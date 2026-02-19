@@ -568,15 +568,9 @@
     return [];
   }
 
-  // Percent stats in your workbook are stored as whole numbers (e.g., 38 for 38%).
-  // We convert them to decimals consistently for BOTH player values and ScoringWeight min/max.
-  const PCT_STATS = new Set(['FG%','3P%','FT%','eFG%','OR%','DR%']);
-  function scalePct(stat, x){
-    if(!Number.isFinite(x)) return x;
-    if(!PCT_STATS.has(stat)) return x;
-    // If it's already a decimal (<= 1.5), keep it; otherwise treat as whole-percent and divide by 100.
-    return (Math.abs(x) <= 1.5) ? x : (x / 100);
-  }
+  // Percent stats are already stored as decimals (e.g., 0.38 for 38%) in the spreadsheet.
+  // No conversion needed.
+  function scalePct(stat, x){ return x; }
 
 
   // percentile (inclusive) like Excel PERCENTILE.INC
