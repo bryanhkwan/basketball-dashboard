@@ -551,7 +551,7 @@
   function sheetToJson(ws){
     if(!ws) return [];
     if(ws.__aoa) return aoaToObjects(ws.__aoa);
-    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json) return sheetToJson(ws);
+    return XLSX.utils.sheet_to_json(ws, { defval: "" });
     return [];
   }
 
@@ -607,11 +607,11 @@
       if(!apiKey) { showWarn('Missing API key.'); return; }
 
       const ranges = [
-        'ScoringWeight!A1:G',
-        `${SHEET_MAP.MBB.Guards}!A1:ZZ`,
-        `${SHEET_MAP.MBB.Bigs}!A1:ZZ`,
-        `${SHEET_MAP.WBB.Guards}!A1:ZZ`,
-        `${SHEET_MAP.WBB.Bigs}!A1:ZZ`,
+        'ScoringWeight!A1:G1000',
+        'MBB Guards!A1:ZZ20000',
+        'MBB Bigs!A1:ZZ20000',
+        'WBB Guards MAC!A1:ZZ20000',
+        'WBB Bigs MAC!A1:ZZ20000'
       ];
 
       const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
@@ -627,63 +627,25 @@
         return;
       }
       if(!data.valueRanges || !data.valueRanges.length){
-  showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
-  console.warn("Sheets returned empty data");
-}
+        showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
+        console.warn('Sheets returned empty data');
+        return;
+      }
 
       wb = { SheetNames: [], Sheets: {} };
       data.valueRanges.forEach(vr => {
         const range = vr.range || '';
         const sheetName = range.split('!')[0] || 'Sheet';
+        const cleanName = sheetName.replace(/^'/,'').replace(/'$/,'');
         const aoa = vr.values || [];
-        wb.SheetNames.push(sheetName);
-        wb.Sheets[sheetName] = { __aoa: aoa };
-      });
+        wb.SheetNames.push(cleanName);
+        wb.Sheets[cleanName] = { __aoa: aoa };
 
       const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
       const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
       if(missing.length){
         showWarn(`Missing sheet(s): ${missing.join(', ')}. Found: ${wb.SheetNames.join(', ')}`);
       } else {
-        clearWarn();
-      }
-
-      const ok = loadScoringWeight();
-      resetWeightsBtn.disabled = !ok;
-      recalcBtn.disabled = false;
-      exportBtn.disabled = false;
-
-      applyLeagueDefaults(true);
-      renderWeights();
-      computeAll();
-      renderPlayers();
-    }catch(err){
-      showWarn(String(err?.message || err));
-    }
-  }
-      if(!data.valueRanges || !data.valueRanges.length){
-        showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
-        return;
-      }
-
-      // Build an in-memory workbook compatible with existing code paths
-      wb = { SheetNames: [], Sheets: {} };
-      data.valueRanges.forEach(vr => {
-        const range = vr.range || '';
-        const sheetName = range.split('!')[0] || 'Sheet';
-        const aoa = vr.values || [];
-        // Ensure at least 1 row
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-        wb.SheetNames.push(sheetName);
-        wb.Sheets[sheetName] = ws;
-      });
-
-      // Validate required sheets exist
-      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
-      const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
-      if(missing.length){
-        showWarn(`Sheet missing: ${missing.join(', ')}. Found: ${wb.SheetNames.join(', ')}`);
-      }else{
         clearWarn();
       }
 
