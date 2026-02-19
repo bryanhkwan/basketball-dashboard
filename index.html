@@ -1,0 +1,1814 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NCAA Scouting Dashboard (MBB/WBB)</title>
+
+  <!-- XLSX: try CDN, fallback to local file next to this HTML -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script>
+    (function(){
+      if (window.XLSX) return;
+      const s = document.createElement('script');
+      s.src = './xlsx.full.min.js';  // place xlsx.full.min.js in the same folder as this HTML
+      s.onload = () => console.log('Loaded local xlsx.full.min.js');
+      s.onerror = () => console.warn('Failed to load local xlsx.full.min.js');
+      document.head.appendChild(s);
+    })();
+  </script>
+
+  <style>
+    :root{
+      --bg:#003E7E;              /* UToledo Midnight */
+      --card:#073166;            /* deep panel blue */
+      --line:#1b4f99;            /* borders */
+      --text:#ecf4ff;
+      --muted:#b9cbe8;
+      --accent:#FFD200;          /* UToledo Gold */
+      --accent2:#ffe36a;
+      --good:#5ed1a7;
+      --warn:#ffb020;
+      --bad:#ff6b6b;
+      --chip:#0a3a79;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:var(--text)}
+    header{padding:18px 18px 12px; border-bottom:1px solid var(--line)}
+    h1{margin:0 0 6px;font-size:18px;letter-spacing:.2px}
+    .sub{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
+    .wrap{padding:14px; max-width:1200px; margin:0 auto}
+    .topbar{display:flex; gap:10px; align-items:end; flex-wrap:wrap; justify-content:space-between}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    label{font-size:12px; color:var(--muted)}
+    input[type="file"]{color:var(--muted)}
+    select, input[type="number"], input[type="text"]{
+      background:#02122a; color:var(--text); border:1px solid var(--line);
+      border-radius:12px; padding:8px 10px; outline:none;
+    }
+    input[type="number"]{width:110px}
+    .search{flex:1; min-width:260px}
+    button{
+      background:linear-gradient(180deg, #FFD200, #1d3ed6);
+      color:white; border:none; border-radius:12px; padding:9px 12px; cursor:pointer;
+      box-shadow:0 10px 20px rgba(42,83,255,.22);
+      font-weight:800;
+    }
+    button.secondary{
+      background:#02122a; border:1px solid var(--line); color:var(--text); box-shadow:none; font-weight:800;
+    }
+    button:disabled{opacity:.5; cursor:not-allowed}
+    .grid{display:grid; grid-template-columns: 1.25fr .75fr; gap:12px; margin-top:12px}
+    @media (max-width: 980px){ .grid{grid-template-columns: 1fr} }
+    .card{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .pill{font-size:12px; color:var(--muted); border:1px solid var(--line); padding:6px 10px; border-radius:999px}
+    .kpis{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+    .kpis b{color:var(--text)}
+    .warnBox{display:none;margin-top:10px; padding:10px 12px; border-radius:14px; border:1px solid #3b2a2a; background:#1a1111; color:#ffd0d0; font-size:12px; line-height:1.4}
+    .hint{font-size:12px; color:var(--muted); margin-top:10px; line-height:1.45}
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{
+      background:#02122a; border:1px solid var(--line); color:var(--text);
+      border-radius:999px; padding:7px 10px; cursor:pointer; font-size:12px; font-weight:900;
+    }
+    .tab.active{border-color:#FFD200; box-shadow:0 0 0 2px rgba(42,83,255,.15) inset}
+    table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:14px; border:1px solid var(--line)}
+    th, td{padding:10px 10px; border-bottom:1px solid var(--line); font-size:12px; white-space:nowrap}
+    th{position:sticky; top:0; background:#02122a; text-align:left; color:#cfe0ff; cursor:pointer; z-index:1}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(122,162,255,.06)}
+    .statLink{color:#cfe0ff; text-decoration:underline; cursor:pointer; pointer-events:auto}
+
+    .scrollY{max-height:560px; overflow:auto; border-radius:14px; border:1px solid var(--line)}
+    .scrollY table{border:none; border-radius:0}
+    .link{color:#cfe0ff; text-decoration:underline; cursor:pointer}
+    .rightstack{display:flex; flex-direction:column; gap:12px}
+    .weights{max-height:300px; overflow:auto; border-radius:14px; border:1px solid var(--line)}
+    .weights table{border:none; border-radius:0}
+    .weights th{top:0}
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted)}
+    .badge strong{color:var(--text)}
+    .divider{height:1px; background:var(--line); margin:10px 0}
+    .chipRow{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+    .dirIcon{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:34px; height:34px; border-radius:12px;
+      border:1px solid var(--line); background:#02122a; color:var(--text);
+      font-weight:1100;
+    }
+    .dirIcon.up::after{content:"↑";}
+    .dirIcon.down::after{content:"↓";}
+    .dirIcon span{display:none;}
+
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 10px; border-radius:999px; border:1px solid var(--line);
+      background:#02122a; color:var(--text); font-size:12px; font-weight:900;
+    }
+    .chip .dot{width:8px; height:8px; border-radius:999px; background:var(--accent)}
+    code{background:#02122a; padding:2px 6px; border-radius:8px; border:1px solid var(--line)}
+
+    /* Modal */
+    .modalBack{position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:14px; z-index:50}
+    #statBack{z-index:9999; position:fixed; inset:0;}
+    .modal{width:min(1040px, 100%); max-height:90vh; overflow:auto; background:var(--card); border:1px solid var(--line);
+      border-radius:18px; box-shadow:0 30px 90px rgba(0,0,0,.45)}
+    .modalHead{padding:14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:10px; align-items:start}
+    .modalTitle{font-size:14px; font-weight:1000; margin:0}
+    .modalSub{margin:6px 0 0; color:var(--muted); font-size:12px}
+    .modalBody{padding:14px}
+    .close{background:#02122a; border:1px solid var(--line); border-radius:12px; color:var(--text); padding:7px 10px; cursor:pointer; font-weight:900}
+    .profileGrid{display:grid; grid-template-columns: 1.15fr .85fr; gap:12px}
+    @media (max-width: 980px){ .profileGrid{grid-template-columns: 1fr} }
+    .panel{border:1px solid var(--line); border-radius:14px; overflow:hidden}
+    .panelHead{padding:10px 12px; border-bottom:1px solid var(--line); background:#02122a; font-weight:1000; font-size:12px; color:#cfe0ff}
+    .panelBody{padding:12px}
+    .scoreRow{display:flex; justify-content:space-between; gap:10px; align-items:end}
+    .big{font-size:26px; font-weight:1100}
+    .muted{color:var(--muted)}
+    .mini{font-size:12px}
+    .statRow{display:flex; justify-content:space-between; gap:10px; padding:10px 12px; border-bottom:1px solid var(--line); font-size:12px}
+    .statRow:last-child{border-bottom:none}
+    .statRow .k{color:var(--muted)}
+    .bars{display:flex; flex-direction:column; gap:10px}
+    .barItem{display:flex; flex-direction:column; gap:6px}
+    .barTop{display:flex; justify-content:space-between; gap:10px; font-size:12px}
+    .barTrack{height:10px; background:#02122a; border:1px solid var(--line); border-radius:999px; overflow:hidden}
+    .barFill{height:100%; width:0%; background:linear-gradient(90deg, var(--accent), var(--accent2))}
+    .barMeta{display:flex; justify-content:space-between; font-size:11px; color:var(--muted)}
+  
+    /* UToledo: ensure primary buttons are gold */
+    button.primary, .primary{
+      background: linear-gradient(180deg,var(--accent),#d4af00) !important;
+      color:#071a33 !important;
+      border-color: rgba(255,210,0,.55) !important;
+      text-shadow: none !important;
+    }
+    button.primary:hover, .primary:hover{ filter: brightness(1.02); }
+    /* Accents for active pills/toggles */
+    .pill.active, .seg button.active{
+      border-color: rgba(255,210,0,.8) !important;
+      box-shadow: 0 0 0 2px rgba(255,210,0,.18) inset !important;
+    }
+
+</style>
+
+<style id="utoledo-theme-override">
+  :root{
+    --utoledo-midnight:#003E7E;
+    --utoledo-gold:#FFD200;
+    --utoledo-gold-dark:#d4af00;
+    --utoledo-card:#05306a;
+    --utoledo-line:#1b4f99;
+    --utoledo-text:#ecf4ff;
+    --utoledo-muted:#b9cbe8;
+  }
+
+  html, body{
+    background: var(--utoledo-midnight) !important;
+    color: var(--utoledo-text) !important;
+  }
+
+  /* Top header bar */
+  .topbar, header, .header{
+    background: rgba(0,62,126,.92) !important;
+    border-bottom: 1px solid rgba(255,210,0,.25) !important;
+  }
+
+  /* Cards/panels */
+  .card, .panel, .modal, .kpi, .tableWrap, .seg, .pill, .modalHead, .modalBody{
+    background: rgba(5,48,106,.72) !important;
+    border-color: rgba(27,79,153,.9) !important;
+  }
+
+  /* Table header row */
+  thead th{
+    background: rgba(2,28,66,.75) !important;
+    border-color: rgba(27,79,153,.9) !important;
+  }
+
+  /* Inputs */
+  input, select, textarea{
+    background: rgba(2,18,42,.85) !important;
+    color: var(--utoledo-text) !important;
+    border-color: rgba(27,79,153,.9) !important;
+  }
+
+  /* Primary buttons = gold */
+  button.primary, .primary{
+    background: linear-gradient(180deg,var(--utoledo-gold),var(--utoledo-gold-dark)) !important;
+    color: #071a33 !important;
+    border-color: rgba(255,210,0,.75) !important;
+    box-shadow: 0 10px 28px rgba(0,0,0,.25) !important;
+  }
+
+  /* Secondary buttons keep blue but with gold outline on hover */
+  button.secondary, .secondary{
+    border-color: rgba(255,210,0,.35) !important;
+  }
+  button.secondary:hover, .secondary:hover{
+    border-color: rgba(255,210,0,.7) !important;
+  }
+
+  /* Active pills/toggles */
+  .seg button.active, .pill.active, .seg .active{
+    border-color: rgba(255,210,0,.9) !important;
+    box-shadow: 0 0 0 2px rgba(255,210,0,.18) inset !important;
+  }
+
+  /* Links */
+  a, .statLink{
+    color: var(--utoledo-gold) !important;
+  }
+
+  /* Scrollbar tint (webkit) */
+  ::-webkit-scrollbar-thumb{
+    background: rgba(255,210,0,.35) !important;
+  }
+  ::-webkit-scrollbar-track{
+    background: rgba(2,18,42,.65) !important;
+  }
+</style>
+
+</head>
+<body>
+<header>
+  <h1>NCAA Basketball Dashboard</h1>
+  <p class="sub">
+    click a player to open their full stat profile with percentiles, archetypes, and fit score.
+    Uses: <b>MBB Guards</b>, <b>MBB Bigs</b>, <b>WBB Guards MAC</b>, <b>WBB Bigs MAC</b>, plus <b>ScoringWeight</b>.
+  </p>
+</header>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="row">
+      <div><label>Data source</label><div class="hint">Google Sheet (auto-loads)</div></div>
+      <div>
+        <label>API key</label><br/>
+        <input id="gsKey" style="display:none" value="AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8">
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:flex-end">
+        <button class="primary" id="loadGs">Refresh data</button>
+        <div class="hint" style="margin-top:6px">Security: consider restricting your key to Google Sheets API + your domain.</div>
+      </div>
+
+
+      <div>
+        <label>League</label><br/>
+        <div class="tabs">
+          <button class="tab active" data-league="MBB" id="tabMBB">MBB</button>
+          <button class="tab" data-league="WBB" id="tabWBB">WBB</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Position rules</label><br/>
+        <div class="tabs">
+          <button class="tab active" data-pos="Guards" id="tabGuards">Guards</button>
+          <button class="tab" data-pos="Bigs" id="tabBigs">Bigs</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Fit preset</label><br/>
+        <select id="fitPreset">
+          <option value="balanced">Balanced</option>
+          <option value="shooting">Shooting</option>
+          <option value="playmaking">Playmaking</option>
+          <option value="defense">Defense</option>
+          <option value="rim">Rim Protection (Bigs)</option>
+          <option value="rebounding">Rebounding (Bigs)</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Search</label><br/>
+        <input id="search" class="search" type="text" placeholder="Search player / team / conf…" />
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="recalc" disabled>Recalculate</button>
+      <button id="export" class="secondary" disabled>Export CSV</button>
+    </div>
+  </div>
+
+  <div id="warn" class="warnBox"></div>
+
+  <div class="grid">
+    <!-- LEFT: Player list -->
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <span class="badge">Sheet: <strong id="activeSheet">—</strong></span>
+          <span class="badge">Fit: <strong id="activeFit">Balanced</strong></span>
+        </div>
+        <span class="pill">Sort headers • Click player for profile</span>
+      </div>
+
+      <div class="kpis">
+        <span class="pill">Players: <b id="kpiPlayers">—</b></span>
+        <span class="pill">Stats used: <b id="kpiStats">—</b></span>
+        <span class="pill">Total weight: <b id="kpiTotalW">—</b></span>
+        <span class="pill">Avg PerfScore: <b id="kpiAvgPerf">—</b></span>
+        <span class="pill">Star PerfScore (p): <b id="kpiStarPerf">—</b></span>
+      </div>
+
+      <div style="margin-top:10px" class="scrollY">
+        <table>
+          <thead>
+            <tr id="playersHead"></tr>
+          </thead>
+          <tbody id="playersBody"></tbody>
+        </table>
+      </div>
+
+      <div class="hint">
+        <b>Percentiles</b> are computed within the currently selected sheet (league+position).
+        If a stat is “lower is better” in your weights (Min &gt; Max), percentiles are automatically inverted (so lower = higher percentile).
+        <br><br>
+        <b>Valuation</b> uses an exponential curve anchored to your average pay and a “star” target:
+        <span class="muted">Pred = clamp(min,max, avgPay × exp(k × (Perf − avgPerf)))</span>,
+        with <span class="muted">k = ln(starValue/avgPay) / (starPerf − avgPerf)</span>.
+        Then a minutes multiplier is applied to avoid low-MP inflation.
+      </div>
+    </div>
+
+    <!-- RIGHT: Controls -->
+    <div class="rightstack">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px; font-weight:1000">Weights / Min / Max</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Switches with Guards/Bigs automatically.</div>
+          </div>
+          <div class="row" style="gap:8px">
+  <label class="pill" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+  <input id="showSelectedOnly" type="checkbox" style="accent-color:#FFD200"/> Selected only
+</label>
+<label class="pill" title="Optional: allow overriding Higher/Lower direction per stat" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+  <input id="advancedDir" type="checkbox" style="accent-color:#FFD200"/> Advanced dir
+</label>
+</div>
+<button id="resetWeights" class="secondary" disabled>Reset</button>
+        </div>
+
+        <div class="weights" style="margin-top:10px">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:46%">Stat</th>
+                <th>W</th>
+                <th>Min</th>
+                <th>Max</th>
+                <th style="width:18%">Dir</th>
+              </tr>
+            </thead>
+            <tbody id="weightsBody"></tbody>
+          </table>
+        </div>
+<div class="row" style="justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap">
+  <span class="pill">Total weight: <b id="wTotalLocal">—</b> / 100</span>
+  <span class="pill">Remaining: <b id="wRemaining">—</b></span>
+  <span class="pill" id="wOverBox" style="display:none; border-color:#3b2a2a; background:#1a1111; color:#ffd0d0">Over by: <b id="wOver">—</b></span>
+</div>
+<div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). This list is pulled from <b>ScoringWeight</b> (your approved scoring metrics).</div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px; font-weight:1000">Valuation settings</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Editable (MBB/WBB defaults on reset).</div>
+          </div>
+          <button id="resetVal" class="secondary">Reset</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div>
+            <label>Average pay</label><br/>
+            <input id="avgPay" type="number" step="1000" value="70000">
+          </div>
+          <div>
+            <label>Min pay</label><br/>
+            <input id="minPay" type="number" step="1000" value="10000">
+          </div>
+          <div>
+            <label>Max pay</label><br/>
+            <input id="maxPay" type="number" step="1000" value="300000">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>Star value ($)</label><br/>
+            <input id="starValue" type="number" step="5000" value="100000">
+          </div>
+          <div>
+            <label>Star percentile (PerfScore)</label><br/>
+            <input id="starPct" type="number" step="0.01" min="0.5" max="0.999" value="0.95">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>Minutes adjust</label><br/>
+            <select id="mpMode">
+              <option value="on" selected>On (min(1, sqrt(MP/MP_p)))</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+          <div>
+            <label>MP percentile (p)</label><br/>
+            <input id="mpPct" type="number" step="0.01" min="0.5" max="0.999" value="0.95">
+          </div>
+        </div>
+
+        <div class="hint">
+          If you change <b>starValue</b>, you are changing the slope of the curve:
+          bigger starValue → higher top-end valuations (more spread above average), while keeping average anchored at avgPay.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modalBack" id="modalBack">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modalHead">
+      <div>
+        <div class="modalTitle" id="mTitle">Player</div>
+        <div class="modalSub" id="mSub">—</div>
+        <div class="chipRow" id="mTags"></div>
+      </div>
+      <button class="close" id="mClose">Close</button>
+    </div>
+    <div class="modalBody">
+      <div class="profileGrid">
+        <div class="panel">
+          <div class="panelHead">Overview</div>
+          <div class="panelBody">
+            <div class="scoreRow">
+              <div>
+                <div class="muted mini">PerfScore</div>
+                <div class="big" id="mScore">—</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted mini">Fit score</div>
+                <div class="big" id="mFit">—</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="scoreRow">
+              <div>
+                <div class="muted mini">Final valuation</div>
+                <div class="big" id="mVal">—</div>
+              </div>
+              <div style="text-align:right">
+                <div class="muted mini">Minutes multiplier</div>
+                <div class="big" id="mMult">—</div>
+              </div>
+            </div>
+
+            <div class="hint" id="mMeta">—</div>
+            <div class="divider"></div>
+            <div class="panel" style="background:rgba(2,18,42,.35); border-color:rgba(27,79,153,.65)">
+              <div class="panelHead">Role tag definitions</div>
+              <div class="panelBody" id="mRoleDefs" style="display:flex; flex-direction:column; gap:10px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">Key percentiles</div>
+          <div class="panelBody">
+            <div class="bars" id="mBars"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="panel">
+        <div class="panelHead">All stats</div>
+        <div class="panelBody" style="padding:0">
+          <div class="panel" style="border:none;border-radius:0" id="mAllStats"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+  // Surface runtime errors in the UI (so you don't need DevTools)
+  window.addEventListener('error', (e) => {
+    const box = document.getElementById('warn');
+    if(!box) return;
+    box.style.display = 'block';
+    box.textContent = `JS Error: ${e.message}`;
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const sheetEl = document.getElementById('activeSheet');
+    if(sheetEl && (sheetEl.textContent||'').trim() === '—') sheetEl.textContent = 'Ready (upload workbook)';
+  });
+
+  // ---------- Helpers ----------
+
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const clamp01 = (x) => clamp(x, 0, 1);
+  const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
+  const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+  // Convert Google Sheets AOA (array-of-arrays) into row objects using header row.
+  function aoaToObjects(aoa){
+    if(!aoa || !aoa.length) return [];
+    const headers = (aoa[0]||[]).map(h => String(h||'').trim());
+    const rows = [];
+    for(let i=1;i<aoa.length;i++){
+      const obj = {};
+      const row = aoa[i]||[];
+      for(let j=0;j<headers.length;j++){
+        const key = headers[j];
+        if(!key) continue;
+        obj[key] = row[j];
+      }
+      if(Object.keys(obj).length) rows.push(obj);
+    }
+    return rows;
+  }
+
+  // Unified sheet->json for both XLSX worksheets and Google AOA sheets
+  function sheetToJson(ws){
+    if(!ws) return [];
+    if(ws.__aoa) return aoaToObjects(ws.__aoa);
+    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json) return sheetToJson(ws);
+    return [];
+  }
+
+  // Percent stats in your workbook are stored as whole numbers (e.g., 38 for 38%).
+  // We convert them to decimals consistently for BOTH player values and ScoringWeight min/max.
+  const PCT_STATS = new Set(['FG%','3P%','FT%','eFG%','OR%','DR%']);
+  function scalePct(stat, x){
+    if(!Number.isFinite(x)) return x;
+    if(!PCT_STATS.has(stat)) return x;
+    // If it's already a decimal (<= 1.5), keep it; otherwise treat as whole-percent and divide by 100.
+    return (Math.abs(x) <= 1.5) ? x : (x / 100);
+  }
+
+
+  // percentile (inclusive) like Excel PERCENTILE.INC
+  function percentileInc(arr, p){
+    const a = arr.filter(Number.isFinite).slice().sort((x,y)=>x-y);
+    if(a.length === 0) return NaN;
+    const n = a.length;
+    const r = (n - 1) * p + 1;
+    const k = Math.floor(r);
+    const d = r - k;
+    if(k <= 1) return a[0];
+    if(k >= n) return a[n-1];
+    return a[k-1] + d * (a[k] - a[k-1]);
+  }
+
+  // percentile rank (0..1): fraction <= x
+  function percentileRank(sortedAsc, x){
+    if(!sortedAsc?.length || !Number.isFinite(x)) return NaN;
+    // binary search upper bound
+    let lo = 0, hi = sortedAsc.length;
+    while(lo < hi){
+      const mid = (lo + hi) >> 1;
+      if(sortedAsc[mid] <= x) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo / sortedAsc.length;
+  }
+
+  
+  function extractSpreadsheetId(url){
+    if(!url) return null;
+    const m = String(url).match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    return m ? m[1] : null;
+  }
+
+  
+  async function loadFromGoogleSheets(url, apiKey){
+    try{
+      const sid = extractSpreadsheetId(url);
+      if(!sid) { showWarn('Could not parse spreadsheet ID from the link.'); return; }
+      if(!apiKey) { showWarn('Missing API key.'); return; }
+
+      const ranges = [
+        'ScoringWeight!A1:G',
+        `${SHEET_MAP.MBB.Guards}!A1:ZZ`,
+        `${SHEET_MAP.MBB.Bigs}!A1:ZZ`,
+        `${SHEET_MAP.WBB.Guards}!A1:ZZ`,
+        `${SHEET_MAP.WBB.Bigs}!A1:ZZ`,
+      ];
+
+      const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+      const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchGet?key=${encodeURIComponent(apiKey)}&valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS&${qs}`;
+
+      showWarn('Loading from Google Sheets…');
+      const res = await fetch(endpoint);
+      const data = await res.json();
+
+      if(!res.ok){
+        const msg = data?.error?.message || ('Google Sheets API error ('+res.status+')');
+        showWarn(msg);
+        return;
+      }
+      if(!data.valueRanges || !data.valueRanges.length){
+        showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
+        return;
+      }
+
+      wb = { SheetNames: [], Sheets: {} };
+      data.valueRanges.forEach(vr => {
+        const range = vr.range || '';
+        const sheetName = range.split('!')[0] || 'Sheet';
+        const aoa = vr.values || [];
+        wb.SheetNames.push(sheetName);
+        wb.Sheets[sheetName] = { __aoa: aoa };
+      });
+
+      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
+      const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
+      if(missing.length){
+        showWarn(`Missing sheet(s): ${missing.join(', ')}. Found: ${wb.SheetNames.join(', ')}`);
+      } else {
+        clearWarn();
+      }
+
+      const ok = loadScoringWeight();
+      resetWeightsBtn.disabled = !ok;
+      recalcBtn.disabled = false;
+      exportBtn.disabled = false;
+
+      applyLeagueDefaults(true);
+      renderWeights();
+      computeAll();
+      renderPlayers();
+    }catch(err){
+      showWarn(String(err?.message || err));
+    }
+  }
+      if(!data.valueRanges || !data.valueRanges.length){
+        showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
+        return;
+      }
+
+      // Build an in-memory workbook compatible with existing code paths
+      wb = { SheetNames: [], Sheets: {} };
+      data.valueRanges.forEach(vr => {
+        const range = vr.range || '';
+        const sheetName = range.split('!')[0] || 'Sheet';
+        const aoa = vr.values || [];
+        // Ensure at least 1 row
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        wb.SheetNames.push(sheetName);
+        wb.Sheets[sheetName] = ws;
+      });
+
+      // Validate required sheets exist
+      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
+      const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
+      if(missing.length){
+        showWarn(`Sheet missing: ${missing.join(', ')}. Found: ${wb.SheetNames.join(', ')}`);
+      }else{
+        clearWarn();
+      }
+
+      const ok = loadScoringWeight();
+      resetWeightsBtn.disabled = !ok;
+      recalcBtn.disabled = false;
+      exportBtn.disabled = false;
+
+      applyLeagueDefaults(true);
+      renderWeights();
+      computeAll();
+      renderPlayers();
+    }catch(err){
+      showWarn(String(err?.message || err));
+    }
+  }
+
+function waitForXLSX(timeoutMs=5000){
+    return new Promise((resolve, reject)=>{
+      const start = Date.now();
+      const t = setInterval(()=>{
+        if(window.XLSX){ clearInterval(t); resolve(true); }
+        if(Date.now()-start > timeoutMs){
+          clearInterval(t);
+          reject(new Error("XLSX library not loaded. Put xlsx.full.min.js next to this HTML."));
+        }
+      }, 50);
+    });
+  }
+
+  // ---------- State + DOM ----------
+const gsUrlInput = document.getElementById('gsUrl');
+  const gsKeyInput = document.getElementById('gsKey');
+  const loadGsBtn = document.getElementById('loadGs');
+  const recalcBtn = document.getElementById('recalc');
+  const exportBtn = document.getElementById('export');
+  const resetWeightsBtn = document.getElementById('resetWeights');
+  const resetValBtn = document.getElementById('resetVal');
+  const searchInput = document.getElementById('search');
+  const warn = document.getElementById('warn');
+  const fitPresetEl = document.getElementById('fitPreset');
+
+  const weightsBody = document.getElementById('weightsBody');
+  const showSelectedOnlyEl = document.getElementById('showSelectedOnly');
+  const advancedDirEl = document.getElementById('advancedDir');
+
+  const playersHead = document.getElementById('playersHead');
+  const playersBody = document.getElementById('playersBody');
+  const activeSheetEl = document.getElementById('activeSheet');
+  const activeFitEl = document.getElementById('activeFit');
+
+  const wTotalLocalEl = document.getElementById('wTotalLocal');
+  const wRemainingEl = document.getElementById('wRemaining');
+  const wOverBoxEl = document.getElementById('wOverBox');
+  const wOverEl = document.getElementById('wOver');
+
+  // Click a stat name in the weights table to open its glossary
+  weightsBody.addEventListener('click', (e)=>{
+    const el = e.target.closest('.statLink');
+    if(!el) return;
+    const stat = el.getAttribute('data-stat') || el.dataset.stat || el.textContent;
+    if(stat) openStatInfo(stat.trim());
+  });
+
+
+  const kpiPlayers = document.getElementById('kpiPlayers');
+  const kpiStats = document.getElementById('kpiStats');
+  const kpiTotalW = document.getElementById('kpiTotalW');
+  const kpiAvgPerf = document.getElementById('kpiAvgPerf');
+  const kpiStarPerf = document.getElementById('kpiStarPerf');
+
+  const avgPayEl = document.getElementById('avgPay');
+  const minPayEl = document.getElementById('minPay');
+  const maxPayEl = document.getElementById('maxPay');
+  const starValueEl = document.getElementById('starValue');
+  const starPctEl = document.getElementById('starPct');
+  const mpModeEl = document.getElementById('mpMode');
+  const mpPctEl = document.getElementById('mpPct');
+
+  const modalBack = document.getElementById('modalBack');
+  const mClose = document.getElementById('mClose');
+  const mTitle = document.getElementById('mTitle');
+  const mSub = document.getElementById('mSub');
+  const mScore = document.getElementById('mScore');
+  const mFit = document.getElementById('mFit');
+  const mVal = document.getElementById('mVal');
+  const mMult = document.getElementById('mMult');
+  const mMeta = document.getElementById('mMeta');
+  const mBars = document.getElementById('mBars');
+  const mAllStats = document.getElementById('mAllStats');
+  const mTags = document.getElementById('mTags');
+  // Stat glossary modal elements are queried lazily (modal is appended after the script)
+
+
+  let wb = null;
+  let league = 'MBB';
+  let pos = 'Guards';
+  let excelWeights = {Guards:[], Bigs:[]};
+  let currentWeights = {Guards:[], Bigs:[]};
+
+  let rows = [];
+  let computed = [];
+  let sort = { key:'ActualValuation_calc', dir:'desc' };
+
+  // All allowable scoring metrics (from ScoringWeight column A)
+  let baseStatsAll = [];
+
+  // precomputed stat distributions for percentiles
+  let statDist = {};  // {stat: {sorted:[...], invert:boolean}}
+  let lastPerfAvg = NaN, lastPerfStar = NaN;
+
+  function normalizeName(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+/g,' '); }
+  function findSheetLike(target){
+    if(!wb) return null;
+    const t = normalizeName(target);
+    // exact (case-insensitive, whitespace-normalized)
+    for(const name of wb.SheetNames){
+      if(normalizeName(name) === t) return name;
+    }
+    // contains all tokens
+    const tokens = t.split(' ').filter(Boolean);
+    let best = null, bestScore = -1;
+    for(const name of wb.SheetNames){
+      const nn = normalizeName(name);
+      let score = 0;
+      tokens.forEach(tok => { if(nn.includes(tok)) score += 1; });
+      // small bonus for prefix match
+      if(nn.startsWith(tokens[0]||'')) score += 0.5;
+      if(score > bestScore){
+        bestScore = score; best = name;
+      }
+    }
+    // require at least half the tokens matched
+    if(bestScore >= Math.max(1, tokens.length/2)) return best;
+    return null;
+  }
+
+  const SHEET_MAP = {
+
+    MBB: {Guards:'MBB Guards', Bigs:'MBB Bigs'},
+    WBB: {Guards:'WBB Guards MAC', Bigs:'WBB Bigs MAC'}
+  };
+
+  // Fit presets: each is weights on percentile metrics (0..1)
+  const FIT_PRESETS = {
+    balanced: { 'PPG':1, 'eFG%':1, 'BPM':1, 'WS/40':1, 'DRtg':1, 'APG':1, 'TOPG':1, 'BPG':1, 'SPG':1, 'DR%':1, 'OR%':0.6, 'A/TO':0.8, '3P%':1, 'FT%':0.6, 'ORtg':0.4, '+/-':0.4 },
+    shooting: { '3P%':1.3, 'eFG%':1.1, 'FT%':0.8, 'PPG':0.8, 'ORtg':0.4 },
+    playmaking: { 'APG':1.2, 'A/TO':1.2, 'TOPG':1.0, 'ORtg':0.6 },
+    defense: { 'DRtg':1.2, 'SPG':1.0, 'BPG':1.0, 'DR%':1.0, '+/-':0.6 },
+    rim: { 'BPG':1.5, 'DRtg':1.2, 'DR%':1.0, 'DRB/G':0.9 },
+    rebounding: { 'DR%':1.4, 'OR%':1.0, 'DRB/G':1.1, 'ORB/G':0.9 }
+  };
+
+  function showWarn(msg){
+    warn.style.display = 'block';
+    warn.textContent = msg;
+  }
+  function clearWarn(){
+    warn.style.display = 'none';
+    warn.textContent = '';
+  }
+
+  function setActiveTab(el, groupSelector){
+    document.querySelectorAll(groupSelector).forEach(x=>x.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // ---------- Excel parsing ----------
+  function parseSheetToRows(ws){
+    const aoa = sheetToJson(ws);
+    if(!aoa || aoa.length < 2) return [];
+    const header = aoa[0].map(h => (h ?? '').toString().trim());
+    const out = [];
+    for(let i=1;i<aoa.length;i++){
+      const r = aoa[i];
+      if(!r) continue;
+      const obj = {};
+      header.forEach((h,idx)=> obj[h || `COL${idx+1}`] = r[idx]);
+      const nonBlank = Object.values(obj).some(v => v !== undefined && v !== null && v !== '');
+      if(nonBlank) out.push(obj);
+    }
+    return out;
+  }
+
+  
+  function isLikelyNumericColumn(key){
+    const k = (key||'').toString().trim();
+    if(!k) return false;
+    // exclude obvious text/id columns
+    const bad = new Set([
+      'Player','Name','Team','School','Conference','Conf','Position','Pos','Class','Yr','Year','ID','URL','Link',
+      'Rank','Score','PerfScore','PerfScore_calc','FitScore','FitScore_calc','PredictedValue','PredictedValue_calc',
+      'ActualValuation','ActualValuation_calc','MinMultiplier','MinMultiplier_calc','MP_num'
+    ]);
+    if(k.startsWith('Norm_')) return false; // normalized helper columns from Excel shouldn't be scoring metrics here
+
+    if(bad.has(k)) return false;
+    return true;
+  }
+
+  function getNumericColumnsFromRows(rowArr){
+    if(!rowArr?.length) return [];
+    const keys = Object.keys(rowArr[0]);
+    const cols = [];
+    keys.forEach(k=>{
+      if(!isLikelyNumericColumn(k)) return;
+      let n=0, ok=0;
+      for(let i=0;i<rowArr.length;i++){
+        const v = Number(rowArr[i][k]);
+        if(rowArr[i][k] === null || rowArr[i][k] === undefined || rowArr[i][k] === '') continue;
+        n++;
+        if(Number.isFinite(v)) ok++;
+      }
+      // keep columns that are mostly numeric (>=30% numeric among non-empty)
+      if(n >= 10 && ok/n >= 0.30) cols.push(k);
+    });
+    return cols;
+  }
+
+  function minMaxForStat(rowArr, stat){
+    let mn = Infinity, mx = -Infinity, count=0;
+    for(const r of rowArr){
+      const v = Number(r[stat]);
+      if(!Number.isFinite(v)) continue;
+      count++;
+      if(v < mn) mn = v;
+      if(v > mx) mx = v;
+    }
+    if(count < 5) return {min: 0, max: 1, ok:false};
+    // If min==max, widen slightly to avoid divide-by-zero normalization.
+    if(mn === mx){
+      const eps = (Math.abs(mn) || 1) * 0.01;
+      mn -= eps; mx += eps;
+    }
+    return {min: mn, max: mx, ok:true};
+  }
+
+  function ensureWeightsCoverStats(forPos, rowArr){
+    // Only allow scoring metrics defined in ScoringWeight (column A)
+    const allowed = (baseStatsAll || []).slice();
+    const existing = currentWeights[forPos] || [];
+    const existingSet = new Set(existing.map(x=>x.stat));
+
+    allowed.forEach(stat=>{
+      if(existingSet.has(stat)) return;
+
+      // If the stat exists in the data sheet, infer min/max from the column; otherwise default to 0..1
+      const mm = (rowArr && rowArr.length && (stat in (rowArr[0]||{}))) ? minMaxForStat(rowArr, stat) : {min:0, max:1, ok:false};
+      existing.push({stat, w:0, min:mm.min, max:mm.max, dir: guessDirForStat(stat), _auto:true});
+      existingSet.add(stat);
+    });
+
+    // Fill missing dir
+    existing.forEach(it=>{ if(!it.dir) it.dir = guessDirForStat(it.stat); });
+
+    // Also remove any accidental non-allowed metrics that might have been added by older versions
+    const allowedSet = new Set(allowed);
+    currentWeights[forPos] = existing.filter(it => allowedSet.has(it.stat));
+  }
+
+function loadScoringWeight(){
+    excelWeights = {Guards:[], Bigs:[]};
+    currentWeights = {Guards:[], Bigs:[]};
+    baseStatsAll = [];
+
+    const swName = findSheetLike('ScoringWeight') || 'ScoringWeight';
+    const ws = wb.Sheets[swName];
+    if(!ws) return false;
+    const aoa = sheetToJson(ws);
+    for(let i=1;i<aoa.length;i++){
+      const [stat, gw, gmin, gmax, bw, bmin, bmax] = aoa[i] || [];
+      if(stat){
+        const s = String(stat).trim();
+        if(s && s.toLowerCase() !== 'total') baseStatsAll.push(s);
+      }
+
+      if(!stat) continue;
+      if(gw !== undefined && gw !== null && gw !== ''){
+        excelWeights.Guards.push({stat:String(stat), w:Number(gw), min:Number(gmin), max:Number(gmax), dir: (Number(gmin) > Number(gmax) ? 'lower' : guessDirForStat(String(stat)))});
+      }
+      if(bw !== undefined && bw !== null && bw !== ''){
+        excelWeights.Bigs.push({stat:String(stat), w:Number(bw), min:Number(bmin), max:Number(bmax), dir: (Number(bmin) > Number(bmax) ? 'lower' : guessDirForStat(String(stat)))});
+      }
+    }
+    // unique and preserve order
+    baseStatsAll = Array.from(new Set(baseStatsAll));
+
+    currentWeights.Guards = JSON.parse(JSON.stringify(excelWeights.Guards));
+    currentWeights.Bigs = JSON.parse(JSON.stringify(excelWeights.Bigs));
+    return true;
+  }
+
+  
+  // Default direction rules (can be overridden in UI)
+  // "lower" means lower is better (percentiles + scoring invert automatically)
+  
+  // Short glossary for your 19 scoring metrics
+  const ROLE_DESCRIPTIONS = {
+  // Guards / general
+  "Shooter": "Elite perimeter threat. Strong 3P% that bends the defense and creates spacing.",
+  "Efficient": "Scores with high efficiency (shot quality + finishing). Converts possessions into points at an above-average rate.",
+  "Scorer": "Primary offensive producer. Creates points through shot volume and/or shot creation ability.",
+  "Playmaker": "Creates offense for teammates through assists, decision-making, and ball movement.",
+  "Low TO": "Protects possessions and makes smart decisions with the ball. Minimizes turnovers relative to usage.",
+  "Disruptor": "Creates defensive events — steals/deflections/pressure that disrupts actions and generates transition chances.",
+  "Defender": "Reliable defensive contributor. Strong defensive impact indicators (e.g., DR% / on-ball pressure proxies).",
+  "Impact": "Overall positive influence on winning across efficiency and impact metrics (e.g., BPM / two-way value).",
+  "Role Player": "Dependable contributor who supports team structure with effort and situational strengths.",
+
+  // Bigs / frontcourt
+  "Rim Protector": "Protects the paint. Deterrs shots at the rim and blocks/contests effectively (high BPG percentile).",
+  "Rebounder": "Controls the glass on defense (and sometimes overall). Ends possessions and creates second-chance chances.",
+  "Anchor Defender": "Backline defensive organizer. Strong team-defense impact indicators (e.g., elite DRtg percentile).",
+  "Efficient Finisher": "High-efficiency scorer around the rim (and on limited touches). Converts looks into points (high eFG% percentile).",
+  "Extra Possessions": "Creates additional chances via offensive rebounding and hustle plays (high OR% percentile).",
+  "Stretch Big": "Big who spaces the floor. Credible 3PT threat that pulls rim protection away from the paint.",
+  "Frontcourt Role": "Role-oriented big. Provides minutes/physicality/screens/rebounding/defense without a standout single elite tag."
+};
+
+const STAT_GLOSSARY = {
+    'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',
+    'FG%': 'Field Goal Percentage. Share of all 2PT+3PT shots made. Doesn’t account for 3PT value.',
+    '3P%': 'Three-Point Percentage. Share of 3PT shots made. Indicates spacing / shooting skill.',
+    'FT%': 'Free Throw Percentage. Share of free throws made. Proxy for touch/shooting.',
+    'APG': 'Assists per game. Passing/playmaking volume (role dependent).',
+    'TOPG': 'Turnovers per game. Ball security; lower is better.',
+    'A/TO': 'Assist-to-turnover ratio. Passing efficiency & decision-making; higher is better.',
+    'ORB/G': 'Offensive rebounds per game. Extra possessions created; higher is better.',
+    'DRB/G': 'Defensive rebounds per game. Ends opponent possessions; higher is better.',
+    'BPG': 'Blocks per game. Rim protection / deterrence; higher is better.',
+    'SPG': 'Steals per game. Disruption / forcing turnovers; higher is better.',
+    'eFG%': 'Effective FG%. Adjusts FG% by giving 3PT extra value: (FGM + 0.5×3PM)/FGA.',
+    'OR%': 'Offensive Rebound %. Percent of available offensive rebounds a player gets while on court.',
+    'DR%': 'Defensive Rebound %. Percent of available defensive rebounds a player gets while on court.',
+    'WS': 'Win Shares. Estimated wins contributed (context/team dependent).',
+    'Ortg': 'Offensive Rating. Points produced per 100 possessions (higher is better).',
+    'DRtg': 'Defensive Rating. Points allowed per 100 possessions while on court; lower is better.',
+    'BPM': 'Box Plus/Minus. Overall impact per 100 possessions vs average player (higher is better).',
+    'PER': 'Player Efficiency Rating. Box-score efficiency measure (higher is better).'
+  };
+
+  function prettyDir(isLower){
+    return isLower ? 'Lower is better (↓)' : 'Higher is better (↑)';
+  }
+
+const DEFAULT_DIR = {
+    'TOPG':'lower',
+    'DRtg':'lower',
+    'DRTG':'lower',
+    'DRTG.':'lower',
+    'DRTg':'lower',
+    'DRTG':'lower',
+    'DRtg':'lower',
+    'TOV':'lower',
+    'TO':'lower',
+    'Fouls':'lower',
+    'PF':'lower',
+    'Opp PPG':'lower',
+    // plus/minus: higher is better generally
+    '+/-':'higher'
+  };
+
+  function normalizeDirValue(v){
+    const s = (v||'').toString().trim().toLowerCase();
+    if(s.startsWith('low')) return 'lower';
+    if(s.startsWith('high')) return 'higher';
+    return '';
+  }
+
+  function guessDirForStat(stat){
+    const key = (stat||'').toString().trim();
+    if(DEFAULT_DIR[key]) return DEFAULT_DIR[key];
+    // heuristic: anything ending with 'tg' (ratings) where lower is better for defense
+    const k = key.toLowerCase();
+    if(k.includes('drtg') || k.includes('def rtg') || k.includes('defrating')) return 'lower';
+    if(k.includes('tov') || k.includes('turn')) return 'lower';
+    // default
+    return 'higher';
+  }
+
+
+function directionLabel(mn, mx, dir){
+    const d = normalizeDirValue(dir) || (Number.isFinite(mn) && Number.isFinite(mx) && mn > mx ? 'lower' : 'higher');
+    return d === 'lower' ? 'Lower' : 'Higher';
+  }
+
+  function getInvertForStat(stat){
+    const w = (currentWeights[pos] || []).find(x => x.stat === stat);
+    if(!w) return false;
+    const d = normalizeDirValue(w.dir);
+    if(d) return d === 'lower';
+    return Number.isFinite(w.min) && Number.isFinite(w.max) && w.min > w.max;
+  }
+
+  
+  function updateWeightFooter(){
+    const used = (currentWeights[pos] || []).filter(x => (Number(x.w)||0) !== 0);
+    const totalW = used.reduce((a,b)=> a + (Number(b.w)||0), 0);
+    const remaining = 100 - totalW;
+    if(wTotalLocalEl) wTotalLocalEl.textContent = totalW.toFixed(1);
+    if(wRemainingEl) wRemainingEl.textContent = remaining.toFixed(1);
+    if(wOverBoxEl && wOverEl){
+      if(remaining < -1e-9){
+        wOverBoxEl.style.display = 'inline-flex';
+        wOverEl.textContent = Math.abs(remaining).toFixed(1);
+      }else{
+        wOverBoxEl.style.display = 'none';
+      }
+    }
+  }
+
+function renderWeights(){
+    const wAll = currentWeights[pos] || [];
+
+    // Only show scoring metrics defined in ScoringWeight (column A)
+    const selectedOnly = !!showSelectedOnlyEl?.checked;
+    let w = wAll.slice();
+    if(selectedOnly) w = w.filter(it => (Number(it.w)||0) !== 0);
+
+    // Keep selected metrics at the top
+    w = w.slice().sort((a,b)=>{
+      const aw = (Number(a.w)||0) !== 0 ? 0 : 1;
+      const bw = (Number(b.w)||0) !== 0 ? 0 : 1;
+      if(aw !== bw) return aw - bw;
+      return a.stat.localeCompare(b.stat);
+    });
+
+    weightsBody.innerHTML = '';
+    w.forEach((it) => {
+      const idx = wAll.findIndex(x => x.stat === it.stat); // stable index into master list
+      const tr = document.createElement('tr');
+      const selected = (Number(it.w)||0) !== 0;
+      tr.style.background = selected ? 'rgba(122,162,255,.08)' : 'transparent';
+      tr.innerHTML = `
+        <td><span class="statLink" data-stat="${it.stat}">${it.stat}</span></td>
+        <td><input type="number" step="0.1" value="${it.w}" data-k="w" data-i="${idx}"/></td>
+        <td><input type="number" step="0.001" value="${it.min}" data-k="min" data-i="${idx}"/></td>
+        <td><input type="number" step="0.001" value="${it.max}" data-k="max" data-i="${idx}"/></td>
+        <td>
+          ${(() => {
+              const d = normalizeDirValue(it.dir) || (getInvertForStat(it.stat) ? 'lower' : 'higher');
+              if(advancedDirEl && advancedDirEl.checked){
+                return `<select data-k="dir" data-i="${idx}" style="width:100%; padding:7px 8px; border-radius:12px">
+                  <option value="higher" ${(d==='higher')?'selected':''}>Higher</option>
+                  <option value="lower" ${(d==='lower')?'selected':''}>Lower</option>
+                </select>`;
+              }
+              const cls = d==='lower' ? 'down' : 'up';
+              const title = d==='lower' ? 'Lower is better' : 'Higher is better';
+              return `<div class="dirIcon ${cls}" title="${title}"></div>`;
+          })()}
+        </td>
+      `;
+      weightsBody.appendChild(tr);
+    });
+    weightsBody.querySelectorAll('input, select').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const i = Number(e.target.dataset.i);
+        const k = e.target.dataset.k;
+        const v = Number(e.target.value);
+        currentWeights[pos][i][k] = v;
+        const row = e.target.closest('tr');
+        const it = currentWeights[pos][i];
+                // keep list order stable (no reordering). Just update highlight + totals.
+        const it2 = currentWeights[pos][i];
+        row.style.background = ((Number(it2.w)||0) !== 0) ? 'rgba(122,162,255,.08)' : 'transparent';
+        updateWeightFooter();
+        if(wb) computeAll();
+      });
+    });
+
+    const used = (currentWeights[pos] || []).filter(x => (Number(x.w)||0) !== 0);
+    const totalW = used.reduce((a,b)=> a + (Number(b.w)||0), 0);
+    kpiStats.textContent = String(used.length);
+    kpiTotalW.textContent = totalW.toFixed(1);
+    updateWeightFooter();
+  }
+
+
+  // ---------- Scoring + valuation ----------
+  function scoreRow(r){
+    const w = currentWeights[pos] || [];
+    const used = w.filter(x => (Number(x.w)||0) !== 0);
+    let score = 0;
+
+    used.forEach(rule => {
+      const raw = r[rule.stat];
+      if(raw === undefined || raw === null || raw === '') return;
+      let x = safeNum(raw);
+      if(x === null) return;
+
+      // Percent scaling (whole-number % -> decimal) to match your Excel conventions
+      x = scalePct(rule.stat, x);
+
+      // Ensure we have a valid range
+      let mn = Number(rule.min);
+      let mx = Number(rule.max);
+
+      mn = scalePct(rule.stat, mn);
+      mx = scalePct(rule.stat, mx);
+
+      if(!Number.isFinite(mn) || !Number.isFinite(mx) || mn === mx){
+        return;
+      }
+      // Always treat range as [lo, hi]
+      const lo = Math.min(mn, mx);
+      const hi = Math.max(mn, mx);
+      let val = (x - lo) / (hi - lo); // higher-is-better normalized
+
+      // If lower-is-better, invert
+      const lowerBetter = getInvertForStat(rule.stat);
+      if(lowerBetter) val = 1 - val;
+
+      score += rule.w * clamp01(val);
+    });
+
+    return score;
+  }
+
+  function getMpMultiplier(mp, mpPctl){
+    if(mpModeEl.value === 'off') return 1;
+    if(!Number.isFinite(mp) || mp <= 0) return 0;
+    if(!Number.isFinite(mpPctl) || mpPctl <= 0) return 1;
+    return Math.min(1, Math.sqrt(mp / mpPctl));
+  }
+
+  function buildStatDistributions(){
+    statDist = {};
+    // Use union of stats in the current weights plus common ones used in fit presets
+    const fromWeights = (currentWeights[pos] || []).map(x => x.stat);
+    const fromFit = Object.keys(FIT_PRESETS.balanced);
+    const stats = Array.from(new Set([...fromWeights, ...fromFit])).filter(Boolean);
+
+    stats.forEach(stat => {
+      const arr = computed.map(r => safeNum(r[stat])).filter(Number.isFinite);
+      if(arr.length < 5) return;
+      const sorted = arr.slice().sort((a,b)=>a-b);
+      statDist[stat] = {sorted, invert: getInvertForStat(stat)};
+    });
+  }
+
+  function statPercentile(stat, x){
+    const d = statDist[stat];
+    if(!d) return NaN;
+    let p = percentileRank(d.sorted, x); // 0..1 (higher value => higher percentile)
+    if(d.invert) p = 1 - p;              // lower is better => invert
+    return clamp(p, 0, 1);
+  }
+
+  function fitScoreForRow(r){
+    const presetKey = fitPresetEl.value;
+    const preset = FIT_PRESETS[presetKey] || FIT_PRESETS.balanced;
+
+    let num = 0, den = 0;
+    for(const [stat, w] of Object.entries(preset)){
+      if(!w) continue;
+      const x = safeNum(r[stat]);
+      if(x === null) continue;
+      const p = statPercentile(stat, x);
+      if(!Number.isFinite(p)) continue;
+      num += w * p;
+      den += w;
+    }
+    if(den === 0) return NaN;
+    return 100 * (num / den);
+  }
+
+  function archetypeTags(r){
+    // Use percentiles for tagging
+    const p = (stat) => {
+      const x = safeNum(r[stat]);
+      if(x === null) return NaN;
+      return statPercentile(stat, x);
+    };
+
+    const tags = [];
+    if(pos === 'Guards'){
+      const p3 = p('3P%'), pefg = p('eFG%'), pft = p('FT%'), pppg = p('PPG');
+      const papg = p('APG'), pato = p('A/TO'), ptopg = p('TOPG');
+      const pspg = p('SPG'), pdr = p('DR%'), pbpm = p('BPM');
+
+      if(Number.isFinite(p3) && p3 >= 0.80) tags.push({t:'Shooter', c:'var(--accent2)'});
+      if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient', c:'var(--good)'});
+      if(Number.isFinite(pppg) && pppg >= 0.80) tags.push({t:'Scorer', c:'var(--accent)'});
+      if(Number.isFinite(papg) && papg >= 0.80) tags.push({t:'Playmaker', c:'var(--accent2)'});
+      if(Number.isFinite(pato) && pato >= 0.75) tags.push({t:'Low TO', c:'var(--good)'});
+      if(Number.isFinite(pspg) && pspg >= 0.80) tags.push({t:'Disruptor', c:'var(--warn)'});
+      if(Number.isFinite(pdr) && pdr >= 0.75) tags.push({t:'Defender', c:'var(--warn)'});
+      if(Number.isFinite(pbpm) && pbpm >= 0.75) tags.push({t:'Impact', c:'var(--accent)'});
+
+      if(tags.length === 0) tags.push({t:'Role Player', c:'var(--muted)'});
+      return tags.slice(0, 6);
+    }else{
+      const pbpg = p('BPG'), pdrtg = p('DRtg'), pdr = p('DR%'), por = p('OR%'), pdrb = p('DRB/G');
+      const pefg = p('eFG%'), p3 = p('3P%');
+
+      if(Number.isFinite(pbpg) && pbpg >= 0.80) tags.push({t:'Rim Protector', c:'var(--warn)'});
+      if((Number.isFinite(pdr) && pdr >= 0.80) || (Number.isFinite(pdrb) && pdrb >= 0.80)) tags.push({t:'Rebounder', c:'var(--accent2)'});
+      if(Number.isFinite(pdrtg) && pdrtg >= 0.75) tags.push({t:'Anchor Defender', c:'var(--warn)'});
+      if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient Finisher', c:'var(--good)'});
+      if(Number.isFinite(por) && por >= 0.75) tags.push({t:'Extra Possessions', c:'var(--accent)'});
+      if(Number.isFinite(p3) && p3 >= 0.75) tags.push({t:'Stretch Big', c:'var(--accent2)'});
+
+      if(tags.length === 0) tags.push({t:'Frontcourt Role', c:'var(--muted)'});
+      return tags.slice(0, 6);
+    }
+  }
+
+  function computeAll(){
+    // Make sure weight table includes every numeric stat in the current sheet
+    ensureWeightsCoverStats(pos, rows);
+
+    if(!rows.length) { computed = []; renderPlayers(); return; }
+
+    computed = rows.map(r => {
+      const perf = scoreRow(r);
+      const mp = safeNum(r['MP']);
+      return {...r, PerfScore_calc: perf, MP_num: mp};
+    });
+
+    const perfArr = computed.map(r => r.PerfScore_calc).filter(Number.isFinite);
+    lastPerfAvg = perfArr.reduce((a,b)=>a+b,0) / (perfArr.length || 1);
+
+    const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
+    lastPerfStar = percentileInc(perfArr, starP);
+
+    const mpP = clamp(Number(mpPctEl.value), 0.5, 0.999);
+    const mpArr = computed.map(r => r.MP_num).filter(Number.isFinite);
+    const mpPctl = percentileInc(mpArr, mpP);
+
+    const avgPay = Number(avgPayEl.value);
+    const minPay = Number(minPayEl.value);
+    const maxPay = Number(maxPayEl.value);
+    const starValue = Number(starValueEl.value);
+
+    let k = 0;
+    const denom = (lastPerfStar - lastPerfAvg);
+    if(Number.isFinite(starValue) && Number.isFinite(avgPay) && avgPay > 0 && Number.isFinite(denom) && Math.abs(denom) > 1e-9){
+      k = Math.log(starValue / avgPay) / denom;
+    }
+
+    computed = computed.map(r => {
+      const perf = r.PerfScore_calc;
+      const mp = r.MP_num;
+
+      let pred = NaN, final = NaN, mult = 1;
+      if(Number.isFinite(perf) && Number.isFinite(avgPay) && avgPay > 0){
+        pred = avgPay * Math.exp(k * (perf - lastPerfAvg));
+        pred = clamp(pred, minPay, maxPay);
+        mult = getMpMultiplier(mp, mpPctl);
+        final = clamp(pred * mult, minPay, maxPay);
+      }
+      return {...r,
+        Score: perf,
+        PredictedValue_calc: pred,
+        MinMultiplier_calc: mult,
+        ActualValuation_calc: final
+      };
+    });
+
+    // Build percentile distributions and fit scores
+    buildStatDistributions();
+    computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)}));
+
+    // --- Boss fields (optional) + our ranking ---
+    function pickActualValuation(row){
+      // Try a few likely columns from the workbook (your boss's valuation)
+      const keys = ['Valuation','Value','ActualValuation','ActualValuation','PredictedValue','Pay','Salary'];
+      for(const k of keys){
+        const v = safeNum(row[k]);
+        if(Number.isFinite(v)) return v;
+      }
+      return NaN;
+    }
+
+    computed = computed.map(r => {
+      const bossRank = safeNum(r['Rank']);
+      const bossVal = pickActualValuation(r);
+      const delta = (Number.isFinite(bossVal) && Number.isFinite(r.ActualValuation_calc)) ? (r.ActualValuation_calc - bossVal) : NaN;
+      const deltaPct = (Number.isFinite(delta) && Number.isFinite(bossVal) && bossVal !== 0) ? (delta / bossVal) : NaN;
+      return {...r, BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct};
+    });
+
+    // Rank by PerfScore (desc), tie-break by FitScore (desc)
+    const ranked = computed.slice().sort((a,b)=>{
+      const pa = a.PerfScore_calc, pb = b.PerfScore_calc;
+      const fa = a.FitScore_calc, fb = b.FitScore_calc;
+      if(Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) return pb - pa;
+      if(Number.isFinite(fa) && Number.isFinite(fb) && fa !== fb) return fb - fa;
+      return String(a.Player||'').localeCompare(String(b.Player||''));
+    });
+    ranked.forEach((r,i)=>{ r.CalcRank = i + 1; });
+
+    // KPIs
+    kpiPlayers.textContent = String(computed.length);
+    kpiAvgPerf.textContent = Number.isFinite(lastPerfAvg) ? lastPerfAvg.toFixed(2) : '—';
+    kpiStarPerf.textContent = Number.isFinite(lastPerfStar) ? lastPerfStar.toFixed(2) : '—';
+
+    renderPlayers();
+  }
+
+  // ---------- Table rendering ----------
+  const LIST_COLS = [
+    {key:'CalcRank', label:'Rank'},
+    {key:'Player', label:'Player'},
+    {key:'Team', label:'Team'},
+    {key:'Conference', label:'Conf'},
+    {key:'MP', label:'MP'},
+    {key:'Score', label:'Perf'},
+    {key:'FitScore_calc', label:'Fit'},
+    {key:'ActualValuation_calc', label:'Model $'},
+    {key:'ActualValuation', label:'Actual $'},
+    {key:'ValueDelta_calc', label:'Δ$'},
+  ];
+
+  function sortData(data){
+    const k = sort.key;
+    const dir = sort.dir;
+    return data.slice().sort((a,b)=>{
+      const av = a[k]; const bv = b[k];
+      const an = Number(av); const bn = Number(bv);
+      let cmp;
+      if(Number.isFinite(an) && Number.isFinite(bn)) cmp = an - bn;
+      else cmp = (av ?? '').toString().localeCompare((bv ?? '').toString());
+      return dir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  function renderPlayers(){
+    const q = (searchInput.value || '').toLowerCase().trim();
+    let data = computed.slice();
+    if(q){
+      data = data.filter(r => {
+        return ['Player','Team','Conference','Position'].some(k => (r[k] ?? '').toString().toLowerCase().includes(q));
+      });
+    }
+    data = sortData(data);
+
+    playersHead.innerHTML = '';
+    LIST_COLS.forEach(c => {
+      const th = document.createElement('th');
+      th.textContent = c.label;
+      th.addEventListener('click', ()=>{
+        if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
+        else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
+        renderPlayers();
+      });
+      playersHead.appendChild(th);
+    });
+
+    playersBody.innerHTML = '';
+    data.slice(0, 4000).forEach(r => {
+      const tr = document.createElement('tr');
+      LIST_COLS.forEach(c => {
+        const td = document.createElement('td');
+        let v = r[c.key];
+      if(['ActualValuation_calc','ActualValuation','ValueDelta_calc'].includes(c.key)){
+        const n = safeNum(v);
+        if(!Number.isFinite(n)) v = '—';
+        else if(c.key === 'ValueDelta_calc') v = (n>=0?'+':'') + fmtMoney(n).replace('$','');
+        else v = fmtMoney(n);
+      }
+
+
+        if(c.key === 'Player'){
+          td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
+          td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
+        }else if(c.key === 'Score' && Number.isFinite(Number(r.Score))){
+          td.textContent = Number(r.Score).toFixed(2);
+        }else if(c.key === 'FitScore_calc'){
+          td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
+        }else if(c.key === 'ActualValuation_calc'){
+          td.textContent = fmtMoney(r.ActualValuation_calc);
+        }else{
+          td.textContent = (v ?? '').toString();
+        }
+        tr.appendChild(td);
+      });
+      playersBody.appendChild(tr);
+    });
+  }
+
+  // ---------- Profile modal ----------
+  function barColor(p){
+    if(!Number.isFinite(p)) return 'var(--muted)';
+    if(p >= 0.80) return 'var(--good)';
+    if(p >= 0.60) return 'var(--accent2)';
+    if(p >= 0.40) return 'var(--accent)';
+    return 'var(--bad)';
+  }
+
+  function openProfile(r){
+    const player = (r['Player'] ?? 'Player').toString();
+    const team = (r['Team'] ?? '').toString();
+    const conf = (r['Conference'] ?? r['Conf'] ?? '').toString();
+    const position = (r['Position'] ?? pos).toString();
+
+    mTitle.textContent = player;
+    mSub.textContent = [team, conf, position].filter(Boolean).join(' • ');
+    mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
+    mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
+    mVal.textContent = fmtMoney(r.ActualValuation_calc);
+    mMult.textContent = Number.isFinite(r.MinMultiplier_calc) ? r.MinMultiplier_calc.toFixed(2) : '—';
+
+    const bossVal = safeNum(r.ActualValuation);
+    const delta = safeNum(r.ValueDelta_calc);
+    const deltaPct = safeNum(r.ValueDeltaPct_calc);
+    let bossLine = '';
+    if(Number.isFinite(bossVal)){
+      const sign = Number.isFinite(delta) ? (delta>=0?'+':'') : '';
+      const pctTxt = Number.isFinite(deltaPct) ? ` (${(deltaPct*100).toFixed(1)}%)` : '';
+      bossLine = `Actual valuation: <b>${fmtMoney(bossVal)}</b> • Model vs Boss: <b>${sign}${fmtMoney(delta).replace('$','')}</b>${pctTxt}`;
+    }
+
+
+    if(bossLine){ mMeta.innerHTML = `<div class="muted">${bossLine}</div>`; }
+
+    // tags
+    mTags.innerHTML = '';
+    
+
+    // Fill role definitions list (under valuation)
+    const roleDefsEl = document.getElementById('mRoleDefs');
+    if(roleDefsEl){
+      const labels = [...new Set(archetypeTags(r).map(x => x.t).filter(Boolean))];
+      roleDefsEl.innerHTML = labels.map(lbl => {
+        const desc = ROLE_DESCRIPTIONS[lbl] || "Definition not set.";
+        return `<div style="display:flex; gap:10px; align-items:flex-start">
+          <span class="pill" style="flex:0 0 auto">${lbl}</span>
+          <div class="hint" style="margin:0; opacity:.95">${desc}</div>
+        </div>`;
+      }).join('') || `<div class="hint" style="margin:0">No role tags for this player.</div>`;
+    }
+archetypeTags(r).forEach(tag=>{
+      const div = document.createElement('div');
+      div.className = 'chip';
+      div.innerHTML = `<span class="dot" style="background:${tag.c}"></span>${tag.t}`;
+      mTags.appendChild(div);
+    });
+
+    // key bars (show the stats from your weights with weight>0, capped)
+    const usedStats = (currentWeights[pos] || []).filter(x => (Number(x.w)||0) !== 0).map(x=>x.stat);
+    const fallback = ['PPG','eFG%','3P%','FT%','APG','A/TO','TOPG','SPG','BPG','DRtg','DR%','WS/40','BPM','PER'];
+    const stats = Array.from(new Set([...usedStats, ...fallback])).filter(s => r[s] !== undefined).slice(0, 10);
+
+    mBars.innerHTML = '';
+    stats.forEach(stat=>{
+      const x = safeNum(r[stat]);
+      const pct = statPercentile(stat, x);
+      const item = document.createElement('div');
+      item.className = 'barItem';
+      const pctLabel = Number.isFinite(pct) ? `${Math.round(pct*100)}th` : '—';
+      item.innerHTML = `
+        <div class="barTop"><div><b>${stat}</b> <span class="muted">${(r[stat] ?? '—')}</span></div><div>${pctLabel}</div></div>
+        <div class="barTrack"><div class="barFill"></div></div>
+        <div class="barMeta"><span>${getInvertForStat(stat) ? 'Lower is better' : 'Higher is better'}</span><span class="muted">${fitPresetEl.options[fitPresetEl.selectedIndex].text}</span></div>
+      `;
+      const fill = item.querySelector('.barFill');
+      fill.style.width = Number.isFinite(pct) ? `${Math.round(pct*100)}%` : `0%`;
+      fill.style.background = `linear-gradient(90deg, ${barColor(pct)}, var(--accent2))`;
+      mBars.appendChild(item);
+    });
+
+    // valuation meta + star anchor explanation
+    const avgPay = Number(avgPayEl.value);
+    const starValue = Number(starValueEl.value);
+    const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
+    mMeta.innerHTML = `
+      <div class="muted">
+        Star anchor: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'—'}</b>),
+        predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
+        More starValue → steeper curve (bigger top-end).
+      </div>
+    `;
+
+    // All stats
+    const exclude = new Set(['PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc']);
+    const all = Object.keys(r).filter(k => !exclude.has(k));
+    const container = document.createElement('div');
+    container.className = 'panel';
+    container.style.border = 'none';
+    container.style.borderRadius = '0';
+    container.innerHTML = '';
+    all.forEach(k => {
+      const div = document.createElement('div');
+      div.className = 'statRow';
+      div.innerHTML = `<span class="k">${k}</span><span>${(r[k] ?? '—')}</span>`;
+      container.appendChild(div);
+    });
+    mAllStats.innerHTML = '';
+    mAllStats.appendChild(container);
+
+    modalBack.style.display = 'flex';
+  }
+
+  function closeProfile(){ modalBack.style.display = 'none'; }
+
+  function openStatInfo(stat){
+    const statBack = document.getElementById('statBack');
+    const sClose = document.getElementById('sClose');
+    const sTitle = document.getElementById('sTitle');
+    const sDir = document.getElementById('sDir');
+    const sDesc = document.getElementById('sDesc');
+    const sMin = document.getElementById('sMin');
+    const sMax = document.getElementById('sMax');
+    const sDir2 = document.getElementById('sDir2');
+    const sTip = document.getElementById('sTip');
+
+    if(!statBack) { showWarn('Stat glossary modal not found in DOM.'); return; }
+
+    const rule = (currentWeights[pos] || []).find(x => x.stat === stat);
+    const isLower = getInvertForStat(stat);
+    const desc = STAT_GLOSSARY[stat] || 'No description yet for this metric.';
+
+    if(sTitle) sTitle.textContent = stat;
+    if(sDir) sDir.textContent = prettyDir(isLower);
+    if(sDir2) sDir2.textContent = prettyDir(isLower);
+    if(sDesc) sDesc.textContent = desc;
+    if(sMin) sMin.textContent = (rule && Number.isFinite(Number(rule.min))) ? Number(rule.min) : '—';
+    if(sMax) sMax.textContent = (rule && Number.isFinite(Number(rule.max))) ? Number(rule.max) : '—';
+    if(sTip) sTip.textContent = 'Tip: Set Min/Max to realistic bounds (or percentiles) so normalization is stable.';
+
+    // attach close handlers once
+    if(sClose && !sClose._bound){
+      sClose.addEventListener('click', ()=> closeStatInfo());
+      sClose._bound = true;
+    }
+    if(!statBack._bound){
+      statBack.addEventListener('click', (e)=>{ if(e.target === statBack) closeStatInfo(); });
+      statBack._bound = true;
+    }
+
+    statBack.style.display = 'flex';
+  }
+
+  function closeStatInfo(){
+    const statBack = document.getElementById('statBack');
+    if(statBack) statBack.style.display = 'none';
+  }
+
+  mClose.addEventListener('click', closeProfile);
+  modalBack.addEventListener('click', (e)=>{ if(e.target === modalBack) closeProfile(); });
+  window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeProfile(); closeStatInfo(); } });
+
+  // ---------- League/pos tabs ----------
+  document.getElementById('tabMBB').addEventListener('click', ()=>{
+    league = 'MBB';
+    setActiveTab(document.getElementById('tabMBB'), '.tab[data-league]');
+    applyLeagueDefaults(false);
+    reloadActiveSheet();
+  });
+  document.getElementById('tabWBB').addEventListener('click', ()=>{
+    league = 'WBB';
+    setActiveTab(document.getElementById('tabWBB'), '.tab[data-league]');
+    applyLeagueDefaults(false);
+    reloadActiveSheet();
+  });
+  document.getElementById('tabGuards').addEventListener('click', ()=>{
+    pos = 'Guards';
+    setActiveTab(document.getElementById('tabGuards'), '.tab[data-pos]');
+    renderWeights();
+    reloadActiveSheet();
+  });
+  document.getElementById('tabBigs').addEventListener('click', ()=>{
+    pos = 'Bigs';
+    setActiveTab(document.getElementById('tabBigs'), '.tab[data-pos]');
+    renderWeights();
+    reloadActiveSheet();
+  });
+
+  fitPresetEl.addEventListener('change', ()=>{
+    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+    if(wb) { computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)})); renderPlayers(); }
+  });
+
+  function applyLeagueDefaults(force){
+    if(league === 'MBB'){
+      if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000){
+        avgPayEl.value = 70000; minPayEl.value = 10000; maxPayEl.value = 300000;
+      }
+    }else{
+      if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 70000){
+        avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 150000;
+      }
+    }
+  }
+
+  // ---------- Sheet selection ----------
+  function reloadActiveSheet(){
+    if(!wb) return;
+    clearWarn();
+    const desired = SHEET_MAP[league][pos];
+    const sheetName = findSheetLike(desired) || desired;
+    activeSheetEl.textContent = sheetName;
+
+    const ws = wb.Sheets[sheetName];
+    if(!ws){
+      showWarn(`Could not find sheet "${sheetName}" in the workbook. Check sheet names.`);
+      rows = [];
+      computed = [];
+      renderPlayers();
+      return;
+    }
+    rows = parseSheetToRows(ws);
+    ensureWeightsCoverStats(pos, rows);
+    renderWeights();
+    computeAll();
+  }
+
+  // ---------- File load ----------
+  
+  if(loadGsBtn){
+    loadGsBtn.addEventListener('click', async ()=>{
+      const url = gsUrlInput?.value?.trim();
+      const key = gsKeyInput?.value?.trim();
+      await loadFromGoogleSheets(url, key);
+    });
+  }
+const buf = await f.arrayBuffer();
+      wb = XLSX.read(buf, {type:'array'});
+
+      // Debug: show sheet names if something goes wrong
+      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
+      const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
+      if(missing.length){
+        showWarn(`Workbook missing: ${missing.join(', ')}. Found sheets: ${wb.SheetNames.join(', ')}`);
+      }else{
+        clearWarn();
+      }
+
+      const ok = loadScoringWeight();
+      resetWeightsBtn.disabled = !ok;
+      recalcBtn.disabled = false;
+      exportBtn.disabled = false;
+
+      applyLeagueDefaults(true);
+      renderWeights();
+      activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+      reloadActiveSheet();
+
+    }catch(err){
+      showWarn(`Upload error: ${err?.message || err}`);
+      console.error(err);
+    }
+  });
+
+  // ---------- Buttons + live updates ----------
+  recalcBtn.addEventListener('click', ()=>{ if(wb) computeAll(); });
+
+  resetWeightsBtn.addEventListener('click', ()=>{
+    // Reset to your Excel defaults, but keep any extra stats (with W=0) available in this sheet.
+    const base = JSON.parse(JSON.stringify(excelWeights));
+    currentWeights[pos] = base[pos] || [];
+    ensureWeightsCoverStats(pos, rows);
+    renderWeights();
+    computeAll();
+  });
+
+  resetValBtn.addEventListener('click', ()=>{
+    applyLeagueDefaults(true);
+    starValueEl.value = 100000;
+    starPctEl.value = 0.95;
+    mpModeEl.value = 'on';
+    mpPctEl.value = 0.95;
+    computeAll();
+  });
+
+  function exportCSV(){
+    const cols = ['Rank','Player','Team','Conference','Position','MP','Score','FitScore_calc','PredictedValue_calc','MinMultiplier_calc','ActualValuation_calc'];
+    const lines = [];
+    lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
+    computed.forEach(r => {
+      const row = cols.map(c => `"${(r[c] ?? '').toString().replaceAll('"','""')}"`).join(',');
+      lines.push(row);
+    });
+    const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scouting_${league.toLowerCase()}_${pos.toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  exportBtn.addEventListener('click', exportCSV);
+
+  searchInput.addEventListener('input', renderPlayers);
+  showSelectedOnlyEl.addEventListener('change', renderWeights);
+  advancedDirEl.addEventListener('change', renderWeights);
+
+
+  [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
+    el.addEventListener('input', ()=>{ if(wb) computeAll(); });
+    el.addEventListener('change', ()=>{ if(wb) computeAll(); });
+  });
+
+  // Auto-load default Google Sheet on startup
+  window.addEventListener('DOMContentLoaded', () => {
+    if(gsUrlInput) gsUrlInput.value = 'https://docs.google.com/spreadsheets/d/1dDphHKY2lIs1T88TKo6f3n7oUccc4dVYmMlF2Rk1mFk/edit?usp=sharing';
+    if(gsKeyInput) gsKeyInput.value = 'AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8';
+    setTimeout(() => loadFromGoogleSheets(gsUrlInput.value, gsKeyInput.value), 80);
+  });
+</script>
+<!-- Stat glossary modal -->
+<div class="modalBack" id="statBack">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modalHead">
+      <div>
+        <div class="modalTitle" id="sTitle">Stat</div>
+        <div class="modalSub" id="sDir">—</div>
+      </div>
+      <button class="close" id="sClose">Close</button>
+    </div>
+    <div class="modalBody">
+      <div class="panel">
+        <div class="panelHead">What it measures</div>
+        <div class="panelBody">
+          <div class="hint" id="sDesc" style="margin-top:0">—</div>
+          <div class="divider"></div>
+          <div class="row" style="gap:10px;flex-wrap:wrap">
+            <span class="pill">Current Min: <b id="sMin">—</b></span>
+            <span class="pill">Current Max: <b id="sMax">—</b></span>
+            <span class="pill">Direction: <b id="sDir2">—</b></span>
+          </div>
+          <div class="hint" id="sTip">Tip: use Min/Max to normalize players into a 0–1 scale before weighting.</div>
+        </div>
+      </div>
+    
+</body>
+</html>
