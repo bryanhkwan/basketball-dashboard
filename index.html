@@ -551,7 +551,7 @@
   function sheetToJson(ws){
     if(!ws) return [];
     if(ws.__aoa) return aoaToObjects(ws.__aoa);
-    return XLSX.utils.sheet_to_json(ws, { defval: "" });
+    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json) return sheetToJson(ws);
     return [];
   }
 
@@ -600,18 +600,22 @@
   }
 
   
-  async function loadFromGoogleSheets(url, apiKey){
+  // ---- Google Sheets defaults (edit once; used for auto-load on GitHub Pages) ----
+  const DEFAULT_GS_URL = 'https://docs.google.com/spreadsheets/d/1dDphHKY2lIs1T88TKo6f3n7oUccc4dVYmMlF2Rk1mFk/edit?usp=sharing';
+  const DEFAULT_GS_API_KEY = 'AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8';
+
+  async function loadFromGoogleSheets(url = DEFAULT_GS_URL, apiKey = DEFAULT_GS_API_KEY){
     try{
       const sid = extractSpreadsheetId(url);
       if(!sid) { showWarn('Could not parse spreadsheet ID from the link.'); return; }
       if(!apiKey) { showWarn('Missing API key.'); return; }
 
       const ranges = [
-        'ScoringWeight!A1:G1000',
-        'MBB Guards!A1:ZZ20000',
-        'MBB Bigs!A1:ZZ20000',
-        'WBB Guards MAC!A1:ZZ20000',
-        'WBB Bigs MAC!A1:ZZ20000'
+        'ScoringWeight!A1:G',
+        `${SHEET_MAP.MBB.Guards}!A1:ZZ`,
+        `${SHEET_MAP.MBB.Bigs}!A1:ZZ`,
+        `${SHEET_MAP.WBB.Guards}!A1:ZZ`,
+        `${SHEET_MAP.WBB.Bigs}!A1:ZZ`,
       ];
 
       const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
@@ -636,10 +640,10 @@
       data.valueRanges.forEach(vr => {
         const range = vr.range || '';
         const sheetName = range.split('!')[0] || 'Sheet';
-        const cleanName = sheetName.replace(/^'/,'').replace(/'$/,'');
         const aoa = vr.values || [];
-        wb.SheetNames.push(cleanName);
-        wb.Sheets[cleanName] = { __aoa: aoa };
+        wb.SheetNames.push(sheetName);
+        wb.Sheets[sheetName] = { __aoa: aoa };
+      });
 
       const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
       const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
@@ -1772,62 +1776,19 @@ const buf = await f.arrayBuffer();
           <div class="hint" id="sTip">Tip: use Min/Max to normalize players into a 0–1 scale before weighting.</div>
         </div>
       </div>
-<script>
-(function () {
-  const API_KEY = "AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8";
-  const SHEET_ID = "1dDphHKY2lIs1T88TKo6f3n7oUccc4dVYmMlF2Rk1mFk";
 
-  // IMPORTANT: this is a simple test call (ScoringWeight only)
-  async function testFetch() {
-    const statusEl = document.getElementById("gsStatus");
-    try {
-      statusEl.textContent = "Fetching ScoringWeight…";
-
-      const url =
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/ScoringWeight!A1:G1000` +
-        `?valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS&key=${encodeURIComponent(API_KEY)}`;
-
-      console.log("[GS REQ]", url);
-
-      const res = await fetch(url);
-      const data = await res.json();
-
-      console.log("[GS RES]", res.status, data);
-
-      if (!res.ok) {
-        statusEl.textContent = "Google Sheets error " + res.status + ": " + (data?.error?.message || JSON.stringify(data));
-        return;
-      }
-
-      const rows = data.values ? data.values.length : 0;
-      statusEl.textContent = `✅ Google Sheets OK. Rows returned: ${rows}. Check Console for details.`;
-    } catch (e) {
-      console.error(e);
-      document.getElementById("gsStatus").textContent = "❌ Fetch crashed: " + e.message;
-    }
-  }
-
-  // Bind to your existing Refresh button by text
-  // (works even if the button has the wrong id)
-  function bind() {
-    const btns = Array.from(document.querySelectorAll("button"));
-    const refreshBtn = btns.find(b => (b.textContent || "").trim().toLowerCase() === "refresh data");
-    if (!refreshBtn) {
-      console.warn("Could not find Refresh data button");
-      return;
-    }
-    refreshBtn.addEventListener("click", testFetch);
-    console.log("✅ Refresh data button bound to Google Sheets test fetch");
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bind);
-  } else {
-    bind();
-  }
-})();
-</script>
 
       
-</body>
+	<script>
+  // Bind the big "Refresh data" button + auto-load from the default Google Sheet.
+  (function(){
+    const btn = document.getElementById('loadGs');
+    if(btn){
+      btn.addEventListener('click', () => loadFromGoogleSheets());
+    }
+    window.addEventListener('load', () => loadFromGoogleSheets());
+  })();
+</script>
+	</body>
+
 </html>
