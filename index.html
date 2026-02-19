@@ -627,9 +627,9 @@
         return;
       }
       if(!data.valueRanges || !data.valueRanges.length){
-        showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
-        return;
-      }
+  showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
+  console.warn("Sheets returned empty data");
+}
 
       wb = { SheetNames: [], Sheets: {} };
       data.valueRanges.forEach(vr => {
