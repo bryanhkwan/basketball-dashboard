@@ -547,11 +547,24 @@
     return rows;
   }
 
-  // Unified sheet->json for both XLSX worksheets and Google AOA sheets
+  // Unified sheet->AOA for both XLSX worksheets and Google AOA sheets
+  // ALWAYS returns array-of-arrays (AOA) so callers can use consistent indexing.
+  function sheetToAoa(ws){
+    if(!ws) return [];
+    if(ws.__aoa) return ws.__aoa;                         // Google Sheets data
+    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json){
+      return XLSX.utils.sheet_to_json(ws, {header:1});    // XLSX worksheet → AOA
+    }
+    return [];
+  }
+
+  // Returns array of row-objects (header-keyed) for either source
   function sheetToJson(ws){
     if(!ws) return [];
     if(ws.__aoa) return aoaToObjects(ws.__aoa);
-    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json) return sheetToJson(ws);
+    if(typeof XLSX !== 'undefined' && XLSX?.utils?.sheet_to_json){
+      return XLSX.utils.sheet_to_json(ws);                // XLSX → objects
+    }
     return [];
   }
 
@@ -639,7 +652,9 @@
       wb = { SheetNames: [], Sheets: {} };
       data.valueRanges.forEach(vr => {
         const range = vr.range || '';
-        const sheetName = range.split('!')[0] || 'Sheet';
+        // Google Sheets API wraps names with spaces in single quotes, e.g. "'MBB Guards'!A1:ZZ"
+        let sheetName = range.split('!')[0] || 'Sheet';
+        sheetName = sheetName.replace(/^'(.*)'$/, '$1');   // strip surrounding quotes
         const aoa = vr.values || [];
         wb.SheetNames.push(sheetName);
         wb.Sheets[sheetName] = { __aoa: aoa };
@@ -660,8 +675,8 @@
 
       applyLeagueDefaults(true);
       renderWeights();
-      computeAll();
-      renderPlayers();
+      activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+      reloadActiveSheet();
     }catch(err){
       showWarn(String(err?.message || err));
     }
@@ -819,19 +834,13 @@ const gsUrlInput = document.getElementById('gsUrl');
 
   // ---------- Excel parsing ----------
   function parseSheetToRows(ws){
-    const aoa = sheetToJson(ws);
-    if(!aoa || aoa.length < 2) return [];
-    const header = aoa[0].map(h => (h ?? '').toString().trim());
-    const out = [];
-    for(let i=1;i<aoa.length;i++){
-      const r = aoa[i];
-      if(!r) continue;
-      const obj = {};
-      header.forEach((h,idx)=> obj[h || `COL${idx+1}`] = r[idx]);
-      const nonBlank = Object.values(obj).some(v => v !== undefined && v !== null && v !== '');
-      if(nonBlank) out.push(obj);
-    }
-    return out;
+    // sheetToJson returns an array of row-objects for both Google and XLSX sources
+    const objRows = sheetToJson(ws);
+    if(!objRows || !objRows.length) return [];
+    // Filter out completely blank rows
+    return objRows.filter(obj => {
+      return Object.values(obj).some(v => v !== undefined && v !== null && v !== '');
+    });
   }
 
   
@@ -918,7 +927,7 @@ function loadScoringWeight(){
     const swName = findSheetLike('ScoringWeight') || 'ScoringWeight';
     const ws = wb.Sheets[swName];
     if(!ws) return false;
-    const aoa = sheetToJson(ws);
+    const aoa = sheetToAoa(ws);   // always AOA so we can destructure by position
     for(let i=1;i<aoa.length;i++){
       const [stat, gw, gmin, gmax, bw, bmin, bmax] = aoa[i] || [];
       if(stat){
@@ -1663,39 +1672,11 @@ archetypeTags(r).forEach(tag=>{
   
   if(loadGsBtn){
     loadGsBtn.addEventListener('click', async ()=>{
-      const url = gsUrlInput?.value?.trim();
-      const key = gsKeyInput?.value?.trim();
-      await loadFromGoogleSheets(url, key);
+      const key = gsKeyInput?.value?.trim() || DEFAULT_GS_API_KEY;
+      await loadFromGoogleSheets(DEFAULT_GS_URL, key);
     });
   }
-const buf = await f.arrayBuffer();
-      wb = XLSX.read(buf, {type:'array'});
-
-      // Debug: show sheet names if something goes wrong
-      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
-      const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
-      if(missing.length){
-        showWarn(`Workbook missing: ${missing.join(', ')}. Found sheets: ${wb.SheetNames.join(', ')}`);
-      }else{
-        clearWarn();
-      }
-
-      const ok = loadScoringWeight();
-      resetWeightsBtn.disabled = !ok;
-      recalcBtn.disabled = false;
-      exportBtn.disabled = false;
-
-      applyLeagueDefaults(true);
-      renderWeights();
-      activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
-      reloadActiveSheet();
-
-    }catch(err){
-      showWarn(`Upload error: ${err?.message || err}`);
-      console.error(err);
-    }
-  });
-
+  // (File upload handler removed — data loads from Google Sheets only)
   // ---------- Buttons + live updates ----------
   recalcBtn.addEventListener('click', ()=>{ if(wb) computeAll(); });
 
@@ -1747,9 +1728,8 @@ const buf = await f.arrayBuffer();
 
   // Auto-load default Google Sheet on startup
   window.addEventListener('DOMContentLoaded', () => {
-    if(gsUrlInput) gsUrlInput.value = 'https://docs.google.com/spreadsheets/d/1dDphHKY2lIs1T88TKo6f3n7oUccc4dVYmMlF2Rk1mFk/edit?usp=sharing';
-    if(gsKeyInput) gsKeyInput.value = 'AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8';
-    setTimeout(() => loadFromGoogleSheets(gsUrlInput.value, gsKeyInput.value), 80);
+    if(gsKeyInput) gsKeyInput.value = DEFAULT_GS_API_KEY;
+    setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 80);
   });
 </script>
 <!-- Stat glossary modal -->
@@ -1776,19 +1756,10 @@ const buf = await f.arrayBuffer();
           <div class="hint" id="sTip">Tip: use Min/Max to normalize players into a 0–1 scale before weighting.</div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
 
-
-      
-	<script>
-  // Bind the big "Refresh data" button + auto-load from the default Google Sheet.
-  (function(){
-    const btn = document.getElementById('loadGs');
-    if(btn){
-      btn.addEventListener('click', () => loadFromGoogleSheets());
-    }
-    window.addEventListener('load', () => loadFromGoogleSheets());
-  })();
-</script>
 	</body>
 
 </html>
