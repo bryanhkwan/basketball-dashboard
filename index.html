@@ -446,7 +446,10 @@
         <div class="modalSub" id="mSub">—</div>
         <div class="chipRow" id="mTags"></div>
       </div>
-      <button class="close" id="mClose">Close</button>
+      <div style="display:flex; gap:8px; align-items:start">
+        <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:5px; padding:6px 14px; background:rgba(27,79,153,.35); border:1px solid rgba(27,79,153,.65); border-radius:6px; color:var(--accent2); font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; transition:background .15s, border-color .15s" onmouseover="this.style.background='rgba(27,79,153,.55)';this.style.borderColor='var(--accent2)'" onmouseout="this.style.background='rgba(27,79,153,.35)';this.style.borderColor='rgba(27,79,153,.65)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
+        <button class="close" id="mClose">Close</button>
+      </div>
     </div>
     <div class="modalBody">
       <div class="profileGrid">
@@ -1452,6 +1455,7 @@ function renderWeights(){
 
     mTitle.textContent = player;
     mSub.textContent = [team, conf, position].filter(Boolean).join(' • ');
+    document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
     mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
     mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
     mVal.textContent = fmtMoney(r.ActualValuation_calc);
