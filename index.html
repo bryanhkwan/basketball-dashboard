@@ -1235,36 +1235,43 @@ function renderWeights(){
   }
 
   // ---------- Conference multiplier ----------
-  const DEFAULT_CONF_MULT = {
-    'Big 12':1.08, 'SEC':1.07, 'Big Ten':1.07, 'ACC':1.06, 'Big East':1.06,
-    'American':1.05, 'Mountain West':1.05, 'Mountain We':1.05,
-    'Atlantic 10':1.04, 'A-10':1.04, 'WCC':1.04,
-    'Missouri Valley':1.03, 'Missouri Vall':1.03, 'MVC':1.03,
-    'CUSA':1.03, 'C-USA':1.03, 'Conference USA':1.03,
-    'MAC':1.00,
-    'Sun Belt':1.01,
-    'CAA':1.00, 'Ivy League':1.00, 'Ivy':1.00,
-    'Big West':0.99, 'Summit League':0.99, 'Summit Leag':0.99,
-    'Horizon League':0.99, 'Horizon Leag':0.99,
-    'America East':0.98, 'America Eas':0.98,
-    'Southern':0.98, 'SoCon':0.98,
-    'ASUN':0.97, 'A-Sun':0.97,
-    'MAAC':0.97,
-    'OVC':0.96, 'Ohio Valley':0.96,
-    'WAC':0.96,
-    'Patriot League':0.96, 'Patriot Leag':0.96, 'Patriot':0.96,
-    'Big Sky':0.96,
-    'Southland':0.95,
-    'NEC':0.94, 'Northeast':0.94,
-    'SWAC':0.93,
-    'MEAC':0.93,
-    'Big South':0.94,
-    'Independent':1.00,
-    'NE10':0.90, 'NE-10':0.90, 'Northeast-10':0.90
+  // Canonical display list (one entry per conference, in order)
+  const CONF_DISPLAY_ORDER = [
+    'Big 12','SEC','Big Ten','ACC','Big East',
+    'American','Mountain West','Atlantic 10','WCC',
+    'Missouri Valley','CUSA','MAC','Sun Belt',
+    'CAA','Ivy League','Big West','Summit League',
+    'Horizon League','America East','Southern',
+    'ASUN','MAAC','OVC','WAC','Patriot League',
+    'Big Sky','Southland','NEC','SWAC','MEAC',
+    'Big South','Independent','NE10'
+  ];
+
+  const DEFAULT_CONF_VALUES = {
+    'Big 12':1.08,'SEC':1.07,'Big Ten':1.07,'ACC':1.06,'Big East':1.06,
+    'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,
+    'Missouri Valley':1.03,'CUSA':1.03,'MAC':1.00,'Sun Belt':1.01,
+    'CAA':1.00,'Ivy League':1.00,'Big West':0.99,'Summit League':0.99,
+    'Horizon League':0.99,'America East':0.98,'Southern':0.98,
+    'ASUN':0.97,'MAAC':0.97,'OVC':0.96,'WAC':0.96,'Patriot League':0.96,
+    'Big Sky':0.96,'Southland':0.95,'NEC':0.94,'SWAC':0.93,'MEAC':0.93,
+    'Big South':0.94,'Independent':1.00,'NE10':0.90
   };
 
-  // Live working copy (user-editable)
-  let confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_MULT));
+  // Alias map: maps alternate spellings → canonical name
+  const CONF_ALIASES = {
+    'Mountain We':'Mountain West','A-10':'Atlantic 10',
+    'Missouri Vall':'Missouri Valley','MVC':'Missouri Valley',
+    'C-USA':'CUSA','Conference USA':'CUSA',
+    'Ivy':'Ivy League','Summit Leag':'Summit League',
+    'Horizon Leag':'Horizon League','America Eas':'America East',
+    'SoCon':'Southern','A-Sun':'ASUN',
+    'Ohio Valley':'OVC','Patriot Leag':'Patriot League','Patriot':'Patriot League',
+    'Northeast':'NEC','NE-10':'NE10','Northeast-10':'NE10'
+  };
+
+  // Live working copy (user-editable) — keyed by canonical name only
+  let confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
   const confMultToggleEl = document.getElementById('confMultToggle');
   const confMultBodyEl = document.getElementById('confMultBody');
   const confMultTableBody = document.getElementById('confMultTableBody');
@@ -1272,41 +1279,15 @@ function renderWeights(){
   const confMultLeagueNote = document.getElementById('confMultLeagueNote');
   const resetConfMultBtn = document.getElementById('resetConfMult');
 
-  // Canonical display order (sorted by multiplier desc)
-  function confSortedEntries(){
-    const seen = new Set();
-    const entries = [];
-    // Deduplicate: keep only 1 entry per unique value — prefer the longest key name
-    const grouped = {};
-    for(const [k,v] of Object.entries(confMultipliers)){
-      const vk = v.toFixed(3);
-      if(!grouped[vk] || k.length > grouped[vk].length) grouped[vk] = k;
-    }
-    // But we want all keys editable, so show ALL unique keys
-    const usedNames = new Set();
-    const result = [];
-    for(const [k,v] of Object.entries(confMultipliers)){
-      // skip short aliases if long form exists
-      const vk = v.toFixed(3);
-      if(grouped[vk] !== k && usedNames.has(vk)) continue;
-      usedNames.add(vk);
-      result.push([grouped[vk], v]);
-    }
-    result.sort((a,b)=> b[1] - a[1] || a[0].localeCompare(b[0]));
-    return result;
-  }
-
   function renderConfMultTable(){
     const isOn = confMultToggleEl.checked;
     confMultBodyEl.style.opacity = isOn ? '1' : '0.4';
     confMultBodyEl.style.pointerEvents = isOn ? 'auto' : 'none';
-
-    // League note
     confMultLeagueNote.textContent = league === 'WBB' ? '(WBB — will activate when conference column detected)' : '';
 
-    const entries = confSortedEntries();
     confMultTableBody.innerHTML = '';
-    entries.forEach(([conf, mult]) => {
+    CONF_DISPLAY_ORDER.forEach(conf => {
+      const mult = confMultipliers[conf] ?? 1;
       const tr = document.createElement('tr');
       const isMac = conf === 'MAC';
       tr.innerHTML = `
@@ -1316,19 +1297,12 @@ function renderWeights(){
       confMultTableBody.appendChild(tr);
     });
 
-    // Attach events
     confMultTableBody.querySelectorAll('.confMult-input').forEach(inp => {
       inp.addEventListener('input', (e) => {
         const conf = e.target.dataset.conf;
         const val = parseFloat(e.target.value);
         if(!Number.isFinite(val)) return;
-        // Update all aliases that had the same old value
-        const oldVal = confMultipliers[conf];
         confMultipliers[conf] = val;
-        // Also update aliases
-        for(const [k,v] of Object.entries(confMultipliers)){
-          if(v === oldVal && k !== conf) confMultipliers[k] = val;
-        }
         e.target.style.color = val > 1 ? 'var(--good)' : val < 1 ? 'var(--bad)' : 'var(--text)';
         updateConfMultRange();
         if(wb) computeAll();
@@ -1339,7 +1313,7 @@ function renderWeights(){
   }
 
   function updateConfMultRange(){
-    const vals = Object.values(confMultipliers);
+    const vals = CONF_DISPLAY_ORDER.map(c => confMultipliers[c] ?? 1);
     const mn = Math.min(...vals), mx = Math.max(...vals);
     confMultRangeEl.textContent = `${mn.toFixed(2)} – ${mx.toFixed(2)}`;
   }
@@ -1350,26 +1324,34 @@ function renderWeights(){
   });
 
   resetConfMultBtn.addEventListener('click', ()=>{
-    confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_MULT));
+    confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
     renderConfMultTable();
     if(wb) computeAll();
   });
 
-  // Lookup: find multiplier for a conference string (fuzzy)
+  // Lookup: resolve a conference string to its canonical name, then get multiplier
   function getConfMultiplier(confStr){
     if(!confStr) return 1;
     const c = confStr.toString().trim();
+    // Direct match on canonical name
     if(confMultipliers[c] !== undefined) return confMultipliers[c];
-    // Try case-insensitive
+    // Check alias map
+    const alias = CONF_ALIASES[c];
+    if(alias && confMultipliers[alias] !== undefined) return confMultipliers[alias];
+    // Case-insensitive match on canonical names
     const cl = c.toLowerCase();
-    for(const [k,v] of Object.entries(confMultipliers)){
-      if(k.toLowerCase() === cl) return v;
+    for(const name of CONF_DISPLAY_ORDER){
+      if(name.toLowerCase() === cl) return confMultipliers[name] ?? 1;
     }
-    // Try partial match
-    for(const [k,v] of Object.entries(confMultipliers)){
-      if(cl.includes(k.toLowerCase()) || k.toLowerCase().includes(cl)) return v;
+    // Case-insensitive alias
+    for(const [ak, av] of Object.entries(CONF_ALIASES)){
+      if(ak.toLowerCase() === cl) return confMultipliers[av] ?? 1;
     }
-    return 1; // unknown conference = no adjustment
+    // Partial/contains match as last resort
+    for(const name of CONF_DISPLAY_ORDER){
+      if(cl.includes(name.toLowerCase()) || name.toLowerCase().includes(cl)) return confMultipliers[name] ?? 1;
+    }
+    return 1;
   }
 
   // Determine if current sheet has conference data
