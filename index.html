@@ -40,14 +40,14 @@
     header{padding:20px 24px 16px;border-bottom:1px solid var(--line);background:rgba(0,30,62,.7);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:sticky;top:0;z-index:30}
     h1{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeDown .5s ease-out both}
     .sub{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:4px;animation:fadeDown .5s .05s ease-out both}
-    .wrap{padding:20px;max-width:1260px;margin:0 auto;animation:fadeUp .4s .1s ease-out both;overflow:hidden}
+    .wrap{padding:20px;max-width:1440px;margin:0 auto;animation:fadeUp .4s .1s ease-out both;overflow:hidden}
     .topbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;justify-content:space-between}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     input[type="file"]{color:var(--muted)}
     select,input[type="number"],input[type="text"]{background:rgba(0,15,40,.7);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none;font-family:inherit;font-size:13px;transition:border-color .2s,box-shadow .2s}
     select:focus,input:focus{border-color:rgba(255,210,0,.45);box-shadow:0 0 0 3px var(--accent-glow)}
-    input[type="number"]{width:100px}
+    input[type="number"]{width:90px}
     .search{flex:1;min-width:0;width:100%}
     button{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--accent),#e6be00);color:#001c3d;box-shadow:0 4px 16px rgba(255,210,0,.2),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .15s,box-shadow .15s,filter .15s}
     button:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3)}
@@ -57,7 +57,7 @@
     button.primary{background:linear-gradient(135deg,var(--accent),#e6be00);color:#001c3d;box-shadow:0 4px 16px rgba(255,210,0,.2),inset 0 1px 0 rgba(255,255,255,.25)}
     button.primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3);filter:brightness(1.05)}
     button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
-    .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:16px;margin-top:16px}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-top:16px}
     .grid>*{min-width:0}
     @media(max-width:1020px){.grid{grid-template-columns:1fr}}
     .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .25s;overflow:hidden}
@@ -80,9 +80,9 @@
     .tab{background:rgba(0,15,40,.5);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
     .tab:hover{border-color:rgba(255,210,0,.3);color:var(--text)}
     .tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow);box-shadow:0 0 12px rgba(255,210,0,.1)}
-    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--r);border:1px solid var(--line);table-layout:fixed}
-    th,td{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    th{position:sticky;top:0;background:rgba(0,18,48,.95);text-align:left;color:var(--muted);cursor:pointer;z-index:1;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;transition:color .15s}
+    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--r);border:1px solid var(--line)}
+    th,td{padding:7px 6px;border-bottom:1px solid var(--line2);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    th{position:sticky;top:0;background:rgba(0,18,48,.95);text-align:left;color:var(--muted);cursor:pointer;z-index:1;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;transition:color .15s}
     th:hover{color:var(--accent)}
     tr:last-child td{border-bottom:none}
     tr{transition:background .12s}
@@ -91,7 +91,7 @@
     .statLink:hover{opacity:.8}
     a,.statLink{color:var(--accent)!important}
     .scrollY{max-height:560px;overflow:auto;border-radius:var(--r);border:1px solid var(--line);-webkit-overflow-scrolling:touch}
-    .scrollY table{border:none;border-radius:0;table-layout:auto}
+    .scrollY table{border:none;border-radius:0}
     .link{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .link:hover{opacity:.8;text-decoration:underline}
     .rightstack{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -1467,11 +1467,11 @@ function renderWeights(){
 
   // ---------- Table rendering ----------
   const LIST_COLS = [
-    {key:'CalcRank', label:'Rank'},
+    {key:'CalcRank', label:'#'},
     {key:'Player', label:'Player'},
     {key:'Team', label:'Team'},
     {key:'Conference', label:'Conf'},
-    {key:'ConfMult_calc', label:'C.Mult'},
+    {key:'ConfMult_calc', label:'CM'},
     {key:'MP', label:'MP'},
     {key:'Score', label:'Perf'},
     {key:'FitScore_calc', label:'Fit'},
