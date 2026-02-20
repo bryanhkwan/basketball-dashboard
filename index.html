@@ -96,9 +96,12 @@
     .link:hover{opacity:.8;text-decoration:underline}
     .rightstack{display:flex;flex-direction:column;gap:16px;min-width:0}
     .weights{max-height:300px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
-    .weights table{border:none;border-radius:0;table-layout:auto}
+    .weights table{border:none;border-radius:0;table-layout:fixed;width:100%}
     .weights th{top:0}
-    .dirIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:rgba(0,15,40,.5);color:var(--text);font-weight:800;font-size:14px}
+    .weights td,.weights th{padding:7px 4px;font-size:11px}
+    .weights input[type="number"]{width:100%;min-width:0;padding:6px 4px;font-size:11.5px;text-align:center}
+    .weights select{width:100%;min-width:0;padding:6px 2px;font-size:11px;border-radius:8px}
+    .dirIcon{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:rgba(0,15,40,.5);color:var(--text);font-weight:800;font-size:12px}
     .dirIcon.up{color:var(--good)}.dirIcon.down{color:var(--bad)}
     .dirIcon.up::after{content:"↑"}.dirIcon.down::after{content:"↓"}.dirIcon span{display:none}
     code{background:rgba(0,15,40,.6);padding:3px 8px;border-radius:8px;border:1px solid var(--line);font-size:12px}
@@ -134,9 +137,10 @@
     .learnMoreBtn svg{flex-shrink:0}
     /* Conference multiplier panel */
     .confScroll{max-height:280px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
-    .confScroll table{border:none;border-radius:0;table-layout:auto}
+    .confScroll table{border:none;border-radius:0;table-layout:fixed;width:100%}
     .confScroll th{top:0}
-    .confMult-input{width:64px;text-align:center;padding:6px 4px;font-size:12px;font-weight:700;border-radius:8px}
+    .confScroll td,.confScroll th{padding:7px 6px;font-size:11.5px}
+    .confMult-input{width:100%!important;min-width:0;text-align:center;padding:6px 4px;font-size:12px;font-weight:700;border-radius:8px}
     .confMult-input:focus{border-color:rgba(255,210,0,.5)}
     .toggleSwitch{position:relative;width:42px;height:24px;cursor:pointer;display:inline-block}
     .toggleSwitch input{opacity:0;width:0;height:0}
@@ -280,11 +284,11 @@
           <table>
             <thead>
               <tr>
-                <th style="width:46%">Stat</th>
-                <th>W</th>
-                <th>Min</th>
-                <th>Max</th>
-                <th style="width:18%">Dir</th>
+                <th style="width:28%">Stat</th>
+                <th style="width:17%">W</th>
+                <th style="width:22%">Min</th>
+                <th style="width:22%">Max</th>
+                <th style="width:11%">Dir</th>
               </tr>
             </thead>
             <tbody id="weightsBody"></tbody>
