@@ -22,303 +22,132 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
   <style>
     :root{
-      --bg:#001c3d;
-      --bg2:#002952;
-      --card:rgba(0,42,88,.65);
-      --card-solid:#002a58;
-      --line:rgba(255,210,0,.12);
-      --line2:rgba(255,210,0,.06);
-      --text:#f0f4ff;
-      --muted:#8eadd4;
-      --accent:#FFD200;
-      --accent2:#ffe566;
-      --accent-glow:rgba(255,210,0,.10);
-      --accent-glow2:rgba(255,210,0,.04);
-      --good:#34d399;
-      --warn:#fbbf24;
-      --bad:#f87171;
-      --chip:#0a3a79;
-      --r:14px;
+      --bg:#001c3d;--bg2:#002952;--card:rgba(0,42,88,.65);--card-solid:#002a58;
+      --line:rgba(255,210,0,.12);--line2:rgba(255,210,0,.06);
+      --text:#f0f4ff;--muted:#8eadd4;
+      --accent:#FFD200;--accent2:#ffe566;--accent-glow:rgba(255,210,0,.10);--accent-glow2:rgba(255,210,0,.04);
+      --good:#34d399;--warn:#fbbf24;--bad:#f87171;--chip:#0a3a79;--r:14px;
     }
-
-    *{box-sizing:border-box; margin:0}
+    *{box-sizing:border-box;margin:0}
     html{scroll-behavior:smooth}
-    body{
-      font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
-      background:var(--bg); color:var(--text);
-      background-image:
-        radial-gradient(ellipse 80% 60% at 20% 0%, rgba(0,62,126,.5) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(0,40,80,.4) 0%, transparent 50%);
-      background-attachment:fixed;
-      min-height:100vh;
-    }
-
-    /* ── Scrollbar ── */
+    body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);
+      background-image:radial-gradient(ellipse 80% 60% at 20% 0%,rgba(0,62,126,.5) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 90% 100%,rgba(0,40,80,.4) 0%,transparent 50%);
+      background-attachment:fixed;min-height:100vh}
     ::-webkit-scrollbar{width:6px;height:6px}
     ::-webkit-scrollbar-track{background:rgba(0,20,50,.4)}
     ::-webkit-scrollbar-thumb{background:rgba(255,210,0,.25);border-radius:3px}
     ::-webkit-scrollbar-thumb:hover{background:rgba(255,210,0,.45)}
-
-    /* ── Header ── */
-    header{
-      padding:20px 24px 16px;
-      border-bottom:1px solid var(--line);
-      background:rgba(0,30,62,.7);
-      backdrop-filter:blur(16px);
-      -webkit-backdrop-filter:blur(16px);
-      position:sticky; top:0; z-index:30;
-    }
-    h1{
-      font-size:20px; font-weight:800; letter-spacing:-.3px;
-      background:linear-gradient(135deg,var(--accent),var(--accent2));
-      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-      animation:fadeDown .5s ease-out both;
-    }
-    .sub{color:var(--muted); font-size:12.5px; line-height:1.5; margin-top:4px; animation:fadeDown .5s .05s ease-out both}
-
-    /* ── Layout ── */
-    .wrap{padding:20px; max-width:1260px; margin:0 auto; animation:fadeUp .4s .1s ease-out both}
-    .topbar{display:flex; gap:12px; align-items:end; flex-wrap:wrap; justify-content:space-between}
-    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-    label{font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.6px}
-
-    /* ── Inputs ── */
+    header{padding:20px 24px 16px;border-bottom:1px solid var(--line);background:rgba(0,30,62,.7);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:sticky;top:0;z-index:30}
+    h1{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeDown .5s ease-out both}
+    .sub{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:4px;animation:fadeDown .5s .05s ease-out both}
+    .wrap{padding:20px;max-width:1260px;margin:0 auto;animation:fadeUp .4s .1s ease-out both}
+    .topbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;justify-content:space-between}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     input[type="file"]{color:var(--muted)}
-    select, input[type="number"], input[type="text"]{
-      background:rgba(0,15,40,.7); color:var(--text); border:1px solid var(--line);
-      border-radius:10px; padding:9px 12px; outline:none; font-family:inherit; font-size:13px;
-      transition:border-color .2s, box-shadow .2s;
-    }
-    select:focus, input:focus{border-color:rgba(255,210,0,.45); box-shadow:0 0 0 3px var(--accent-glow)}
+    select,input[type="number"],input[type="text"]{background:rgba(0,15,40,.7);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none;font-family:inherit;font-size:13px;transition:border-color .2s,box-shadow .2s}
+    select:focus,input:focus{border-color:rgba(255,210,0,.45);box-shadow:0 0 0 3px var(--accent-glow)}
     input[type="number"]{width:110px}
-    .search{flex:1; min-width:260px}
-
-    /* ── Buttons ── */
-    button{
-      font-family:inherit; font-size:13px; font-weight:700;
-      border:none; border-radius:10px; padding:9px 16px;
-      cursor:pointer; position:relative; overflow:hidden;
-      background:linear-gradient(135deg,var(--accent),#e6be00);
-      color:#001c3d;
-      box-shadow:0 4px 16px rgba(255,210,0,.2), inset 0 1px 0 rgba(255,255,255,.25);
-      transition:transform .15s, box-shadow .15s, filter .15s;
-    }
-    button:hover{transform:translateY(-1px); box-shadow:0 6px 24px rgba(255,210,0,.3)}
-    button:active{transform:translateY(0); box-shadow:0 2px 8px rgba(255,210,0,.15)}
-    button.secondary{
-      background:rgba(0,15,40,.6); border:1px solid var(--line); color:var(--text);
-      box-shadow:none;
-    }
-    button.secondary:hover{border-color:rgba(255,210,0,.4); background:rgba(0,20,50,.8)}
-    button.primary{
-      background:linear-gradient(135deg,var(--accent),#e6be00);
-      color:#001c3d;
-      box-shadow:0 4px 16px rgba(255,210,0,.2), inset 0 1px 0 rgba(255,255,255,.25);
-    }
+    .search{flex:1;min-width:260px}
+    button{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--accent),#e6be00);color:#001c3d;box-shadow:0 4px 16px rgba(255,210,0,.2),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .15s,box-shadow .15s,filter .15s}
+    button:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3)}
+    button:active{transform:translateY(0);box-shadow:0 2px 8px rgba(255,210,0,.15)}
+    button.secondary{background:rgba(0,15,40,.6);border:1px solid var(--line);color:var(--text);box-shadow:none}
+    button.secondary:hover{border-color:rgba(255,210,0,.4);background:rgba(0,20,50,.8);transform:translateY(-1px)}
+    button.primary{background:linear-gradient(135deg,var(--accent),#e6be00);color:#001c3d;box-shadow:0 4px 16px rgba(255,210,0,.2),inset 0 1px 0 rgba(255,255,255,.25)}
     button.primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3);filter:brightness(1.05)}
-    button:disabled{opacity:.4; cursor:not-allowed; transform:none!important; filter:none!important}
-
-    /* ── Grid ── */
-    .grid{display:grid; grid-template-columns:1.3fr .7fr; gap:16px; margin-top:16px}
+    button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
+    .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:16px;margin-top:16px}
     @media(max-width:1020px){.grid{grid-template-columns:1fr}}
-
-    /* ── Cards ── */
-    .card{
-      background:var(--card); border:1px solid var(--line); border-radius:var(--r);
-      padding:18px; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-      box-shadow:0 8px 32px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03);
-      transition:border-color .25s;
-    }
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .25s}
     .card:hover{border-color:rgba(255,210,0,.2)}
-
-    /* ── Pills / Badges / Chips ── */
-    .pill{
-      font-size:11.5px; font-weight:500; color:var(--muted);
-      border:1px solid var(--line); padding:6px 12px; border-radius:999px;
-      transition:all .2s;
-    }
-    .pill.active, .seg button.active{
-      border-color:rgba(255,210,0,.6)!important;
-      background:var(--accent-glow)!important;
-      color:var(--accent)!important;
-    }
-    .badge{
-      display:inline-flex; align-items:center; gap:6px; padding:6px 12px;
-      border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted);
-    }
-    .badge strong{color:var(--text); font-weight:700}
-    .chip{
-      display:inline-flex; align-items:center; gap:7px;
-      padding:6px 12px; border-radius:999px; border:1px solid var(--line);
-      background:rgba(0,15,40,.5); color:var(--text); font-size:12px; font-weight:700;
-      transition:border-color .2s;
-    }
+    .pill{font-size:11.5px;font-weight:500;color:var(--muted);border:1px solid var(--line);padding:6px 12px;border-radius:999px;transition:all .2s}
+    .pill.active,.seg button.active{border-color:rgba(255,210,0,.6)!important;background:var(--accent-glow)!important;color:var(--accent)!important}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--muted)}
+    .badge strong{color:var(--text);font-weight:700}
+    .chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(0,15,40,.5);color:var(--text);font-size:12px;font-weight:700;transition:border-color .2s}
     .chip:hover{border-color:rgba(255,210,0,.3)}
-    .chip .dot{width:8px; height:8px; border-radius:999px; background:var(--accent)}
-    .chipRow{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
-
-    /* ── KPIs ── */
-    .kpis{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+    .chip .dot{width:8px;height:8px;border-radius:999px;background:var(--accent)}
+    .chipRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .kpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .kpis .pill{background:var(--accent-glow2)}
-    .kpis b{color:var(--accent); font-weight:700}
-
-    /* ── Warning ── */
-    .warnBox{
-      display:none; margin-top:12px; padding:12px 16px; border-radius:var(--r);
-      border:1px solid rgba(248,113,113,.3); background:rgba(50,10,10,.6);
-      color:#fca5a5; font-size:12px; line-height:1.5; backdrop-filter:blur(8px);
-    }
-
-    /* ── Hints ── */
-    .hint{font-size:12px; color:var(--muted); margin-top:10px; line-height:1.55; opacity:.85}
-    .divider{height:1px; background:var(--line); margin:12px 0}
-
-    /* ── Tabs ── */
-    .tabs{display:flex; gap:6px; flex-wrap:wrap}
-    .tab{
-      background:rgba(0,15,40,.5); border:1px solid var(--line); color:var(--muted);
-      border-radius:999px; padding:7px 14px; cursor:pointer; font-size:12px; font-weight:700;
-      transition:all .2s;
-    }
-    .tab:hover{border-color:rgba(255,210,0,.3); color:var(--text)}
-    .tab.active{
-      border-color:var(--accent); color:var(--accent);
-      background:var(--accent-glow);
-      box-shadow:0 0 12px rgba(255,210,0,.1);
-    }
-
-    /* ── Tables ── */
-    table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:var(--r); border:1px solid var(--line)}
-    th,td{padding:10px 12px; border-bottom:1px solid var(--line2); font-size:12.5px; white-space:nowrap}
-    th{
-      position:sticky; top:0; background:rgba(0,18,48,.9); backdrop-filter:blur(8px);
-      text-align:left; color:var(--muted); cursor:pointer; z-index:1;
-      font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
-      transition:color .15s;
-    }
+    .kpis b{color:var(--accent);font-weight:700}
+    .warnBox{display:none;margin-top:12px;padding:12px 16px;border-radius:var(--r);border:1px solid rgba(248,113,113,.3);background:rgba(50,10,10,.6);color:#fca5a5;font-size:12px;line-height:1.5;backdrop-filter:blur(8px)}
+    .hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.55;opacity:.85}
+    .divider{height:1px;background:var(--line);margin:12px 0}
+    .tabs{display:flex;gap:6px;flex-wrap:wrap}
+    .tab{background:rgba(0,15,40,.5);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
+    .tab:hover{border-color:rgba(255,210,0,.3);color:var(--text)}
+    .tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow);box-shadow:0 0 12px rgba(255,210,0,.1)}
+    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--r);border:1px solid var(--line)}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line2);font-size:12.5px;white-space:nowrap}
+    th{position:sticky;top:0;background:rgba(0,18,48,.9);backdrop-filter:blur(8px);text-align:left;color:var(--muted);cursor:pointer;z-index:1;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;transition:color .15s}
     th:hover{color:var(--accent)}
     tr:last-child td{border-bottom:none}
     tr{transition:background .12s}
     tr:hover td{background:rgba(255,210,0,.03)}
-    .statLink{color:var(--accent); text-decoration:none; cursor:pointer; font-weight:600; transition:opacity .15s}
+    .statLink{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .statLink:hover{opacity:.8}
     a,.statLink{color:var(--accent)!important}
-
-    .scrollY{max-height:560px; overflow:auto; border-radius:var(--r); border:1px solid var(--line)}
-    .scrollY table{border:none; border-radius:0}
-    .link{color:var(--accent); text-decoration:none; cursor:pointer; font-weight:600; transition:opacity .15s}
-    .link:hover{opacity:.8; text-decoration:underline}
-
-    /* ── Weights panel ── */
-    .rightstack{display:flex; flex-direction:column; gap:16px}
-    .weights{max-height:300px; overflow:auto; border-radius:var(--r); border:1px solid var(--line)}
-    .weights table{border:none; border-radius:0}
+    .scrollY{max-height:560px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .scrollY table{border:none;border-radius:0}
+    .link{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
+    .link:hover{opacity:.8;text-decoration:underline}
+    .rightstack{display:flex;flex-direction:column;gap:16px}
+    .weights{max-height:300px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .weights table{border:none;border-radius:0}
     .weights th{top:0}
-
-    /* ── Direction icons ── */
-    .dirIcon{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:32px; height:32px; border-radius:10px;
-      border:1px solid var(--line); background:rgba(0,15,40,.5); color:var(--text);
-      font-weight:800; font-size:14px;
-    }
-    .dirIcon.up{color:var(--good)}
-    .dirIcon.down{color:var(--bad)}
-    .dirIcon.up::after{content:"↑"}
-    .dirIcon.down::after{content:"↓"}
-    .dirIcon span{display:none}
-
-    code{background:rgba(0,15,40,.6); padding:3px 8px; border-radius:8px; border:1px solid var(--line); font-size:12px}
-
-    /* ── Modal ── */
-    .modalBack{
-      position:fixed; inset:0; background:rgba(0,10,25,.7); backdrop-filter:blur(6px);
-      display:none; align-items:center; justify-content:center; padding:16px; z-index:50;
-    }
+    .dirIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:rgba(0,15,40,.5);color:var(--text);font-weight:800;font-size:14px}
+    .dirIcon.up{color:var(--good)}.dirIcon.down{color:var(--bad)}
+    .dirIcon.up::after{content:"↑"}.dirIcon.down::after{content:"↓"}.dirIcon span{display:none}
+    code{background:rgba(0,15,40,.6);padding:3px 8px;border-radius:8px;border:1px solid var(--line);font-size:12px}
+    .modalBack{position:fixed;inset:0;background:rgba(0,10,25,.7);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
     .modalBack[style*="flex"]{animation:fadeIn .2s ease-out}
-    #statBack{z-index:9999; position:fixed; inset:0}
-    .modal{
-      width:min(1060px,100%); max-height:90vh; overflow:auto;
-      background:rgba(0,30,65,.92); border:1px solid rgba(255,210,0,.15);
-      border-radius:18px; box-shadow:0 32px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03) inset;
-      backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
-      animation:modalSlide .25s ease-out;
-    }
-    .modalHead{
-      padding:18px 20px; border-bottom:1px solid var(--line);
-      display:flex; justify-content:space-between; gap:12px; align-items:start;
-    }
-    .modalTitle{font-size:18px; font-weight:800; letter-spacing:-.2px}
-    .modalSub{margin:4px 0 0; color:var(--muted); font-size:12.5px}
+    #statBack{z-index:9999;position:fixed;inset:0}
+    .modal{width:min(1060px,100%);max-height:90vh;overflow:auto;background:rgba(0,30,65,.92);border:1px solid rgba(255,210,0,.15);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.03) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:modalSlide .25s ease-out}
+    .modalHead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:start}
+    .modalTitle{font-size:18px;font-weight:800;letter-spacing:-.2px}
+    .modalSub{margin:4px 0 0;color:var(--muted);font-size:12.5px}
     .modalBody{padding:20px}
-    .close{
-      background:rgba(0,15,40,.6); border:1px solid var(--line); border-radius:10px;
-      color:var(--text); padding:8px 14px; cursor:pointer; font-weight:700; font-size:12px;
-      transition:all .15s;
-    }
-    .close:hover{border-color:rgba(255,210,0,.4); background:rgba(255,210,0,.08); color:var(--accent); transform:none; box-shadow:none}
-
-    .profileGrid{display:grid; grid-template-columns:1.15fr .85fr; gap:14px}
+    .close{background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:8px 14px;cursor:pointer;font-weight:700;font-size:12px;transition:all .15s}
+    .close:hover{border-color:rgba(255,210,0,.4);background:rgba(255,210,0,.08);color:var(--accent);transform:none;box-shadow:none}
+    .profileGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
     @media(max-width:980px){.profileGrid{grid-template-columns:1fr}}
-
-    .panel{border:1px solid var(--line); border-radius:var(--r); overflow:hidden}
-    .panelHead{
-      padding:10px 14px; border-bottom:1px solid var(--line);
-      background:rgba(0,18,48,.7); font-weight:700; font-size:11.5px;
-      color:var(--muted); text-transform:uppercase; letter-spacing:.5px;
-    }
+    .panel{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+    .panelHead{padding:10px 14px;border-bottom:1px solid var(--line);background:rgba(0,18,48,.7);font-weight:700;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
     .panelBody{padding:14px}
-
-    .scoreRow{display:flex; justify-content:space-between; gap:12px; align-items:end}
-    .big{
-      font-size:28px; font-weight:800; letter-spacing:-.5px;
-      background:linear-gradient(135deg,var(--accent),var(--accent2));
-      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    }
-    .muted{color:var(--muted)}
-    .mini{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px}
-
-    .statRow{display:flex; justify-content:space-between; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line2); font-size:12.5px}
-    .statRow:last-child{border-bottom:none}
-    .statRow:hover{background:rgba(255,210,0,.02)}
-    .statRow .k{color:var(--muted); font-weight:500}
-
-    /* ── Bars ── */
-    .bars{display:flex; flex-direction:column; gap:12px}
-    .barItem{display:flex; flex-direction:column; gap:5px}
-    .barTop{display:flex; justify-content:space-between; gap:10px; font-size:12.5px}
-    .barTop b{font-weight:700}
-    .barTrack{height:8px; background:rgba(0,15,40,.6); border:1px solid var(--line); border-radius:999px; overflow:hidden}
-    .barFill{height:100%; width:0%; border-radius:999px; transition:width .6s cubic-bezier(.22,1,.36,1)}
-    .barMeta{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); opacity:.7}
-
-    /* ── Learn More button ── */
-    .learnMoreBtn{
-      display:inline-flex; align-items:center; gap:6px;
-      padding:8px 16px; border-radius:10px; font-size:12px; font-weight:700;
-      background:rgba(255,210,0,.1); border:1px solid rgba(255,210,0,.3);
-      color:var(--accent); text-decoration:none; white-space:nowrap;
-      transition:all .2s;
-    }
+    .scoreRow{display:flex;justify-content:space-between;gap:12px;align-items:end}
+    .big{font-size:28px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .muted{color:var(--muted)}.mini{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+    .statRow{display:flex;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line2);font-size:12.5px}
+    .statRow:last-child{border-bottom:none}.statRow:hover{background:rgba(255,210,0,.02)}.statRow .k{color:var(--muted);font-weight:500}
+    .bars{display:flex;flex-direction:column;gap:12px}
+    .barItem{display:flex;flex-direction:column;gap:5px}
+    .barTop{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}.barTop b{font-weight:700}
+    .barTrack{height:8px;background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+    .barFill{height:100%;width:0%;border-radius:999px;transition:width .6s cubic-bezier(.22,1,.36,1)}
+    .barMeta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);opacity:.7}
+    .learnMoreBtn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;background:rgba(255,210,0,.1);border:1px solid rgba(255,210,0,.3);color:var(--accent);text-decoration:none;white-space:nowrap;transition:all .2s}
     .learnMoreBtn:hover{background:rgba(255,210,0,.18);border-color:rgba(255,210,0,.5);transform:translateY(-1px);box-shadow:0 4px 12px rgba(255,210,0,.12)}
     .learnMoreBtn:active{transform:translateY(0)}
     .learnMoreBtn svg{flex-shrink:0}
-
-    /* ── Animations ── */
+    /* Conference multiplier panel */
+    .confScroll{max-height:280px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .confScroll table{border:none;border-radius:0}
+    .confScroll th{top:0}
+    .confMult-input{width:64px;text-align:center;padding:6px 4px;font-size:12px;font-weight:700;border-radius:8px}
+    .confMult-input:focus{border-color:rgba(255,210,0,.5)}
+    .toggleSwitch{position:relative;width:42px;height:24px;cursor:pointer;display:inline-block}
+    .toggleSwitch input{opacity:0;width:0;height:0}
+    .toggleTrack{position:absolute;inset:0;background:rgba(0,15,40,.7);border:1px solid var(--line);border-radius:999px;transition:background .2s,border-color .2s}
+    .toggleSwitch input:checked + .toggleTrack{background:rgba(255,210,0,.25);border-color:rgba(255,210,0,.5)}
+    .toggleTrack::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
+    .toggleSwitch input:checked + .toggleTrack::after{transform:translateX(18px);background:var(--accent)}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes modalSlide{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-
-    /* ── Responsive ── */
-    @media(max-width:640px){
-      .wrap{padding:12px}
-      header{padding:14px 16px 12px}
-      h1{font-size:17px}
-      .card{padding:12px}
-      .modalHead{padding:14px}
-      .modalBody{padding:14px}
-    }
+    @media(max-width:640px){.wrap{padding:12px}header{padding:14px 16px 12px}h1{font-size:17px}.card{padding:12px}.modalHead{padding:14px}.modalBody{padding:14px}}
   </style>
 
 </head>
@@ -524,6 +353,42 @@
           bigger starValue → higher top-end valuations (more spread above average), while keeping average anchored at avgPay.
         </div>
       </div>
+
+      <!-- Conference Multiplier -->
+      <div class="card" id="confMultCard">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px; font-weight:800">Conference multiplier</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Multiplies PerfScore by conference strength. <span id="confMultLeagueNote" style="color:var(--warn)"></span></div>
+          </div>
+          <div class="row" style="gap:10px">
+            <label class="toggleSwitch" title="Toggle conference multiplier on/off">
+              <input id="confMultToggle" type="checkbox" checked>
+              <span class="toggleTrack"></span>
+            </label>
+            <button id="resetConfMult" class="secondary" style="padding:7px 12px;font-size:12px">Reset</button>
+          </div>
+        </div>
+
+        <div id="confMultBody" style="margin-top:12px">
+          <div class="confScroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:55%">Conference</th>
+                  <th>Multiplier</th>
+                </tr>
+              </thead>
+              <tbody id="confMultTableBody"></tbody>
+            </table>
+          </div>
+          <div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">
+            <span class="pill">Baseline: <b>MAC = 1.00</b></span>
+            <span class="pill">Range: <b id="confMultRange">—</b></span>
+          </div>
+          <div class="hint">Adjusts PerfScore before valuation. A player in a stronger conference gets a boosted score. Currently <b>MBB only</b> — WBB will auto-activate when conference data is added to that sheet.</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -568,6 +433,19 @@
               <div style="text-align:right">
                 <div class="muted mini">Minutes multiplier</div>
                 <div class="big" id="mMult">—</div>
+              </div>
+            </div>
+
+            <div id="mConfMultRow" style="margin-top:8px;display:none">
+              <div class="scoreRow">
+                <div>
+                  <div class="muted mini">Conf multiplier</div>
+                  <div class="big" id="mConfMult" style="font-size:20px">—</div>
+                </div>
+                <div style="text-align:right">
+                  <div class="muted mini">Conference</div>
+                  <div id="mConfName" style="font-size:14px;font-weight:700;margin-top:2px">—</div>
+                </div>
               </div>
             </div>
 
@@ -1355,16 +1233,172 @@ function renderWeights(){
     }
   }
 
+  // ---------- Conference multiplier ----------
+  const DEFAULT_CONF_MULT = {
+    'Big 12':1.08, 'SEC':1.07, 'Big Ten':1.07, 'ACC':1.06, 'Big East':1.06,
+    'American':1.05, 'Mountain West':1.05, 'Mountain We':1.05,
+    'Atlantic 10':1.04, 'A-10':1.04, 'WCC':1.04,
+    'Missouri Valley':1.03, 'Missouri Vall':1.03, 'MVC':1.03,
+    'CUSA':1.03, 'C-USA':1.03, 'Conference USA':1.03,
+    'MAC':1.00,
+    'Sun Belt':1.01,
+    'CAA':1.00, 'Ivy League':1.00, 'Ivy':1.00,
+    'Big West':0.99, 'Summit League':0.99, 'Summit Leag':0.99,
+    'Horizon League':0.99, 'Horizon Leag':0.99,
+    'America East':0.98, 'America Eas':0.98,
+    'Southern':0.98, 'SoCon':0.98,
+    'ASUN':0.97, 'A-Sun':0.97,
+    'MAAC':0.97,
+    'OVC':0.96, 'Ohio Valley':0.96,
+    'WAC':0.96,
+    'Patriot League':0.96, 'Patriot Leag':0.96, 'Patriot':0.96,
+    'Big Sky':0.96,
+    'Southland':0.95,
+    'NEC':0.94, 'Northeast':0.94,
+    'SWAC':0.93,
+    'MEAC':0.93,
+    'Big South':0.94,
+    'Independent':1.00,
+    'NE10':0.90, 'NE-10':0.90, 'Northeast-10':0.90
+  };
+
+  // Live working copy (user-editable)
+  let confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_MULT));
+  const confMultToggleEl = document.getElementById('confMultToggle');
+  const confMultBodyEl = document.getElementById('confMultBody');
+  const confMultTableBody = document.getElementById('confMultTableBody');
+  const confMultRangeEl = document.getElementById('confMultRange');
+  const confMultLeagueNote = document.getElementById('confMultLeagueNote');
+  const resetConfMultBtn = document.getElementById('resetConfMult');
+
+  // Canonical display order (sorted by multiplier desc)
+  function confSortedEntries(){
+    const seen = new Set();
+    const entries = [];
+    // Deduplicate: keep only 1 entry per unique value — prefer the longest key name
+    const grouped = {};
+    for(const [k,v] of Object.entries(confMultipliers)){
+      const vk = v.toFixed(3);
+      if(!grouped[vk] || k.length > grouped[vk].length) grouped[vk] = k;
+    }
+    // But we want all keys editable, so show ALL unique keys
+    const usedNames = new Set();
+    const result = [];
+    for(const [k,v] of Object.entries(confMultipliers)){
+      // skip short aliases if long form exists
+      const vk = v.toFixed(3);
+      if(grouped[vk] !== k && usedNames.has(vk)) continue;
+      usedNames.add(vk);
+      result.push([grouped[vk], v]);
+    }
+    result.sort((a,b)=> b[1] - a[1] || a[0].localeCompare(b[0]));
+    return result;
+  }
+
+  function renderConfMultTable(){
+    const isOn = confMultToggleEl.checked;
+    confMultBodyEl.style.opacity = isOn ? '1' : '0.4';
+    confMultBodyEl.style.pointerEvents = isOn ? 'auto' : 'none';
+
+    // League note
+    confMultLeagueNote.textContent = league === 'WBB' ? '(WBB — will activate when conference column detected)' : '';
+
+    const entries = confSortedEntries();
+    confMultTableBody.innerHTML = '';
+    entries.forEach(([conf, mult]) => {
+      const tr = document.createElement('tr');
+      const isMac = conf === 'MAC';
+      tr.innerHTML = `
+        <td style="font-weight:${isMac?'700':'500'};${isMac?'color:var(--accent)':''}">${conf}${isMac ? ' (baseline)' : ''}</td>
+        <td><input type="number" step="0.01" min="0.5" max="1.5" value="${mult.toFixed(2)}" class="confMult-input" data-conf="${conf}" style="${mult>1?'color:var(--good)':mult<1?'color:var(--bad)':'color:var(--text)'}"></td>
+      `;
+      confMultTableBody.appendChild(tr);
+    });
+
+    // Attach events
+    confMultTableBody.querySelectorAll('.confMult-input').forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        const conf = e.target.dataset.conf;
+        const val = parseFloat(e.target.value);
+        if(!Number.isFinite(val)) return;
+        // Update all aliases that had the same old value
+        const oldVal = confMultipliers[conf];
+        confMultipliers[conf] = val;
+        // Also update aliases
+        for(const [k,v] of Object.entries(confMultipliers)){
+          if(v === oldVal && k !== conf) confMultipliers[k] = val;
+        }
+        e.target.style.color = val > 1 ? 'var(--good)' : val < 1 ? 'var(--bad)' : 'var(--text)';
+        updateConfMultRange();
+        if(wb) computeAll();
+      });
+    });
+
+    updateConfMultRange();
+  }
+
+  function updateConfMultRange(){
+    const vals = Object.values(confMultipliers);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    confMultRangeEl.textContent = `${mn.toFixed(2)} – ${mx.toFixed(2)}`;
+  }
+
+  confMultToggleEl.addEventListener('change', ()=>{
+    renderConfMultTable();
+    if(wb) computeAll();
+  });
+
+  resetConfMultBtn.addEventListener('click', ()=>{
+    confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_MULT));
+    renderConfMultTable();
+    if(wb) computeAll();
+  });
+
+  // Lookup: find multiplier for a conference string (fuzzy)
+  function getConfMultiplier(confStr){
+    if(!confStr) return 1;
+    const c = confStr.toString().trim();
+    if(confMultipliers[c] !== undefined) return confMultipliers[c];
+    // Try case-insensitive
+    const cl = c.toLowerCase();
+    for(const [k,v] of Object.entries(confMultipliers)){
+      if(k.toLowerCase() === cl) return v;
+    }
+    // Try partial match
+    for(const [k,v] of Object.entries(confMultipliers)){
+      if(cl.includes(k.toLowerCase()) || k.toLowerCase().includes(cl)) return v;
+    }
+    return 1; // unknown conference = no adjustment
+  }
+
+  // Determine if current sheet has conference data
+  function sheetHasConference(){
+    if(!rows || !rows.length) return false;
+    return rows.some(r => {
+      const c = (r['Conference'] ?? r['Conf'] ?? '').toString().trim();
+      return c.length > 0;
+    });
+  }
+
+  // Init render
+  renderConfMultTable();
+
   function computeAll(){
     // Make sure weight table includes every numeric stat in the current sheet
     ensureWeightsCoverStats(pos, rows);
 
     if(!rows.length) { computed = []; renderPlayers(); return; }
 
+    // Determine if conference multiplier should be applied
+    const confMultOn = confMultToggleEl.checked && sheetHasConference();
+
     computed = rows.map(r => {
       const perf = scoreRow(r);
       const mp = safeNum(r['MP']);
-      return {...r, PerfScore_calc: perf, MP_num: mp};
+      const conf = (r['Conference'] ?? r['Conf'] ?? '').toString().trim();
+      const cm = confMultOn ? getConfMultiplier(conf) : 1;
+      const adjPerf = perf * cm;
+      return {...r, PerfScore_calc: adjPerf, PerfScore_raw: perf, ConfMult_calc: cm, MP_num: mp};
     });
 
     const perfArr = computed.map(r => r.PerfScore_calc).filter(Number.isFinite);
@@ -1454,6 +1488,7 @@ function renderWeights(){
     {key:'Player', label:'Player'},
     {key:'Team', label:'Team'},
     {key:'Conference', label:'Conf'},
+    {key:'ConfMult_calc', label:'C.Mult'},
     {key:'MP', label:'MP'},
     {key:'Score', label:'Perf'},
     {key:'FitScore_calc', label:'Fit'},
@@ -1514,6 +1549,15 @@ function renderWeights(){
         if(c.key === 'Player'){
           td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
           td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
+        }else if(c.key === 'ConfMult_calc'){
+          const cm = safeNum(r.ConfMult_calc);
+          if(Number.isFinite(cm) && cm !== 1){
+            td.textContent = cm.toFixed(2);
+            td.style.color = cm > 1 ? 'var(--good)' : 'var(--bad)';
+            td.style.fontWeight = '700';
+          } else {
+            td.textContent = Number.isFinite(cm) ? cm.toFixed(2) : '—';
+          }
         }else if(c.key === 'Score' && Number.isFinite(Number(r.Score))){
           td.textContent = Number(r.Score).toFixed(2);
         }else if(c.key === 'FitScore_calc'){
@@ -1551,6 +1595,17 @@ function renderWeights(){
     mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
     mVal.textContent = fmtMoney(r.ActualValuation_calc);
     mMult.textContent = Number.isFinite(r.MinMultiplier_calc) ? r.MinMultiplier_calc.toFixed(2) : '—';
+
+    // Conference multiplier row in modal
+    const mConfMultRow = document.getElementById('mConfMultRow');
+    const cm = safeNum(r.ConfMult_calc);
+    if(Number.isFinite(cm) && cm !== 1 && confMultToggleEl.checked){
+      mConfMultRow.style.display = 'block';
+      document.getElementById('mConfMult').textContent = cm.toFixed(2);
+      document.getElementById('mConfName').textContent = conf || '—';
+    } else {
+      mConfMultRow.style.display = 'none';
+    }
 
     const bossVal = safeNum(r.ActualValuation);
     const delta = safeNum(r.ValueDelta_calc);
@@ -1697,12 +1752,14 @@ archetypeTags(r).forEach(tag=>{
     league = 'MBB';
     setActiveTab(document.getElementById('tabMBB'), '.tab[data-league]');
     applyLeagueDefaults(false);
+    renderConfMultTable();
     reloadActiveSheet();
   });
   document.getElementById('tabWBB').addEventListener('click', ()=>{
     league = 'WBB';
     setActiveTab(document.getElementById('tabWBB'), '.tab[data-league]');
     applyLeagueDefaults(false);
+    renderConfMultTable();
     reloadActiveSheet();
   });
   document.getElementById('tabGuards').addEventListener('click', ()=>{
@@ -1788,7 +1845,7 @@ archetypeTags(r).forEach(tag=>{
   });
 
   function exportCSV(){
-    const cols = ['Rank','Player','Team','Conference','Position','MP','Score','FitScore_calc','PredictedValue_calc','MinMultiplier_calc','ActualValuation_calc'];
+    const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','FitScore_calc','PredictedValue_calc','MinMultiplier_calc','ActualValuation_calc'];
     const lines = [];
     lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
     computed.forEach(r => {
