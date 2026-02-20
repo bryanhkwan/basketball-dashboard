@@ -29,10 +29,10 @@
       --good:#34d399;--warn:#fbbf24;--bad:#f87171;--chip:#0a3a79;--r:14px;
     }
     *{box-sizing:border-box;margin:0}
-    html{scroll-behavior:smooth}
+    html{scroll-behavior:smooth;overflow-x:hidden}
     body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);
       background-image:radial-gradient(ellipse 80% 60% at 20% 0%,rgba(0,62,126,.5) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 90% 100%,rgba(0,40,80,.4) 0%,transparent 50%);
-      background-attachment:fixed;min-height:100vh}
+      background-attachment:fixed;min-height:100vh;overflow-x:hidden}
     ::-webkit-scrollbar{width:6px;height:6px}
     ::-webkit-scrollbar-track{background:rgba(0,20,50,.4)}
     ::-webkit-scrollbar-thumb{background:rgba(255,210,0,.25);border-radius:3px}
@@ -40,15 +40,15 @@
     header{padding:20px 24px 16px;border-bottom:1px solid var(--line);background:rgba(0,30,62,.7);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:sticky;top:0;z-index:30}
     h1{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeDown .5s ease-out both}
     .sub{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:4px;animation:fadeDown .5s .05s ease-out both}
-    .wrap{padding:20px;max-width:1260px;margin:0 auto;animation:fadeUp .4s .1s ease-out both}
+    .wrap{padding:20px;max-width:1260px;margin:0 auto;animation:fadeUp .4s .1s ease-out both;overflow:hidden}
     .topbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;justify-content:space-between}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     input[type="file"]{color:var(--muted)}
     select,input[type="number"],input[type="text"]{background:rgba(0,15,40,.7);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none;font-family:inherit;font-size:13px;transition:border-color .2s,box-shadow .2s}
     select:focus,input:focus{border-color:rgba(255,210,0,.45);box-shadow:0 0 0 3px var(--accent-glow)}
-    input[type="number"]{width:110px}
-    .search{flex:1;min-width:260px}
+    input[type="number"]{width:100px}
+    .search{flex:1;min-width:0;width:100%}
     button{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--accent),#e6be00);color:#001c3d;box-shadow:0 4px 16px rgba(255,210,0,.2),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .15s,box-shadow .15s,filter .15s}
     button:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3)}
     button:active{transform:translateY(0);box-shadow:0 2px 8px rgba(255,210,0,.15)}
@@ -58,8 +58,9 @@
     button.primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,210,0,.3);filter:brightness(1.05)}
     button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
     .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:16px;margin-top:16px}
+    .grid>*{min-width:0}
     @media(max-width:1020px){.grid{grid-template-columns:1fr}}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .25s}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.03);transition:border-color .25s;overflow:hidden}
     .card:hover{border-color:rgba(255,210,0,.2)}
     .pill{font-size:11.5px;font-weight:500;color:var(--muted);border:1px solid var(--line);padding:6px 12px;border-radius:999px;transition:all .2s}
     .pill.active,.seg button.active{border-color:rgba(255,210,0,.6)!important;background:var(--accent-glow)!important;color:var(--accent)!important}
@@ -79,9 +80,9 @@
     .tab{background:rgba(0,15,40,.5);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s}
     .tab:hover{border-color:rgba(255,210,0,.3);color:var(--text)}
     .tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow);box-shadow:0 0 12px rgba(255,210,0,.1)}
-    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--r);border:1px solid var(--line)}
-    th,td{padding:10px 12px;border-bottom:1px solid var(--line2);font-size:12.5px;white-space:nowrap}
-    th{position:sticky;top:0;background:rgba(0,18,48,.9);backdrop-filter:blur(8px);text-align:left;color:var(--muted);cursor:pointer;z-index:1;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px;transition:color .15s}
+    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--r);border:1px solid var(--line);table-layout:fixed}
+    th,td{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    th{position:sticky;top:0;background:rgba(0,18,48,.95);text-align:left;color:var(--muted);cursor:pointer;z-index:1;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;transition:color .15s}
     th:hover{color:var(--accent)}
     tr:last-child td{border-bottom:none}
     tr{transition:background .12s}
@@ -89,13 +90,13 @@
     .statLink{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .statLink:hover{opacity:.8}
     a,.statLink{color:var(--accent)!important}
-    .scrollY{max-height:560px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
-    .scrollY table{border:none;border-radius:0}
+    .scrollY{max-height:560px;overflow:auto;border-radius:var(--r);border:1px solid var(--line);-webkit-overflow-scrolling:touch}
+    .scrollY table{border:none;border-radius:0;table-layout:auto}
     .link{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .link:hover{opacity:.8;text-decoration:underline}
-    .rightstack{display:flex;flex-direction:column;gap:16px}
+    .rightstack{display:flex;flex-direction:column;gap:16px;min-width:0}
     .weights{max-height:300px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
-    .weights table{border:none;border-radius:0}
+    .weights table{border:none;border-radius:0;table-layout:auto}
     .weights th{top:0}
     .dirIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:rgba(0,15,40,.5);color:var(--text);font-weight:800;font-size:14px}
     .dirIcon.up{color:var(--good)}.dirIcon.down{color:var(--bad)}
@@ -104,7 +105,7 @@
     .modalBack{position:fixed;inset:0;background:rgba(0,10,25,.7);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
     .modalBack[style*="flex"]{animation:fadeIn .2s ease-out}
     #statBack{z-index:9999;position:fixed;inset:0}
-    .modal{width:min(1060px,100%);max-height:90vh;overflow:auto;background:rgba(0,30,65,.92);border:1px solid rgba(255,210,0,.15);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.03) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:modalSlide .25s ease-out}
+    .modal{width:min(1060px,100%);max-height:90vh;overflow:auto;background:rgba(0,28,61,.97);border:1px solid rgba(255,210,0,.15);border-radius:18px;box-shadow:0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.03) inset;animation:modalSlide .25s ease-out}
     .modalHead{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:start}
     .modalTitle{font-size:18px;font-weight:800;letter-spacing:-.2px}
     .modalSub{margin:4px 0 0;color:var(--muted);font-size:12.5px}
@@ -133,7 +134,7 @@
     .learnMoreBtn svg{flex-shrink:0}
     /* Conference multiplier panel */
     .confScroll{max-height:280px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
-    .confScroll table{border:none;border-radius:0}
+    .confScroll table{border:none;border-radius:0;table-layout:auto}
     .confScroll th{top:0}
     .confMult-input{width:64px;text-align:center;padding:6px 4px;font-size:12px;font-weight:700;border-radius:8px}
     .confMult-input:focus{border-color:rgba(255,210,0,.5)}
@@ -1510,42 +1511,62 @@ function renderWeights(){
     });
   }
 
+  // ---------- Pagination ----------
+  const PAGE_SIZE = 200;
+  let currentPage = 0;
+  let filteredData = [];
+
   function renderPlayers(){
     const q = (searchInput.value || '').toLowerCase().trim();
-    let data = computed.slice();
+    let data = computed;
     if(q){
       data = data.filter(r => {
         return ['Player','Team','Conference','Position'].some(k => (r[k] ?? '').toString().toLowerCase().includes(q));
       });
     }
-    data = sortData(data);
+    filteredData = sortData(data);
+    currentPage = 0;
+    playersHead.innerHTML = ''; // force header rebuild
+    renderPlayersPage();
+  }
 
-    playersHead.innerHTML = '';
-    LIST_COLS.forEach(c => {
-      const th = document.createElement('th');
-      th.textContent = c.label;
-      th.addEventListener('click', ()=>{
-        if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
-        else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
-        renderPlayers();
+  function renderPlayersPage(){
+    // Header (only rebuild if empty)
+    if(!playersHead.children.length){
+      const frag = document.createDocumentFragment();
+      LIST_COLS.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c.label;
+        th.addEventListener('click', ()=>{
+          if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
+          else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
+          filteredData = sortData(filteredData);
+          currentPage = 0;
+          renderPlayersPage();
+        });
+        frag.appendChild(th);
       });
-      playersHead.appendChild(th);
-    });
+      playersHead.innerHTML = '';
+      playersHead.appendChild(frag);
+    }
 
-    playersBody.innerHTML = '';
-    data.slice(0, 4000).forEach(r => {
+    const start = currentPage * PAGE_SIZE;
+    const pageData = filteredData.slice(start, start + PAGE_SIZE);
+    const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+
+    // Build rows with DocumentFragment (single DOM write)
+    const frag = document.createDocumentFragment();
+    pageData.forEach(r => {
       const tr = document.createElement('tr');
       LIST_COLS.forEach(c => {
         const td = document.createElement('td');
         let v = r[c.key];
-      if(['ActualValuation_calc','ActualValuation','ValueDelta_calc'].includes(c.key)){
-        const n = safeNum(v);
-        if(!Number.isFinite(n)) v = '—';
-        else if(c.key === 'ValueDelta_calc') v = (n>=0?'+':'') + fmtMoney(n).replace('$','');
-        else v = fmtMoney(n);
-      }
-
-
+        if(c.key === 'ActualValuation_calc' || c.key === 'ActualValuation' || c.key === 'ValueDelta_calc'){
+          const n = safeNum(v);
+          if(!Number.isFinite(n)) v = '—';
+          else if(c.key === 'ValueDelta_calc') v = (n>=0?'+':'') + fmtMoney(n).replace('$','');
+          else v = fmtMoney(n);
+        }
         if(c.key === 'Player'){
           td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
           td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
@@ -1569,8 +1590,39 @@ function renderWeights(){
         }
         tr.appendChild(td);
       });
-      playersBody.appendChild(tr);
+      frag.appendChild(tr);
     });
+    playersBody.innerHTML = '';
+    playersBody.appendChild(frag);
+
+    // Pagination controls
+    let pag = document.getElementById('pagControls');
+    if(!pag){
+      pag = document.createElement('div');
+      pag.id = 'pagControls';
+      pag.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap';
+      playersBody.closest('.card').insertBefore(pag, playersBody.closest('.scrollY').nextSibling);
+    }
+    if(totalPages <= 1){
+      pag.innerHTML = `<span class="pill" style="font-size:11px">${filteredData.length} players</span>`;
+    } else {
+      pag.innerHTML = `
+        <span class="pill" style="font-size:11px">Showing ${start+1}–${Math.min(start+PAGE_SIZE, filteredData.length)} of ${filteredData.length}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="secondary" id="pagPrev" style="padding:6px 12px;font-size:11px" ${currentPage===0?'disabled':''}>← Prev</button>
+          <span style="font-size:11px;color:var(--muted)">Page ${currentPage+1} / ${totalPages}</span>
+          <button class="secondary" id="pagNext" style="padding:6px 12px;font-size:11px" ${currentPage>=totalPages-1?'disabled':''}>Next →</button>
+        </div>`;
+      document.getElementById('pagPrev')?.addEventListener('click',()=>{if(currentPage>0){currentPage--;renderPlayersPage();}});
+      document.getElementById('pagNext')?.addEventListener('click',()=>{if(currentPage<totalPages-1){currentPage++;renderPlayersPage();}});
+    }
+  }
+
+  // Debounced search (150ms)
+  let _searchTimer = null;
+  function debouncedSearch(){
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(renderPlayers, 150);
   }
 
   // ---------- Profile modal ----------
@@ -1862,7 +1914,7 @@ archetypeTags(r).forEach(tag=>{
   }
   exportBtn.addEventListener('click', exportCSV);
 
-  searchInput.addEventListener('input', renderPlayers);
+  searchInput.addEventListener('input', debouncedSearch);
   showSelectedOnlyEl.addEventListener('change', renderWeights);
   advancedDirEl.addEventListener('change', renderWeights);
 
