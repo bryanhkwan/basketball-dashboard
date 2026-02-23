@@ -178,7 +178,17 @@
     .gapBarTrack{height:10px;background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:999px;overflow:hidden;position:relative}
     .gapBarFill{height:100%;border-radius:999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
     .gapBarLabel{display:flex;justify-content:space-between;font-size:11px}
-    .gapTag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700}
+    .gapTag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;cursor:pointer;position:relative;transition:filter .15s}
+    .gapTag:hover{filter:brightness(1.3)}
+    .gapTag.weak{border:1px solid rgba(248,113,113,.4);color:var(--bad);background:rgba(248,113,113,.08)}
+    .gapTag.ok{border:1px solid rgba(251,191,36,.3);color:var(--warn);background:rgba(251,191,36,.06)}
+    .gapTag.strong{border:1px solid rgba(52,211,153,.3);color:var(--good);background:rgba(52,211,153,.06)}
+    .gapExplain{position:fixed;z-index:100;max-width:320px;padding:12px 14px;border-radius:12px;background:rgba(0,20,50,.97);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:12px;line-height:1.55;color:var(--text);pointer-events:none;animation:fadeIn .15s ease-out}
+    .gapExplain b{color:var(--accent);font-weight:700}
+    .tbPosControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .tbPosControls input[type="number"]{width:48px;text-align:center;padding:6px 4px;font-size:12px}
+    .tbPosBalance{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .tbRebalanceCard{border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 12px;background:rgba(251,191,36,.04);margin-top:8px}
     .gapTag.weak{border:1px solid rgba(248,113,113,.4);color:var(--bad);background:rgba(248,113,113,.08)}
     .gapTag.ok{border:1px solid rgba(251,191,36,.3);color:var(--warn);background:rgba(251,191,36,.06)}
     .gapTag.strong{border:1px solid rgba(52,211,153,.3);color:var(--good);background:rgba(52,211,153,.06)}
@@ -449,6 +459,8 @@
         <div><label>Budget</label><br/><input id="tbBudget" type="number" step="10000" value="500000" style="width:100px"></div>
         <div><label>Player cap</label><br/><input id="tbPlayerCap" type="number" step="5000" value="150000" style="width:90px"></div>
         <div><label>Max roster</label><br/><input id="tbMaxRoster" type="number" step="1" min="1" max="25" value="13" style="width:60px"></div>
+        <div><label>Guards</label><br/><input id="tbTargetGuards" type="number" step="1" min="0" max="15" value="8" style="width:48px;text-align:center"></div>
+        <div><label>Bigs</label><br/><input id="tbTargetBigs" type="number" step="1" min="0" max="15" value="5" style="width:48px;text-align:center"></div>
         <div><label>Weak below</label><br/>
           <div style="display:flex;align-items:center;gap:6px">
             <input id="tbWeakThresh" type="range" min="10" max="60" value="40" style="width:80px;accent-color:var(--accent)">
@@ -461,9 +473,15 @@
 
     <div class="tbKpis" id="tbKpis">
       <span class="pill">Roster: <b id="tbCount">0</b> / <b id="tbMaxLabel">13</b></span>
+      <span class="pill">Guards: <b id="tbGuardCount">0</b> / <b id="tbGuardTarget">8</b></span>
+      <span class="pill">Bigs: <b id="tbBigCount">0</b> / <b id="tbBigTarget">5</b></span>
       <span class="pill">Total cost: <b id="tbCost">$0</b></span>
       <span class="pill">Remaining: <b id="tbRemaining">$500,000</b></span>
       <span class="pill" id="tbPosNote" style="display:none;border-color:rgba(251,191,36,.3);color:var(--warn)"></span>
+    </div>
+    <div id="tbRebalanceSection" style="display:none" class="tbRebalanceCard">
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:4px">⚖️ Roster rebalance suggestion</div>
+      <div id="tbRebalanceInfo" style="font-size:11.5px;line-height:1.5;color:var(--muted)"></div>
     </div>
 
     <div class="tbGrid">
@@ -2103,6 +2121,22 @@ archetypeTags(r).forEach(tag=>{
     ]
   };
 
+  // Plain-English explanations for each stat category
+  const GAP_EXPLANATIONS = {
+    'Scoring': 'Points per game (PPG). How many points your players put up on average. A weak score here means your team may struggle to keep up on the scoreboard.',
+    'Shooting': 'Three-point percentage (3P%) and effective field goal percentage (eFG%). Measures how efficiently your team shoots from the field, especially from beyond the arc. Weak shooting means missed open looks and lower offensive output.',
+    'Free throws': 'Free throw percentage (FT%). How reliable your team is at the foul line. Weak free throw shooting loses you easy points, especially in close games.',
+    'Playmaking': 'Assists per game (APG) and assist-to-turnover ratio (A/TO). How well your guards create scoring opportunities for teammates. Weak playmaking means too much iso ball and predictable offense.',
+    'Ball security': 'Turnovers per game (TOPG — lower is better). How often your team gives the ball away. Weak ball security means your opponents get free possessions and easy fast-break points.',
+    'Steals': 'Steals per game (SPG). Your team\'s ability to force turnovers and create extra possessions. More steals = more transition scoring opportunities.',
+    'Defense': 'Defensive rating (DRtg — lower is better) and defensive rebound percentage (DR%). How many points your team allows per 100 possessions. Weak defense means opponents score easily against you.',
+    'Impact': 'Box Plus/Minus (BPM) and Win Shares per 40 minutes (WS/40). Overall player impact — combines offense and defense into one number. Weak impact means your players aren\'t moving the needle in games.',
+    'Efficiency': 'Effective field goal % (eFG%) and field goal % (FG%). How well your bigs convert their shot attempts. Weak efficiency means wasted possessions around the rim.',
+    'Rim protection': 'Blocks per game (BPG). Your bigs\' ability to protect the paint and deter drives. Weak rim protection means opponents get easy layups and dunks.',
+    'Off. rebounding': 'Offensive rebound percentage (OR%). How often your team grabs their own misses for second-chance points. Weak offensive rebounding means one-and-done possessions.',
+    'Def. rebounding': 'Defensive rebound percentage (DR%). How well your team secures boards after opponent misses. Weak defensive rebounding gives opponents extra shots at the basket.',
+  };
+
   function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
 
   function tbAddPlayer(r){
@@ -2137,19 +2171,86 @@ archetypeTags(r).forEach(tag=>{
     tbRemainingEl.textContent = fmtMoney(rem);
     tbRemainingEl.style.color = rem < 0 ? 'var(--bad)' : rem < budget * 0.1 ? 'var(--warn)' : 'var(--good)';
 
-    // Position balance note
+    // Position balance with targets
     let guards = 0, bigs = 0;
     tbRoster.forEach(r => {
       const pg = tbPosGroup(r);
       if(pg === 'guard') guards++;
       else bigs++;
     });
-    if(tbRoster.length >= 3){
-      const ratio = guards / (tbRoster.length);
-      if(ratio > 0.75){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on guards (${guards}G / ${bigs}B)`; }
-      else if(ratio < 0.25){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on bigs (${guards}G / ${bigs}B)`; }
-      else { tbPosNoteEl.style.display = 'none'; }
-    } else { tbPosNoteEl.style.display = 'none'; }
+
+    const targetG = Number(document.getElementById('tbTargetGuards').value) || 0;
+    const targetB = Number(document.getElementById('tbTargetBigs').value) || 0;
+    document.getElementById('tbGuardCount').textContent = guards;
+    document.getElementById('tbGuardTarget').textContent = targetG;
+    document.getElementById('tbBigCount').textContent = bigs;
+    document.getElementById('tbBigTarget').textContent = targetB;
+
+    // Color the count pills
+    document.getElementById('tbGuardCount').style.color = guards > targetG ? 'var(--bad)' : guards < targetG ? 'var(--warn)' : 'var(--good)';
+    document.getElementById('tbBigCount').style.color = bigs > targetB ? 'var(--bad)' : bigs < targetB ? 'var(--warn)' : 'var(--good)';
+
+    // Rebalance suggestion
+    const rebalanceSection = document.getElementById('tbRebalanceSection');
+    const rebalanceInfo = document.getElementById('tbRebalanceInfo');
+    const excessGuards = guards - targetG;
+    const excessBigs = bigs - targetB;
+
+    if(tbRoster.length >= 2 && (excessGuards > 0 || excessBigs > 0)){
+      rebalanceSection.style.display = '';
+      const allPool = tbGetAllPlayers();
+      const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
+      const cap = Number(tbPlayerCapEl.value) || Infinity;
+      let html = '';
+
+      if(excessGuards > 0 && bigs < targetB){
+        // Too many guards, need more bigs — find weakest guard(s) and suggest big replacements
+        const rosterGuards = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)==='guard').sort((a,b)=>a.pct-b.pct);
+        const toDrop = rosterGuards.slice(0, Math.min(excessGuards, targetB - bigs));
+        html += `<div style="margin-bottom:4px">You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${targetB-bigs} more big${(targetB-bigs)>1?'s':''}</b>. Consider swapping:</div>`;
+        toDrop.forEach(({r: grd, i: gIdx, pct}) => {
+          const gVal = safeNum(grd.ActualValuation_calc)||0;
+          const bigCands = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='big' && (safeNum(c.ActualValuation_calc)||0) <= cap)
+            .sort((a,b)=>(b.Score||0)-(a.Score||0)).slice(0,2);
+          html += `<div style="margin:4px 0"><b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th avg, ${fmtMoney(gVal)})</span> → `;
+          if(bigCands.length){
+            html += bigCands.map(c=>`<b style="color:var(--good)">${c.Player}</b> <span class="muted">(${c.Position||'Big'}, ${(c.Score||0).toFixed(1)} perf, ${fmtMoney(safeNum(c.ActualValuation_calc))})</span>`).join(' or ');
+          } else { html += '<span class="muted">no big candidates in budget</span>'; }
+          html += `</div>`;
+        });
+      }
+      if(excessBigs > 0 && guards < targetG){
+        const rosterBigs = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)!=='guard').sort((a,b)=>a.pct-b.pct);
+        const toDrop = rosterBigs.slice(0, Math.min(excessBigs, targetG - guards));
+        html += `<div style="margin-bottom:4px">You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${targetG-guards} more guard${(targetG-guards)>1?'s':''}</b>. Consider swapping:</div>`;
+        toDrop.forEach(({r: big, i: bIdx, pct}) => {
+          const bVal = safeNum(big.ActualValuation_calc)||0;
+          const grdCands = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='guard' && (safeNum(c.ActualValuation_calc)||0) <= cap)
+            .sort((a,b)=>(b.Score||0)-(a.Score||0)).slice(0,2);
+          html += `<div style="margin:4px 0"><b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th avg, ${fmtMoney(bVal)})</span> → `;
+          if(grdCands.length){
+            html += grdCands.map(c=>`<b style="color:var(--good)">${c.Player}</b> <span class="muted">(${c.Position||'Guard'}, ${(c.Score||0).toFixed(1)} perf, ${fmtMoney(safeNum(c.ActualValuation_calc))})</span>`).join(' or ');
+          } else { html += '<span class="muted">no guard candidates in budget</span>'; }
+          html += `</div>`;
+        });
+      }
+      if(excessGuards > 0 && bigs >= targetB){
+        html += `<div>You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> — consider removing your weakest guard(s) to hit target.</div>`;
+      }
+      if(excessBigs > 0 && guards >= targetG){
+        html += `<div>You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> — consider removing your weakest big(s) to hit target.</div>`;
+      }
+      rebalanceInfo.innerHTML = html;
+      tbPosNoteEl.style.display = 'none';
+    } else {
+      rebalanceSection.style.display = 'none';
+      if(tbRoster.length >= 3){
+        const ratio = guards / (tbRoster.length);
+        if(ratio > 0.75){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on guards (${guards}G / ${bigs}B)`; }
+        else if(ratio < 0.25){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on bigs (${guards}G / ${bigs}B)`; }
+        else { tbPosNoteEl.style.display = 'none'; }
+      } else { tbPosNoteEl.style.display = 'none'; }
+    }
 
     tbRenderRoster();
     tbRenderGaps();
@@ -2400,11 +2501,29 @@ archetypeTags(r).forEach(tag=>{
       tbGapBars.appendChild(div);
     });
 
-    // Gap tags
+    // Gap tags with click-to-explain
     gaps.forEach(g => {
       const tag = document.createElement('span');
       tag.className = `gapTag ${g.level}`;
       tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
+      tag.title = 'Click for explanation';
+      tag.addEventListener('click', (e) => {
+        // Remove any existing explanation tooltip
+        document.querySelectorAll('.gapExplain').forEach(el => el.remove());
+        const expl = GAP_EXPLANATIONS[g.label] || 'No description available.';
+        const levelText = g.level === 'weak' ? 'Your team is weak here.' : g.level === 'ok' ? 'Your team is average here.' : 'Your team is strong here.';
+        const tip = document.createElement('div');
+        tip.className = 'gapExplain';
+        tip.innerHTML = `<b>${g.label}</b> — ${expl}<br><br><em style="color:${g.level==='weak'?'var(--bad)':g.level==='ok'?'var(--warn)':'var(--good)'}">${levelText} (${Math.round(g.avgPct*100)}th percentile)</em>`;
+        document.body.appendChild(tip);
+        const rect = e.target.getBoundingClientRect();
+        tip.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
+        tip.style.top = (rect.bottom + 8) + 'px';
+        setTimeout(() => {
+          const dismiss = (ev) => { if(!tip.contains(ev.target)){ tip.remove(); document.removeEventListener('click', dismiss); }};
+          document.addEventListener('click', dismiss);
+        }, 50);
+      });
       tbGapTags.appendChild(tag);
     });
   }
@@ -2500,7 +2619,7 @@ archetypeTags(r).forEach(tag=>{
 
   tbClearBtn.addEventListener('click', ()=>{ tbRoster = []; clearWarn(); tbRefresh(); });
   tbMaxRosterEl.addEventListener('input', ()=>{ tbMaxLabelEl.textContent = tbMaxRosterEl.value; });
-  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl, tbWeakThreshEl].forEach(el => {
+  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl, tbWeakThreshEl, document.getElementById('tbTargetGuards'), document.getElementById('tbTargetBigs')].forEach(el => {
     el.addEventListener('change', ()=> tbRefresh());
   });
 
