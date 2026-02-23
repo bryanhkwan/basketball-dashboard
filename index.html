@@ -183,8 +183,10 @@
     .gapTag.weak{border:1px solid rgba(248,113,113,.4);color:var(--bad);background:rgba(248,113,113,.08)}
     .gapTag.ok{border:1px solid rgba(251,191,36,.3);color:var(--warn);background:rgba(251,191,36,.06)}
     .gapTag.strong{border:1px solid rgba(52,211,153,.3);color:var(--good);background:rgba(52,211,153,.06)}
-    .gapExplain{position:fixed;z-index:100;max-width:320px;padding:12px 14px;border-radius:12px;background:rgba(0,20,50,.97);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:12px;line-height:1.55;color:var(--text);pointer-events:none;animation:fadeIn .15s ease-out}
+    .gapExplain{position:fixed;z-index:100;max-width:320px;padding:12px 14px;border-radius:12px;background:rgba(0,20,50,.97);border:1px solid var(--line);box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:12px;line-height:1.55;color:var(--text);pointer-events:auto;animation:fadeIn .15s ease-out}
     .gapExplain b{color:var(--accent);font-weight:700}
+    .gapExplain .gapExplainClose{position:absolute;top:6px;right:8px;cursor:pointer;color:var(--muted);font-size:14px;font-weight:700;line-height:1;padding:2px 6px;border-radius:6px;background:none;border:1px solid var(--line)}
+    .gapExplain .gapExplainClose:hover{color:var(--text);background:rgba(255,255,255,.06)}
     .tbPosControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .tbPosControls input[type="number"]{width:48px;text-align:center;padding:6px 4px;font-size:12px}
     .tbPosBalance{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -2201,46 +2203,113 @@ archetypeTags(r).forEach(tag=>{
       const allPool = tbGetAllPlayers();
       const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
       const cap = Number(tbPlayerCapEl.value) || Infinity;
-      let html = '';
+      rebalanceInfo.innerHTML = '';
 
       if(excessGuards > 0 && bigs < targetB){
-        // Too many guards, need more bigs — find weakest guard(s) and suggest big replacements
+        const neededBigs = targetB - bigs;
+        const swapCount = Math.min(excessGuards, neededBigs);
         const rosterGuards = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)==='guard').sort((a,b)=>a.pct-b.pct);
-        const toDrop = rosterGuards.slice(0, Math.min(excessGuards, targetB - bigs));
-        html += `<div style="margin-bottom:4px">You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${targetB-bigs} more big${(targetB-bigs)>1?'s':''}</b>. Consider swapping:</div>`;
+        const toDrop = rosterGuards.slice(0, swapCount);
+
+        // Get a unique big candidate for each swap (don't reuse)
+        const usedBigKeys = new Set();
+        const allBigs = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='big' && (safeNum(c.ActualValuation_calc)||0) <= cap)
+          .sort((a,b)=>(b.Score||0)-(a.Score||0));
+
+        const header = document.createElement('div');
+        header.style.cssText = 'margin-bottom:6px;font-size:11.5px';
+        header.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${neededBigs} more big${neededBigs>1?'s':''}</b>. Click a swap to execute:`;
+        rebalanceInfo.appendChild(header);
+
         toDrop.forEach(({r: grd, i: gIdx, pct}) => {
+          // Pick the best available big not yet used
+          const bigCand = allBigs.find(c => !usedBigKeys.has(tbPlayerKey(c)));
+          if(bigCand) usedBigKeys.add(tbPlayerKey(bigCand));
+
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
           const gVal = safeNum(grd.ActualValuation_calc)||0;
-          const bigCands = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='big' && (safeNum(c.ActualValuation_calc)||0) <= cap)
-            .sort((a,b)=>(b.Score||0)-(a.Score||0)).slice(0,2);
-          html += `<div style="margin:4px 0"><b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th avg, ${fmtMoney(gVal)})</span> → `;
-          if(bigCands.length){
-            html += bigCands.map(c=>`<b style="color:var(--good)">${c.Player}</b> <span class="muted">(${c.Position||'Big'}, ${(c.Score||0).toFixed(1)} perf, ${fmtMoney(safeNum(c.ActualValuation_calc))})</span>`).join(' or ');
-          } else { html += '<span class="muted">no big candidates in budget</span>'; }
-          html += `</div>`;
+
+          if(bigCand){
+            const cVal = safeNum(bigCand.ActualValuation_calc)||0;
+            row.innerHTML = `
+              <span class="tbAddBtn" data-rebal-drop="${gIdx}" data-rebal-add="${tbPlayerKey(bigCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
+              <b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)})</span>
+              <span style="color:var(--muted)">→</span>
+              <b style="color:var(--good)">${bigCand.Player}</b> <span class="muted">(${bigCand.Position||'Big'}, ${(bigCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
+            `;
+          } else {
+            row.innerHTML = `<b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)}) — no big candidates in budget</span>`;
+          }
+          rebalanceInfo.appendChild(row);
         });
       }
+
       if(excessBigs > 0 && guards < targetG){
+        const neededGuards = targetG - guards;
+        const swapCount = Math.min(excessBigs, neededGuards);
         const rosterBigs = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)!=='guard').sort((a,b)=>a.pct-b.pct);
-        const toDrop = rosterBigs.slice(0, Math.min(excessBigs, targetG - guards));
-        html += `<div style="margin-bottom:4px">You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${targetG-guards} more guard${(targetG-guards)>1?'s':''}</b>. Consider swapping:</div>`;
+        const toDrop = rosterBigs.slice(0, swapCount);
+
+        const usedGrdKeys = new Set();
+        const allGrds = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='guard' && (safeNum(c.ActualValuation_calc)||0) <= cap)
+          .sort((a,b)=>(b.Score||0)-(a.Score||0));
+
+        const header = document.createElement('div');
+        header.style.cssText = 'margin-bottom:6px;margin-top:8px;font-size:11.5px';
+        header.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${neededGuards} more guard${neededGuards>1?'s':''}</b>. Click a swap to execute:`;
+        rebalanceInfo.appendChild(header);
+
         toDrop.forEach(({r: big, i: bIdx, pct}) => {
+          const grdCand = allGrds.find(c => !usedGrdKeys.has(tbPlayerKey(c)));
+          if(grdCand) usedGrdKeys.add(tbPlayerKey(grdCand));
+
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
           const bVal = safeNum(big.ActualValuation_calc)||0;
-          const grdCands = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='guard' && (safeNum(c.ActualValuation_calc)||0) <= cap)
-            .sort((a,b)=>(b.Score||0)-(a.Score||0)).slice(0,2);
-          html += `<div style="margin:4px 0"><b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th avg, ${fmtMoney(bVal)})</span> → `;
-          if(grdCands.length){
-            html += grdCands.map(c=>`<b style="color:var(--good)">${c.Player}</b> <span class="muted">(${c.Position||'Guard'}, ${(c.Score||0).toFixed(1)} perf, ${fmtMoney(safeNum(c.ActualValuation_calc))})</span>`).join(' or ');
-          } else { html += '<span class="muted">no guard candidates in budget</span>'; }
-          html += `</div>`;
+
+          if(grdCand){
+            const cVal = safeNum(grdCand.ActualValuation_calc)||0;
+            row.innerHTML = `
+              <span class="tbAddBtn" data-rebal-drop="${bIdx}" data-rebal-add="${tbPlayerKey(grdCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
+              <b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)})</span>
+              <span style="color:var(--muted)">→</span>
+              <b style="color:var(--good)">${grdCand.Player}</b> <span class="muted">(${grdCand.Position||'Guard'}, ${(grdCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
+            `;
+          } else {
+            row.innerHTML = `<b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)}) — no guard candidates in budget</span>`;
+          }
+          rebalanceInfo.appendChild(row);
         });
       }
+
       if(excessGuards > 0 && bigs >= targetB){
-        html += `<div>You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> — consider removing your weakest guard(s) to hit target.</div>`;
+        const note = document.createElement('div');
+        note.style.cssText = 'margin-top:6px;font-size:11.5px';
+        note.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> — consider removing your weakest guard(s) to hit target.`;
+        rebalanceInfo.appendChild(note);
       }
       if(excessBigs > 0 && guards >= targetG){
-        html += `<div>You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> — consider removing your weakest big(s) to hit target.</div>`;
+        const note = document.createElement('div');
+        note.style.cssText = 'margin-top:6px;font-size:11.5px';
+        note.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> — consider removing your weakest big(s) to hit target.`;
+        rebalanceInfo.appendChild(note);
       }
-      rebalanceInfo.innerHTML = html;
+
+      // Attach swap click handlers for rebalance
+      rebalanceInfo.querySelectorAll('[data-rebal-drop]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dropIdx = Number(btn.dataset.rebalDrop);
+          const addKey = btn.dataset.rebalAdd;
+          const replacement = tbGetAllPlayers().find(r => tbPlayerKey(r) === addKey);
+          if(replacement && dropIdx >= 0 && dropIdx < tbRoster.length){
+            tbRoster.splice(dropIdx, 1, replacement);
+            clearWarn();
+            tbRefresh();
+          }
+        });
+      });
+
       tbPosNoteEl.style.display = 'none';
     } else {
       rebalanceSection.style.display = 'none';
@@ -2508,19 +2577,30 @@ archetypeTags(r).forEach(tag=>{
       tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
       tag.title = 'Click for explanation';
       tag.addEventListener('click', (e) => {
+        e.stopPropagation();
         // Remove any existing explanation tooltip
         document.querySelectorAll('.gapExplain').forEach(el => el.remove());
         const expl = GAP_EXPLANATIONS[g.label] || 'No description available.';
         const levelText = g.level === 'weak' ? 'Your team is weak here.' : g.level === 'ok' ? 'Your team is average here.' : 'Your team is strong here.';
         const tip = document.createElement('div');
         tip.className = 'gapExplain';
-        tip.innerHTML = `<b>${g.label}</b> — ${expl}<br><br><em style="color:${g.level==='weak'?'var(--bad)':g.level==='ok'?'var(--warn)':'var(--good)'}">${levelText} (${Math.round(g.avgPct*100)}th percentile)</em>`;
+        tip.innerHTML = `<span class="gapExplainClose" id="gapTipClose">✕</span><b>${g.label}</b> — ${expl}<br><br><em style="color:${g.level==='weak'?'var(--bad)':g.level==='ok'?'var(--warn)':'var(--good)'}">${levelText} (${Math.round(g.avgPct*100)}th percentile)</em>`;
         document.body.appendChild(tip);
         const rect = e.target.getBoundingClientRect();
-        tip.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
-        tip.style.top = (rect.bottom + 8) + 'px';
+        const tipHeight = tip.offsetHeight || 140;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const leftPos = Math.max(8, Math.min(rect.left, window.innerWidth - 340));
+        tip.style.left = leftPos + 'px';
+        // Show above if not enough space below
+        if(spaceBelow < tipHeight + 16){
+          tip.style.top = Math.max(8, rect.top - tipHeight - 8) + 'px';
+        } else {
+          tip.style.top = (rect.bottom + 8) + 'px';
+        }
+        const closeTip = () => { tip.remove(); };
+        tip.querySelector('#gapTipClose').addEventListener('click', closeTip);
         setTimeout(() => {
-          const dismiss = (ev) => { if(!tip.contains(ev.target)){ tip.remove(); document.removeEventListener('click', dismiss); }};
+          const dismiss = (ev) => { if(!tip.contains(ev.target) && ev.target !== e.target){ closeTip(); document.removeEventListener('click', dismiss); }};
           document.addEventListener('click', dismiss);
         }, 50);
       });
