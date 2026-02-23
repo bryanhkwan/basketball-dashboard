@@ -148,6 +148,34 @@
     .toggleSwitch input:checked + .toggleTrack{background:rgba(255,210,0,.25);border-color:rgba(255,210,0,.5)}
     .toggleTrack::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s}
     .toggleSwitch input:checked + .toggleTrack::after{transform:translateX(18px);background:var(--accent)}
+    /* Team Builder */
+    .tbSection{margin-top:20px;animation:fadeUp .4s .15s ease-out both}
+    .tbGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+    .tbGrid>*{min-width:0}
+    @media(max-width:1020px){.tbGrid{grid-template-columns:1fr}}
+    .tbRoster{max-height:360px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .tbRoster table{border:none;border-radius:0}
+    .tbRoster th{top:0}
+    .tbRosterRow{transition:background .12s}
+    .tbRosterRow:hover td{background:rgba(255,210,0,.04)}
+    .tbRemoveBtn{background:none;border:1px solid rgba(248,113,113,.3);color:var(--bad);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none}
+    .tbRemoveBtn:hover{background:rgba(248,113,113,.12);border-color:var(--bad);transform:none;box-shadow:none}
+    .tbAddBtn{background:none;border:1px solid rgba(52,211,153,.3);color:var(--good);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none;white-space:nowrap}
+    .tbAddBtn:hover{background:rgba(52,211,153,.12);border-color:var(--good);transform:none;box-shadow:none}
+    .tbAddBtn.on-roster{border-color:rgba(255,210,0,.4);color:var(--accent);opacity:.6;cursor:default}
+    .gapBar{display:flex;flex-direction:column;gap:3px}
+    .gapBarTrack{height:10px;background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:999px;overflow:hidden;position:relative}
+    .gapBarFill{height:100%;border-radius:999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+    .gapBarLabel{display:flex;justify-content:space-between;font-size:11px}
+    .gapTag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700}
+    .gapTag.weak{border:1px solid rgba(248,113,113,.4);color:var(--bad);background:rgba(248,113,113,.08)}
+    .gapTag.ok{border:1px solid rgba(251,191,36,.3);color:var(--warn);background:rgba(251,191,36,.06)}
+    .gapTag.strong{border:1px solid rgba(52,211,153,.3);color:var(--good);background:rgba(52,211,153,.06)}
+    .tbKpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .tbKpis .pill b{font-weight:700}
+    .tbSuggest{max-height:320px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .tbSuggest table{border:none;border-radius:0}
+    .tbSuggest th{top:0}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
@@ -161,7 +189,7 @@
   <h1>🏀 NCAA Scouting Dashboard</h1>
   <p class="sub">
     Click a player to open their full stat profile with percentiles, archetypes, and fit score.
-    Uses: <b>MBB Guards</b>, <b>MBB Bigs</b>, <b>WBB Guards</b>, <b>WBB Bigs</b>, plus <b>ScoringWeight</b>.
+    Uses: <b>MBB Guards</b>, <b>MBB Bigs</b>, <b>WBB Guards MAC</b>, <b>WBB Bigs MAC</b>, plus <b>ScoringWeight</b>.
   </p>
 </header>
 
@@ -176,7 +204,7 @@
       <div style="display:flex;flex-direction:column;justify-content:flex-end">
         <button class="primary" id="loadGs">Refresh data</button>
         <div id="gsStatus" style="margin-top:10px;color:#fff;font-family:system-ui;font-size:14px;"></div>
-        
+        <div class="hint" style="margin-top:6px">Security: consider restricting your key to Google Sheets API + your domain.</div>
       </div>
 
 
@@ -392,6 +420,72 @@
             <span class="pill">Range: <b id="confMultRange">—</b></span>
           </div>
           <div class="hint">Adjusts PerfScore before valuation. A player in a stronger conference gets a boosted score. Currently <b>MBB only</b> — WBB will auto-activate when conference data is added to that sheet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Team Builder -->
+<div class="wrap tbSection">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">🏀 Team Builder</div>
+        <div class="muted" style="font-size:12px;margin-top:4px">Add players from the table above, analyze gaps, and get recommendations.</div>
+      </div>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <div><label>Budget</label><br/><input id="tbBudget" type="number" step="10000" value="500000" style="width:100px"></div>
+        <div><label>Player cap</label><br/><input id="tbPlayerCap" type="number" step="5000" value="150000" style="width:90px"></div>
+        <div><label>Max roster</label><br/><input id="tbMaxRoster" type="number" step="1" min="1" max="25" value="13" style="width:60px"></div>
+        <div style="align-self:end"><button id="tbClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear roster</button></div>
+      </div>
+    </div>
+
+    <div class="tbKpis" id="tbKpis">
+      <span class="pill">Roster: <b id="tbCount">0</b> / <b id="tbMaxLabel">13</b></span>
+      <span class="pill">Total cost: <b id="tbCost">$0</b></span>
+      <span class="pill">Remaining: <b id="tbRemaining">$500,000</b></span>
+      <span class="pill" id="tbPosNote" style="display:none;border-color:rgba(251,191,36,.3);color:var(--warn)"></span>
+    </div>
+
+    <div class="tbGrid">
+      <!-- Left: Roster + Gap Analysis -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <div class="panelHead">Your roster</div>
+          <div class="panelBody" style="padding:0">
+            <div class="tbRoster">
+              <table>
+                <thead><tr><th style="width:4%"></th><th>Player</th><th>Team</th><th>Pos</th><th>Perf</th><th>Value</th><th></th></tr></thead>
+                <tbody id="tbRosterBody"></tbody>
+              </table>
+            </div>
+            <div id="tbRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Click <b>＋</b> on any player row above to add them to your roster.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">Team stat profile</div>
+          <div class="panelBody">
+            <div id="tbGapBars" style="display:flex;flex-direction:column;gap:10px"></div>
+            <div id="tbGapEmpty" class="hint" style="text-align:center;margin:0;opacity:.6">Add players to see team stat analysis.</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" id="tbGapTags"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Recommendations -->
+      <div class="panel">
+        <div class="panelHead">Recommended fits</div>
+        <div class="panelBody" style="padding:0">
+          <div class="tbSuggest">
+            <table>
+              <thead><tr><th>Player</th><th>Team</th><th>Fills gap</th><th>Perf</th><th>Value</th><th></th></tr></thead>
+              <tbody id="tbSuggestBody"></tbody>
+            </table>
+          </div>
+          <div id="tbSuggestEmpty" class="hint" style="text-align:center;padding:20px;margin:0;opacity:.6">Add players to get gap-based recommendations.</div>
         </div>
       </div>
     </div>
@@ -1471,6 +1565,7 @@ function renderWeights(){
 
   // ---------- Table rendering ----------
   const LIST_COLS = [
+    {key:'_tb_add', label:''},
     {key:'CalcRank', label:'#'},
     {key:'Player', label:'Player'},
     {key:'Team', label:'Team'},
@@ -1553,7 +1648,15 @@ function renderWeights(){
           else if(c.key === 'ValueDelta_calc') v = (n>=0?'+':'') + fmtMoney(n).replace('$','');
           else v = fmtMoney(n);
         }
-        if(c.key === 'Player'){
+        if(c.key === '_tb_add'){
+          const onRoster = tbRoster.some(x => x.Player === r.Player && x.Team === r.Team);
+          if(onRoster){
+            td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">✓</span>`;
+          } else {
+            td.innerHTML = `<span class="tbAddBtn" title="Add to roster">＋</span>`;
+            td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); tbAddPlayer(r); });
+          }
+        }else if(c.key === 'Player'){
           td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
           td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
         }else if(c.key === 'ConfMult_calc'){
@@ -1908,6 +2011,259 @@ archetypeTags(r).forEach(tag=>{
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
     el.addEventListener('input', ()=>{ if(wb) computeAll(); });
     el.addEventListener('change', ()=>{ if(wb) computeAll(); });
+  });
+
+  // ========== TEAM BUILDER ==========
+  var tbRoster = [];
+  const tbBudgetEl = document.getElementById('tbBudget');
+  const tbPlayerCapEl = document.getElementById('tbPlayerCap');
+  const tbMaxRosterEl = document.getElementById('tbMaxRoster');
+  const tbCountEl = document.getElementById('tbCount');
+  const tbMaxLabelEl = document.getElementById('tbMaxLabel');
+  const tbCostEl = document.getElementById('tbCost');
+  const tbRemainingEl = document.getElementById('tbRemaining');
+  const tbPosNoteEl = document.getElementById('tbPosNote');
+  const tbRosterBody = document.getElementById('tbRosterBody');
+  const tbRosterEmpty = document.getElementById('tbRosterEmpty');
+  const tbGapBars = document.getElementById('tbGapBars');
+  const tbGapEmpty = document.getElementById('tbGapEmpty');
+  const tbGapTags = document.getElementById('tbGapTags');
+  const tbSuggestBody = document.getElementById('tbSuggestBody');
+  const tbSuggestEmpty = document.getElementById('tbSuggestEmpty');
+  const tbClearBtn = document.getElementById('tbClear');
+
+  // Gap analysis stat categories
+  const GAP_CATEGORIES = {
+    Guards: [
+      {label:'Scoring', stats:['PPG'], icon:'🏀'},
+      {label:'Shooting', stats:['3P%','eFG%'], icon:'🎯'},
+      {label:'Free throws', stats:['FT%'], icon:'📏'},
+      {label:'Playmaking', stats:['APG','A/TO'], icon:'🎯'},
+      {label:'Ball security', stats:['TOPG'], icon:'🔒'},
+      {label:'Steals', stats:['SPG'], icon:'🖐️'},
+      {label:'Defense', stats:['DRtg','DR%'], icon:'🛡️'},
+      {label:'Impact', stats:['BPM','WS/40'], icon:'📈'},
+    ],
+    Bigs: [
+      {label:'Scoring', stats:['PPG'], icon:'🏀'},
+      {label:'Efficiency', stats:['eFG%','FG%'], icon:'🎯'},
+      {label:'Free throws', stats:['FT%'], icon:'📏'},
+      {label:'Rim protection', stats:['BPG'], icon:'🚫'},
+      {label:'Off. rebounding', stats:['OR%'], icon:'💪'},
+      {label:'Def. rebounding', stats:['DR%'], icon:'🛡️'},
+      {label:'Steals', stats:['SPG'], icon:'🖐️'},
+      {label:'Defense', stats:['DRtg'], icon:'🛡️'},
+      {label:'Impact', stats:['BPM','WS/40'], icon:'📈'},
+    ]
+  };
+
+  function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
+
+  function tbAddPlayer(r){
+    const maxR = Number(tbMaxRosterEl.value) || 13;
+    if(tbRoster.length >= maxR){ showWarn(`Roster full (max ${maxR}).`); return; }
+    if(tbRoster.some(x => tbPlayerKey(x) === tbPlayerKey(r))) return;
+    const cap = Number(tbPlayerCapEl.value) || Infinity;
+    const val = safeNum(r.ActualValuation_calc) || 0;
+    if(Number.isFinite(cap) && val > cap){ showWarn(`${r.Player} ($${val.toLocaleString()}) exceeds per-player cap ($${cap.toLocaleString()}).`); return; }
+    const budget = Number(tbBudgetEl.value) || Infinity;
+    const used = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+    if(Number.isFinite(budget) && used + val > budget){ showWarn(`Adding ${r.Player} would exceed budget.`); return; }
+    tbRoster.push(r);
+    clearWarn();
+    tbRefresh();
+  }
+
+  function tbRemovePlayer(idx){
+    tbRoster.splice(idx, 1);
+    tbRefresh();
+  }
+
+  function tbRefresh(){
+    const maxR = Number(tbMaxRosterEl.value) || 13;
+    const budget = Number(tbBudgetEl.value) || 0;
+    const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+
+    tbMaxLabelEl.textContent = maxR;
+    tbCountEl.textContent = tbRoster.length;
+    tbCostEl.textContent = fmtMoney(totalCost);
+    const rem = budget - totalCost;
+    tbRemainingEl.textContent = fmtMoney(rem);
+    tbRemainingEl.style.color = rem < 0 ? 'var(--bad)' : rem < budget * 0.1 ? 'var(--warn)' : 'var(--good)';
+
+    // Position balance note
+    let guards = 0, bigs = 0;
+    tbRoster.forEach(r => {
+      const p = (r.Position||r.Pos||pos||'').toString().toLowerCase();
+      if(p.includes('g') || p.includes('guard')) guards++;
+      else bigs++;
+    });
+    if(tbRoster.length >= 3){
+      const ratio = guards / (tbRoster.length);
+      if(ratio > 0.75){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on guards (${guards}G / ${bigs}B)`; }
+      else if(ratio < 0.25){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on bigs (${guards}G / ${bigs}B)`; }
+      else { tbPosNoteEl.style.display = 'none'; }
+    } else { tbPosNoteEl.style.display = 'none'; }
+
+    tbRenderRoster();
+    tbRenderGaps();
+    tbRenderSuggestions();
+    // re-render table so + buttons update to ✓
+    renderPlayersPage();
+  }
+
+  function tbRenderRoster(){
+    tbRosterBody.innerHTML = '';
+    tbRosterEmpty.style.display = tbRoster.length ? 'none' : 'block';
+    tbRoster.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'tbRosterRow';
+      tr.innerHTML = `
+        <td style="font-size:11px;color:var(--muted)">${i+1}</td>
+        <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span></td>
+        <td style="font-size:11px">${r.Team||'—'}</td>
+        <td style="font-size:11px">${r.Position||pos||'—'}</td>
+        <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
+        <td style="font-size:11.5px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+        <td><button class="tbRemoveBtn">✕</button></td>
+      `;
+      tr.querySelector('.link').addEventListener('click', () => openProfile(r));
+      tr.querySelector('.tbRemoveBtn').addEventListener('click', () => tbRemovePlayer(i));
+      tbRosterBody.appendChild(tr);
+    });
+  }
+
+  function tbRenderGaps(){
+    tbGapBars.innerHTML = '';
+    tbGapTags.innerHTML = '';
+    if(!tbRoster.length){ tbGapEmpty.style.display = 'block'; return; }
+    tbGapEmpty.style.display = 'none';
+
+    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    const gaps = []; // {label, avgPct, level}
+
+    cats.forEach(cat => {
+      // Average percentile of roster players in these stats
+      let sum = 0, count = 0;
+      cat.stats.forEach(stat => {
+        if(!statDist[stat]) return;
+        tbRoster.forEach(r => {
+          const x = safeNum(r[stat]);
+          if(x === null) return;
+          const p = statPercentile(stat, x);
+          if(Number.isFinite(p)){ sum += p; count++; }
+        });
+      });
+      const avgPct = count > 0 ? sum / count : 0.5;
+      const pct100 = Math.round(avgPct * 100);
+      const level = avgPct < 0.35 ? 'weak' : avgPct < 0.55 ? 'ok' : 'strong';
+      const color = level === 'weak' ? 'var(--bad)' : level === 'ok' ? 'var(--warn)' : 'var(--good)';
+
+      gaps.push({label:cat.label, avgPct, level, stats:cat.stats});
+
+      const div = document.createElement('div');
+      div.className = 'gapBar';
+      div.innerHTML = `
+        <div class="gapBarLabel"><span>${cat.icon} ${cat.label}</span><span style="color:${color};font-weight:700">${pct100}th</span></div>
+        <div class="gapBarTrack"><div class="gapBarFill" style="width:${pct100}%;background:${color}"></div></div>
+      `;
+      tbGapBars.appendChild(div);
+    });
+
+    // Gap tags
+    gaps.forEach(g => {
+      const tag = document.createElement('span');
+      tag.className = `gapTag ${g.level}`;
+      tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
+      tbGapTags.appendChild(tag);
+    });
+  }
+
+  function tbRenderSuggestions(){
+    tbSuggestBody.innerHTML = '';
+    if(!tbRoster.length || !computed.length){ tbSuggestEmpty.style.display = 'block'; return; }
+    tbSuggestEmpty.style.display = 'none';
+
+    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    const budget = Number(tbBudgetEl.value) || Infinity;
+    const cap = Number(tbPlayerCapEl.value) || Infinity;
+    const maxR = Number(tbMaxRosterEl.value) || 13;
+    const used = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+    const remaining = budget - used;
+    const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
+
+    // Find weak categories (avg pct < 0.45)
+    const weakCats = [];
+    cats.forEach(cat => {
+      let sum = 0, count = 0;
+      cat.stats.forEach(stat => {
+        if(!statDist[stat]) return;
+        tbRoster.forEach(r => {
+          const x = safeNum(r[stat]);
+          if(x === null) return;
+          const p = statPercentile(stat, x);
+          if(Number.isFinite(p)){ sum += p; count++; }
+        });
+      });
+      const avgPct = count > 0 ? sum / count : 0.5;
+      if(avgPct < 0.45) weakCats.push(cat);
+    });
+
+    // If no weak categories, suggest best overall fits
+    const targetCats = weakCats.length > 0 ? weakCats : cats;
+
+    // Score every non-roster player by how well they fill gaps
+    const candidates = computed.filter(r => {
+      if(rosterKeys.has(tbPlayerKey(r))) return false;
+      const val = safeNum(r.ActualValuation_calc) || 0;
+      if(val > cap) return false;
+      if(tbRoster.length < maxR && val > remaining) return false;
+      return true;
+    });
+
+    const scored = candidates.map(r => {
+      let gapScore = 0, gapCount = 0;
+      let bestGap = '';
+      let bestGapScore = -1;
+      targetCats.forEach(cat => {
+        cat.stats.forEach(stat => {
+          const x = safeNum(r[stat]);
+          if(x === null) return;
+          const p = statPercentile(stat, x);
+          if(!Number.isFinite(p)) return;
+          gapScore += p;
+          gapCount++;
+          if(p > bestGapScore){ bestGapScore = p; bestGap = cat.label; }
+        });
+      });
+      const avg = gapCount > 0 ? gapScore / gapCount : 0;
+      return {r, avg, bestGap};
+    });
+
+    scored.sort((a,b) => b.avg - a.avg);
+
+    scored.slice(0, 30).forEach(({r, avg, bestGap}) => {
+      const tr = document.createElement('tr');
+      const pct = Math.round(avg * 100);
+      const gapColor = avg >= 0.7 ? 'var(--good)' : avg >= 0.5 ? 'var(--warn)' : 'var(--muted)';
+      tr.innerHTML = `
+        <td><span class="link" style="font-size:11px">${r.Player||'—'}</span></td>
+        <td style="font-size:11px">${r.Team||'—'}</td>
+        <td style="font-size:10.5px;color:${gapColor};font-weight:700">${bestGap} (${pct}th)</td>
+        <td style="font-size:11px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
+        <td style="font-size:11px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+        <td><span class="tbAddBtn" title="Add to roster">＋</span></td>
+      `;
+      tr.querySelector('.link').addEventListener('click', () => openProfile(r));
+      tr.querySelector('.tbAddBtn').addEventListener('click', () => tbAddPlayer(r));
+      tbSuggestBody.appendChild(tr);
+    });
+  }
+
+  tbClearBtn.addEventListener('click', ()=>{ tbRoster = []; clearWarn(); tbRefresh(); });
+  tbMaxRosterEl.addEventListener('input', ()=>{ tbMaxLabelEl.textContent = tbMaxRosterEl.value; });
+  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl].forEach(el => {
+    el.addEventListener('change', ()=> tbRefresh());
   });
 
   // Auto-load default Google Sheet on startup
