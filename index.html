@@ -160,6 +160,9 @@
     .tbRosterRow:hover td{background:rgba(255,210,0,.04)}
     .tbRemoveBtn{background:none;border:1px solid rgba(248,113,113,.3);color:var(--bad);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none}
     .tbRemoveBtn:hover{background:rgba(248,113,113,.12);border-color:var(--bad);transform:none;box-shadow:none}
+    .tbWeakest td{background:rgba(248,113,113,.06)!important}
+    .tbWeakestTag{font-size:9.5px;font-weight:700;color:var(--bad);border:1px solid rgba(248,113,113,.3);border-radius:999px;padding:2px 7px;white-space:nowrap}
+    .tbReplaceSection{border-top:1px solid var(--line);padding:12px;background:rgba(248,113,113,.03)}
     .tbAddBtn{background:none;border:1px solid rgba(52,211,153,.3);color:var(--good);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none;white-space:nowrap}
     .tbAddBtn:hover{background:rgba(52,211,153,.12);border-color:var(--good);transform:none;box-shadow:none}
     .tbAddBtn.on-roster{border-color:rgba(255,210,0,.4);color:var(--accent);opacity:.6;cursor:default}
@@ -462,6 +465,10 @@
               </table>
             </div>
             <div id="tbRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Click <b>＋</b> on any player row above to add them to your roster.</div>
+            <div id="tbWeakestSection" class="tbReplaceSection" style="display:none">
+              <div style="font-size:11.5px;font-weight:700;margin-bottom:8px">🔄 Suggested replacement</div>
+              <div id="tbWeakestInfo" style="font-size:11.5px;line-height:1.5"></div>
+            </div>
           </div>
         </div>
 
@@ -481,7 +488,7 @@
         <div class="panelBody" style="padding:0">
           <div class="tbSuggest">
             <table>
-              <thead><tr><th>Player</th><th>Team</th><th>Fills gap</th><th>Perf</th><th>Value</th><th></th></tr></thead>
+              <thead><tr><th>Player</th><th>Team</th><th>Pos</th><th>Fills gap</th><th>Perf</th><th>Value</th><th></th></tr></thead>
               <tbody id="tbSuggestBody"></tbody>
             </table>
           </div>
@@ -1693,11 +1700,14 @@ function renderWeights(){
       playersBody.closest('.card').insertBefore(pag, playersBody.closest('.scrollY').nextSibling);
     }
     if(totalPages <= 1){
-      pag.innerHTML = `<span class="pill" style="font-size:11px">${filteredData.length} players</span>`;
+      pag.innerHTML = `
+        <span class="pill" style="font-size:11px">${filteredData.length} players</span>
+        <button class="secondary" id="tbAddAllBtn" style="padding:5px 12px;font-size:10.5px;border-color:rgba(52,211,153,.3);color:var(--good)">＋ Add all ${filteredData.length} to roster</button>`;
     } else {
       pag.innerHTML = `
         <span class="pill" style="font-size:11px">Showing ${start+1}–${Math.min(start+PAGE_SIZE, filteredData.length)} of ${filteredData.length}</span>
         <div style="display:flex;gap:6px;align-items:center">
+          <button class="secondary" id="tbAddAllBtn" style="padding:5px 10px;font-size:10.5px;border-color:rgba(52,211,153,.3);color:var(--good)">＋ Add all ${filteredData.length}</button>
           <button class="secondary" id="pagPrev" style="padding:6px 12px;font-size:11px" ${currentPage===0?'disabled':''}>← Prev</button>
           <span style="font-size:11px;color:var(--muted)">Page ${currentPage+1} / ${totalPages}</span>
           <button class="secondary" id="pagNext" style="padding:6px 12px;font-size:11px" ${currentPage>=totalPages-1?'disabled':''}>Next →</button>
@@ -1705,6 +1715,24 @@ function renderWeights(){
       document.getElementById('pagPrev')?.addEventListener('click',()=>{if(currentPage>0){currentPage--;renderPlayersPage();}});
       document.getElementById('pagNext')?.addEventListener('click',()=>{if(currentPage<totalPages-1){currentPage++;renderPlayersPage();}});
     }
+    // Add All button (present in both single and multi page)
+    document.getElementById('tbAddAllBtn')?.addEventListener('click',()=>{
+      const maxR = Number(tbMaxRosterEl.value) || 13;
+      const budget = Number(tbBudgetEl.value) || Infinity;
+      const cap = Number(tbPlayerCapEl.value) || Infinity;
+      let added = 0;
+      filteredData.forEach(r => {
+        if(tbRoster.length >= maxR) return;
+        if(tbRoster.some(x => tbPlayerKey(x) === tbPlayerKey(r))) return;
+        const val = safeNum(r.ActualValuation_calc) || 0;
+        if(val > cap) return;
+        const used = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+        if(used + val > budget) return;
+        tbRoster.push(r);
+        added++;
+      });
+      if(added > 0) tbRefresh();
+    });
   }
 
   // Debounced search (150ms)
@@ -2115,12 +2143,36 @@ archetypeTags(r).forEach(tag=>{
   function tbRenderRoster(){
     tbRosterBody.innerHTML = '';
     tbRosterEmpty.style.display = tbRoster.length ? 'none' : 'block';
+    const weakestSection = document.getElementById('tbWeakestSection');
+    const weakestInfo = document.getElementById('tbWeakestInfo');
+
+    // Find weakest link: player with lowest average percentile across gap categories
+    let weakestIdx = -1, weakestScore = Infinity, weakestName = '';
+    if(tbRoster.length >= 2){
+      const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+      tbRoster.forEach((r, i) => {
+        let sum = 0, cnt = 0;
+        cats.forEach(cat => {
+          cat.stats.forEach(stat => {
+            if(!statDist[stat]) return;
+            const x = safeNum(r[stat]);
+            if(x === null) return;
+            const p = statPercentile(stat, x);
+            if(Number.isFinite(p)){ sum += p; cnt++; }
+          });
+        });
+        const avg = cnt > 0 ? sum / cnt : 0;
+        if(avg < weakestScore){ weakestScore = avg; weakestIdx = i; weakestName = r.Player||'—'; }
+      });
+    }
+
     tbRoster.forEach((r, i) => {
       const tr = document.createElement('tr');
-      tr.className = 'tbRosterRow';
+      tr.className = 'tbRosterRow' + (i === weakestIdx ? ' tbWeakest' : '');
+      const isWeak = i === weakestIdx;
       tr.innerHTML = `
         <td style="font-size:11px;color:var(--muted)">${i+1}</td>
-        <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span></td>
+        <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span>${isWeak ? ' <span class="tbWeakestTag">weakest</span>' : ''}</td>
         <td style="font-size:11px">${r.Team||'—'}</td>
         <td style="font-size:11px">${r.Position||pos||'—'}</td>
         <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
@@ -2131,6 +2183,62 @@ archetypeTags(r).forEach(tag=>{
       tr.querySelector('.tbRemoveBtn').addEventListener('click', () => tbRemovePlayer(i));
       tbRosterBody.appendChild(tr);
     });
+
+    // Replacement suggestion for weakest link
+    if(weakestIdx >= 0 && computed.length && tbRoster.length >= 2){
+      weakestSection.style.display = '';
+      const weakPlayer = tbRoster[weakestIdx];
+      const weakVal = safeNum(weakPlayer.ActualValuation_calc) || 0;
+      const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
+      const cap = Number(tbPlayerCapEl.value) || Infinity;
+
+      // Find the best replacement: higher perf score, within similar value range
+      const replacements = computed.filter(r => {
+        if(rosterKeys.has(tbPlayerKey(r))) return false;
+        const val = safeNum(r.ActualValuation_calc) || 0;
+        if(val > cap) return false;
+        if(!Number.isFinite(r.Score)) return false;
+        return r.Score > (weakPlayer.Score || 0);
+      }).sort((a,b) => (b.Score||0) - (a.Score||0)).slice(0, 3);
+
+      if(replacements.length){
+        let html = `<div style="color:var(--muted);margin-bottom:6px">
+          <b style="color:var(--bad)">${weakestName}</b> has the lowest avg percentile on your roster (${Math.round(weakestScore*100)}th).
+          Consider replacing with:</div>`;
+        html += `<div style="display:flex;flex-direction:column;gap:4px">`;
+        replacements.forEach(r => {
+          const val = fmtMoney(safeNum(r.ActualValuation_calc));
+          const rPos = r.Position || pos || '—';
+          html += `<div style="display:flex;align-items:center;gap:8px;font-size:11.5px">
+            <span class="tbAddBtn" data-replace-key="${tbPlayerKey(r)}" style="font-size:10px">＋ Swap</span>
+            <b style="color:var(--good)">${r.Player}</b>
+            <span class="muted">${r.Team} · ${rPos}</span>
+            <span style="font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} perf</span>
+            <span class="muted">${val}</span>
+          </div>`;
+        });
+        html += `</div>`;
+        weakestInfo.innerHTML = html;
+
+        // Attach swap handlers
+        weakestInfo.querySelectorAll('[data-replace-key]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const key = btn.dataset.replaceKey;
+            const replacement = computed.find(r => tbPlayerKey(r) === key);
+            if(replacement){
+              tbRoster.splice(weakestIdx, 1);
+              tbRoster.push(replacement);
+              clearWarn();
+              tbRefresh();
+            }
+          });
+        });
+      } else {
+        weakestInfo.innerHTML = `<span class="muted"><b style="color:var(--bad)">${weakestName}</b> is the weakest on your roster (${Math.round(weakestScore*100)}th avg) but no better options found within budget/cap.</span>`;
+      }
+    } else {
+      weakestSection.style.display = 'none';
+    }
   }
 
   function tbRenderGaps(){
@@ -2246,9 +2354,11 @@ archetypeTags(r).forEach(tag=>{
       const tr = document.createElement('tr');
       const pct = Math.round(avg * 100);
       const gapColor = avg >= 0.7 ? 'var(--good)' : avg >= 0.5 ? 'var(--warn)' : 'var(--muted)';
+      const rPos = r.Position || pos || '—';
       tr.innerHTML = `
         <td><span class="link" style="font-size:11px">${r.Player||'—'}</span></td>
         <td style="font-size:11px">${r.Team||'—'}</td>
+        <td style="font-size:11px">${rPos}</td>
         <td style="font-size:10.5px;color:${gapColor};font-weight:700">${bestGap} (${pct}th)</td>
         <td style="font-size:11px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
         <td style="font-size:11px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
