@@ -163,6 +163,14 @@
     .tbWeakest td{background:rgba(248,113,113,.06)!important}
     .tbWeakestTag{font-size:9.5px;font-weight:700;color:var(--bad);border:1px solid rgba(248,113,113,.3);border-radius:999px;padding:2px 7px;white-space:nowrap}
     .tbReplaceSection{border-top:1px solid var(--line);padding:12px;background:rgba(248,113,113,.03)}
+    .tbSwapCard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(0,15,40,.4)}
+    .tbSwapCard .swapHeader{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+    .tbSwapCard .swapOpts{display:flex;flex-direction:column;gap:4px}
+    .tbSwapOpt{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 0;flex-wrap:wrap}
+    .tbBfbPill{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+    .tbBfbPill.high{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);color:var(--good)}
+    .tbBfbPill.mid{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);color:var(--warn)}
+    .tbBfbPill.low{background:rgba(0,15,40,.3);border:1px solid var(--line);color:var(--muted)}
     .tbAddBtn{background:none;border:1px solid rgba(52,211,153,.3);color:var(--good);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none;white-space:nowrap}
     .tbAddBtn:hover{background:rgba(52,211,153,.12);border-color:var(--good);transform:none;box-shadow:none}
     .tbAddBtn.on-roster{border-color:rgba(255,210,0,.4);color:var(--accent);opacity:.6;cursor:default}
@@ -441,6 +449,12 @@
         <div><label>Budget</label><br/><input id="tbBudget" type="number" step="10000" value="500000" style="width:100px"></div>
         <div><label>Player cap</label><br/><input id="tbPlayerCap" type="number" step="5000" value="150000" style="width:90px"></div>
         <div><label>Max roster</label><br/><input id="tbMaxRoster" type="number" step="1" min="1" max="25" value="13" style="width:60px"></div>
+        <div><label>Weak below</label><br/>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input id="tbWeakThresh" type="range" min="10" max="60" value="40" style="width:80px;accent-color:var(--accent)">
+            <span id="tbWeakThreshLabel" style="font-size:12px;font-weight:700;color:var(--bad);min-width:30px">40th</span>
+          </div>
+        </div>
         <div style="align-self:end"><button id="tbClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear roster</button></div>
       </div>
     </div>
@@ -466,8 +480,8 @@
             </div>
             <div id="tbRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Click <b>＋</b> on any player row above to add them to your roster.</div>
             <div id="tbWeakestSection" class="tbReplaceSection" style="display:none">
-              <div style="font-size:11.5px;font-weight:700;margin-bottom:8px">🔄 Suggested replacement</div>
-              <div id="tbWeakestInfo" style="font-size:11.5px;line-height:1.5"></div>
+              <div style="font-size:11.5px;font-weight:700;margin-bottom:6px">🔄 Suggested swaps <span id="tbWeakCount" style="font-weight:500;color:var(--muted)"></span></div>
+              <div id="tbWeakestInfo" style="display:flex;flex-direction:column;gap:10px"></div>
             </div>
           </div>
         </div>
@@ -2140,42 +2154,62 @@ archetypeTags(r).forEach(tag=>{
     renderPlayersPage();
   }
 
+  const tbWeakThreshEl = document.getElementById('tbWeakThresh');
+  const tbWeakThreshLabelEl = document.getElementById('tbWeakThreshLabel');
+  tbWeakThreshEl.addEventListener('input', () => {
+    tbWeakThreshLabelEl.textContent = tbWeakThreshEl.value + 'th';
+    tbRefresh();
+  });
+
+  // Compute a player's avg percentile across gap categories
+  function tbPlayerAvgPct(r){
+    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    let sum = 0, cnt = 0;
+    cats.forEach(cat => {
+      cat.stats.forEach(stat => {
+        if(!statDist[stat]) return;
+        const x = safeNum(r[stat]);
+        if(x === null) return;
+        const p = statPercentile(stat, x);
+        if(Number.isFinite(p)){ sum += p; cnt++; }
+      });
+    });
+    return cnt > 0 ? sum / cnt : 0;
+  }
+
+  // Get simplified position bucket for a player
+  function tbPosGroup(r){
+    const p = (r.Position||r.Pos||pos||'').toString().toLowerCase();
+    if(p.includes('g') || p.includes('guard') || p.includes('wing')) return 'guard';
+    return 'big';
+  }
+
   function tbRenderRoster(){
     tbRosterBody.innerHTML = '';
     tbRosterEmpty.style.display = tbRoster.length ? 'none' : 'block';
     const weakestSection = document.getElementById('tbWeakestSection');
     const weakestInfo = document.getElementById('tbWeakestInfo');
+    const weakCountEl = document.getElementById('tbWeakCount');
 
-    // Find weakest link: player with lowest average percentile across gap categories
-    let weakestIdx = -1, weakestScore = Infinity, weakestName = '';
-    if(tbRoster.length >= 2){
-      const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
-      tbRoster.forEach((r, i) => {
-        let sum = 0, cnt = 0;
-        cats.forEach(cat => {
-          cat.stats.forEach(stat => {
-            if(!statDist[stat]) return;
-            const x = safeNum(r[stat]);
-            if(x === null) return;
-            const p = statPercentile(stat, x);
-            if(Number.isFinite(p)){ sum += p; cnt++; }
-          });
-        });
-        const avg = cnt > 0 ? sum / cnt : 0;
-        if(avg < weakestScore){ weakestScore = avg; weakestIdx = i; weakestName = r.Player||'—'; }
-      });
-    }
+    const threshold = (Number(tbWeakThreshEl.value) || 40) / 100;
+
+    // Score each roster player
+    const rosterScored = tbRoster.map((r, i) => ({r, i, avgPct: tbPlayerAvgPct(r)}));
+    const weakPlayers = rosterScored.filter(x => x.avgPct < threshold);
+    const weakIdxSet = new Set(weakPlayers.map(x => x.i));
 
     tbRoster.forEach((r, i) => {
       const tr = document.createElement('tr');
-      tr.className = 'tbRosterRow' + (i === weakestIdx ? ' tbWeakest' : '');
-      const isWeak = i === weakestIdx;
+      const isWeak = weakIdxSet.has(i);
+      tr.className = 'tbRosterRow' + (isWeak ? ' tbWeakest' : '');
+      const pctVal = rosterScored[i]?.avgPct ?? 0;
+      const pctStr = Math.round(pctVal * 100) + 'th';
       tr.innerHTML = `
         <td style="font-size:11px;color:var(--muted)">${i+1}</td>
-        <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span>${isWeak ? ' <span class="tbWeakestTag">weakest</span>' : ''}</td>
+        <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span>${isWeak ? ' <span class="tbWeakestTag">weak</span>' : ''}</td>
         <td style="font-size:11px">${r.Team||'—'}</td>
         <td style="font-size:11px">${r.Position||pos||'—'}</td>
-        <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
+        <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} <span class="muted" style="font-size:10px;font-weight:500">(${pctStr})</span></td>
         <td style="font-size:11.5px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
         <td><button class="tbRemoveBtn">✕</button></td>
       `;
@@ -2184,60 +2218,106 @@ archetypeTags(r).forEach(tag=>{
       tbRosterBody.appendChild(tr);
     });
 
-    // Replacement suggestion for weakest link
-    if(weakestIdx >= 0 && computed.length && tbRoster.length >= 2){
+    // Swap suggestions for ALL weak players
+    if(weakPlayers.length > 0 && computed.length){
       weakestSection.style.display = '';
-      const weakPlayer = tbRoster[weakestIdx];
-      const weakVal = safeNum(weakPlayer.ActualValuation_calc) || 0;
+      weakCountEl.textContent = `— ${weakPlayers.length} player${weakPlayers.length>1?'s':''} below ${Math.round(threshold*100)}th`;
+      weakestInfo.innerHTML = '';
+
       const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
       const cap = Number(tbPlayerCapEl.value) || Infinity;
+      const budget = Number(tbBudgetEl.value) || Infinity;
+      const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
 
-      // Find the best replacement: higher perf score, within similar value range
-      const replacements = computed.filter(r => {
-        if(rosterKeys.has(tbPlayerKey(r))) return false;
-        const val = safeNum(r.ActualValuation_calc) || 0;
-        if(val > cap) return false;
-        if(!Number.isFinite(r.Score)) return false;
-        return r.Score > (weakPlayer.Score || 0);
-      }).sort((a,b) => (b.Score||0) - (a.Score||0)).slice(0, 3);
+      weakPlayers.forEach(({r: weakPlayer, i: weakIdx, avgPct}) => {
+        const weakVal = safeNum(weakPlayer.ActualValuation_calc) || 0;
+        const weakPerf = weakPlayer.Score || 0;
+        const weakPosGroup = tbPosGroup(weakPlayer);
+        const remaining = budget - totalCost + weakVal; // budget freed if we drop this player
 
-      if(replacements.length){
-        let html = `<div style="color:var(--muted);margin-bottom:6px">
-          <b style="color:var(--bad)">${weakestName}</b> has the lowest avg percentile on your roster (${Math.round(weakestScore*100)}th).
-          Consider replacing with:</div>`;
-        html += `<div style="display:flex;flex-direction:column;gap:4px">`;
-        replacements.forEach(r => {
-          const val = fmtMoney(safeNum(r.ActualValuation_calc));
-          const rPos = r.Position || pos || '—';
-          html += `<div style="display:flex;align-items:center;gap:8px;font-size:11.5px">
-            <span class="tbAddBtn" data-replace-key="${tbPlayerKey(r)}" style="font-size:10px">＋ Swap</span>
-            <b style="color:var(--good)">${r.Player}</b>
-            <span class="muted">${r.Team} · ${rPos}</span>
-            <span style="font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} perf</span>
-            <span class="muted">${val}</span>
-          </div>`;
+        // Find same-position candidates with higher perf
+        const candidates = computed.filter(c => {
+          if(rosterKeys.has(tbPlayerKey(c))) return false;
+          if(tbPosGroup(c) !== weakPosGroup) return false;
+          const val = safeNum(c.ActualValuation_calc) || 0;
+          if(val > cap) return false;
+          if(val > remaining) return false;
+          if(!Number.isFinite(c.Score) || c.Score <= weakPerf) return false;
+          return true;
         });
-        html += `</div>`;
-        weakestInfo.innerHTML = html;
 
-        // Attach swap handlers
-        weakestInfo.querySelectorAll('[data-replace-key]').forEach(btn => {
+        // Bang-for-buck: (perfGain / max($1, costIncrease))
+        // Normalize: perfGain is meaningful (0-1 scale), cost in $1000s
+        const scored = candidates.map(c => {
+          const cVal = safeNum(c.ActualValuation_calc) || 0;
+          const perfGain = (c.Score - weakPerf);
+          const costDelta = cVal - weakVal; // can be negative (cheaper AND better = jackpot)
+          // BFB formula: weight perf gain heavily, penalize cost increase, reward cost savings
+          // Higher = better. If costDelta is negative, the denominator shrinks → score goes up
+          const bfb = perfGain / Math.max(0.5, (costDelta / 10000) + 1);
+          return {c, perfGain, costDelta, bfb, cVal};
+        });
+
+        scored.sort((a,b) => b.bfb - a.bfb);
+        const top3 = scored.slice(0, 3);
+
+        const card = document.createElement('div');
+        card.className = 'tbSwapCard';
+
+        let headerHtml = `<div class="swapHeader">
+          <div><span style="color:var(--bad);font-weight:700">${weakPlayer.Player}</span>
+            <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||pos||'—'} · ${Math.round(avgPct*100)}th avg · ${fmtMoney(weakVal)}</span></div>
+        </div>`;
+
+        let optsHtml = '';
+        if(top3.length){
+          optsHtml = '<div class="swapOpts">';
+          top3.forEach(({c, perfGain, costDelta, bfb, cVal}) => {
+            const bfbLevel = bfb >= 5 ? 'high' : bfb >= 2 ? 'mid' : 'low';
+            const bfbLabel = bfb >= 5 ? '🔥 Great deal' : bfb >= 2 ? '👍 Solid' : '📊 Marginal';
+            const costLabel = costDelta <= 0 ? `saves ${fmtMoney(Math.abs(costDelta))}` : `+${fmtMoney(costDelta)}`;
+            const costColor = costDelta <= 0 ? 'var(--good)' : costDelta < 20000 ? 'var(--warn)' : 'var(--bad)';
+            optsHtml += `<div class="tbSwapOpt">
+              <span class="tbAddBtn" data-swap-weak="${weakIdx}" data-swap-key="${tbPlayerKey(c)}" style="font-size:10px">Swap</span>
+              <b style="color:var(--good)">${c.Player}</b>
+              <span class="muted">${c.Team} · ${c.Position||pos||'—'}</span>
+              <span style="font-weight:700">${c.Score.toFixed(1)} perf</span>
+              <span style="font-weight:600;font-size:10.5px;color:var(--good)">+${perfGain.toFixed(1)}</span>
+              <span style="font-size:10.5px;color:${costColor}">${costLabel}</span>
+              <span class="tbBfbPill ${bfbLevel}">${bfbLabel}</span>
+            </div>`;
+          });
+          optsHtml += '</div>';
+        } else {
+          optsHtml = '<div class="muted" style="font-size:11px">No same-position upgrades found within budget.</div>';
+        }
+
+        card.innerHTML = headerHtml + optsHtml;
+
+        // Attach swap click handlers
+        card.querySelectorAll('[data-swap-key]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const key = btn.dataset.replaceKey;
+            const wIdx = Number(btn.dataset.swapWeak);
+            const key = btn.dataset.swapKey;
             const replacement = computed.find(r => tbPlayerKey(r) === key);
             if(replacement){
-              tbRoster.splice(weakestIdx, 1);
-              tbRoster.push(replacement);
+              tbRoster.splice(wIdx, 1, replacement);
               clearWarn();
               tbRefresh();
             }
           });
         });
-      } else {
-        weakestInfo.innerHTML = `<span class="muted"><b style="color:var(--bad)">${weakestName}</b> is the weakest on your roster (${Math.round(weakestScore*100)}th avg) but no better options found within budget/cap.</span>`;
-      }
+
+        weakestInfo.appendChild(card);
+      });
     } else {
-      weakestSection.style.display = 'none';
+      if(tbRoster.length >= 2){
+        weakestSection.style.display = '';
+        weakCountEl.textContent = '';
+        weakestInfo.innerHTML = `<div class="muted" style="font-size:11.5px">✅ All players are above the ${Math.round(threshold*100)}th percentile threshold. Roster looks solid!</div>`;
+      } else {
+        weakestSection.style.display = 'none';
+      }
     }
   }
 
@@ -2372,7 +2452,7 @@ archetypeTags(r).forEach(tag=>{
 
   tbClearBtn.addEventListener('click', ()=>{ tbRoster = []; clearWarn(); tbRefresh(); });
   tbMaxRosterEl.addEventListener('input', ()=>{ tbMaxLabelEl.textContent = tbMaxRosterEl.value; });
-  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl].forEach(el => {
+  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl, tbWeakThreshEl].forEach(el => {
     el.addEventListener('change', ()=> tbRefresh());
   });
 
