@@ -853,6 +853,7 @@ const gsUrlInput = document.getElementById('gsUrl');
 
   let rows = [];
   let computed = [];
+  var tbAllComputed = {}; // cache: {'MBB_Guards': [...], 'MBB_Bigs': [...], ...}
   let sort = { key:'ActualValuation_calc', dir:'desc' };
 
   // All allowable scoring metrics (from ScoringWeight column A)
@@ -1581,6 +1582,9 @@ function renderWeights(){
     kpiAvgPerf.textContent = Number.isFinite(lastPerfAvg) ? lastPerfAvg.toFixed(2) : '—';
     kpiStarPerf.textContent = Number.isFinite(lastPerfStar) ? lastPerfStar.toFixed(2) : '—';
 
+    // Cache for Team Builder (so swaps can search across all loaded pools)
+    tbAllComputed[league + '_' + pos] = computed.slice();
+
     renderPlayers();
   }
 
@@ -2136,8 +2140,8 @@ archetypeTags(r).forEach(tag=>{
     // Position balance note
     let guards = 0, bigs = 0;
     tbRoster.forEach(r => {
-      const p = (r.Position||r.Pos||pos||'').toString().toLowerCase();
-      if(p.includes('g') || p.includes('guard')) guards++;
+      const pg = tbPosGroup(r);
+      if(pg === 'guard') guards++;
       else bigs++;
     });
     if(tbRoster.length >= 3){
@@ -2161,9 +2165,10 @@ archetypeTags(r).forEach(tag=>{
     tbRefresh();
   });
 
-  // Compute a player's avg percentile across gap categories
+  // Compute a player's avg percentile across gap categories (using their position)
   function tbPlayerAvgPct(r){
-    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    const pg = tbPosGroup(r);
+    const cats = pg === 'guard' ? (GAP_CATEGORIES.Guards || []) : (GAP_CATEGORIES.Bigs || []);
     let sum = 0, cnt = 0;
     cats.forEach(cat => {
       cat.stats.forEach(stat => {
@@ -2177,11 +2182,34 @@ archetypeTags(r).forEach(tag=>{
     return cnt > 0 ? sum / cnt : 0;
   }
 
-  // Get simplified position bucket for a player
+  // Get simplified position bucket — NEVER falls back to global pos variable
   function tbPosGroup(r){
-    const p = (r.Position||r.Pos||pos||'').toString().toLowerCase();
-    if(p.includes('g') || p.includes('guard') || p.includes('wing')) return 'guard';
-    return 'big';
+    const p = (r.Position||r.Pos||'').toString().toLowerCase();
+    if(p.includes('guard') || p === 'g' || p === 'pg' || p === 'sg') return 'guard';
+    if(p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'pf' || p === 'sf') return 'big';
+    // If Position column is empty, check which sheet pool they came from
+    if(r._tbPosGroup) return r._tbPosGroup;
+    return 'unknown';
+  }
+
+  // Merge all cached computed pools into one array (deduplicated)
+  function tbGetAllPlayers(){
+    const seen = new Set();
+    const all = [];
+    for(const [key, arr] of Object.entries(tbAllComputed)){
+      const posLabel = key.includes('Guards') ? 'guard' : 'big';
+      arr.forEach(r => {
+        const pk = tbPlayerKey(r);
+        if(seen.has(pk)) return;
+        seen.add(pk);
+        // Stamp position group from sheet if the player's Position column is empty
+        if(!(r.Position||r.Pos||'').toString().trim()){
+          r._tbPosGroup = posLabel;
+        }
+        all.push(r);
+      });
+    }
+    return all;
   }
 
   function tbRenderRoster(){
@@ -2208,7 +2236,7 @@ archetypeTags(r).forEach(tag=>{
         <td style="font-size:11px;color:var(--muted)">${i+1}</td>
         <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span>${isWeak ? ' <span class="tbWeakestTag">weak</span>' : ''}</td>
         <td style="font-size:11px">${r.Team||'—'}</td>
-        <td style="font-size:11px">${r.Position||pos||'—'}</td>
+        <td style="font-size:11px">${r.Position||r.Pos||(tbPosGroup(r)==='guard'?'Guard':'Big')}</td>
         <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} <span class="muted" style="font-size:10px;font-weight:500">(${pctStr})</span></td>
         <td style="font-size:11.5px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
         <td><button class="tbRemoveBtn">✕</button></td>
@@ -2228,6 +2256,7 @@ archetypeTags(r).forEach(tag=>{
       const cap = Number(tbPlayerCapEl.value) || Infinity;
       const budget = Number(tbBudgetEl.value) || Infinity;
       const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+      const allPool = tbGetAllPlayers(); // search across ALL loaded data, not just current tab
 
       weakPlayers.forEach(({r: weakPlayer, i: weakIdx, avgPct}) => {
         const weakVal = safeNum(weakPlayer.ActualValuation_calc) || 0;
@@ -2236,7 +2265,7 @@ archetypeTags(r).forEach(tag=>{
         const remaining = budget - totalCost + weakVal; // budget freed if we drop this player
 
         // Find same-position candidates with higher perf
-        const candidates = computed.filter(c => {
+        const candidates = allPool.filter(c => {
           if(rosterKeys.has(tbPlayerKey(c))) return false;
           if(tbPosGroup(c) !== weakPosGroup) return false;
           const val = safeNum(c.ActualValuation_calc) || 0;
@@ -2266,7 +2295,7 @@ archetypeTags(r).forEach(tag=>{
 
         let headerHtml = `<div class="swapHeader">
           <div><span style="color:var(--bad);font-weight:700">${weakPlayer.Player}</span>
-            <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||pos||'—'} · ${Math.round(avgPct*100)}th avg · ${fmtMoney(weakVal)}</span></div>
+            <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||weakPlayer.Pos||(tbPosGroup(weakPlayer)==='guard'?'Guard':'Big')} · ${Math.round(avgPct*100)}th avg · ${fmtMoney(weakVal)}</span></div>
         </div>`;
 
         let optsHtml = '';
@@ -2280,7 +2309,7 @@ archetypeTags(r).forEach(tag=>{
             optsHtml += `<div class="tbSwapOpt">
               <span class="tbAddBtn" data-swap-weak="${weakIdx}" data-swap-key="${tbPlayerKey(c)}" style="font-size:10px">Swap</span>
               <b style="color:var(--good)">${c.Player}</b>
-              <span class="muted">${c.Team} · ${c.Position||pos||'—'}</span>
+              <span class="muted">${c.Team} · ${c.Position||c.Pos||(tbPosGroup(c)==='guard'?'Guard':'Big')}</span>
               <span style="font-weight:700">${c.Score.toFixed(1)} perf</span>
               <span style="font-weight:600;font-size:10.5px;color:var(--good)">+${perfGain.toFixed(1)}</span>
               <span style="font-size:10.5px;color:${costColor}">${costLabel}</span>
@@ -2299,7 +2328,7 @@ archetypeTags(r).forEach(tag=>{
           btn.addEventListener('click', () => {
             const wIdx = Number(btn.dataset.swapWeak);
             const key = btn.dataset.swapKey;
-            const replacement = computed.find(r => tbPlayerKey(r) === key);
+            const replacement = tbGetAllPlayers().find(r => tbPlayerKey(r) === key);
             if(replacement){
               tbRoster.splice(wIdx, 1, replacement);
               clearWarn();
@@ -2327,7 +2356,20 @@ archetypeTags(r).forEach(tag=>{
     if(!tbRoster.length){ tbGapEmpty.style.display = 'block'; return; }
     tbGapEmpty.style.display = 'none';
 
-    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    // Pick categories based on who's on the roster
+    const hasGuards = tbRoster.some(r => tbPosGroup(r) === 'guard');
+    const hasBigs = tbRoster.some(r => tbPosGroup(r) !== 'guard');
+    let cats = [];
+    if(hasGuards && hasBigs){
+      // Merge both, dedup by label
+      const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
+      const seen = new Set();
+      cats = all.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
+    } else if(hasBigs){
+      cats = GAP_CATEGORIES.Bigs || [];
+    } else {
+      cats = GAP_CATEGORIES.Guards || [];
+    }
     const gaps = []; // {label, avgPct, level}
 
     cats.forEach(cat => {
@@ -2369,10 +2411,16 @@ archetypeTags(r).forEach(tag=>{
 
   function tbRenderSuggestions(){
     tbSuggestBody.innerHTML = '';
-    if(!tbRoster.length || !computed.length){ tbSuggestEmpty.style.display = 'block'; return; }
+    const allPool = tbGetAllPlayers();
+    if(!tbRoster.length || !allPool.length){ tbSuggestEmpty.style.display = 'block'; return; }
     tbSuggestEmpty.style.display = 'none';
 
-    const cats = GAP_CATEGORIES[pos] || GAP_CATEGORIES.Guards;
+    // Use BOTH guard and big categories to evaluate all roster players
+    const allCats = [...(GAP_CATEGORIES.Guards || []), ...(GAP_CATEGORIES.Bigs || [])];
+    // Deduplicate by label
+    const seenLabels = new Set();
+    const cats = allCats.filter(c => { if(seenLabels.has(c.label)) return false; seenLabels.add(c.label); return true; });
+
     const budget = Number(tbBudgetEl.value) || Infinity;
     const cap = Number(tbPlayerCapEl.value) || Infinity;
     const maxR = Number(tbMaxRosterEl.value) || 13;
@@ -2400,8 +2448,8 @@ archetypeTags(r).forEach(tag=>{
     // If no weak categories, suggest best overall fits
     const targetCats = weakCats.length > 0 ? weakCats : cats;
 
-    // Score every non-roster player by how well they fill gaps
-    const candidates = computed.filter(r => {
+    // Score every non-roster player from ALL pools
+    const candidates = allPool.filter(r => {
       if(rosterKeys.has(tbPlayerKey(r))) return false;
       const val = safeNum(r.ActualValuation_calc) || 0;
       if(val > cap) return false;
@@ -2434,7 +2482,7 @@ archetypeTags(r).forEach(tag=>{
       const tr = document.createElement('tr');
       const pct = Math.round(avg * 100);
       const gapColor = avg >= 0.7 ? 'var(--good)' : avg >= 0.5 ? 'var(--warn)' : 'var(--muted)';
-      const rPos = r.Position || pos || '—';
+      const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'Guard':'Big');
       tr.innerHTML = `
         <td><span class="link" style="font-size:11px">${r.Player||'—'}</span></td>
         <td style="font-size:11px">${r.Team||'—'}</td>
