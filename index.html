@@ -221,6 +221,13 @@
     .aiMsg .aiCompare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;font-size:11.5px}
     .aiMsg .aiCompare>div{background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:10px;padding:10px}
     .aiMsg .aiCompare b{color:var(--accent);display:block;margin-bottom:4px;font-size:12px}
+    .aiQuickBtn{padding:5px 12px;border-radius:8px;font-size:11px;background:rgba(0,30,70,.6);border:1px solid var(--line);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s}
+    .aiQuickBtn:hover{background:rgba(0,62,126,.4);color:var(--text);border-color:var(--accent)}
+    .aiCompareTable{width:100%;border-collapse:collapse;font-size:11.5px}
+    .aiCompareTable th{padding:6px 4px;border-bottom:1px solid var(--line);color:var(--accent);font-size:12px}
+    .aiCompareTable td{padding:4px;font-size:11.5px}
+    .aiCompareTable .win{color:var(--good);font-weight:700}
+    .aiCompareTable .stat-label{text-align:center;color:var(--muted);font-size:10px;width:60px}
     .aiConfirm{display:flex;gap:6px;margin-top:8px}
     .aiConfirm button{padding:5px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid;transition:all .15s}
     .aiConfirm .yes{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.4);color:var(--good)}
@@ -2788,17 +2795,24 @@ archetypeTags(r).forEach(tag=>{
 <button class="aiToggle" id="aiToggle" title="Ask AI Assistant">🤖</button>
 <div class="aiPanel hidden" id="aiPanel">
   <div class="aiHeader">
-    <b>🤖 Rocket AI Assistant</b>
+    <b>🤖 Scout AI</b>
     <div style="display:flex;gap:6px">
       <button class="secondary" id="aiClearChat" style="padding:4px 10px;font-size:10px;box-shadow:none">Clear</button>
       <button class="close" id="aiClose" style="font-size:16px;padding:4px 8px">✕</button>
     </div>
   </div>
   <div class="aiMessages" id="aiMessages">
-    <div class="aiMsg ai">Hey coach! 👋 I'm your AI assistant. I can help you analyze players, build rosters, compare stats, search for news, and make data-driven decisions. What do you need?</div>
+    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Add all Toledo players"</b> → loads into roster builder<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br>• <b>"Is $136K fair for this player?"</b> → valuation analysis<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
+  </div>
+  <div id="aiQuickActions" style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-top:1px solid var(--line)">
+    <button class="aiQuickBtn" data-q="Analyze my current roster and suggest improvements">Analyze roster</button>
+    <button class="aiQuickBtn" data-q="Find the best value players I should target">Best value</button>
+    <button class="aiQuickBtn" data-q="What position gaps does my roster have?">Position gaps</button>
+    <button class="aiQuickBtn" data-q="Auto-build me the best roster within budget">Auto-build</button>
+    <button class="aiQuickBtn" data-q="Who are the top 5 shooters that are bigs?">Top shooters</button>
   </div>
   <div class="aiInput">
-    <input id="aiChatInput" type="text" placeholder="Ask me anything about your players..." autocomplete="off">
+    <input id="aiChatInput" type="text" placeholder="Ask about players, strategy, roster..." autocomplete="off">
     <button id="aiSendBtn">Send</button>
   </div>
 </div>
@@ -2811,438 +2825,321 @@ archetypeTags(r).forEach(tag=>{
 
   const toggle = document.getElementById('aiToggle');
   const panel = document.getElementById('aiPanel');
-  const msgs = document.getElementById('aiMessages');
+  const msgBox = document.getElementById('aiMessages');
   const input = document.getElementById('aiChatInput');
   const sendBtn = document.getElementById('aiSendBtn');
-  const clearBtn = document.getElementById('aiClearChat');
-  const closeBtn = document.getElementById('aiClose');
 
   let chatHistory = [];
-  let pendingAction = null; // stores a function call awaiting user confirmation
+  let pendingAction = null;
 
   toggle.addEventListener('click', () => { panel.classList.toggle('hidden'); if(!panel.classList.contains('hidden')) input.focus(); });
-  closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
-  clearBtn.addEventListener('click', () => { chatHistory = []; msgs.innerHTML = ''; addAiMsg('ai', "Chat cleared! 👋 What do you need, coach?"); });
-  input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMsg(); }});
-  sendBtn.addEventListener('click', sendMsg);
+  document.getElementById('aiClose').addEventListener('click', () => panel.classList.add('hidden'));
+  document.getElementById('aiClearChat').addEventListener('click', () => {
+    chatHistory = []; pendingAction = null; msgBox.innerHTML = '';
+    addMsg('ai', "Chat cleared! 👋 What do you need, coach?");
+  });
+  input.addEventListener('keydown', e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }});
+  sendBtn.addEventListener('click', send);
+  document.querySelectorAll('.aiQuickBtn').forEach(b => b.addEventListener('click', () => { input.value = b.dataset.q; send(); }));
 
-  function addAiMsg(role, html, extra){
-    const div = document.createElement('div');
-    div.className = `aiMsg ${role}`;
-    div.innerHTML = html;
-    if(extra) div.appendChild(extra);
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
-    return div;
+  // ---- Helpers ----
+  function addMsg(role, html){
+    const d = document.createElement('div');
+    d.className = 'aiMsg ' + role;
+    d.innerHTML = html;
+    msgBox.appendChild(d);
+    msgBox.scrollTop = msgBox.scrollHeight;
+    return d;
   }
-
   function showTyping(){
-    const div = document.createElement('div');
-    div.className = 'aiTyping';
-    div.id = 'aiTypingIndicator';
-    div.innerHTML = '<span></span><span></span><span></span>';
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
+    const d = document.createElement('div'); d.className='aiTyping'; d.id='aiTypingIndicator';
+    d.innerHTML='<span></span><span></span><span></span>'; msgBox.appendChild(d); msgBox.scrollTop=msgBox.scrollHeight;
   }
   function hideTyping(){ document.getElementById('aiTypingIndicator')?.remove(); }
+  function fmt(v){ return v!=null ? (typeof v==='number' ? (Math.abs(v)<1&&v!==0 ? v.toFixed(3) : v.toFixed(1)) : v) : '—'; }
 
-  // ---- Dashboard Data Access Functions ----
-  const A = () => window._app || {};
+  // ---- App bridge ----
+  const app = () => window._app || {};
+  function allPlayers(){ const a=app(); return a.tbGetAllPlayers ? a.tbGetAllPlayers() : (a.computed||[]); }
+  function statLine(r){
+    return { player:r.Player, team:r.Team, pos:r.Position||'', conf:r.Conference||'',
+      perf:r.Score?+r.Score.toFixed(1):null, value:r.ActualValuation_calc?Math.round(r.ActualValuation_calc):null,
+      ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
+      rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
+      bpg:r.BPG!=null?+Number(r.BPG).toFixed(1):null, bpm:r.BPM!=null?+Number(r.BPM).toFixed(1):null,
+      threePct:r['3P%']!=null?+Number(r['3P%']).toFixed(3):null, ftPct:r['FT%']!=null?+Number(r['FT%']).toFixed(3):null,
+      efg:r['eFG%']!=null?+Number(r['eFG%']).toFixed(3):null, drtg:r.DRtg!=null?+Number(r.DRtg).toFixed(1):null,
+    };
+  }
 
+  // ---- Tool implementations ----
   function getDashboardContext(){
-    const app = A();
-    const roster = app.tbRoster || [];
-    return {
-      league: app.league || 'MBB',
-      position: app.pos || 'Guards',
-      totalPlayers: (app.computed || []).length,
-      rosterSize: roster.length,
-      roster: roster.map(r => ({
-        player: r.Player, team: r.Team, pos: r.Position||'',
-        perf: r.Score ? r.Score.toFixed(1) : '—',
-        value: r.ActualValuation_calc ? '$'+Math.round(r.ActualValuation_calc).toLocaleString() : '—',
-        conf: r.Conference||''
-      })),
-      budget: document.getElementById('tbBudget')?.value || '500000',
-      playerCap: document.getElementById('tbPlayerCap')?.value || '150000',
-      maxRoster: document.getElementById('tbMaxRoster')?.value || '13',
-      targetGuards: document.getElementById('tbTargetGuards')?.value || '8',
-      targetBigs: document.getElementById('tbTargetBigs')?.value || '5',
-    };
+    const a=app(), roster=a.tbRoster||[];
+    return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:(a.computed||[]).length,
+      rosterSize:roster.length, roster:roster.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
+      perf:r.Score?r.Score.toFixed(1):'—',value:r.ActualValuation_calc?'$'+Math.round(r.ActualValuation_calc).toLocaleString():'—'})),
+      budget:document.getElementById('tbBudget')?.value||'500000',
+      playerCap:document.getElementById('tbPlayerCap')?.value||'150000',
+      maxRoster:document.getElementById('tbMaxRoster')?.value||'13',
+      targetGuards:document.getElementById('tbTargetGuards')?.value||'8',
+      targetBigs:document.getElementById('tbTargetBigs')?.value||'5' };
   }
 
-  function searchPlayers(query){
-    const app = A();
-    const pool = app.computed || [];
-    if(!pool.length) return [];
-    const q = query.toLowerCase();
-    return pool.filter(r =>
-      ['Player','Team','Conference','Position'].some(k => (r[k]||'').toString().toLowerCase().includes(q))
-    ).slice(0, 20).map(r => ({
-      player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
-      perf: r.Score ? Number(r.Score.toFixed(1)) : null,
-      value: r.ActualValuation_calc ? Math.round(r.ActualValuation_calc) : null,
-      fit: r.FitScore_calc ? Math.round(r.FitScore_calc) : null,
-      mp: r.MP_num || null,
-      cmult: r.ConfMult_calc || 1,
-      ppg: r.PPG ? Number(Number(r.PPG).toFixed(1)) : null,
-      apg: r.APG ? Number(Number(r.APG).toFixed(1)) : null,
-      rpg: r.RPG ? Number(Number(r.RPG).toFixed(1)) : null,
-      spg: r.SPG ? Number(Number(r.SPG).toFixed(1)) : null,
-      bpg: r.BPG ? Number(Number(r.BPG).toFixed(1)) : null,
-      threePct: r['3P%'] ? Number(Number(r['3P%']).toFixed(3)) : null,
-      ftPct: r['FT%'] ? Number(Number(r['FT%']).toFixed(3)) : null,
-      efg: r['eFG%'] ? Number(Number(r['eFG%']).toFixed(3)) : null,
-      bpm: r.BPM ? Number(Number(r.BPM).toFixed(1)) : null,
-      drtg: r.DRtg ? Number(Number(r.DRtg).toFixed(1)) : null,
-    }));
+  function searchPlayers(q){
+    const pool=app().computed||[]; if(!pool.length)return [];
+    const lq=q.toLowerCase();
+    return pool.filter(r=>['Player','Team','Conference','Position'].some(k=>(r[k]||'').toString().toLowerCase().includes(lq))).slice(0,20).map(statLine);
   }
 
-  function getPlayerProfile(playerName){
-    const app = A();
-    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
-    if(!allPlayers.length) return null;
-    const pn = playerName.toLowerCase();
-    const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
-    if(!match) return null;
-    const result = {};
-    for(const [k,v] of Object.entries(match)){
-      if(v !== null && v !== undefined && v !== '' && !k.startsWith('_'))
-        result[k] = typeof v === 'number' ? Number(v.toFixed(3)) : v;
-    }
-    return result;
+  function getPlayerProfile(name){
+    const all=allPlayers(), pn=name.toLowerCase();
+    const m=all.find(r=>(r.Player||'').toLowerCase().includes(pn));
+    if(!m) return null;
+    const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
+    return out;
   }
 
-  function getTopPlayers(filters){
-    const app = A();
-    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
-    let pool = allPlayers.slice();
-
-    if(filters.position){
-      const fp = filters.position.toLowerCase();
-      pool = pool.filter(r => {
-        const p = (r.Position||r.Pos||'').toString().toLowerCase();
-        if(fp === 'guard' || fp === 'guards') return p.includes('guard') || p === 'g' || p === 'pg' || p === 'sg';
-        if(fp === 'big' || fp === 'bigs' || fp === 'forward' || fp === 'center') return p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'pf' || p === 'sf';
-        return p.includes(fp);
-      });
-    }
-    if(filters.maxValue) pool = pool.filter(r => (r.ActualValuation_calc||Infinity) <= Number(filters.maxValue));
-    if(filters.minPerf) pool = pool.filter(r => (r.Score||0) >= Number(filters.minPerf));
-    if(filters.team){ const ft = filters.team.toLowerCase(); pool = pool.filter(r => (r.Team||'').toLowerCase().includes(ft)); }
-    if(filters.conference){ const fc = filters.conference.toLowerCase(); pool = pool.filter(r => (r.Conference||'').toLowerCase().includes(fc)); }
-    if(filters.sortBy){ const sk = filters.sortBy; pool.sort((a,b) => (Number(b[sk])||0) - (Number(a[sk])||0)); }
-    else { pool.sort((a,b) => (b.Score||0) - (a.Score||0)); }
-    return pool.slice(0, filters.limit || 10).map(r => ({
-      player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
-      perf: r.Score ? Number(r.Score.toFixed(1)) : null,
-      value: r.ActualValuation_calc ? Math.round(r.ActualValuation_calc) : null,
-      ppg: r.PPG ? Number(Number(r.PPG).toFixed(1)) : null,
-      threePct: r['3P%'] ? Number(Number(r['3P%']).toFixed(3)) : null,
-      apg: r.APG ? Number(Number(r.APG).toFixed(1)) : null,
-      bpg: r.BPG ? Number(Number(r.BPG).toFixed(1)) : null,
-      rpg: r.RPG ? Number(Number(r.RPG).toFixed(1)) : null,
-      bpm: r.BPM ? Number(Number(r.BPM).toFixed(1)) : null,
-    }));
+  function getTopPlayers(f){
+    let pool=allPlayers().slice();
+    if(f.position){ const fp=f.position.toLowerCase();
+      pool=pool.filter(r=>{ const p=(r.Position||r.Pos||'').toString().toLowerCase();
+        if(fp==='guard'||fp==='guards')return p.includes('guard')||p==='g'||p==='pg'||p==='sg';
+        if(fp==='big'||fp==='bigs'||fp==='forward'||fp==='center')return p.includes('forward')||p.includes('center')||p==='f'||p==='c'||p==='pf'||p==='sf';
+        return p.includes(fp); }); }
+    if(f.maxValue) pool=pool.filter(r=>(r.ActualValuation_calc||Infinity)<=+f.maxValue);
+    if(f.minPerf) pool=pool.filter(r=>(r.Score||0)>=+f.minPerf);
+    if(f.team){ const t=f.team.toLowerCase(); pool=pool.filter(r=>(r.Team||'').toLowerCase().includes(t)); }
+    if(f.conference){ const c=f.conference.toLowerCase(); pool=pool.filter(r=>(r.Conference||'').toLowerCase().includes(c)); }
+    if(f.sortBy) pool.sort((a,b)=>(+(b[f.sortBy])||0)-(+(a[f.sortBy])||0)); else pool.sort((a,b)=>(b.Score||0)-(a.Score||0));
+    return pool.slice(0,f.limit||10).map(statLine);
   }
 
-  function addPlayersToRoster(playerNames){
-    const app = A();
-    if(!app.tbRoster || !app.tbAddPlayer) return 'Team builder not available.';
-    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
-    let added = 0, failed = [];
-    playerNames.forEach(name => {
-      const pn = name.toLowerCase();
-      const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
-      if(match){ try { app.tbAddPlayer(match); added++; } catch(e) { failed.push(name); } }
-      else { failed.push(name); }
+  function addPlayersToRoster(names){
+    const a=app(); if(!a.tbRoster||!a.tbAddPlayer) return {error:'Team builder not loaded.'};
+    const all=allPlayers(); let added=0,failed=[];
+    names.forEach(n=>{ const m=all.find(r=>(r.Player||'').toLowerCase().includes(n.toLowerCase()));
+      if(m){try{a.tbAddPlayer(m);added++;}catch(e){failed.push(n);}} else failed.push(n); });
+    if(a.tbRefresh) a.tbRefresh();
+    return {added,failed,rosterSize:a.tbRoster.length};
+  }
+
+  function removeFromRoster(name){
+    const a=app(); if(!a.tbRoster) return {error:'Team builder not loaded.'};
+    const idx=a.tbRoster.findIndex(r=>(r.Player||'').toLowerCase().includes(name.toLowerCase()));
+    if(idx===-1) return {success:false,message:name+' not on roster.'};
+    const removed=a.tbRoster[idx].Player; a.tbRoster.splice(idx,1);
+    if(a.tbRefresh) a.tbRefresh();
+    return {success:true,removed,rosterSize:a.tbRoster.length};
+  }
+
+  function swapPlayer(drop,add){
+    const a=app(); if(!a.tbRoster) return {error:'Team builder not loaded.'};
+    const all=allPlayers();
+    const di=a.tbRoster.findIndex(r=>(r.Player||'').toLowerCase().includes(drop.toLowerCase()));
+    if(di===-1) return {success:false,message:drop+' not on roster.'};
+    const ap=all.find(r=>(r.Player||'').toLowerCase().includes(add.toLowerCase()));
+    if(!ap) return {success:false,message:add+' not found.'};
+    const dropped=a.tbRoster[di].Player; a.tbRoster.splice(di,1,ap);
+    if(a.tbRefresh) a.tbRefresh();
+    return {success:true,dropped,added:ap.Player,rosterSize:a.tbRoster.length};
+  }
+
+  function comparePlayers(n1,n2){
+    const p1=getPlayerProfile(n1), p2=getPlayerProfile(n2);
+    if(!p1&&!p2) return {error:'Neither player found.'};
+    if(!p1) return {error:n1+' not found.'};
+    if(!p2) return {error:n2+' not found.'};
+    // Render visual compare table in chat
+    const stats=['PPG','3P%','FT%','eFG%','APG','RPG','SPG','BPG','BPM','DRtg','WS/40','TOPG'];
+    const lowerBetter=new Set(['DRtg','TOPG']);
+    let rows='';
+    stats.forEach(s=>{
+      const v1=p1[s],v2=p2[s],n1v=+(v1)||0,n2v=+(v2)||0;
+      const w1=lowerBetter.has(s)?(n1v<n2v&&v1!=null):(n1v>n2v&&v1!=null);
+      const w2=lowerBetter.has(s)?(n2v<n1v&&v2!=null):(n2v>n1v&&v2!=null);
+      rows+=`<tr><td style="text-align:right;${w1?'color:var(--good);font-weight:700':''}">${fmt(v1)}</td><td class="stat-label">${s}</td><td style="${w2?'color:var(--good);font-weight:700':''}">${fmt(v2)}</td></tr>`;
     });
-    if(app.tbRefresh) app.tbRefresh();
-    return { added, failed, rosterSize: app.tbRoster.length };
+    const pf=(p)=>p.Score!=null?(+p.Score).toFixed(1):'—';
+    const vf=(p)=>p.ActualValuation_calc!=null?'$'+Math.round(+p.ActualValuation_calc).toLocaleString():'—';
+    addMsg('ai',`<div style="font-size:12px;margin-bottom:6px"><b>📊 Head-to-Head Comparison</b></div>
+      <table class="aiCompareTable"><thead><tr><th style="text-align:right">${p1.Player||n1}</th><th class="stat-label">STAT</th><th>${p2.Player||n2}</th></tr></thead><tbody>
+      <tr><td style="text-align:right;color:var(--muted)">${p1.Team||'—'}</td><td class="stat-label">Team</td><td style="color:var(--muted)">${p2.Team||'—'}</td></tr>
+      <tr><td style="text-align:right;color:var(--muted)">${p1.Position||'—'}</td><td class="stat-label">Pos</td><td style="color:var(--muted)">${p2.Position||'—'}</td></tr>
+      <tr><td style="text-align:right;font-weight:700">${pf(p1)}</td><td class="stat-label">Perf</td><td style="font-weight:700">${pf(p2)}</td></tr>
+      <tr><td style="text-align:right">${vf(p1)}</td><td class="stat-label">Value</td><td>${vf(p2)}</td></tr>
+      <tr><td colspan="3" style="border-bottom:1px solid var(--line);padding:2px"></td></tr>${rows}</tbody></table>`);
+    return {player1:statLine(p1),player2:statLine(p2)};
   }
 
-  function removePlayerFromRoster(playerName){
-    const app = A();
-    if(!app.tbRoster) return 'Team builder not available.';
-    const pn = playerName.toLowerCase();
-    const idx = app.tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(pn));
-    if(idx === -1) return { success: false, message: `${playerName} not found on roster.` };
-    const removed = app.tbRoster[idx].Player;
-    app.tbRoster.splice(idx, 1);
-    if(app.tbRefresh) app.tbRefresh();
-    return { success: true, removed, rosterSize: app.tbRoster.length };
-  }
+  // ---- Gemini Tool Schema ----
+  const tools=[{functionDeclarations:[
+    {name:'search_players',description:'Search players by name, team, conference, or position.',
+      parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Search query'}},required:['query']}},
+    {name:'get_player_profile',description:'Get full stats for a player.',
+      parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
+    {name:'get_top_players',description:'Get top players filtered by position, budget, team, conference, sorted by stat. Use for finding shooters (sortBy 3P%), defenders (sortBy DRtg), scorers (sortBy PPG), etc.',
+      parameters:{type:'OBJECT',properties:{
+        position:{type:'STRING',description:'guard, big, forward, center'},
+        maxValue:{type:'NUMBER',description:'Max valuation $'},
+        minPerf:{type:'NUMBER',description:'Min PerfScore'},
+        team:{type:'STRING'},conference:{type:'STRING'},
+        sortBy:{type:'STRING',description:'Score, PPG, 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, ActualValuation_calc'},
+        limit:{type:'NUMBER',description:'# results (default 10)'}}}},
+    {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
+      parameters:{type:'OBJECT',properties:{}}},
+    {name:'add_players_to_roster',description:'Add players to roster. MUST ask user confirmation first.',
+      parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'}}},required:['playerNames']}},
+    {name:'remove_player_from_roster',description:'Remove player from roster. MUST ask user confirmation first.',
+      parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
+    {name:'swap_roster_player',description:'Swap one roster player for another. MUST ask user confirmation first.',
+      parameters:{type:'OBJECT',properties:{dropPlayer:{type:'STRING'},addPlayer:{type:'STRING'}},required:['dropPlayer','addPlayer']}},
+    {name:'compare_players',description:'Compare two players side-by-side with visual stats table. ALWAYS use this for comparisons.',
+      parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
+  ]}];
 
-  function swapRosterPlayer(dropName, addName){
-    const app = A();
-    if(!app.tbRoster) return 'Team builder not available.';
-    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
-    const dropIdx = app.tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(dropName.toLowerCase()));
-    if(dropIdx === -1) return { success: false, message: `${dropName} not on roster.` };
-    const addP = allPlayers.find(r => (r.Player||'').toLowerCase().includes(addName.toLowerCase()));
-    if(!addP) return { success: false, message: `${addName} not found in data.` };
-    const dropped = app.tbRoster[dropIdx].Player;
-    app.tbRoster.splice(dropIdx, 1, addP);
-    if(app.tbRefresh) app.tbRefresh();
-    return { success: true, dropped, added: addP.Player, rosterSize: app.tbRoster.length };
-  }
+  const CONFIRM_ACTIONS=new Set(['add_players_to_roster','remove_player_from_roster','swap_roster_player']);
 
-  // ---- Tool Definitions for Gemini ----
-  const tools = [{
-    functionDeclarations: [
-      {
-        name: 'search_players',
-        description: 'Search for players by name, team, conference, or position in the dashboard data.',
-        parameters: { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Search query (player name, team, conference)' } }, required: ['query'] }
-      },
-      {
-        name: 'get_player_profile',
-        description: 'Get detailed stats and profile for a specific player by name.',
-        parameters: { type: 'OBJECT', properties: { playerName: { type: 'STRING', description: 'Player name to look up' } }, required: ['playerName'] }
-      },
-      {
-        name: 'get_top_players',
-        description: 'Get top players filtered by position, budget, team, conference, minimum performance score, or sorted by a specific stat.',
-        parameters: { type: 'OBJECT', properties: {
-          position: { type: 'STRING', description: 'Filter by position: guard, big, forward, center' },
-          maxValue: { type: 'NUMBER', description: 'Maximum valuation/budget in dollars' },
-          minPerf: { type: 'NUMBER', description: 'Minimum PerfScore' },
-          team: { type: 'STRING', description: 'Filter by team name' },
-          conference: { type: 'STRING', description: 'Filter by conference' },
-          sortBy: { type: 'STRING', description: 'Sort by stat field: Score, PPG, 3P%, APG, BPG, RPG, BPM, ActualValuation_calc' },
-          limit: { type: 'NUMBER', description: 'Number of results (default 10)' }
-        }}
-      },
-      {
-        name: 'get_dashboard_context',
-        description: 'Get the current state of the dashboard including current roster, budget, settings, and league.',
-        parameters: { type: 'OBJECT', properties: {} }
-      },
-      {
-        name: 'add_players_to_roster',
-        description: 'Add one or more players to the team builder roster by name. Requires user confirmation first.',
-        parameters: { type: 'OBJECT', properties: { playerNames: { type: 'ARRAY', items: { type: 'STRING' }, description: 'List of player names to add' } }, required: ['playerNames'] }
-      },
-      {
-        name: 'remove_player_from_roster',
-        description: 'Remove a player from the team builder roster. Requires user confirmation first.',
-        parameters: { type: 'OBJECT', properties: { playerName: { type: 'STRING', description: 'Player name to remove' } }, required: ['playerName'] }
-      },
-      {
-        name: 'swap_roster_player',
-        description: 'Swap a player on the roster with another player. Removes one and adds the replacement. Requires user confirmation first.',
-        parameters: { type: 'OBJECT', properties: {
-          dropPlayer: { type: 'STRING', description: 'Player to remove from roster' },
-          addPlayer: { type: 'STRING', description: 'Player to add to roster' }
-        }, required: ['dropPlayer', 'addPlayer'] }
-      },
-      {
-        name: 'compare_players',
-        description: 'Compare two players side by side with all their stats.',
-        parameters: { type: 'OBJECT', properties: {
-          player1: { type: 'STRING', description: 'First player name' },
-          player2: { type: 'STRING', description: 'Second player name' }
-        }, required: ['player1', 'player2'] }
-      }
-    ]
-  }];
-
-  // ---- Actions that require user confirmation ----
-  const CONFIRM_ACTIONS = new Set(['add_players_to_roster', 'remove_player_from_roster', 'swap_roster_player']);
-
-  // ---- Execute a function call ----
-  function execFunctionCall(call){
-    const args = call.args || {};
-    switch(call.name){
-      case 'search_players': return searchPlayers(args.query || '');
-      case 'get_player_profile': return getPlayerProfile(args.playerName || '');
-      case 'get_top_players': return getTopPlayers(args);
+  function execCall(c){
+    const a=c.args||{};
+    switch(c.name){
+      case 'search_players': return searchPlayers(a.query||'');
+      case 'get_player_profile': return getPlayerProfile(a.playerName||'');
+      case 'get_top_players': return getTopPlayers(a);
       case 'get_dashboard_context': return getDashboardContext();
-      case 'add_players_to_roster': return addPlayersToRoster(args.playerNames || []);
-      case 'remove_player_from_roster': return removePlayerFromRoster(args.playerName || '');
-      case 'swap_roster_player': return swapRosterPlayer(args.dropPlayer || '', args.addPlayer || '');
-      case 'compare_players': {
-        const p1 = getPlayerProfile(args.player1 || '');
-        const p2 = getPlayerProfile(args.player2 || '');
-        return { player1: p1, player2: p2 };
-      }
-      default: return { error: 'Unknown function: ' + call.name };
+      case 'add_players_to_roster': return addPlayersToRoster(a.playerNames||[]);
+      case 'remove_player_from_roster': return removeFromRoster(a.playerName||'');
+      case 'swap_roster_player': return swapPlayer(a.dropPlayer||'',a.addPlayer||'');
+      case 'compare_players': return comparePlayers(a.player1||'',a.player2||'');
+      default: return {error:'Unknown: '+c.name};
     }
   }
 
-  // ---- Build system instruction ----
-  function getSystemPrompt(){
-    const ctx = getDashboardContext();
-    return {
-      parts: [{ text: `You are Rocket AI, the basketball analytics assistant for the UToledo NCAA Basketball Evaluation Dashboard. You help coaches make data-driven roster decisions.
+  // ---- System prompt ----
+  function sysPrompt(){
+    const ctx=getDashboardContext();
+    return {parts:[{text:`You are Scout AI, the basketball analytics assistant for the UToledo NCAA Basketball Dashboard.
 
-CURRENT DASHBOARD STATE:
-- League: ${ctx.league}, Position tab: ${ctx.position}
-- Players loaded: ${ctx.totalPlayers}
-- Current roster: ${ctx.rosterSize} players
-- Budget: $${Number(ctx.budget).toLocaleString()}, Player cap: $${Number(ctx.playerCap).toLocaleString()}
-- Target: ${ctx.targetGuards} guards, ${ctx.targetBigs} bigs, max ${ctx.maxRoster} roster
+STATE: ${ctx.league}, ${ctx.position} tab, ${ctx.totalPlayers} players loaded
+ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetBigs}B
+${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+r.team+', '+r.pos+', Perf:'+r.perf+', Val:'+r.value+')').join('\n'):'ROSTER: empty'}
 
-CURRENT ROSTER:
-${ctx.roster.length ? ctx.roster.map((r,i) => `${i+1}. ${r.player} (${r.team}, ${r.pos}, Perf: ${r.perf}, Value: ${r.value})`).join('\n') : '(empty)'}
-
-GUIDELINES:
-- Use function calls to access player data. Don't guess stats — look them up.
-- For roster modifications (add, remove, swap), ALWAYS ask the user for confirmation first. Present your recommendation with reasoning, then ask "Should I go ahead and make this change?"
-- When the user confirms (yes/proceed/do it/go ahead), THEN call the roster modification function.
-- For comparisons, use compare_players to get both profiles, then present a detailed side-by-side analysis.
-- When analyzing valuations, consider PerfScore, conference multiplier, minutes played, and position need.
-- Be concise but insightful. Use basketball knowledge to give real coaching advice.
-- You can use markdown-like formatting: **bold**, line breaks, bullet points.
-- If asked about news or info outside the dashboard data, let the user know you can only analyze the data in the dashboard currently, but give your best advice based on what you have.
-- When recommending players, always explain WHY they're a good fit (stats, position need, budget, team gaps).
-- Format numbers nicely: $125,000 not 125000, 85.3 not 85.29384.` }]
-    };
+RULES:
+1. ALWAYS use function calls to get data. Never guess stats.
+2. For roster changes (add/remove/swap): recommend with reasoning, ask "Want me to do this?", only call function AFTER user confirms.
+3. For compare_players: ALWAYS use the tool - it shows a visual table.
+4. For finding players: use get_top_players with sortBy (3P% for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
+5. Be concise. Use **bold** for emphasis.
+6. Format: $125,000 not 125000.
+7. Explain WHY (stats, fit, value, position need).
+8. You CAN chain multiple function calls if needed.`}]};
   }
 
-  // ---- Send message to Gemini ----
-  async function callGemini(userText, functionResponse){
-    if(userText){
-      chatHistory.push({ role: 'user', parts: [{ text: userText }] });
+  // ---- API call ----
+  async function callGemini(userText, fnResp){
+    if(userText) chatHistory.push({role:'user',parts:[{text:userText}]});
+    if(fnResp){
+      chatHistory.push(fnResp.modelMsg);
+      chatHistory.push({role:'user',parts:[{functionResponse:{name:fnResp.name,response:{result:fnResp.result}}}]});
     }
-    if(functionResponse){
-      chatHistory.push(functionResponse.modelMsg);
-      chatHistory.push({ role: 'user', parts: [{ functionResponse: { name: functionResponse.name, response: { result: functionResponse.result } } }] });
-    }
-
-    const payload = {
-      model: GEMINI_MODEL,
-      contents: chatHistory,
-      tools: tools,
-      systemInstruction: getSystemPrompt(),
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
-    };
-
-    const res = await fetch(GEMINI_PROXY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if(!res.ok) throw new Error(`API error: ${res.status}`);
-    return await res.json();
+    const res=await fetch(GEMINI_PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:GEMINI_MODEL,contents:chatHistory,tools,systemInstruction:sysPrompt(),
+        generationConfig:{temperature:0.7,maxOutputTokens:2048}})});
+    const data=await res.json();
+    if(data.error){ console.error('Gemini error:',data.error); throw new Error(data.error.message||data.error.status||JSON.stringify(data.error)); }
+    return data;
   }
 
-  // ---- Process Gemini response ----
-  async function processResponse(data){
-    if(!data.candidates || !data.candidates[0]) {
-      addAiMsg('ai', "Sorry, I couldn't process that. Try rephrasing your question.");
+  // ---- Process response ----
+  async function processResp(data, depth){
+    depth = depth || 0;
+    if(depth > 5){ addMsg('ai','I hit a loop limit. Here\'s what I have so far.'); return; }
+
+    if(!data.candidates||!data.candidates.length){
+      // Log the full response for debugging
+      console.warn('No candidates in response:', JSON.stringify(data).slice(0,1000));
+      const reason = data.promptFeedback?.blockReason || '';
+      if(reason) addMsg('ai','My response was blocked: '+reason+'. Try rephrasing.');
+      else addMsg('ai','I had trouble with that. Try a simpler question or rephrase it.');
       return;
     }
 
-    const candidate = data.candidates[0];
-    const parts = candidate.content?.parts || [];
+    const parts=data.candidates[0].content?.parts||[];
+    if(!parts.length){ addMsg('ai','Empty response. Try rephrasing.'); return; }
 
+    let hasText=false;
     for(const part of parts){
-      // Text response
       if(part.text){
-        const formatted = formatAiText(part.text);
-        chatHistory.push({ role: 'model', parts: [{ text: part.text }] });
-        addAiMsg('ai', formatted);
+        hasText=true;
+        chatHistory.push({role:'model',parts:[{text:part.text}]});
+        addMsg('ai',fmtText(part.text));
       }
-
-      // Function call
       if(part.functionCall){
-        const call = part.functionCall;
-        const modelMsg = { role: 'model', parts: [{ functionCall: call }] };
+        const call=part.functionCall;
+        const modelMsg={role:'model',parts:[{functionCall:call}]};
 
-        // If this is a confirmation-required action, queue it
         if(CONFIRM_ACTIONS.has(call.name)){
-          // The model should have asked for confirmation in text already
-          // Store the pending action so we can execute on user confirmation
-          pendingAction = { call, modelMsg };
-          return; // Wait for user to confirm
+          pendingAction={call,modelMsg};
+          if(!hasText){
+            const desc=call.name==='add_players_to_roster'?'Add '+(call.args?.playerNames||[]).join(', ')+' to roster'
+              :call.name==='remove_player_from_roster'?'Remove '+call.args?.playerName
+              :'Swap '+call.args?.dropPlayer+' → '+call.args?.addPlayer;
+            addMsg('ai','I\'d like to: <b>'+desc+'</b>.<br>Should I go ahead? (yes/no)');
+          }
+          return;
         }
 
-        // Execute read-only function calls immediately
-        addAiMsg('system', `🔍 Looking up data...`);
-        const result = execFunctionCall(call);
+        // Execute read-only calls immediately
+        addMsg('system','🔍 Looking up data...');
+        let result;
+        try{ result=execCall(call); }catch(e){ result={error:e.message}; }
 
-        // Send result back to Gemini for interpretation
-        try {
-          const data2 = await callGemini(null, { name: call.name, result, modelMsg });
-          await processResponse(data2);
-        } catch(err) {
-          addAiMsg('ai', `I got the data but had trouble analyzing it: ${err.message}`);
+        // Send result back for interpretation
+        try{
+          const d2=await callGemini(null,{name:call.name,result,modelMsg});
+          await processResp(d2, depth+1);
+        }catch(err){
+          // Fallback: show raw result
+          if(result&&!result.error){
+            const preview=Array.isArray(result)?'Found '+result.length+' players.':JSON.stringify(result).slice(0,300);
+            addMsg('ai','Here\'s the data:<br><code>'+preview+'</code><br>(Analysis failed: '+err.message+')');
+          } else addMsg('ai','Error: '+err.message);
         }
-        return;
+        return; // Only process first function call per turn
       }
     }
   }
 
-  function formatAiText(text){
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-      .replace(/\n- /g, '\n• ')
-      .replace(/\n\d+\.\s/g, m => '\n' + m.trim() + ' ')
-      .replace(/\n/g, '<br>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  function fmtText(t){
+    return t.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n- /g,'\n• ').replace(/\n/g,'<br>').replace(/`([^`]+)`/g,'<code>$1</code>');
   }
 
-  // ---- Main send handler ----
-  async function sendMsg(){
-    const text = input.value.trim();
-    if(!text) return;
-    input.value = '';
+  // ---- Send ----
+  async function send(){
+    const text=input.value.trim(); if(!text) return; input.value='';
 
-    // Check if this is a confirmation for a pending action
     if(pendingAction){
-      const affirmative = /^(yes|yep|yea|yeah|sure|do it|go ahead|proceed|ok|confirm|absolutely|make it happen|swap|add)/i.test(text);
-      const negative = /^(no|nah|nope|cancel|never|don't|stop)/i.test(text);
-
-      addAiMsg('user', text);
-
-      if(affirmative){
-        addAiMsg('system', '⚡ Executing...');
-        const result = execFunctionCall(pendingAction.call);
-        const pa = pendingAction;
-        pendingAction = null;
-
-        try {
-          const data = await callGemini(null, { name: pa.call.name, result, modelMsg: pa.modelMsg });
-          await processResponse(data);
-        } catch(err){
-          addAiMsg('ai', `Done! ${JSON.stringify(result)}`);
-        }
-      } else if(negative){
-        pendingAction = null;
-        addAiMsg('ai', "No problem, I won't make that change. What else can I help with?");
-      } else {
-        // Not a clear yes/no — forward to Gemini with the pending context
-        pendingAction = null;
-        showTyping();
-        sendBtn.disabled = true;
-        try {
-          const data = await callGemini(text);
-          hideTyping();
-          await processResponse(data);
-        } catch(err){
-          hideTyping();
-          addAiMsg('ai', `Error: ${err.message}. Make sure your Cloudflare Worker URL is configured.`);
-        }
-        sendBtn.disabled = false;
-      }
+      const yes=/^(yes|yep|yea|yeah|sure|do it|go ahead|proceed|ok|confirm|absolutely|swap|add|remove)/i.test(text);
+      const no=/^(no|nah|nope|cancel|never|don't|stop)/i.test(text);
+      addMsg('user',text);
+      if(yes){
+        addMsg('system','⚡ Executing...');
+        let result; try{result=execCall(pendingAction.call);}catch(e){result={error:e.message};}
+        const pa=pendingAction; pendingAction=null;
+        try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
+        catch(err){ addMsg('ai','Done! '+(result.error||result.added+' added'||JSON.stringify(result))); }
+      } else if(no){ pendingAction=null; addMsg('ai','Cancelled. What else?'); }
+      else { pendingAction=null; await doSend(text); }
       return;
     }
+    addMsg('user',text);
+    await doSend(text);
+  }
 
-    addAiMsg('user', text);
-    showTyping();
-    sendBtn.disabled = true;
-
-    try {
-      const data = await callGemini(text);
-      hideTyping();
-      await processResponse(data);
-    } catch(err){
-      hideTyping();
-      addAiMsg('ai', `Error: ${err.message}. <br><br>Make sure your Cloudflare Worker URL is set up. See the setup guide for details.`);
-    }
-    sendBtn.disabled = false;
+  async function doSend(text){
+    showTyping(); sendBtn.disabled=true;
+    try{ const d=await callGemini(text); hideTyping(); await processResp(d); }
+    catch(err){ hideTyping(); console.error('Scout AI error:',err); addMsg('ai','Error: '+err.message+'<br><br>Check your Cloudflare Worker is running.'); }
+    sendBtn.disabled=false;
   }
 })();
 </script>
