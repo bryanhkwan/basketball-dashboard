@@ -2177,6 +2177,20 @@ archetypeTags(r).forEach(tag=>{
       if(out['3PA/G'] == null && out['3PA'] != null && out['G'] != null && +out['G'] > 0){
         out['3PA/G'] = +(+out['3PA'] / +out['G']).toFixed(2);
       }
+      // Compute 3PT Rating: combines 3P accuracy + volume (penalizes tiny sample sizes)
+      // Formula: 3P% * min(1, 3PA/G / 2.0) * min(1, totalGames / 10)
+      // - Requires ~2+ 3PA/G to get full credit
+      // - Requires 10+ games played for full credit
+      // - A player shooting 40% on 3 3PA/G gets: 0.40 * 1.0 * 1.0 = 0.40
+      // - A player shooting 100% on 0.1 3PA/G gets: 1.0 * 0.05 * 1.0 = 0.05
+      const tpp = +(out['3P%']) || 0;
+      const tpag = +(out['3PA/G']) || 0;
+      const gp = +(out['G']) || 0;
+      if(tpp > 0 && tpag > 0){
+        out['3PT_Rating'] = +(tpp * Math.min(1, tpag / 2.0) * Math.min(1, gp / 10)).toFixed(3);
+      } else {
+        out['3PT_Rating'] = 0;
+      }
       return out;
     });
 
@@ -2957,7 +2971,7 @@ archetypeTags(r).forEach(tag=>{
     document.getElementById('cmpClose').onclick = () => { cmpBack.style.display = 'none'; };
     cmpBack.onclick = e => { if(e.target === cmpBack) cmpBack.style.display = 'none'; };
 
-    const stats = ['PPG','eFG%','3P%','FT%','APG','A/TO','RPG','SPG','BPG','DRtg','WS/40','BPM','USG%','TOPG','PER','3PA/G'];
+    const stats = ['PPG','eFG%','3P%','3PT_Rating','FT%','APG','A/TO','RPG','SPG','BPG','DRtg','WS/40','BPM','USG%','TOPG','PER','3PA/G'];
     const lowerBetter = new Set(['DRtg','TOPG']);
 
     function pct(r, stat){
@@ -3170,6 +3184,7 @@ archetypeTags(r).forEach(tag=>{
       threePA:r['3PA']!=null?+Number(r['3PA']):null, threePAG:r['3PA/G']!=null?+Number(r['3PA/G']).toFixed(1):null,
       usg:r['USG%']!=null?+Number(r['USG%']).toFixed(1):null, per:r.PER!=null?+Number(r.PER).toFixed(1):null,
       ws40:r['WS/40']!=null?+Number(r['WS/40']).toFixed(3):null,
+      threeRating:r['3PT_Rating']!=null?+Number(r['3PT_Rating']).toFixed(3):null,
     };
   }
 
@@ -3279,7 +3294,7 @@ archetypeTags(r).forEach(tag=>{
         maxValue:{type:'NUMBER',description:'Max valuation $'},
         minPerf:{type:'NUMBER',description:'Min PerfScore'},
         team:{type:'STRING'},conference:{type:'STRING'},
-        sortBy:{type:'STRING',description:'Score, PPG, 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, USG%, PER, WS/40, 3PA/G, ActualValuation_calc'},
+        sortBy:{type:'STRING',description:'Score, PPG, 3PT_Rating (ALWAYS use for shooters instead of 3P%), 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, USG%, PER, WS/40, 3PA/G, ActualValuation_calc'},
         limit:{type:'NUMBER',description:'# results (default 10)'}}}},
     {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
       parameters:{type:'OBJECT',properties:{}}},
@@ -3323,8 +3338,8 @@ RULES:
 1. ALWAYS use function calls to get data. Never guess stats.
 2. For roster changes (add/remove/swap): recommend with reasoning, ask "Want me to do this?", only call function AFTER user confirms.
 3. For compare_players: ALWAYS use the tool - it opens a full visual comparison modal on the page.
-4. For finding players: use get_top_players with sortBy (3P% for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
-5. SHOOTING SAMPLE SIZE: When recommending shooters, ALWAYS check their 3PA (3-point attempts) or 3PA/G. A player with 100% 3P% on 2 attempts is NOT a shooter. Look for players with at least 1.5+ 3PA/G who also have good 3P%. Use get_player_profile to verify.
+4. For finding players: use get_top_players with sortBy (3PT_Rating for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
+5. SHOOTING: NEVER sort by raw 3P% — it rewards tiny sample sizes (1/1 = 100%). ALWAYS use sortBy: 3PT_Rating which combines 3P% accuracy with volume (3PA/G). A legit shooter needs 1.5+ 3PA/G. Also set a minPerf threshold (e.g. 20+) so you don't recommend bad players who just happen to shoot.
 6. LEAGUE SEPARATION: Data is league-separated. MBB and WBB players cannot be mixed. You only see players from the current league (${ctx.league}). If user asks about the other league, tell them to switch tabs first.
 6. Be concise. Use **bold** for emphasis.
 7. Format: $125,000 not 125000.
