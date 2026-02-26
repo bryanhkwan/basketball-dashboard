@@ -240,6 +240,8 @@
     .aiMsg .aiCompare b{color:var(--accent);display:block;margin-bottom:4px;font-size:12px}
     .aiQuickBtn{padding:5px 12px;border-radius:8px;font-size:11px;background:rgba(0,30,70,.6);border:1px solid var(--line);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s}
     .aiQuickBtn:hover{background:rgba(0,62,126,.4);color:var(--text);border-color:var(--accent)}
+    .aiPlayerLink{color:var(--accent);cursor:pointer;border-bottom:1px dotted var(--accent);transition:color .15s}
+    .aiPlayerLink:hover{color:#ffe34d}
     .aiCompareTable{width:100%;border-collapse:collapse;font-size:11.5px}
     .aiCompareTable th{padding:6px 4px;border-bottom:1px solid var(--line);color:var(--accent);font-size:12px}
     .aiCompareTable td{padding:4px;font-size:11.5px}
@@ -271,7 +273,7 @@
   <h1>🏀 NCAA Scouting Dashboard</h1>
   <p class="sub">
     Click a player to open their full stat profile with percentiles, archetypes, and fit score.
-    Uses: <b>MBB Guards</b>, <b>MBB Bigs</b>, <b>WBB Guards MAC</b>, <b>WBB Bigs MAC</b>, plus <b>ScoringWeight</b>.
+    Uses: <b>Men Data</b> and <b>Women Data</b> sheets with position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
   </p>
 </header>
 
@@ -409,7 +411,7 @@
   <span class="pill">Remaining: <b id="wRemaining">—</b></span>
   <span class="pill" id="wOverBox" style="display:none; border-color:#3b2a2a; background:#1a1111; color:#ffd0d0">Over by: <b id="wOver">—</b></span>
 </div>
-<div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). This list is pulled from <b>ScoringWeight</b> (your approved scoring metrics).</div>
+<div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). Defaults are optimized to avoid multicollinearity. Add any available stat with W=0 if you want to customize.</div>
       </div>
 
       <div class="card">
@@ -602,6 +604,7 @@
         <div class="chipRow" id="mTags"></div>
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
+        <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>
@@ -663,6 +666,11 @@
             <div class="bars" id="mBars"></div>
           </div>
         </div>
+      </div>
+
+      <div style="margin-top:12px" class="panel">
+        <div class="panelHead">Similar Players</div>
+        <div class="panelBody" id="mSimilar" style="font-size:12px"></div>
       </div>
 
       <div style="margin-top:12px" class="panel">
@@ -800,11 +808,8 @@
       if(!apiKey) { showWarn('Missing API key.'); return; }
 
       const ranges = [
-        'ScoringWeight!A1:G',
-        `${SHEET_MAP.MBB.Guards}!A1:ZZ`,
-        `${SHEET_MAP.MBB.Bigs}!A1:ZZ`,
-        `${SHEET_MAP.WBB.Guards}!A1:ZZ`,
-        `${SHEET_MAP.WBB.Bigs}!A1:ZZ`,
+        `${SHEET_MAP.MBB}!A1:ZZ`,
+        `${SHEET_MAP.WBB}!A1:ZZ`,
       ];
 
       const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
@@ -821,22 +826,20 @@
       }
       if(!data.valueRanges || !data.valueRanges.length){
         showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
-        console.warn('Sheets returned empty data');
         return;
       }
 
       wb = { SheetNames: [], Sheets: {} };
       data.valueRanges.forEach(vr => {
         const range = vr.range || '';
-        // Google Sheets API wraps names with spaces in single quotes, e.g. "'MBB Guards'!A1:ZZ"
         let sheetName = range.split('!')[0] || 'Sheet';
-        sheetName = sheetName.replace(/^'(.*)'$/, '$1');   // strip surrounding quotes
+        sheetName = sheetName.replace(/^'(.*)'$/, '$1');
         const aoa = vr.values || [];
         wb.SheetNames.push(sheetName);
         wb.Sheets[sheetName] = { __aoa: aoa };
       });
 
-      const need = ['ScoringWeight', ...Object.values(SHEET_MAP.MBB), ...Object.values(SHEET_MAP.WBB)];
+      const need = [SHEET_MAP.MBB, SHEET_MAP.WBB];
       const missing = need.filter(n => !wb.SheetNames.includes(n) && !findSheetLike(n));
       if(missing.length){
         showWarn(`Missing sheet(s): ${missing.join(', ')}. Found: ${wb.SheetNames.join(', ')}`);
@@ -844,8 +847,8 @@
         clearWarn();
       }
 
-      const ok = loadScoringWeight();
-      resetWeightsBtn.disabled = !ok;
+      // No ScoringWeight sheet needed — we use built-in defaults
+      resetWeightsBtn.disabled = false;
       recalcBtn.disabled = false;
       exportBtn.disabled = false;
 
@@ -980,19 +983,25 @@ const gsUrlInput = document.getElementById('gsUrl');
   }
 
   const SHEET_MAP = {
-
-    MBB: {Guards:'MBB Guards', Bigs:'MBB Bigs'},
-    WBB: {Guards:'WBB Guards MAC', Bigs:'WBB Bigs MAC'}
+    MBB: 'Men Data',
+    WBB: 'Women Data'
   };
+
+  // Position bucketing: G, G-F, F-G → Guards; F, C, F-C, C-F → Bigs; blank → Guards
+  function bucketPosition(posStr){
+    const p = (posStr||'').toString().trim().toUpperCase();
+    if(!p || p === 'G' || p === 'G-F' || p === 'F-G') return 'Guards';
+    return 'Bigs'; // F, C, F-C, C-F
+  }
 
   // Fit presets: each is weights on percentile metrics (0..1)
   const FIT_PRESETS = {
-    balanced: { 'PPG':1, 'eFG%':1, 'BPM':1, 'WS/40':1, 'DRtg':1, 'APG':1, 'TOPG':1, 'BPG':1, 'SPG':1, 'DR%':1, 'OR%':0.6, 'A/TO':0.8, '3P%':1, 'FT%':0.6, 'ORtg':0.4, '+/-':0.4 },
-    shooting: { '3P%':1.3, 'eFG%':1.1, 'FT%':0.8, 'PPG':0.8, 'ORtg':0.4 },
-    playmaking: { 'APG':1.2, 'A/TO':1.2, 'TOPG':1.0, 'ORtg':0.6 },
-    defense: { 'DRtg':1.2, 'SPG':1.0, 'BPG':1.0, 'DR%':1.0, '+/-':0.6 },
-    rim: { 'BPG':1.5, 'DRtg':1.2, 'DR%':1.0, 'DRB/G':0.9 },
-    rebounding: { 'DR%':1.4, 'OR%':1.0, 'DRB/G':1.1, 'ORB/G':0.9 }
+    balanced: { 'PPG':1, 'eFG%':1, '3P%':0.7, 'FT%':0.6, 'APG':0.9, 'A/TO':0.8, 'SPG':0.7, 'BPG':0.5, 'RPG':0.6, 'DRtg':0.8, 'BPM':1, 'USG%':0.4, 'WS/40':0.8 },
+    shooting: { 'eFG%':1.3, '3P%':1.3, 'FT%':0.9, 'PPG':0.8, 'TS%':1.0 },
+    playmaking: { 'APG':1.3, 'A/TO':1.2, 'AST%':1.0, 'PPG':0.6 },
+    defense: { 'DRtg':1.3, 'SPG':1.0, 'BPG':1.0, 'STL%':0.8, 'BLK%':0.8 },
+    rim: { 'BPG':1.5, 'BLK%':1.2, 'DRtg':1.0, 'RPG':0.8 },
+    rebounding: { 'RPG':1.3, 'ORB/G':1.0, 'DRB/G':1.0, 'TRB%':0.9 }
   };
 
   function showWarn(msg){
@@ -1074,59 +1083,77 @@ const gsUrlInput = document.getElementById('gsUrl');
   }
 
   function ensureWeightsCoverStats(forPos, rowArr){
-    // Only allow scoring metrics defined in ScoringWeight (column A)
-    const allowed = (baseStatsAll || []).slice();
+    // Start with base stats from defaults, then add any numeric stats found in data
+    const allowed = new Set((baseStatsAll || []).slice());
+    // Non-scoring columns to exclude
+    const exclude = new Set(['Player','Season','Team','Conference','G','GS','MP','Pos','Class','Rk',
+      'FG','FGA','2P','2PA','3P','3PA','FT','FTA','ORB','DRB','TRB','AST','STL','BLK','TOV','PF','PTS',
+      'Position','PerfScore_calc','PerfScore_raw','ConfMult_calc','MP_num','PredictedValue_calc',
+      'ActualValuation_calc','MinMultiplier_calc','Score','FitScore_calc','CalcRank','BossRank',
+      'ActualValuation','ValueDelta_calc','ValueDeltaPct_calc','_tbPosGroup']);
+    if(rowArr && rowArr.length){
+      const sample = rowArr[0] || {};
+      for(const k of Object.keys(sample)){
+        if(!exclude.has(k) && typeof sample[k] === 'number') allowed.add(k);
+      }
+    }
+
     const existing = currentWeights[forPos] || [];
     const existingSet = new Set(existing.map(x=>x.stat));
 
-    allowed.forEach(stat=>{
-      if(existingSet.has(stat)) return;
-
-      // If the stat exists in the data sheet, infer min/max from the column; otherwise default to 0..1
+    for(const stat of allowed){
+      if(existingSet.has(stat)) continue;
       const mm = (rowArr && rowArr.length && (stat in (rowArr[0]||{}))) ? minMaxForStat(rowArr, stat) : {min:0, max:1, ok:false};
       existing.push({stat, w:0, min:mm.min, max:mm.max, dir: guessDirForStat(stat), _auto:true});
       existingSet.add(stat);
-    });
+    }
 
-    // Fill missing dir
     existing.forEach(it=>{ if(!it.dir) it.dir = guessDirForStat(it.stat); });
-
-    // Also remove any accidental non-allowed metrics that might have been added by older versions
-    const allowedSet = new Set(allowed);
-    currentWeights[forPos] = existing.filter(it => allowedSet.has(it.stat));
+    currentWeights[forPos] = existing;
   }
 
 function loadScoringWeight(){
-    excelWeights = {Guards:[], Bigs:[]};
-    currentWeights = {Guards:[], Bigs:[]};
-    baseStatsAll = [];
+    // Built-in defaults — no ScoringWeight sheet needed
+    // Guards: multicollinearity-free stat selection emphasizing perimeter skills
+    const GUARD_DEFAULTS = [
+      {stat:'PPG', w:10, min:0, max:30, dir:'higher'},
+      {stat:'eFG%', w:10, min:0.35, max:0.60, dir:'higher'},
+      {stat:'3P%', w:8, min:0.25, max:0.42, dir:'higher'},
+      {stat:'FT%', w:5, min:0.60, max:0.90, dir:'higher'},
+      {stat:'APG', w:10, min:0.5, max:7, dir:'higher'},
+      {stat:'A/TO', w:8, min:0.5, max:2.5, dir:'higher'},
+      {stat:'SPG', w:7, min:0.3, max:2.0, dir:'higher'},
+      {stat:'BPM', w:10, min:-3, max:8, dir:'higher'},
+      {stat:'WS/40', w:8, min:0.05, max:0.25, dir:'higher'},
+      {stat:'DRtg', w:7, min:115, max:90, dir:'lower'},
+      {stat:'USG%', w:5, min:12, max:32, dir:'higher'},
+      {stat:'RPG', w:5, min:1, max:7, dir:'higher'},
+      {stat:'TOPG', w:7, min:3.5, max:0.5, dir:'lower'},
+    ];
+    // Bigs: multicollinearity-free emphasizing interior skills
+    const BIG_DEFAULTS = [
+      {stat:'PPG', w:10, min:0, max:25, dir:'higher'},
+      {stat:'eFG%', w:10, min:0.40, max:0.65, dir:'higher'},
+      {stat:'FT%', w:5, min:0.55, max:0.85, dir:'higher'},
+      {stat:'BPG', w:9, min:0.2, max:2.5, dir:'higher'},
+      {stat:'RPG', w:10, min:2, max:12, dir:'higher'},
+      {stat:'OR%', w:7, min:3, max:15, dir:'higher'},
+      {stat:'DR%', w:7, min:10, max:25, dir:'higher'},
+      {stat:'DRtg', w:8, min:115, max:90, dir:'lower'},
+      {stat:'BPM', w:10, min:-3, max:8, dir:'higher'},
+      {stat:'WS/40', w:8, min:0.05, max:0.25, dir:'higher'},
+      {stat:'A/TO', w:6, min:0.3, max:2.0, dir:'higher'},
+      {stat:'USG%', w:5, min:12, max:32, dir:'higher'},
+      {stat:'TOPG', w:5, min:3.5, max:0.5, dir:'lower'},
+    ];
 
-    const swName = findSheetLike('ScoringWeight') || 'ScoringWeight';
-    const ws = wb.Sheets[swName];
-    if(!ws) return false;
-    const aoa = sheetToAoa(ws);   // always AOA so we can destructure by position
-    for(let i=1;i<aoa.length;i++){
-      const [stat, gw, gmin, gmax, bw, bmin, bmax] = aoa[i] || [];
-      if(stat){
-        const s = String(stat).trim();
-        if(s && s.toLowerCase() !== 'total') baseStatsAll.push(s);
-      }
-
-      if(!stat) continue;
-      if(gw !== undefined && gw !== null && gw !== ''){
-        excelWeights.Guards.push({stat:String(stat), w:Number(gw), min:Number(gmin), max:Number(gmax), dir: (Number(gmin) > Number(gmax) ? 'lower' : guessDirForStat(String(stat)))});
-      }
-      if(bw !== undefined && bw !== null && bw !== ''){
-        excelWeights.Bigs.push({stat:String(stat), w:Number(bw), min:Number(bmin), max:Number(bmax), dir: (Number(bmin) > Number(bmax) ? 'lower' : guessDirForStat(String(stat)))});
-      }
-    }
-    // unique and preserve order
-    baseStatsAll = Array.from(new Set(baseStatsAll));
-
-    currentWeights.Guards = JSON.parse(JSON.stringify(excelWeights.Guards));
-    currentWeights.Bigs = JSON.parse(JSON.stringify(excelWeights.Bigs));
+    excelWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
+    currentWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
+    baseStatsAll = [...new Set([...GUARD_DEFAULTS.map(x=>x.stat), ...BIG_DEFAULTS.map(x=>x.stat)])];
     return true;
   }
+  // Initialize defaults immediately
+  loadScoringWeight();
 
   
   // Default direction rules (can be overridden in UI)
@@ -1182,20 +1209,13 @@ const STAT_GLOSSARY = {
   }
 
 const DEFAULT_DIR = {
-    'TOPG':'lower',
-    'DRtg':'lower',
-    'DRTG':'lower',
-    'DRTG.':'lower',
-    'DRTg':'lower',
-    'DRTG':'lower',
-    'DRtg':'lower',
-    'TOV':'lower',
-    'TO':'lower',
-    'Fouls':'lower',
-    'PF':'lower',
+    'TOPG':'lower', 'TOV/G':'lower',
+    'DRtg':'lower', 'DRTG':'lower', 'DRTG.':'lower', 'DRTg':'lower',
+    'TOV':'lower', 'TOV%':'lower', 'TO':'lower',
+    'Fouls':'lower', 'PF':'lower', 'PF/G':'lower',
     'Opp PPG':'lower',
-    // plus/minus: higher is better generally
-    '+/-':'higher'
+    '+/-':'higher',
+    'USG%':'higher', // higher usage = more involved
   };
 
   function normalizeDirValue(v){
@@ -1863,7 +1883,7 @@ function renderWeights(){
     const player = (r['Player'] ?? 'Player').toString();
     const team = (r['Team'] ?? '').toString();
     const conf = (r['Conference'] ?? r['Conf'] ?? '').toString();
-    const position = (r['Position'] ?? pos).toString();
+    const position = (r['Pos'] ?? r['Position'] ?? pos).toString();
 
     mTitle.textContent = player;
     mSub.textContent = [team, conf, position].filter(Boolean).join(' • ');
@@ -1972,8 +1992,55 @@ archetypeTags(r).forEach(tag=>{
     mAllStats.innerHTML = '';
     mAllStats.appendChild(container);
 
+    // Similar Players — find players with closest stat profile in same position
+    const mSimilar = document.getElementById('mSimilar');
+    if(mSimilar){
+      const all = tbGetAllPlayers();
+      const curPos = bucketPosition(r.Pos || r.Position);
+      const samePos = all.filter(x => bucketPosition(x.Pos || x.Position) === curPos && tbPlayerKey(x) !== tbPlayerKey(r));
+      // Compute euclidean distance on key percentiles
+      const keyStats = curPos === 'Guards'
+        ? ['PPG','eFG%','3P%','APG','A/TO','SPG','BPM','DRtg']
+        : ['PPG','eFG%','BPG','RPG','DRtg','BPM','FT%','A/TO'];
+      function pctVec(p){
+        return keyStats.map(s => { const v = safeNum(p[s]); const pct = statPercentile(s,v); return Number.isFinite(pct)?pct:0.5; });
+      }
+      const curVec = pctVec(r);
+      const scored = samePos.map(x => {
+        const xVec = pctVec(x);
+        let dist = 0;
+        for(let i=0;i<curVec.length;i++) dist += (curVec[i]-xVec[i])**2;
+        return {r:x, dist: Math.sqrt(dist), upgrade: (x.Score||0) > (r.Score||0)};
+      }).sort((a,b) => a.dist - b.dist).slice(0, 5);
+
+      if(scored.length){
+        mSimilar.innerHTML = scored.map(s => {
+          const pp = s.r;
+          const arrow = s.upgrade ? '<span style="color:var(--good)">↑</span>' : '<span style="color:var(--muted)">≈</span>';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)">
+            <span>${arrow} <span class="link" style="cursor:pointer" onclick="window._app.openProfile(window._app.tbGetAllPlayers().find(x=>x.Player==='${(pp.Player||'').replace(/'/g,"\\'")}')); event.stopPropagation();">${pp.Player}</span>
+            <span style="color:var(--muted);font-size:10px;margin-left:4px">${pp.Team||''}</span></span>
+            <span style="font-size:11px"><b>${pp.Score?pp.Score.toFixed(1):'—'}</b> perf · ${pp.ActualValuation_calc?fmtMoney(pp.ActualValuation_calc):'—'}</span>
+          </div>`;
+        }).join('');
+      } else { mSimilar.innerHTML = '<div class="muted">No similar players found.</div>'; }
+    }
+
+    // Compare button — opens a search to pick second player
+    let _currentProfilePlayer = r;
+    document.getElementById('mCompareBtn').onclick = () => {
+      const name2 = prompt('Enter a player name to compare with ' + player + ':');
+      if(name2 && name2.trim()){
+        closeProfile();
+        openCompare(player, name2.trim());
+      }
+    };
+
     modalBack.style.display = 'flex';
   }
+
+  // Store last comparison for re-opening
+  let _lastCompare = null;
 
   function closeProfile(){ modalBack.style.display = 'none'; }
 
@@ -2083,48 +2150,59 @@ archetypeTags(r).forEach(tag=>{
   function reloadActiveSheet(){
     if(!wb) return;
     clearWarn();
-    const desired = SHEET_MAP[league][pos];
-    const sheetName = findSheetLike(desired) || desired;
-    activeSheetEl.textContent = sheetName;
+    // Single sheet per league, bucket by position
+    const sheetName = findSheetLike(SHEET_MAP[league]) || SHEET_MAP[league];
+    activeSheetEl.textContent = league + ' ' + pos;
 
     const ws = wb.Sheets[sheetName];
     if(!ws){
       showWarn(`Could not find sheet "${sheetName}" in the workbook. Check sheet names.`);
-      rows = [];
-      computed = [];
-      renderPlayers();
-      return;
+      rows = []; computed = []; renderPlayers(); return;
     }
-    rows = parseSheetToRows(ws);
+    const allRows = parseSheetToRows(ws);
+
+    // Normalize stat names between Men/Women data
+    const normalized = allRows.map(r => {
+      const out = {...r};
+      // Position bucketing
+      out.Position = bucketPosition(r.Pos);
+      // Normalize TOPG: Men has TOPG, Women has TOV/G
+      if(out['TOV/G'] != null && out['TOPG'] == null) out['TOPG'] = out['TOV/G'];
+      // Normalize rebounding rate stats: Men has OR%/DR%, Women has ORB%/DRB%
+      if(out['ORB%'] != null && out['OR%'] == null) out['OR%'] = out['ORB%'];
+      if(out['DRB%'] != null && out['DR%'] == null) out['DR%'] = out['DRB%'];
+      // Ensure Conference column (Women may not have it)
+      if(!out.Conference) out.Conference = '';
+      // Compute 3PA/G if not present (Men Data)
+      if(out['3PA/G'] == null && out['3PA'] != null && out['G'] != null && +out['G'] > 0){
+        out['3PA/G'] = +(+out['3PA'] / +out['G']).toFixed(2);
+      }
+      return out;
+    });
+
+    // Bucket into Guards and Bigs
+    const guards = normalized.filter(r => r.Position === 'Guards');
+    const bigs = normalized.filter(r => r.Position === 'Bigs');
+
+    // Use the selected position tab
+    rows = pos === 'Guards' ? guards : bigs;
     ensureWeightsCoverStats(pos, rows);
     renderWeights();
     computeAll();
 
-    // Auto-compute the sibling position tab for the same league (so AI/search has both Guards+Bigs)
+    // Also compute the sibling position and cache it
     const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
-    const sibKey = league + '_' + sibPos;
-    if(!tbAllComputed[sibKey]){
-      const sibDesired = SHEET_MAP[league][sibPos];
-      const sibSheet = findSheetLike(sibDesired) || sibDesired;
-      const sibWs = wb.Sheets[sibSheet];
-      if(sibWs){
-        const sibRows = parseSheetToRows(sibWs);
-        if(sibRows.length){
-          // Temporarily compute sibling data using same valuation settings
-          const savedPos = pos, savedRows = rows, savedComputed = computed;
-          pos = sibPos;
-          rows = sibRows;
-          ensureWeightsCoverStats(pos, rows);
-          computeAll(); // this will cache into tbAllComputed[league+'_'+sibPos]
-          // Restore original state
-          pos = savedPos;
-          rows = savedRows;
-          computed = savedComputed;
-          ensureWeightsCoverStats(pos, rows);
-          renderWeights();
-          renderPlayers(); // re-render the correct tab
-        }
-      }
+    const sibRows = pos === 'Guards' ? bigs : guards;
+    if(sibRows.length){
+      const savedPos = pos, savedRows = rows, savedComputed = computed;
+      pos = sibPos;
+      rows = sibRows;
+      ensureWeightsCoverStats(pos, rows);
+      computeAll(); // caches into tbAllComputed[league+'_'+sibPos]
+      pos = savedPos; rows = savedRows; computed = savedComputed;
+      ensureWeightsCoverStats(pos, rows);
+      renderWeights();
+      renderPlayers();
     }
   }
 
@@ -2858,12 +2936,19 @@ archetypeTags(r).forEach(tag=>{
     const p2 = all.find(r => (r.Player||'').toLowerCase().includes(n2));
     if(!p1||!p2) return false;
 
+    // Store for re-opening
+    _lastCompare = {name1: p1.Player, name2: p2.Player};
+    window._lastCompare = _lastCompare;
+    // Show reopen button in AI chat
+    const reopenBtn = document.getElementById('aiReopenCmp');
+    if(reopenBtn) reopenBtn.style.display = '';
+
     const cmpBack = document.getElementById('compareBack');
     const cmpBody = document.getElementById('cmpBody');
     document.getElementById('cmpClose').onclick = () => { cmpBack.style.display = 'none'; };
-    cmpBack.addEventListener('click', e => { if(e.target === cmpBack) cmpBack.style.display = 'none'; });
+    cmpBack.onclick = e => { if(e.target === cmpBack) cmpBack.style.display = 'none'; };
 
-    const stats = ['PPG','eFG%','3P%','FT%','APG','A/TO','RPG','SPG','BPG','DRtg','DR%','WS/40','BPM','TOPG','PER'];
+    const stats = ['PPG','eFG%','3P%','FT%','APG','A/TO','RPG','SPG','BPG','DRtg','WS/40','BPM','USG%','TOPG','PER','3PA/G'];
     const lowerBetter = new Set(['DRtg','TOPG']);
 
     function pct(r, stat){
@@ -3005,6 +3090,7 @@ archetypeTags(r).forEach(tag=>{
     <button class="aiQuickBtn" data-q="What position gaps does my roster have?">Position gaps</button>
     <button class="aiQuickBtn" data-q="Auto-build me the best roster within budget">Auto-build</button>
     <button class="aiQuickBtn" data-q="Who are the top 5 shooters that are bigs?">Top shooters</button>
+    <button class="aiQuickBtn" id="aiReopenCmp" style="display:none" data-q="">↩ Last compare</button>
   </div>
   <div class="aiInput">
     <input id="aiChatInput" type="text" placeholder="Ask about players, strategy, roster..." autocomplete="off">
@@ -3035,7 +3121,14 @@ archetypeTags(r).forEach(tag=>{
   });
   input.addEventListener('keydown', e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }});
   sendBtn.addEventListener('click', send);
-  document.querySelectorAll('.aiQuickBtn').forEach(b => b.addEventListener('click', () => { input.value = b.dataset.q; send(); }));
+  document.querySelectorAll('.aiQuickBtn').forEach(b => b.addEventListener('click', () => {
+    if(b.id === 'aiReopenCmp'){
+      const a = app();
+      if(a.openCompare && window._lastCompare) a.openCompare(window._lastCompare.name1, window._lastCompare.name2);
+      return;
+    }
+    input.value = b.dataset.q; send();
+  }));
 
   // ---- Helpers ----
   function addMsg(role, html){
@@ -3057,13 +3150,17 @@ archetypeTags(r).forEach(tag=>{
   const app = () => window._app || {};
   function allPlayers(){ const a=app(); return a.tbGetAllPlayers ? a.tbGetAllPlayers() : (a.computed||[]); }
   function statLine(r){
-    return { player:r.Player, team:r.Team, pos:r.Position||'', conf:r.Conference||'',
+    return { player:r.Player, team:r.Team, pos:r.Position||r.Pos||'', conf:r.Conference||'',
+      cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null, value:r.ActualValuation_calc?Math.round(r.ActualValuation_calc):null,
       ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
       rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
       bpg:r.BPG!=null?+Number(r.BPG).toFixed(1):null, bpm:r.BPM!=null?+Number(r.BPM).toFixed(1):null,
       threePct:r['3P%']!=null?+Number(r['3P%']).toFixed(3):null, ftPct:r['FT%']!=null?+Number(r['FT%']).toFixed(3):null,
       efg:r['eFG%']!=null?+Number(r['eFG%']).toFixed(3):null, drtg:r.DRtg!=null?+Number(r.DRtg).toFixed(1):null,
+      threePA:r['3PA']!=null?+Number(r['3PA']):null, threePAG:r['3PA/G']!=null?+Number(r['3PA/G']).toFixed(1):null,
+      usg:r['USG%']!=null?+Number(r['USG%']).toFixed(1):null, per:r.PER!=null?+Number(r.PER).toFixed(1):null,
+      ws40:r['WS/40']!=null?+Number(r['WS/40']).toFixed(3):null,
     };
   }
 
@@ -3171,7 +3268,7 @@ archetypeTags(r).forEach(tag=>{
         maxValue:{type:'NUMBER',description:'Max valuation $'},
         minPerf:{type:'NUMBER',description:'Min PerfScore'},
         team:{type:'STRING'},conference:{type:'STRING'},
-        sortBy:{type:'STRING',description:'Score, PPG, 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, ActualValuation_calc'},
+        sortBy:{type:'STRING',description:'Score, PPG, 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, USG%, PER, WS/40, 3PA/G, ActualValuation_calc'},
         limit:{type:'NUMBER',description:'# results (default 10)'}}}},
     {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
       parameters:{type:'OBJECT',properties:{}}},
@@ -3216,7 +3313,8 @@ RULES:
 2. For roster changes (add/remove/swap): recommend with reasoning, ask "Want me to do this?", only call function AFTER user confirms.
 3. For compare_players: ALWAYS use the tool - it opens a full visual comparison modal on the page.
 4. For finding players: use get_top_players with sortBy (3P% for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
-5. LEAGUE SEPARATION: Data is league-separated. MBB and WBB players cannot be mixed. You only see players from the current league (${ctx.league}). If user asks about the other league, tell them to switch tabs first.
+5. SHOOTING SAMPLE SIZE: When recommending shooters, ALWAYS check their 3PA (3-point attempts) or 3PA/G. A player with 100% 3P% on 2 attempts is NOT a shooter. Look for players with at least 1.5+ 3PA/G who also have good 3P%. Use get_player_profile to verify.
+6. LEAGUE SEPARATION: Data is league-separated. MBB and WBB players cannot be mixed. You only see players from the current league (${ctx.league}). If user asks about the other league, tell them to switch tabs first.
 6. Be concise. Use **bold** for emphasis.
 7. Format: $125,000 not 125000.
 8. Explain WHY (stats, fit, value, position need).
@@ -3299,7 +3397,20 @@ RULES:
   }
 
   function fmtText(t){
-    return t.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n- /g,'\n• ').replace(/\n/g,'<br>').replace(/`([^`]+)`/g,'<code>$1</code>');
+    let html = t.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n- /g,'\n• ').replace(/\n/g,'<br>').replace(/`([^`]+)`/g,'<code>$1</code>');
+    // Make player names clickable — search for names that match loaded players
+    const all = allPlayers();
+    if(all.length){
+      // Build a set of player names sorted longest first (to match "De'Angelo Smith" before "Smith")
+      const names = [...new Set(all.map(r=>r.Player).filter(Boolean))].sort((a,b)=>b.length-a.length);
+      for(const name of names){
+        if(name.length < 5) continue; // skip very short names to avoid false matches
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp('(?<!<[^>]*)\\b(' + escaped + ')\\b', 'g');
+        html = html.replace(re, `<span class="aiPlayerLink" onclick="(function(){const a=window._app;if(a&&a.openProfile){const p=a.tbGetAllPlayers().find(r=>r.Player==='${name.replace(/'/g,"\\'")}');if(p)a.openProfile(p);}})()">$1</span>`);
+      }
+    }
+    return html;
   }
 
   // ---- Send ----
