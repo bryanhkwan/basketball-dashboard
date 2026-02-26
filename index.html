@@ -2194,16 +2194,26 @@ archetypeTags(r).forEach(tag=>{
     const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
     const sibRows = pos === 'Guards' ? bigs : guards;
     if(sibRows.length){
-      const savedPos = pos, savedRows = rows, savedComputed = computed;
-      pos = sibPos;
-      rows = sibRows;
-      ensureWeightsCoverStats(pos, rows);
-      computeAll(); // caches into tbAllComputed[league+'_'+sibPos]
-      pos = savedPos; rows = savedRows; computed = savedComputed;
-      ensureWeightsCoverStats(pos, rows);
-      renderWeights();
-      renderPlayers();
+      try{
+        const savedPos = pos, savedRows = rows, savedComputed = computed;
+        pos = sibPos;
+        rows = sibRows;
+        ensureWeightsCoverStats(pos, rows);
+        computeAll(); // caches into tbAllComputed[league+'_'+sibPos]
+        console.log(`Auto-cached ${league}_${sibPos}: ${tbAllComputed[league+'_'+sibPos]?.length || 0} players`);
+        pos = savedPos; rows = savedRows; computed = savedComputed;
+        ensureWeightsCoverStats(pos, rows);
+        renderWeights();
+        renderPlayers();
+      }catch(e){
+        console.error('Sibling computation failed:', e);
+        // Restore state
+        pos = pos === sibPos ? (sibPos === 'Guards' ? 'Bigs' : 'Guards') : pos;
+      }
+    } else {
+      console.warn(`No ${sibPos} rows found for ${league}`);
     }
+    console.log('tbAllComputed keys:', Object.keys(tbAllComputed), 'sizes:', Object.fromEntries(Object.entries(tbAllComputed).map(([k,v])=>[k,v.length])));
   }
 
   // ---------- File load ----------
@@ -2572,11 +2582,10 @@ archetypeTags(r).forEach(tag=>{
   // Get simplified position bucket — NEVER falls back to global pos variable
   function tbPosGroup(r){
     const p = (r.Position||r.Pos||'').toString().toLowerCase();
-    if(p.includes('guard') || p === 'g' || p === 'pg' || p === 'sg') return 'guard';
-    if(p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'pf' || p === 'sf') return 'big';
-    // If Position column is empty, check which sheet pool they came from
+    if(p === 'guards' || p.includes('guard') || p === 'g' || p === 'g-f' || p === 'f-g' || p === 'pg' || p === 'sg') return 'guard';
+    if(p === 'bigs' || p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'f-c' || p === 'c-f' || p === 'pf' || p === 'sf') return 'big';
     if(r._tbPosGroup) return r._tbPosGroup;
-    return 'unknown';
+    return 'guard'; // default to guard for blanks
   }
 
   // Merge all cached computed pools for the CURRENT LEAGUE into one array (deduplicated)
@@ -3195,10 +3204,13 @@ archetypeTags(r).forEach(tag=>{
     let pool=allPlayers().slice();
     const totalBefore = pool.length;
     if(f.position){ const fp=f.position.toLowerCase();
-      pool=pool.filter(r=>{ const p=(r.Position||r.Pos||'').toString().toLowerCase();
-        if(fp==='guard'||fp==='guards')return p.includes('guard')||p==='g'||p==='pg'||p==='sg';
-        if(fp==='big'||fp==='bigs'||fp==='forward'||fp==='center')return p.includes('forward')||p.includes('center')||p==='f'||p==='c'||p==='pf'||p==='sf';
-        return p.includes(fp); }); }
+      pool=pool.filter(r=>{
+        const pos=(r.Position||'').toString().toLowerCase();
+        const rawPos=(r.Pos||'').toString().toLowerCase();
+        if(fp==='guard'||fp==='guards') return pos==='guards'||pos.includes('guard')||rawPos==='g'||rawPos==='g-f'||rawPos==='f-g'||rawPos==='pg'||rawPos==='sg';
+        if(fp==='big'||fp==='bigs'||fp==='forward'||fp==='center') return pos==='bigs'||pos.includes('forward')||pos.includes('center')||rawPos==='f'||rawPos==='c'||rawPos==='f-c'||rawPos==='c-f'||rawPos==='pf'||rawPos==='sf';
+        return pos.includes(fp)||rawPos.includes(fp);
+      }); }
     const afterPosFilter = pool.length;
     if(f.maxValue) pool=pool.filter(r=>(r.ActualValuation_calc||Infinity)<=+f.maxValue);
     if(f.minPerf) pool=pool.filter(r=>(r.Score||0)>=+f.minPerf);
@@ -3206,13 +3218,12 @@ archetypeTags(r).forEach(tag=>{
     if(f.conference){ const c=f.conference.toLowerCase(); pool=pool.filter(r=>(r.Conference||'').toLowerCase().includes(c)); }
     if(f.sortBy) pool.sort((a,b)=>(+(b[f.sortBy])||0)-(+(a[f.sortBy])||0)); else pool.sort((a,b)=>(b.Score||0)-(a.Score||0));
     const results = pool.slice(0,f.limit||10).map(statLine);
-    // Include metadata so AI knows if data is missing
     return {
       results,
       totalPool: totalBefore,
       afterPositionFilter: afterPosFilter,
       finalCount: pool.length,
-      note: afterPosFilter === 0 && f.position ? `No ${f.position} players found in ${app().league || 'current league'}. Data may not be loaded yet — try clicking Recalculate.` : null
+      note: afterPosFilter === 0 && f.position ? `No ${f.position} players found in ${app().league || 'current league'} (pool had ${totalBefore} total). Both Guards and Bigs data should be auto-loaded.` : null
     };
   }
 
@@ -3379,6 +3390,20 @@ RULES:
         addMsg('system','🔍 Looking up data...');
         let result;
         try{ result=execCall(call); }catch(e){ result={error:e.message}; }
+
+        // For compare_players, don't send back to Gemini — the modal is already open
+        if(call.name === 'compare_players'){
+          chatHistory.push(modelMsg);
+          if(result && result.opened){
+            const p1n = result.player1?.player || call.args?.player1 || '?';
+            const p2n = result.player2?.player || call.args?.player2 || '?';
+            chatHistory.push({role:'user',parts:[{functionResponse:{name:call.name,response:{result:{opened:true}}}}]});
+            addMsg('ai', `⚔️ Opened side-by-side comparison of <b>${p1n}</b> vs <b>${p2n}</b>. Click the 🤖 button to see it behind this panel, or use <b>↩ Last compare</b> to reopen anytime.`);
+          } else {
+            addMsg('ai', result?.error || 'Could not find one or both players.');
+          }
+          return;
+        }
 
         // Send result back for interpretation
         try{
