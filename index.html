@@ -3105,7 +3105,7 @@ archetypeTags(r).forEach(tag=>{
     </div>
   </div>
   <div class="aiMessages" id="aiMessages">
-    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Add all Toledo players"</b> → loads into roster builder<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br>• <b>"Is $136K fair for this player?"</b> → valuation analysis<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
+    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Add all Toledo players"</b> → loads into roster builder<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br><br>I can also <b>search the web</b> 🌐:<br>• <b>"Is Brandon Benjamin worth $200K?"</b> → stats + opinion + web intel<br>• <b>"Any injury news on Player X?"</b> → live Google search<br>• <b>"What's the latest on the transfer portal?"</b> → recruiting news<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
   </div>
   <div id="aiQuickActions" style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-top:1px solid var(--line)">
     <button class="aiQuickBtn" data-q="Analyze my current roster and suggest improvements">Analyze roster</button>
@@ -3283,12 +3283,13 @@ archetypeTags(r).forEach(tag=>{
   }
 
   // ---- Gemini Tool Schema ----
-  const tools=[{functionDeclarations:[
-    {name:'search_players',description:'Search players by name, team, conference, or position.',
+  const tools=[
+    {functionDeclarations:[
+    {name:'search_players',description:'Search players in our database by name, team, conference, or position.',
       parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Search query'}},required:['query']}},
-    {name:'get_player_profile',description:'Get full stats for a player.',
+    {name:'get_player_profile',description:'Get full stats for a player from our database.',
       parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
-    {name:'get_top_players',description:'Get top players filtered by position, budget, team, conference, sorted by stat. Use for finding shooters (sortBy 3P%), defenders (sortBy DRtg), scorers (sortBy PPG), etc.',
+    {name:'get_top_players',description:'Get top players filtered by position, budget, team, conference, sorted by stat. Use for finding shooters (sortBy 3PT_Rating), defenders (sortBy DRtg), scorers (sortBy PPG), etc.',
       parameters:{type:'OBJECT',properties:{
         position:{type:'STRING',description:'guard, big, forward, center'},
         maxValue:{type:'NUMBER',description:'Max valuation $'},
@@ -3306,7 +3307,9 @@ archetypeTags(r).forEach(tag=>{
       parameters:{type:'OBJECT',properties:{dropPlayer:{type:'STRING'},addPlayer:{type:'STRING'}},required:['dropPlayer','addPlayer']}},
     {name:'compare_players',description:'Compare two players side-by-side with visual stats table. ALWAYS use this for comparisons.',
       parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
-  ]}];
+  ]},
+  {googleSearch:{}}
+  ];
 
   const CONFIRM_ACTIONS=new Set(['add_players_to_roster','remove_player_from_roster','swap_roster_player']);
 
@@ -3328,23 +3331,28 @@ archetypeTags(r).forEach(tag=>{
   // ---- System prompt ----
   function sysPrompt(){
     const ctx=getDashboardContext();
-    return {parts:[{text:`You are Scout AI, the basketball analytics assistant for the UToledo NCAA Basketball Dashboard.
+    return {parts:[{text:`You are Scout AI, an expert basketball analytics and scouting assistant for the UToledo NCAA Basketball Dashboard. You are opinionated, knowledgeable, and proactive — like a real assistant coach.
 
 STATE: ${ctx.league}, ${ctx.position} tab, ${ctx.totalPlayers} players loaded
 ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetBigs}B
 ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+r.team+', '+r.pos+', Perf:'+r.perf+', Val:'+r.value+')').join('\n'):'ROSTER: empty'}
 
 RULES:
-1. ALWAYS use function calls to get data. Never guess stats.
+1. Use function calls to get data from our database. Use Google Search for external info (news, scouting reports, injury updates, transfer portal, recruiting rankings, etc).
 2. For roster changes (add/remove/swap): recommend with reasoning, ask "Want me to do this?", only call function AFTER user confirms.
-3. For compare_players: ALWAYS use the tool - it opens a full visual comparison modal on the page.
+3. For compare_players: ALWAYS use the tool - it opens a full visual comparison modal.
 4. For finding players: use get_top_players with sortBy (3PT_Rating for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
-5. SHOOTING: NEVER sort by raw 3P% — it rewards tiny sample sizes (1/1 = 100%). ALWAYS use sortBy: 3PT_Rating which combines 3P% accuracy with volume (3PA/G). A legit shooter needs 1.5+ 3PA/G. Also set a minPerf threshold (e.g. 20+) so you don't recommend bad players who just happen to shoot.
-6. LEAGUE SEPARATION: Data is league-separated. MBB and WBB players cannot be mixed. You only see players from the current league (${ctx.league}). If user asks about the other league, tell them to switch tabs first.
-6. Be concise. Use **bold** for emphasis.
-7. Format: $125,000 not 125000.
-8. Explain WHY (stats, fit, value, position need).
-9. You CAN chain multiple function calls if needed.`}]};
+5. SHOOTING: NEVER sort by raw 3P%. ALWAYS use sortBy: 3PT_Rating which combines accuracy + volume. Also set minPerf threshold (e.g. 20+).
+6. LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}.
+7. Be concise. Use **bold** for emphasis. Format: $125,000 not 125000.
+8. GIVE YOUR OPINION. When asked if a player is worth a price, don't just cite stats — give a clear recommendation (overpay/fair/steal) with reasoning. Consider:
+   - Our model valuation vs the asking price
+   - The player's upside, class year (FR/SO/JR/SR), role, efficiency
+   - Team needs (check the roster context above)
+   - Use Google Search to find recent news, transfer portal status, injuries, scouting reports
+9. You CAN and SHOULD search the web when the user asks about news, recruiting, injuries, whether a player is worth investing in, or anything beyond raw stats.
+10. You CAN chain multiple function calls if needed.
+11. Challenge the model's valuation when appropriate — if you think a player is better or worse than the model says, say so and explain why.`}]};
   }
 
   // ---- API call ----
@@ -3380,11 +3388,24 @@ RULES:
     if(!parts.length){ addMsg('ai','Empty response. Try rephrasing.'); return; }
 
     let hasText=false;
+    // Check for Google Search grounding metadata (source citations)
+    const grounding = data.candidates[0].groundingMetadata;
+    let sources = '';
+    if(grounding && grounding.groundingChunks && grounding.groundingChunks.length){
+      const unique = [...new Map(grounding.groundingChunks.filter(c=>c.web).map(c=>[c.web.uri, c.web])).values()].slice(0,3);
+      if(unique.length){
+        sources = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)">📎 Sources: ' +
+          unique.map(s => `<a href="${s.uri}" target="_blank" rel="noopener" style="color:var(--accent)">${s.title||'Link'}</a>`).join(' · ') + '</div>';
+      }
+    }
     for(const part of parts){
       if(part.text){
         hasText=true;
         chatHistory.push({role:'model',parts:[{text:part.text}]});
-        addMsg('ai',fmtText(part.text));
+        // Append source citations if this was a Google Search-grounded response
+        const msgHtml = fmtText(part.text) + (sources || '');
+        sources = ''; // only show sources once
+        addMsg('ai', msgHtml);
       }
       if(part.functionCall){
         const call=part.functionCall;
