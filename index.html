@@ -201,6 +201,23 @@
     .tbSuggest th{top:0}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    /* Comparison modal */
+    .cmpGrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .cmpCol{background:rgba(0,15,40,.4);border:1px solid var(--line);border-radius:12px;padding:14px}
+    .cmpCol .cmpName{font-size:16px;font-weight:800;color:var(--accent);margin-bottom:2px}
+    .cmpCol .cmpSub{font-size:11px;color:var(--muted);margin-bottom:10px}
+    .cmpCol .cmpScore{display:flex;gap:12px;align-items:baseline;margin-bottom:12px}
+    .cmpCol .cmpScore .big{font-size:24px;font-weight:800}
+    .cmpCol .cmpScore .val{font-size:13px;color:var(--muted)}
+    .cmpStatRow{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:11.5px}
+    .cmpStatRow .cmpLabel{width:55px;color:var(--muted);font-size:10.5px;text-align:right;flex-shrink:0}
+    .cmpStatRow .cmpTrack{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+    .cmpStatRow .cmpFill{height:100%;border-radius:4px;transition:width .4s ease-out}
+    .cmpStatRow .cmpVal{width:42px;font-weight:700;font-size:11px}
+    .cmpStatRow .cmpVal.win{color:var(--good)}
+    .cmpVerdict{grid-column:1/-1;background:rgba(0,15,40,.4);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:12px;line-height:1.6}
+    .cmpVerdict h4{margin:0 0 6px;font-size:13px}
+    @media(max-width:700px){.cmpGrid{grid-template-columns:1fr}}
     @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes modalSlide{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
     @media(max-width:640px){.wrap{padding:12px}header{padding:14px 16px 12px}h1{font-size:17px}.card{padding:12px}.modalHead{padding:14px}.modalBody{padding:14px}}
@@ -496,7 +513,7 @@
   <div class="card">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:15px;font-weight:800">🏀 Team Builder</div>
+        <div style="font-size:15px;font-weight:800">🏀 Team Builder <span id="tbLeagueBadge" style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(0,62,126,.4);border:1px solid rgba(0,62,126,.6);margin-left:6px;font-weight:700"></span></div>
         <div class="muted" style="font-size:12px;margin-top:4px">Add players from the table above, analyze gaps, and get recommendations.</div>
       </div>
       <div class="row" style="gap:8px;flex-wrap:wrap">
@@ -661,6 +678,17 @@
   </div>
 </div>
 
+</div>
+
+<!-- Comparison Modal -->
+<div class="modalBack" id="compareBack" style="z-index:55">
+  <div class="modal" role="dialog" style="max-width:860px;width:95%">
+    <div class="modalHead">
+      <div id="cmpHeader"><b>⚔️ Player Comparison</b></div>
+      <button class="close" id="cmpClose">Close</button>
+    </div>
+    <div class="modalBody" id="cmpBody" style="max-height:75vh;overflow-y:auto"></div>
+  </div>
 </div>
 
 <script>
@@ -1998,6 +2026,11 @@ archetypeTags(r).forEach(tag=>{
 
   // ---------- League/pos tabs ----------
   document.getElementById('tabMBB').addEventListener('click', ()=>{
+    if(league === 'MBB') return;
+    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== 'MBB'){
+      if(!confirm(`Your roster has ${tbRoster.length} WBB players. Switching to MBB will clear your roster. Continue?`)) return;
+      tbRoster.length = 0;
+    }
     league = 'MBB';
     setActiveTab(document.getElementById('tabMBB'), '.tab[data-league]');
     applyLeagueDefaults(false);
@@ -2005,6 +2038,11 @@ archetypeTags(r).forEach(tag=>{
     reloadActiveSheet();
   });
   document.getElementById('tabWBB').addEventListener('click', ()=>{
+    if(league === 'WBB') return;
+    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== 'WBB'){
+      if(!confirm(`Your roster has ${tbRoster.length} MBB players. Switching to WBB will clear your roster. Continue?`)) return;
+      tbRoster.length = 0;
+    }
     league = 'WBB';
     setActiveTab(document.getElementById('tabWBB'), '.tab[data-league]');
     applyLeagueDefaults(false);
@@ -2061,6 +2099,33 @@ archetypeTags(r).forEach(tag=>{
     ensureWeightsCoverStats(pos, rows);
     renderWeights();
     computeAll();
+
+    // Auto-compute the sibling position tab for the same league (so AI/search has both Guards+Bigs)
+    const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
+    const sibKey = league + '_' + sibPos;
+    if(!tbAllComputed[sibKey]){
+      const sibDesired = SHEET_MAP[league][sibPos];
+      const sibSheet = findSheetLike(sibDesired) || sibDesired;
+      const sibWs = wb.Sheets[sibSheet];
+      if(sibWs){
+        const sibRows = parseSheetToRows(sibWs);
+        if(sibRows.length){
+          // Temporarily compute sibling data using same valuation settings
+          const savedPos = pos, savedRows = rows, savedComputed = computed;
+          pos = sibPos;
+          rows = sibRows;
+          ensureWeightsCoverStats(pos, rows);
+          computeAll(); // this will cache into tbAllComputed[league+'_'+sibPos]
+          // Restore original state
+          pos = savedPos;
+          rows = savedRows;
+          computed = savedComputed;
+          ensureWeightsCoverStats(pos, rows);
+          renderWeights();
+          renderPlayers(); // re-render the correct tab
+        }
+      }
+    }
   }
 
   // ---------- File load ----------
@@ -2183,10 +2248,33 @@ archetypeTags(r).forEach(tag=>{
 
   function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
 
+  // Determine which league a player belongs to
+  function tbPlayerLeague(r){
+    for(const [key, arr] of Object.entries(tbAllComputed)){
+      if(arr.some(x => tbPlayerKey(x) === tbPlayerKey(r))){
+        return key.startsWith('MBB') ? 'MBB' : 'WBB';
+      }
+    }
+    return league; // fallback to current
+  }
+
   function tbAddPlayer(r){
     const maxR = Number(tbMaxRosterEl.value) || 13;
     if(tbRoster.length >= maxR){ showWarn(`Roster full (max ${maxR}).`); return; }
     if(tbRoster.some(x => tbPlayerKey(x) === tbPlayerKey(r))) return;
+    // League enforcement: cannot mix MBB and WBB
+    const playerLg = tbPlayerLeague(r);
+    if(tbRoster.length > 0){
+      const rosterLg = tbPlayerLeague(tbRoster[0]);
+      if(playerLg !== rosterLg){
+        showWarn(`Cannot add ${playerLg} player to a ${rosterLg} roster. Clear roster first or switch leagues.`);
+        return;
+      }
+    }
+    if(playerLg !== league){
+      showWarn(`${r.Player} is a ${playerLg} player but you're in ${league} mode. Switch to ${playerLg} first.`);
+      return;
+    }
     const cap = Number(tbPlayerCapEl.value) || Infinity;
     const val = safeNum(r.ActualValuation_calc) || 0;
     if(Number.isFinite(cap) && val > cap){ showWarn(`${r.Player} ($${val.toLocaleString()}) exceeds per-player cap ($${cap.toLocaleString()}).`); return; }
@@ -2207,6 +2295,15 @@ archetypeTags(r).forEach(tag=>{
     const maxR = Number(tbMaxRosterEl.value) || 13;
     const budget = Number(tbBudgetEl.value) || 0;
     const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
+
+    // League badge
+    const badge = document.getElementById('tbLeagueBadge');
+    if(badge){
+      const rosterLg = tbRoster.length > 0 ? tbPlayerLeague(tbRoster[0]) : league;
+      badge.textContent = rosterLg;
+      badge.style.background = rosterLg === 'MBB' ? 'rgba(0,62,126,.4)' : 'rgba(147,51,234,.3)';
+      badge.style.borderColor = rosterLg === 'MBB' ? 'rgba(0,62,126,.6)' : 'rgba(147,51,234,.5)';
+    }
 
     tbMaxLabelEl.textContent = maxR;
     tbCountEl.textContent = tbRoster.length;
@@ -2404,17 +2501,19 @@ archetypeTags(r).forEach(tag=>{
     return 'unknown';
   }
 
-  // Merge all cached computed pools into one array (deduplicated)
-  function tbGetAllPlayers(){
+  // Merge all cached computed pools for the CURRENT LEAGUE into one array (deduplicated)
+  function tbGetAllPlayers(forLeague){
+    const lg = forLeague || league;
     const seen = new Set();
     const all = [];
     for(const [key, arr] of Object.entries(tbAllComputed)){
+      // Only include pools from the current league
+      if(!key.startsWith(lg + '_')) continue;
       const posLabel = key.includes('Guards') ? 'guard' : 'big';
       arr.forEach(r => {
         const pk = tbPlayerKey(r);
         if(seen.has(pk)) return;
         seen.add(pk);
-        // Stamp position group from sheet if the player's Position column is empty
         if(!(r.Position||r.Pos||'').toString().trim()){
           r._tbPosGroup = posLabel;
         }
@@ -2751,6 +2850,100 @@ archetypeTags(r).forEach(tag=>{
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 80);
   });
 
+  // --- Comparison modal ---
+  function openCompare(name1, name2){
+    const all = tbGetAllPlayers();
+    const n1 = name1.toLowerCase(), n2 = name2.toLowerCase();
+    const p1 = all.find(r => (r.Player||'').toLowerCase().includes(n1));
+    const p2 = all.find(r => (r.Player||'').toLowerCase().includes(n2));
+    if(!p1||!p2) return false;
+
+    const cmpBack = document.getElementById('compareBack');
+    const cmpBody = document.getElementById('cmpBody');
+    document.getElementById('cmpClose').onclick = () => { cmpBack.style.display = 'none'; };
+    cmpBack.addEventListener('click', e => { if(e.target === cmpBack) cmpBack.style.display = 'none'; });
+
+    const stats = ['PPG','eFG%','3P%','FT%','APG','A/TO','RPG','SPG','BPG','DRtg','DR%','WS/40','BPM','TOPG','PER'];
+    const lowerBetter = new Set(['DRtg','TOPG']);
+
+    function pct(r, stat){
+      const x = safeNum(r[stat]);
+      const p = statPercentile(stat, x);
+      return Number.isFinite(p) ? Math.round(p * 100) : null;
+    }
+
+    function statColor(p){ return p >= 80 ? 'var(--good)' : p >= 55 ? 'var(--accent)' : p >= 35 ? 'var(--warn)' : 'var(--bad)'; }
+
+    function renderCol(player, otherPlayer){
+      const perf = player.Score != null ? player.Score.toFixed(1) : '—';
+      const val = player.ActualValuation_calc != null ? fmtMoney(player.ActualValuation_calc) : '—';
+      const perfColor = player.Score >= 60 ? 'var(--good)' : player.Score >= 35 ? 'var(--warn)' : 'var(--bad)';
+
+      let rows = '';
+      stats.forEach(s => {
+        const v = safeNum(player[s]);
+        const ov = safeNum(otherPlayer[s]);
+        const p = pct(player, s);
+        const op = pct(otherPlayer, s);
+        if(p === null && v === null) return;
+        const win = p !== null && op !== null && (lowerBetter.has(s) ? p > op : p > op);
+        const color = p !== null ? statColor(p) : 'var(--muted)';
+        const displayVal = v !== null ? (Math.abs(v) < 1 && v !== 0 ? Number(v).toFixed(3) : Number(v).toFixed(1)) : '—';
+        rows += `<div class="cmpStatRow">
+          <span class="cmpLabel">${s}</span>
+          <div class="cmpTrack"><div class="cmpFill" style="width:${p||0}%;background:${color}"></div></div>
+          <span class="cmpVal ${win?'win':''}">${displayVal}</span>
+          <span style="font-size:10px;color:${color};width:30px">${p !== null ? p+'th' : ''}</span>
+        </div>`;
+      });
+      return `<div class="cmpCol">
+        <div class="cmpName">${player.Player||'—'}</div>
+        <div class="cmpSub">${[player.Team, player.Conference, player.Position].filter(Boolean).join(' • ')}</div>
+        <div class="cmpScore"><span class="big" style="color:${perfColor}">${perf}</span><span class="val">${val}</span></div>
+        ${rows}
+      </div>`;
+    }
+
+    // Verdict
+    const s1 = p1.Score || 0, s2 = p2.Score || 0;
+    const diff = Math.abs(s1 - s2).toFixed(1);
+    let verdict = '';
+    if(Math.abs(s1 - s2) <= 5) verdict = `Very close matchup — only ${diff} points apart. Decision comes down to team needs and fit.`;
+    else if(s1 > s2) verdict = `<b>${p1.Player}</b> scores ${diff} points higher overall.`;
+    else verdict = `<b>${p2.Player}</b> scores ${diff} points higher overall.`;
+
+    // Find stat wins
+    const p1wins = [], p2wins = [];
+    stats.forEach(s => {
+      const a = pct(p1, s), b = pct(p2, s);
+      if(a !== null && b !== null){
+        if(a > b + 8) p1wins.push(s);
+        if(b > a + 8) p2wins.push(s);
+      }
+    });
+    if(p1wins.length) verdict += ` ${p1.Player} leads in ${p1wins.join(', ')}.`;
+    if(p2wins.length) verdict += ` ${p2.Player} leads in ${p2wins.join(', ')}.`;
+
+    const v1 = safeNum(p1.ActualValuation_calc)||0, v2 = safeNum(p2.ActualValuation_calc)||0;
+    if(v1 !== v2) verdict += ` Value gap: $${Math.abs(v1 - v2).toLocaleString()} (${v1 < v2 ? p1.Player : p2.Player} is cheaper).`;
+
+    cmpBody.innerHTML = `<div class="cmpGrid">
+      ${renderCol(p1, p2)}
+      ${renderCol(p2, p1)}
+      <div class="cmpVerdict"><h4>📊 Verdict</h4><p>${verdict}</p>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="secondary" onclick="window._app.openProfile(window._app.tbGetAllPlayers().find(r=>r.Player==='${(p1.Player||'').replace(/'/g,"\\'")}'));document.getElementById('compareBack').style.display='none'"
+            style="padding:6px 12px;font-size:11px">View ${(p1.Player||'').split(' ')[0]}'s Profile</button>
+          <button class="secondary" onclick="window._app.openProfile(window._app.tbGetAllPlayers().find(r=>r.Player==='${(p2.Player||'').replace(/'/g,"\\'")}'));document.getElementById('compareBack').style.display='none'"
+            style="padding:6px 12px;font-size:11px">View ${(p2.Player||'').split(' ')[0]}'s Profile</button>
+        </div>
+      </div>
+    </div>`;
+
+    cmpBack.style.display = 'flex';
+    return true;
+  }
+
   // Expose functions for AI chat integration
   window._app = {
     get tbRoster(){ return tbRoster; },
@@ -2759,8 +2952,10 @@ archetypeTags(r).forEach(tag=>{
     get pos(){ return pos; },
     get league(){ return league; },
     get statDist(){ return statDist; },
-    tbAddPlayer, tbRefresh, tbGetAllPlayers, openProfile,
-    safeNum, fmtMoney, tbPlayerKey, tbPosGroup, tbPlayerAvgPct, statPercentile
+    get currentWeights(){ return currentWeights; },
+    tbAddPlayer, tbRefresh, tbGetAllPlayers, openProfile, openCompare, tbPlayerLeague,
+    safeNum, fmtMoney, tbPlayerKey, tbPosGroup, tbPlayerAvgPct, statPercentile,
+    barColor, getInvertForStat
   };
 </script>
 <!-- Stat glossary modal -->
@@ -2901,17 +3096,27 @@ archetypeTags(r).forEach(tag=>{
 
   function getTopPlayers(f){
     let pool=allPlayers().slice();
+    const totalBefore = pool.length;
     if(f.position){ const fp=f.position.toLowerCase();
       pool=pool.filter(r=>{ const p=(r.Position||r.Pos||'').toString().toLowerCase();
         if(fp==='guard'||fp==='guards')return p.includes('guard')||p==='g'||p==='pg'||p==='sg';
         if(fp==='big'||fp==='bigs'||fp==='forward'||fp==='center')return p.includes('forward')||p.includes('center')||p==='f'||p==='c'||p==='pf'||p==='sf';
         return p.includes(fp); }); }
+    const afterPosFilter = pool.length;
     if(f.maxValue) pool=pool.filter(r=>(r.ActualValuation_calc||Infinity)<=+f.maxValue);
     if(f.minPerf) pool=pool.filter(r=>(r.Score||0)>=+f.minPerf);
     if(f.team){ const t=f.team.toLowerCase(); pool=pool.filter(r=>(r.Team||'').toLowerCase().includes(t)); }
     if(f.conference){ const c=f.conference.toLowerCase(); pool=pool.filter(r=>(r.Conference||'').toLowerCase().includes(c)); }
     if(f.sortBy) pool.sort((a,b)=>(+(b[f.sortBy])||0)-(+(a[f.sortBy])||0)); else pool.sort((a,b)=>(b.Score||0)-(a.Score||0));
-    return pool.slice(0,f.limit||10).map(statLine);
+    const results = pool.slice(0,f.limit||10).map(statLine);
+    // Include metadata so AI knows if data is missing
+    return {
+      results,
+      totalPool: totalBefore,
+      afterPositionFilter: afterPosFilter,
+      finalCount: pool.length,
+      note: afterPosFilter === 0 && f.position ? `No ${f.position} players found in ${app().league || 'current league'}. Data may not be loaded yet — try clicking Recalculate.` : null
+    };
   }
 
   function addPlayersToRoster(names){
@@ -2945,30 +3150,13 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function comparePlayers(n1,n2){
-    const p1=getPlayerProfile(n1), p2=getPlayerProfile(n2);
-    if(!p1&&!p2) return {error:'Neither player found.'};
-    if(!p1) return {error:n1+' not found.'};
-    if(!p2) return {error:n2+' not found.'};
-    // Render visual compare table in chat
-    const stats=['PPG','3P%','FT%','eFG%','APG','RPG','SPG','BPG','BPM','DRtg','WS/40','TOPG'];
-    const lowerBetter=new Set(['DRtg','TOPG']);
-    let rows='';
-    stats.forEach(s=>{
-      const v1=p1[s],v2=p2[s],n1v=+(v1)||0,n2v=+(v2)||0;
-      const w1=lowerBetter.has(s)?(n1v<n2v&&v1!=null):(n1v>n2v&&v1!=null);
-      const w2=lowerBetter.has(s)?(n2v<n1v&&v2!=null):(n2v>n1v&&v2!=null);
-      rows+=`<tr><td style="text-align:right;${w1?'color:var(--good);font-weight:700':''}">${fmt(v1)}</td><td class="stat-label">${s}</td><td style="${w2?'color:var(--good);font-weight:700':''}">${fmt(v2)}</td></tr>`;
-    });
-    const pf=(p)=>p.Score!=null?(+p.Score).toFixed(1):'—';
-    const vf=(p)=>p.ActualValuation_calc!=null?'$'+Math.round(+p.ActualValuation_calc).toLocaleString():'—';
-    addMsg('ai',`<div style="font-size:12px;margin-bottom:6px"><b>📊 Head-to-Head Comparison</b></div>
-      <table class="aiCompareTable"><thead><tr><th style="text-align:right">${p1.Player||n1}</th><th class="stat-label">STAT</th><th>${p2.Player||n2}</th></tr></thead><tbody>
-      <tr><td style="text-align:right;color:var(--muted)">${p1.Team||'—'}</td><td class="stat-label">Team</td><td style="color:var(--muted)">${p2.Team||'—'}</td></tr>
-      <tr><td style="text-align:right;color:var(--muted)">${p1.Position||'—'}</td><td class="stat-label">Pos</td><td style="color:var(--muted)">${p2.Position||'—'}</td></tr>
-      <tr><td style="text-align:right;font-weight:700">${pf(p1)}</td><td class="stat-label">Perf</td><td style="font-weight:700">${pf(p2)}</td></tr>
-      <tr><td style="text-align:right">${vf(p1)}</td><td class="stat-label">Value</td><td>${vf(p2)}</td></tr>
-      <tr><td colspan="3" style="border-bottom:1px solid var(--line);padding:2px"></td></tr>${rows}</tbody></table>`);
-    return {player1:statLine(p1),player2:statLine(p2)};
+    const a = app();
+    if(!a.openCompare) return {error:'Comparison not available.'};
+    const result = a.openCompare(n1, n2);
+    if(!result) return {error: 'One or both players not found. Make sure both tabs (Guards & Bigs) have been loaded.'};
+    // Return summary data for Gemini to analyze
+    const p1 = getPlayerProfile(n1), p2 = getPlayerProfile(n2);
+    return {opened: true, player1: p1 ? statLine(p1) : null, player2: p2 ? statLine(p2) : null};
   }
 
   // ---- Gemini Tool Schema ----
@@ -3026,12 +3214,13 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
 RULES:
 1. ALWAYS use function calls to get data. Never guess stats.
 2. For roster changes (add/remove/swap): recommend with reasoning, ask "Want me to do this?", only call function AFTER user confirms.
-3. For compare_players: ALWAYS use the tool - it shows a visual table.
+3. For compare_players: ALWAYS use the tool - it opens a full visual comparison modal on the page.
 4. For finding players: use get_top_players with sortBy (3P% for shooters, BPG for shot blockers, PPG for scorers, APG for playmakers, DRtg for defenders).
-5. Be concise. Use **bold** for emphasis.
-6. Format: $125,000 not 125000.
-7. Explain WHY (stats, fit, value, position need).
-8. You CAN chain multiple function calls if needed.`}]};
+5. LEAGUE SEPARATION: Data is league-separated. MBB and WBB players cannot be mixed. You only see players from the current league (${ctx.league}). If user asks about the other league, tell them to switch tabs first.
+6. Be concise. Use **bold** for emphasis.
+7. Format: $125,000 not 125000.
+8. Explain WHY (stats, fit, value, position need).
+9. You CAN chain multiple function calls if needed.`}]};
   }
 
   // ---- API call ----
