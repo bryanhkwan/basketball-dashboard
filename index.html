@@ -204,6 +204,41 @@
     @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes modalSlide{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
     @media(max-width:640px){.wrap{padding:12px}header{padding:14px 16px 12px}h1{font-size:17px}.card{padding:12px}.modalHead{padding:14px}.modalBody{padding:14px}}
+    /* AI Chat */
+    .aiToggle{position:fixed;bottom:24px;right:24px;z-index:200;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));color:#001230;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 24px rgba(0,62,126,.5),0 0 0 3px rgba(255,210,0,.2);transition:all .2s}
+    .aiToggle:hover{transform:scale(1.08);box-shadow:0 8px 32px rgba(0,62,126,.7),0 0 0 4px rgba(255,210,0,.35)}
+    .aiPanel{position:fixed;bottom:90px;right:24px;z-index:200;width:420px;max-height:70vh;display:flex;flex-direction:column;border-radius:16px;background:rgba(0,12,32,.97);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.6);animation:modalSlide .25s ease-out;overflow:hidden;backdrop-filter:blur(12px)}
+    .aiPanel.hidden{display:none}
+    .aiHeader{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(0,18,48,.9);border-bottom:1px solid var(--line)}
+    .aiHeader b{font-size:14px;color:var(--accent)}
+    .aiMessages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;max-height:50vh;min-height:200px}
+    .aiMsg{max-width:90%;padding:10px 14px;border-radius:14px;font-size:12.5px;line-height:1.55;word-wrap:break-word;animation:fadeIn .2s ease-out}
+    .aiMsg.user{align-self:flex-end;background:rgba(0,62,126,.5);border:1px solid rgba(0,62,126,.7);color:var(--text);border-bottom-right-radius:4px}
+    .aiMsg.ai{align-self:flex-start;background:rgba(255,210,0,.06);border:1px solid rgba(255,210,0,.15);color:var(--text);border-bottom-left-radius:4px}
+    .aiMsg.ai b{color:var(--accent)}
+    .aiMsg.system{align-self:center;background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2);color:var(--good);font-size:11px;text-align:center;border-radius:10px}
+    .aiMsg code{background:rgba(0,0,0,.3);padding:1px 5px;border-radius:4px;font-size:11.5px}
+    .aiMsg .aiCompare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;font-size:11.5px}
+    .aiMsg .aiCompare>div{background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:10px;padding:10px}
+    .aiMsg .aiCompare b{color:var(--accent);display:block;margin-bottom:4px;font-size:12px}
+    .aiConfirm{display:flex;gap:6px;margin-top:8px}
+    .aiConfirm button{padding:5px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid;transition:all .15s}
+    .aiConfirm .yes{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.4);color:var(--good)}
+    .aiConfirm .yes:hover{background:rgba(52,211,153,.25)}
+    .aiConfirm .no{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);color:var(--bad)}
+    .aiConfirm .no:hover{background:rgba(248,113,113,.2)}
+    .aiInput{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);background:rgba(0,12,32,.95)}
+    .aiInput input{flex:1;background:rgba(0,20,50,.7);border:1px solid var(--line);color:var(--text);padding:10px 14px;border-radius:10px;font-size:12.5px;font-family:inherit;outline:none;transition:border-color .15s}
+    .aiInput input:focus{border-color:var(--accent)}
+    .aiInput button{background:var(--accent);color:#001230;border:none;border-radius:10px;padding:10px 16px;font-weight:800;font-size:12px;cursor:pointer;transition:all .15s}
+    .aiInput button:hover{background:#ffe34d}
+    .aiInput button:disabled{opacity:.4;cursor:default}
+    .aiTyping{display:flex;gap:4px;padding:6px 12px}
+    .aiTyping span{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.4;animation:aiBounce .6s infinite alternate}
+    .aiTyping span:nth-child(2){animation-delay:.2s}
+    .aiTyping span:nth-child(3){animation-delay:.4s}
+    @keyframes aiBounce{to{opacity:1;transform:translateY(-4px)}}
+    @media(max-width:640px){.aiPanel{width:calc(100vw - 32px);right:16px;bottom:80px;max-height:60vh}.aiToggle{bottom:16px;right:16px;width:48px;height:48px;font-size:20px}}
   </style>
 
 </head>
@@ -2708,6 +2743,24 @@ archetypeTags(r).forEach(tag=>{
     if(gsKeyInput) gsKeyInput.value = DEFAULT_GS_API_KEY;
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 80);
   });
+
+  // Expose functions for AI chat integration
+  window.tbAddPlayer = tbAddPlayer;
+  window.tbRefresh = tbRefresh;
+  window.tbGetAllPlayers = tbGetAllPlayers;
+  window.tbRoster = null; // getter/setter to keep in sync
+  Object.defineProperty(window, 'tbRoster', { get(){ return tbRoster; }, set(v){ tbRoster = v; } });
+  Object.defineProperty(window, 'computed', { get(){ return computed; } });
+  Object.defineProperty(window, 'pos', { get(){ return pos; } });
+  Object.defineProperty(window, 'league', { get(){ return league; } });
+  Object.defineProperty(window, 'statDist', { get(){ return statDist; } });
+  window.openProfile = openProfile;
+  window.safeNum = safeNum;
+  window.fmtMoney = fmtMoney;
+  window.tbPlayerKey = tbPlayerKey;
+  window.tbPosGroup = tbPosGroup;
+  window.tbPlayerAvgPct = tbPlayerAvgPct;
+  window.statPercentile = statPercentile;
 </script>
 <!-- Stat glossary modal -->
 <div class="modalBack" id="statBack">
@@ -2736,6 +2789,477 @@ archetypeTags(r).forEach(tag=>{
     </div>
   </div>
 </div>
+
+<!-- AI Chat -->
+<button class="aiToggle" id="aiToggle" title="Ask AI Assistant">🤖</button>
+<div class="aiPanel hidden" id="aiPanel">
+  <div class="aiHeader">
+    <b>🤖 Rocket AI Assistant</b>
+    <div style="display:flex;gap:6px">
+      <button class="secondary" id="aiClearChat" style="padding:4px 10px;font-size:10px;box-shadow:none">Clear</button>
+      <button class="close" id="aiClose" style="font-size:16px;padding:4px 8px">✕</button>
+    </div>
+  </div>
+  <div class="aiMessages" id="aiMessages">
+    <div class="aiMsg ai">Hey coach! 👋 I'm your AI assistant. I can help you analyze players, build rosters, compare stats, search for news, and make data-driven decisions. What do you need?</div>
+  </div>
+  <div class="aiInput">
+    <input id="aiChatInput" type="text" placeholder="Ask me anything about your players..." autocomplete="off">
+    <button id="aiSendBtn">Send</button>
+  </div>
+</div>
+
+<script>
+// ============ AI CHAT SYSTEM ============
+(function(){
+  // 🔑 Replace this with your Cloudflare Worker URL after deployment
+  const GEMINI_PROXY_URL = 'white-pine-7669.bryanhkwan.workers.dev';
+  // For local testing only (remove before pushing to GitHub):
+  // const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=YOUR_KEY';
+
+  const toggle = document.getElementById('aiToggle');
+  const panel = document.getElementById('aiPanel');
+  const msgs = document.getElementById('aiMessages');
+  const input = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiSendBtn');
+  const clearBtn = document.getElementById('aiClearChat');
+  const closeBtn = document.getElementById('aiClose');
+
+  let chatHistory = [];
+  let pendingAction = null; // stores a function call awaiting user confirmation
+
+  toggle.addEventListener('click', () => { panel.classList.toggle('hidden'); if(!panel.classList.contains('hidden')) input.focus(); });
+  closeBtn.addEventListener('click', () => panel.classList.add('hidden'));
+  clearBtn.addEventListener('click', () => { chatHistory = []; msgs.innerHTML = ''; addAiMsg('ai', "Chat cleared! 👋 What do you need, coach?"); });
+  input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMsg(); }});
+  sendBtn.addEventListener('click', sendMsg);
+
+  function addAiMsg(role, html, extra){
+    const div = document.createElement('div');
+    div.className = `aiMsg ${role}`;
+    div.innerHTML = html;
+    if(extra) div.appendChild(extra);
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+    return div;
+  }
+
+  function showTyping(){
+    const div = document.createElement('div');
+    div.className = 'aiTyping';
+    div.id = 'aiTypingIndicator';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  function hideTyping(){ document.getElementById('aiTypingIndicator')?.remove(); }
+
+  // ---- Dashboard Data Access Functions ----
+  function getDashboardContext(){
+    const data = {
+      league: typeof league !== 'undefined' ? league : 'MBB',
+      position: typeof pos !== 'undefined' ? pos : 'Guards',
+      totalPlayers: typeof computed !== 'undefined' ? computed.length : 0,
+      rosterSize: typeof tbRoster !== 'undefined' ? tbRoster.length : 0,
+      roster: typeof tbRoster !== 'undefined' ? tbRoster.map(r => ({
+        player: r.Player, team: r.Team, pos: r.Position||'',
+        perf: r.Score ? r.Score.toFixed(1) : '—',
+        value: r.ActualValuation_calc ? '$'+Math.round(r.ActualValuation_calc).toLocaleString() : '—',
+        conf: r.Conference||''
+      })) : [],
+      budget: document.getElementById('tbBudget')?.value || '500000',
+      playerCap: document.getElementById('tbPlayerCap')?.value || '150000',
+      maxRoster: document.getElementById('tbMaxRoster')?.value || '13',
+      targetGuards: document.getElementById('tbTargetGuards')?.value || '8',
+      targetBigs: document.getElementById('tbTargetBigs')?.value || '5',
+    };
+    return data;
+  }
+
+  function searchPlayers(query){
+    if(typeof computed === 'undefined' || !computed.length) return [];
+    const q = query.toLowerCase();
+    return computed.filter(r =>
+      ['Player','Team','Conference','Position'].some(k => (r[k]||'').toString().toLowerCase().includes(q))
+    ).slice(0, 20).map(r => ({
+      player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
+      perf: r.Score ? Number(r.Score.toFixed(1)) : null,
+      value: r.ActualValuation_calc ? Math.round(r.ActualValuation_calc) : null,
+      fit: r.FitScore_calc ? Math.round(r.FitScore_calc) : null,
+      mp: r.MP_num || null,
+      cmult: r.ConfMult_calc || 1,
+      ppg: r.PPG ? Number(Number(r.PPG).toFixed(1)) : null,
+      apg: r.APG ? Number(Number(r.APG).toFixed(1)) : null,
+      rpg: r.RPG ? Number(Number(r.RPG).toFixed(1)) : null,
+      spg: r.SPG ? Number(Number(r.SPG).toFixed(1)) : null,
+      bpg: r.BPG ? Number(Number(r.BPG).toFixed(1)) : null,
+      threePct: r['3P%'] ? Number(Number(r['3P%']).toFixed(3)) : null,
+      ftPct: r['FT%'] ? Number(Number(r['FT%']).toFixed(3)) : null,
+      efg: r['eFG%'] ? Number(Number(r['eFG%']).toFixed(3)) : null,
+      bpm: r.BPM ? Number(Number(r.BPM).toFixed(1)) : null,
+      drtg: r.DRtg ? Number(Number(r.DRtg).toFixed(1)) : null,
+    }));
+  }
+
+  function getPlayerProfile(playerName){
+    if(typeof computed === 'undefined') return null;
+    // Search all cached pools
+    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : computed;
+    const pn = playerName.toLowerCase();
+    const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
+    if(!match) return null;
+    const result = {};
+    for(const [k,v] of Object.entries(match)){
+      if(v !== null && v !== undefined && v !== '' && !k.startsWith('_'))
+        result[k] = typeof v === 'number' ? Number(v.toFixed(3)) : v;
+    }
+    return result;
+  }
+
+  function getTopPlayers(filters){
+    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : (typeof computed !== 'undefined' ? computed : []);
+    let pool = allPlayers.slice();
+
+    if(filters.position){
+      const fp = filters.position.toLowerCase();
+      pool = pool.filter(r => {
+        const p = (r.Position||r.Pos||'').toString().toLowerCase();
+        if(fp === 'guard' || fp === 'guards') return p.includes('guard') || p === 'g' || p === 'pg' || p === 'sg';
+        if(fp === 'big' || fp === 'bigs' || fp === 'forward' || fp === 'center') return p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'pf' || p === 'sf';
+        return p.includes(fp);
+      });
+    }
+    if(filters.maxValue){
+      pool = pool.filter(r => (r.ActualValuation_calc||Infinity) <= Number(filters.maxValue));
+    }
+    if(filters.minPerf){
+      pool = pool.filter(r => (r.Score||0) >= Number(filters.minPerf));
+    }
+    if(filters.team){
+      const ft = filters.team.toLowerCase();
+      pool = pool.filter(r => (r.Team||'').toLowerCase().includes(ft));
+    }
+    if(filters.conference){
+      const fc = filters.conference.toLowerCase();
+      pool = pool.filter(r => (r.Conference||'').toLowerCase().includes(fc));
+    }
+    if(filters.sortBy){
+      const sk = filters.sortBy;
+      pool.sort((a,b) => (Number(b[sk])||0) - (Number(a[sk])||0));
+    } else {
+      pool.sort((a,b) => (b.Score||0) - (a.Score||0));
+    }
+    return pool.slice(0, filters.limit || 10).map(r => ({
+      player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
+      perf: r.Score ? Number(r.Score.toFixed(1)) : null,
+      value: r.ActualValuation_calc ? Math.round(r.ActualValuation_calc) : null,
+      ppg: r.PPG ? Number(Number(r.PPG).toFixed(1)) : null,
+      threePct: r['3P%'] ? Number(Number(r['3P%']).toFixed(3)) : null,
+      apg: r.APG ? Number(Number(r.APG).toFixed(1)) : null,
+      bpg: r.BPG ? Number(Number(r.BPG).toFixed(1)) : null,
+      rpg: r.RPG ? Number(Number(r.RPG).toFixed(1)) : null,
+      bpm: r.BPM ? Number(Number(r.BPM).toFixed(1)) : null,
+    }));
+  }
+
+  function addPlayersToRoster(playerNames){
+    if(typeof tbRoster === 'undefined' || typeof tbAddPlayer !== 'function') return 'Team builder not available.';
+    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : (typeof computed !== 'undefined' ? computed : []);
+    let added = 0, failed = [];
+    playerNames.forEach(name => {
+      const pn = name.toLowerCase();
+      const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
+      if(match){
+        try { tbAddPlayer(match); added++; } catch(e) { failed.push(name); }
+      } else { failed.push(name); }
+    });
+    if(typeof tbRefresh === 'function') tbRefresh();
+    return { added, failed, rosterSize: tbRoster.length };
+  }
+
+  function removePlayerFromRoster(playerName){
+    if(typeof tbRoster === 'undefined') return 'Team builder not available.';
+    const pn = playerName.toLowerCase();
+    const idx = tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(pn));
+    if(idx === -1) return { success: false, message: `${playerName} not found on roster.` };
+    const removed = tbRoster[idx].Player;
+    tbRoster.splice(idx, 1);
+    if(typeof tbRefresh === 'function') tbRefresh();
+    return { success: true, removed, rosterSize: tbRoster.length };
+  }
+
+  function swapRosterPlayer(dropName, addName){
+    if(typeof tbRoster === 'undefined') return 'Team builder not available.';
+    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : computed;
+    const dropIdx = tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(dropName.toLowerCase()));
+    if(dropIdx === -1) return { success: false, message: `${dropName} not on roster.` };
+    const addPlayer = allPlayers.find(r => (r.Player||'').toLowerCase().includes(addName.toLowerCase()));
+    if(!addPlayer) return { success: false, message: `${addName} not found in data.` };
+    const dropped = tbRoster[dropIdx].Player;
+    tbRoster.splice(dropIdx, 1, addPlayer);
+    if(typeof tbRefresh === 'function') tbRefresh();
+    return { success: true, dropped, added: addPlayer.Player, rosterSize: tbRoster.length };
+  }
+
+  // ---- Tool Definitions for Gemini ----
+  const tools = [{
+    functionDeclarations: [
+      {
+        name: 'search_players',
+        description: 'Search for players by name, team, conference, or position in the dashboard data.',
+        parameters: { type: 'OBJECT', properties: { query: { type: 'STRING', description: 'Search query (player name, team, conference)' } }, required: ['query'] }
+      },
+      {
+        name: 'get_player_profile',
+        description: 'Get detailed stats and profile for a specific player by name.',
+        parameters: { type: 'OBJECT', properties: { playerName: { type: 'STRING', description: 'Player name to look up' } }, required: ['playerName'] }
+      },
+      {
+        name: 'get_top_players',
+        description: 'Get top players filtered by position, budget, team, conference, minimum performance score, or sorted by a specific stat.',
+        parameters: { type: 'OBJECT', properties: {
+          position: { type: 'STRING', description: 'Filter by position: guard, big, forward, center' },
+          maxValue: { type: 'NUMBER', description: 'Maximum valuation/budget in dollars' },
+          minPerf: { type: 'NUMBER', description: 'Minimum PerfScore' },
+          team: { type: 'STRING', description: 'Filter by team name' },
+          conference: { type: 'STRING', description: 'Filter by conference' },
+          sortBy: { type: 'STRING', description: 'Sort by stat field: Score, PPG, 3P%, APG, BPG, RPG, BPM, ActualValuation_calc' },
+          limit: { type: 'NUMBER', description: 'Number of results (default 10)' }
+        }}
+      },
+      {
+        name: 'get_dashboard_context',
+        description: 'Get the current state of the dashboard including current roster, budget, settings, and league.',
+        parameters: { type: 'OBJECT', properties: {} }
+      },
+      {
+        name: 'add_players_to_roster',
+        description: 'Add one or more players to the team builder roster by name. Requires user confirmation first.',
+        parameters: { type: 'OBJECT', properties: { playerNames: { type: 'ARRAY', items: { type: 'STRING' }, description: 'List of player names to add' } }, required: ['playerNames'] }
+      },
+      {
+        name: 'remove_player_from_roster',
+        description: 'Remove a player from the team builder roster. Requires user confirmation first.',
+        parameters: { type: 'OBJECT', properties: { playerName: { type: 'STRING', description: 'Player name to remove' } }, required: ['playerName'] }
+      },
+      {
+        name: 'swap_roster_player',
+        description: 'Swap a player on the roster with another player. Removes one and adds the replacement. Requires user confirmation first.',
+        parameters: { type: 'OBJECT', properties: {
+          dropPlayer: { type: 'STRING', description: 'Player to remove from roster' },
+          addPlayer: { type: 'STRING', description: 'Player to add to roster' }
+        }, required: ['dropPlayer', 'addPlayer'] }
+      },
+      {
+        name: 'compare_players',
+        description: 'Compare two players side by side with all their stats.',
+        parameters: { type: 'OBJECT', properties: {
+          player1: { type: 'STRING', description: 'First player name' },
+          player2: { type: 'STRING', description: 'Second player name' }
+        }, required: ['player1', 'player2'] }
+      }
+    ]
+  }];
+
+  // ---- Actions that require user confirmation ----
+  const CONFIRM_ACTIONS = new Set(['add_players_to_roster', 'remove_player_from_roster', 'swap_roster_player']);
+
+  // ---- Execute a function call ----
+  function execFunctionCall(call){
+    const args = call.args || {};
+    switch(call.name){
+      case 'search_players': return searchPlayers(args.query || '');
+      case 'get_player_profile': return getPlayerProfile(args.playerName || '');
+      case 'get_top_players': return getTopPlayers(args);
+      case 'get_dashboard_context': return getDashboardContext();
+      case 'add_players_to_roster': return addPlayersToRoster(args.playerNames || []);
+      case 'remove_player_from_roster': return removePlayerFromRoster(args.playerName || '');
+      case 'swap_roster_player': return swapRosterPlayer(args.dropPlayer || '', args.addPlayer || '');
+      case 'compare_players': {
+        const p1 = getPlayerProfile(args.player1 || '');
+        const p2 = getPlayerProfile(args.player2 || '');
+        return { player1: p1, player2: p2 };
+      }
+      default: return { error: 'Unknown function: ' + call.name };
+    }
+  }
+
+  // ---- Build system instruction ----
+  function getSystemPrompt(){
+    const ctx = getDashboardContext();
+    return {
+      parts: [{ text: `You are Rocket AI, the basketball analytics assistant for the UToledo NCAA Basketball Evaluation Dashboard. You help coaches make data-driven roster decisions.
+
+CURRENT DASHBOARD STATE:
+- League: ${ctx.league}, Position tab: ${ctx.position}
+- Players loaded: ${ctx.totalPlayers}
+- Current roster: ${ctx.rosterSize} players
+- Budget: $${Number(ctx.budget).toLocaleString()}, Player cap: $${Number(ctx.playerCap).toLocaleString()}
+- Target: ${ctx.targetGuards} guards, ${ctx.targetBigs} bigs, max ${ctx.maxRoster} roster
+
+CURRENT ROSTER:
+${ctx.roster.length ? ctx.roster.map((r,i) => `${i+1}. ${r.player} (${r.team}, ${r.pos}, Perf: ${r.perf}, Value: ${r.value})`).join('\n') : '(empty)'}
+
+GUIDELINES:
+- Use function calls to access player data. Don't guess stats — look them up.
+- For roster modifications (add, remove, swap), ALWAYS ask the user for confirmation first. Present your recommendation with reasoning, then ask "Should I go ahead and make this change?"
+- When the user confirms (yes/proceed/do it/go ahead), THEN call the roster modification function.
+- For comparisons, use compare_players to get both profiles, then present a detailed side-by-side analysis.
+- When analyzing valuations, consider PerfScore, conference multiplier, minutes played, and position need.
+- Be concise but insightful. Use basketball knowledge to give real coaching advice.
+- You can use markdown-like formatting: **bold**, line breaks, bullet points.
+- If asked about news or info outside the dashboard data, let the user know you can only analyze the data in the dashboard currently, but give your best advice based on what you have.
+- When recommending players, always explain WHY they're a good fit (stats, position need, budget, team gaps).
+- Format numbers nicely: $125,000 not 125000, 85.3 not 85.29384.` }]
+    };
+  }
+
+  // ---- Send message to Gemini ----
+  async function callGemini(userText, functionResponse){
+    if(userText){
+      chatHistory.push({ role: 'user', parts: [{ text: userText }] });
+    }
+    if(functionResponse){
+      chatHistory.push(functionResponse.modelMsg);
+      chatHistory.push({ role: 'user', parts: [{ functionResponse: { name: functionResponse.name, response: { result: functionResponse.result } } }] });
+    }
+
+    const payload = {
+      model: 'gemini-2.0-flash',
+      contents: chatHistory,
+      tools: tools,
+      systemInstruction: getSystemPrompt(),
+      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+    };
+
+    const res = await fetch(GEMINI_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if(!res.ok) throw new Error(`API error: ${res.status}`);
+    return await res.json();
+  }
+
+  // ---- Process Gemini response ----
+  async function processResponse(data){
+    if(!data.candidates || !data.candidates[0]) {
+      addAiMsg('ai', "Sorry, I couldn't process that. Try rephrasing your question.");
+      return;
+    }
+
+    const candidate = data.candidates[0];
+    const parts = candidate.content?.parts || [];
+
+    for(const part of parts){
+      // Text response
+      if(part.text){
+        const formatted = formatAiText(part.text);
+        chatHistory.push({ role: 'model', parts: [{ text: part.text }] });
+        addAiMsg('ai', formatted);
+      }
+
+      // Function call
+      if(part.functionCall){
+        const call = part.functionCall;
+        const modelMsg = { role: 'model', parts: [{ functionCall: call }] };
+
+        // If this is a confirmation-required action, queue it
+        if(CONFIRM_ACTIONS.has(call.name)){
+          // The model should have asked for confirmation in text already
+          // Store the pending action so we can execute on user confirmation
+          pendingAction = { call, modelMsg };
+          return; // Wait for user to confirm
+        }
+
+        // Execute read-only function calls immediately
+        addAiMsg('system', `🔍 Looking up data...`);
+        const result = execFunctionCall(call);
+
+        // Send result back to Gemini for interpretation
+        try {
+          const data2 = await callGemini(null, { name: call.name, result, modelMsg });
+          await processResponse(data2);
+        } catch(err) {
+          addAiMsg('ai', `I got the data but had trouble analyzing it: ${err.message}`);
+        }
+        return;
+      }
+    }
+  }
+
+  function formatAiText(text){
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      .replace(/\n- /g, '\n• ')
+      .replace(/\n\d+\.\s/g, m => '\n' + m.trim() + ' ')
+      .replace(/\n/g, '<br>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  // ---- Main send handler ----
+  async function sendMsg(){
+    const text = input.value.trim();
+    if(!text) return;
+    input.value = '';
+
+    // Check if this is a confirmation for a pending action
+    if(pendingAction){
+      const affirmative = /^(yes|yep|yea|yeah|sure|do it|go ahead|proceed|ok|confirm|absolutely|make it happen|swap|add)/i.test(text);
+      const negative = /^(no|nah|nope|cancel|never|don't|stop)/i.test(text);
+
+      addAiMsg('user', text);
+
+      if(affirmative){
+        addAiMsg('system', '⚡ Executing...');
+        const result = execFunctionCall(pendingAction.call);
+        const pa = pendingAction;
+        pendingAction = null;
+
+        try {
+          const data = await callGemini(null, { name: pa.call.name, result, modelMsg: pa.modelMsg });
+          await processResponse(data);
+        } catch(err){
+          addAiMsg('ai', `Done! ${JSON.stringify(result)}`);
+        }
+      } else if(negative){
+        pendingAction = null;
+        addAiMsg('ai', "No problem, I won't make that change. What else can I help with?");
+      } else {
+        // Not a clear yes/no — forward to Gemini with the pending context
+        pendingAction = null;
+        showTyping();
+        sendBtn.disabled = true;
+        try {
+          const data = await callGemini(text);
+          hideTyping();
+          await processResponse(data);
+        } catch(err){
+          hideTyping();
+          addAiMsg('ai', `Error: ${err.message}. Make sure your Cloudflare Worker URL is configured.`);
+        }
+        sendBtn.disabled = false;
+      }
+      return;
+    }
+
+    addAiMsg('user', text);
+    showTyping();
+    sendBtn.disabled = true;
+
+    try {
+      const data = await callGemini(text);
+      hideTyping();
+      await processResponse(data);
+    } catch(err){
+      hideTyping();
+      addAiMsg('ai', `Error: ${err.message}. <br><br>Make sure your Cloudflare Worker URL is set up. See the setup guide for details.`);
+    }
+    sendBtn.disabled = false;
+  }
+})();
+</script>
 
 	</body>
 
