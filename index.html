@@ -2745,22 +2745,16 @@ archetypeTags(r).forEach(tag=>{
   });
 
   // Expose functions for AI chat integration
-  window.tbAddPlayer = tbAddPlayer;
-  window.tbRefresh = tbRefresh;
-  window.tbGetAllPlayers = tbGetAllPlayers;
-  window.tbRoster = null; // getter/setter to keep in sync
-  Object.defineProperty(window, 'tbRoster', { get(){ return tbRoster; }, set(v){ tbRoster = v; } });
-  Object.defineProperty(window, 'computed', { get(){ return computed; } });
-  Object.defineProperty(window, 'pos', { get(){ return pos; } });
-  Object.defineProperty(window, 'league', { get(){ return league; } });
-  Object.defineProperty(window, 'statDist', { get(){ return statDist; } });
-  window.openProfile = openProfile;
-  window.safeNum = safeNum;
-  window.fmtMoney = fmtMoney;
-  window.tbPlayerKey = tbPlayerKey;
-  window.tbPosGroup = tbPosGroup;
-  window.tbPlayerAvgPct = tbPlayerAvgPct;
-  window.statPercentile = statPercentile;
+  window._app = {
+    get tbRoster(){ return tbRoster; },
+    set tbRoster(v){ tbRoster = v; },
+    get computed(){ return computed; },
+    get pos(){ return pos; },
+    get league(){ return league; },
+    get statDist(){ return statDist; },
+    tbAddPlayer, tbRefresh, tbGetAllPlayers, openProfile,
+    safeNum, fmtMoney, tbPlayerKey, tbPosGroup, tbPlayerAvgPct, statPercentile
+  };
 </script>
 <!-- Stat glossary modal -->
 <div class="modalBack" id="statBack">
@@ -2812,10 +2806,8 @@ archetypeTags(r).forEach(tag=>{
 <script>
 // ============ AI CHAT SYSTEM ============
 (function(){
-  // 🔑 Replace this with your Cloudflare Worker URL after deployment
   const GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
-  // For local testing only (remove before pushing to GitHub):
-  // const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=YOUR_KEY';
+  const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
   const toggle = document.getElementById('aiToggle');
   const panel = document.getElementById('aiPanel');
@@ -2855,31 +2847,36 @@ archetypeTags(r).forEach(tag=>{
   function hideTyping(){ document.getElementById('aiTypingIndicator')?.remove(); }
 
   // ---- Dashboard Data Access Functions ----
+  const A = () => window._app || {};
+
   function getDashboardContext(){
-    const data = {
-      league: typeof league !== 'undefined' ? league : 'MBB',
-      position: typeof pos !== 'undefined' ? pos : 'Guards',
-      totalPlayers: typeof computed !== 'undefined' ? computed.length : 0,
-      rosterSize: typeof tbRoster !== 'undefined' ? tbRoster.length : 0,
-      roster: typeof tbRoster !== 'undefined' ? tbRoster.map(r => ({
+    const app = A();
+    const roster = app.tbRoster || [];
+    return {
+      league: app.league || 'MBB',
+      position: app.pos || 'Guards',
+      totalPlayers: (app.computed || []).length,
+      rosterSize: roster.length,
+      roster: roster.map(r => ({
         player: r.Player, team: r.Team, pos: r.Position||'',
         perf: r.Score ? r.Score.toFixed(1) : '—',
         value: r.ActualValuation_calc ? '$'+Math.round(r.ActualValuation_calc).toLocaleString() : '—',
         conf: r.Conference||''
-      })) : [],
+      })),
       budget: document.getElementById('tbBudget')?.value || '500000',
       playerCap: document.getElementById('tbPlayerCap')?.value || '150000',
       maxRoster: document.getElementById('tbMaxRoster')?.value || '13',
       targetGuards: document.getElementById('tbTargetGuards')?.value || '8',
       targetBigs: document.getElementById('tbTargetBigs')?.value || '5',
     };
-    return data;
   }
 
   function searchPlayers(query){
-    if(typeof computed === 'undefined' || !computed.length) return [];
+    const app = A();
+    const pool = app.computed || [];
+    if(!pool.length) return [];
     const q = query.toLowerCase();
-    return computed.filter(r =>
+    return pool.filter(r =>
       ['Player','Team','Conference','Position'].some(k => (r[k]||'').toString().toLowerCase().includes(q))
     ).slice(0, 20).map(r => ({
       player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
@@ -2902,9 +2899,9 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function getPlayerProfile(playerName){
-    if(typeof computed === 'undefined') return null;
-    // Search all cached pools
-    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : computed;
+    const app = A();
+    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
+    if(!allPlayers.length) return null;
     const pn = playerName.toLowerCase();
     const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
     if(!match) return null;
@@ -2917,7 +2914,8 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function getTopPlayers(filters){
-    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : (typeof computed !== 'undefined' ? computed : []);
+    const app = A();
+    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
     let pool = allPlayers.slice();
 
     if(filters.position){
@@ -2929,26 +2927,12 @@ archetypeTags(r).forEach(tag=>{
         return p.includes(fp);
       });
     }
-    if(filters.maxValue){
-      pool = pool.filter(r => (r.ActualValuation_calc||Infinity) <= Number(filters.maxValue));
-    }
-    if(filters.minPerf){
-      pool = pool.filter(r => (r.Score||0) >= Number(filters.minPerf));
-    }
-    if(filters.team){
-      const ft = filters.team.toLowerCase();
-      pool = pool.filter(r => (r.Team||'').toLowerCase().includes(ft));
-    }
-    if(filters.conference){
-      const fc = filters.conference.toLowerCase();
-      pool = pool.filter(r => (r.Conference||'').toLowerCase().includes(fc));
-    }
-    if(filters.sortBy){
-      const sk = filters.sortBy;
-      pool.sort((a,b) => (Number(b[sk])||0) - (Number(a[sk])||0));
-    } else {
-      pool.sort((a,b) => (b.Score||0) - (a.Score||0));
-    }
+    if(filters.maxValue) pool = pool.filter(r => (r.ActualValuation_calc||Infinity) <= Number(filters.maxValue));
+    if(filters.minPerf) pool = pool.filter(r => (r.Score||0) >= Number(filters.minPerf));
+    if(filters.team){ const ft = filters.team.toLowerCase(); pool = pool.filter(r => (r.Team||'').toLowerCase().includes(ft)); }
+    if(filters.conference){ const fc = filters.conference.toLowerCase(); pool = pool.filter(r => (r.Conference||'').toLowerCase().includes(fc)); }
+    if(filters.sortBy){ const sk = filters.sortBy; pool.sort((a,b) => (Number(b[sk])||0) - (Number(a[sk])||0)); }
+    else { pool.sort((a,b) => (b.Score||0) - (a.Score||0)); }
     return pool.slice(0, filters.limit || 10).map(r => ({
       player: r.Player, team: r.Team, pos: r.Position||'', conf: r.Conference||'',
       perf: r.Score ? Number(r.Score.toFixed(1)) : null,
@@ -2963,42 +2947,44 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function addPlayersToRoster(playerNames){
-    if(typeof tbRoster === 'undefined' || typeof tbAddPlayer !== 'function') return 'Team builder not available.';
-    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : (typeof computed !== 'undefined' ? computed : []);
+    const app = A();
+    if(!app.tbRoster || !app.tbAddPlayer) return 'Team builder not available.';
+    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
     let added = 0, failed = [];
     playerNames.forEach(name => {
       const pn = name.toLowerCase();
       const match = allPlayers.find(r => (r.Player||'').toLowerCase().includes(pn));
-      if(match){
-        try { tbAddPlayer(match); added++; } catch(e) { failed.push(name); }
-      } else { failed.push(name); }
+      if(match){ try { app.tbAddPlayer(match); added++; } catch(e) { failed.push(name); } }
+      else { failed.push(name); }
     });
-    if(typeof tbRefresh === 'function') tbRefresh();
-    return { added, failed, rosterSize: tbRoster.length };
+    if(app.tbRefresh) app.tbRefresh();
+    return { added, failed, rosterSize: app.tbRoster.length };
   }
 
   function removePlayerFromRoster(playerName){
-    if(typeof tbRoster === 'undefined') return 'Team builder not available.';
+    const app = A();
+    if(!app.tbRoster) return 'Team builder not available.';
     const pn = playerName.toLowerCase();
-    const idx = tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(pn));
+    const idx = app.tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(pn));
     if(idx === -1) return { success: false, message: `${playerName} not found on roster.` };
-    const removed = tbRoster[idx].Player;
-    tbRoster.splice(idx, 1);
-    if(typeof tbRefresh === 'function') tbRefresh();
-    return { success: true, removed, rosterSize: tbRoster.length };
+    const removed = app.tbRoster[idx].Player;
+    app.tbRoster.splice(idx, 1);
+    if(app.tbRefresh) app.tbRefresh();
+    return { success: true, removed, rosterSize: app.tbRoster.length };
   }
 
   function swapRosterPlayer(dropName, addName){
-    if(typeof tbRoster === 'undefined') return 'Team builder not available.';
-    const allPlayers = typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : computed;
-    const dropIdx = tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(dropName.toLowerCase()));
+    const app = A();
+    if(!app.tbRoster) return 'Team builder not available.';
+    const allPlayers = app.tbGetAllPlayers ? app.tbGetAllPlayers() : (app.computed || []);
+    const dropIdx = app.tbRoster.findIndex(r => (r.Player||'').toLowerCase().includes(dropName.toLowerCase()));
     if(dropIdx === -1) return { success: false, message: `${dropName} not on roster.` };
-    const addPlayer = allPlayers.find(r => (r.Player||'').toLowerCase().includes(addName.toLowerCase()));
-    if(!addPlayer) return { success: false, message: `${addName} not found in data.` };
-    const dropped = tbRoster[dropIdx].Player;
-    tbRoster.splice(dropIdx, 1, addPlayer);
-    if(typeof tbRefresh === 'function') tbRefresh();
-    return { success: true, dropped, added: addPlayer.Player, rosterSize: tbRoster.length };
+    const addP = allPlayers.find(r => (r.Player||'').toLowerCase().includes(addName.toLowerCase()));
+    if(!addP) return { success: false, message: `${addName} not found in data.` };
+    const dropped = app.tbRoster[dropIdx].Player;
+    app.tbRoster.splice(dropIdx, 1, addP);
+    if(app.tbRefresh) app.tbRefresh();
+    return { success: true, dropped, added: addP.Player, rosterSize: app.tbRoster.length };
   }
 
   // ---- Tool Definitions for Gemini ----
@@ -3125,7 +3111,7 @@ GUIDELINES:
     }
 
     const payload = {
-      model: 'gemini-2.0-flash',
+      model: GEMINI_MODEL,
       contents: chatHistory,
       tools: tools,
       systemInstruction: getSystemPrompt(),
