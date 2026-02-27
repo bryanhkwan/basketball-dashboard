@@ -3125,7 +3125,7 @@ archetypeTags(r).forEach(tag=>{
 // ============ AI CHAT SYSTEM ============
 (function(){
   const GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
-  const GEMINI_MODEL = 'gemini-2.5-flash';
+  const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
   const toggle = document.getElementById('aiToggle');
   const panel = document.getElementById('aiPanel');
@@ -3307,11 +3307,33 @@ archetypeTags(r).forEach(tag=>{
       parameters:{type:'OBJECT',properties:{dropPlayer:{type:'STRING'},addPlayer:{type:'STRING'}},required:['dropPlayer','addPlayer']}},
     {name:'compare_players',description:'Compare two players side-by-side with visual stats table. ALWAYS use this for comparisons.',
       parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
-  ]},
-  {googleSearch:{}}
+    {name:'web_search',description:'Search Google for external information about a player or topic. Use for: injury news, transfer portal updates, scouting reports, recruiting rankings, player background, team news, game recaps, or any info beyond our stats database. ALWAYS use this when user asks about news, whether a player is worth investing in, player history, or anything requiring current external knowledge.',
+      parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Google search query, e.g. "Brandon Benjamin Fairfield basketball 2025 scouting report"'}},required:['query']}},
+  ]}
   ];
 
   const CONFIRM_ACTIONS=new Set(['add_players_to_roster','remove_player_from_roster','swap_roster_player']);
+
+  // Web search via Cloudflare Worker proxy
+  async function doWebSearch(query){
+    try{
+      const res = await fetch(GEMINI_PROXY_URL, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({action:'web_search', query})
+      });
+      const data = await res.json();
+      if(data.error) return {error: typeof data.error === 'string' ? data.error : data.error.message || JSON.stringify(data.error)};
+      // Format for Gemini to use
+      let result = data.summary || 'No results found.';
+      if(data.sources && data.sources.length){
+        result += '\n\nSources:\n' + data.sources.map((s,i) => `${i+1}. ${s.title} — ${s.url}`).join('\n');
+      }
+      return {searchResults: result, query};
+    }catch(e){
+      return {error: 'Web search failed: ' + e.message};
+    }
+  }
 
   function execCall(c){
     const a=c.args||{};
@@ -3324,6 +3346,7 @@ archetypeTags(r).forEach(tag=>{
       case 'remove_player_from_roster': return removeFromRoster(a.playerName||'');
       case 'swap_roster_player': return swapPlayer(a.dropPlayer||'',a.addPlayer||'');
       case 'compare_players': return comparePlayers(a.player1||'',a.player2||'');
+      case 'web_search': return doWebSearch(a.query||'');
       default: return {error:'Unknown: '+c.name};
     }
   }
@@ -3388,24 +3411,11 @@ RULES:
     if(!parts.length){ addMsg('ai','Empty response. Try rephrasing.'); return; }
 
     let hasText=false;
-    // Check for Google Search grounding metadata (source citations)
-    const grounding = data.candidates[0].groundingMetadata;
-    let sources = '';
-    if(grounding && grounding.groundingChunks && grounding.groundingChunks.length){
-      const unique = [...new Map(grounding.groundingChunks.filter(c=>c.web).map(c=>[c.web.uri, c.web])).values()].slice(0,3);
-      if(unique.length){
-        sources = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)">📎 Sources: ' +
-          unique.map(s => `<a href="${s.uri}" target="_blank" rel="noopener" style="color:var(--accent)">${s.title||'Link'}</a>`).join(' · ') + '</div>';
-      }
-    }
     for(const part of parts){
       if(part.text){
         hasText=true;
         chatHistory.push({role:'model',parts:[{text:part.text}]});
-        // Append source citations if this was a Google Search-grounded response
-        const msgHtml = fmtText(part.text) + (sources || '');
-        sources = ''; // only show sources once
-        addMsg('ai', msgHtml);
+        addMsg('ai', fmtText(part.text));
       }
       if(part.functionCall){
         const call=part.functionCall;
@@ -3423,9 +3433,13 @@ RULES:
         }
 
         // Execute read-only calls immediately
-        addMsg('system','🔍 Looking up data...');
+        const isWebSearch = call.name === 'web_search';
+        addMsg('system', isWebSearch ? '🌐 Searching the web...' : '🔍 Looking up data...');
         let result;
-        try{ result=execCall(call); }catch(e){ result={error:e.message}; }
+        try{
+          const r = execCall(call);
+          result = (r && typeof r.then === 'function') ? await r : r; // await if Promise
+        }catch(e){ result={error:e.message}; }
 
         // For compare_players, don't send back to Gemini — the modal is already open
         if(call.name === 'compare_players'){
