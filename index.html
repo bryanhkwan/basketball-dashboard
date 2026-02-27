@@ -3217,12 +3217,13 @@ archetypeTags(r).forEach(tag=>{
   function buildForcedWebQuery(text){
     const raw = (text || '').trim();
     const ql = normalizeName(raw);
-    const names = [...new Set(allPlayers().map(r=>r.Player).filter(Boolean))].sort((a,b)=>b.length-a.length);
-    const matched = names.find(n => ql.includes(normalizeName(n)));
     const isValuation = /(\$[\d,.]+|worth|value|valuat|invest|overpay|underpay|fair|steal|avoid|buy|sign|price|priced|pay)/.test(ql);
-    if(matched){
-      if(isValuation) return `${matched} college basketball NIL salary contract value 2025`;
-      return `${matched} college basketball latest news injury transfer portal role minutes 2025`;
+    const matchedPlayer = matchLoadedPlayer(raw);
+    if(matchedPlayer){
+      // Include team name so web search targets the correct player when names are shared.
+      const nameAndTeam = matchedPlayer.Team ? `${matchedPlayer.Player} ${matchedPlayer.Team}` : matchedPlayer.Player;
+      if(isValuation) return `${nameAndTeam} college basketball NIL salary contract value 2025`;
+      return `${nameAndTeam} college basketball latest news injury transfer portal role minutes 2025`;
     }
     if(isValuation) return `${raw} college basketball NIL value market 2025`;
     return `${raw} college basketball latest news 2025`;
@@ -3243,10 +3244,49 @@ archetypeTags(r).forEach(tag=>{
     return (s||'').toLowerCase().replace(/[.,]/g,'').replace(/\b(jr|sr|ii|iii|iv)\b/g,'').replace(/\s+/g,' ').trim();
   }
 
-  function matchLoadedPlayerName(text){
+  // Extract a team name from phrases like "from Fairfield", "at Toledo", "(San Diego)".
+  // Returns the matching team string from the loaded player pool, or null.
+  function extractTeamHint(text, pool){
+    const t = (text || '').trim();
+    const patterns = [
+      /\b(?:from|at|of|for)\s+([A-Za-z][A-Za-z\s\-']{1,40}?)(?=\s+(?:worth|is|was|will|can|should|playing|plays|player|basketball|\$|\d)|[,.]|$)/i,
+      /\(([A-Za-z][A-Za-z\s\-']{1,40}?)\)/i,
+    ];
+    const candidates = [];
+    for(const pat of patterns){ const m = t.match(pat); if(m) candidates.push(m[1].trim()); }
+    if(!candidates.length) return null;
+    const teams = [...new Set((pool||allPlayers()).map(r=>r.Team).filter(Boolean))];
+    for(const hint of candidates){
+      const hl = hint.toLowerCase();
+      const best = teams.find(tm => tm.toLowerCase().includes(hl));
+      if(best) return best;
+    }
+    return null;
+  }
+
+  // Team-aware player row lookup. Returns the full player object (not just name) so callers
+  // can pass team to getPlayerProfile and build more accurate web queries.
+  // When the query contains "from X" / "at X" and multiple players share a name, picks the
+  // one whose team matches the hint.
+  function matchLoadedPlayer(text){
+    const all = allPlayers();
     const ql = normalizeName(text);
-    const names = [...new Set(allPlayers().map(r=>r.Player).filter(Boolean))].sort((a,b)=>b.length-a.length);
-    return names.find(n => ql.includes(normalizeName(n))) || null;
+    const teamHint = extractTeamHint(text, all);
+    // All players whose name appears inside the normalized query string
+    const matches = all.filter(r => r.Player && ql.includes(normalizeName(r.Player)));
+    if(!matches.length) return null;
+    // With a team hint, prefer the player whose team matches
+    if(teamHint && matches.length > 1){
+      const specific = matches.find(r => (r.Team||'').toLowerCase().includes(teamHint.toLowerCase()));
+      if(specific) return specific;
+    }
+    // Fall back to the player with the longest name (most specific match)
+    return matches.sort((a,b)=>(b.Player||'').length-(a.Player||'').length)[0];
+  }
+
+  function matchLoadedPlayerName(text){
+    const p = matchLoadedPlayer(text);
+    return p ? (p.Player || null) : null;
   }
 
   function renderDashboardEvidence(playerName, profile, matches){
@@ -3311,10 +3351,11 @@ archetypeTags(r).forEach(tag=>{
       pushFnResult('get_dashboard_context', {}, ctx);
       turnHasDashboardLookup = true;
 
-      const matched = matchLoadedPlayerName(text);
+      const matchedPlayerObj = matchLoadedPlayer(text);
+      const matched = matchedPlayerObj?.Player || null;
       let profile = null;
       if(matched){
-        profile = getPlayerProfile(matched);
+        profile = getPlayerProfile(matched, matchedPlayerObj?.Team);
         pushFnResult('get_player_profile', {playerName: matched}, profile);
         renderDashboardEvidence(matched, profile, null);
       } else {
@@ -3385,9 +3426,12 @@ archetypeTags(r).forEach(tag=>{
     return pool.filter(r=>['Player','Team','Conference','Position'].some(k=>(r[k]||'').toString().toLowerCase().includes(lq))).slice(0,20).map(statLine);
   }
 
-  function getPlayerProfile(name){
+  function getPlayerProfile(name, team){
     const all=allPlayers(), pn=name.toLowerCase();
-    const m=all.find(r=>(r.Player||'').toLowerCase().includes(pn));
+    let m;
+    // When a team is provided, prefer the player whose team also matches (disambiguates same-name players).
+    if(team){ const tl=team.toLowerCase(); m=all.find(r=>(r.Player||'').toLowerCase().includes(pn)&&(r.Team||'').toLowerCase().includes(tl)); }
+    m = m || all.find(r=>(r.Player||'').toLowerCase().includes(pn));
     if(!m) return null;
     const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
     return out;
@@ -3420,13 +3464,88 @@ archetypeTags(r).forEach(tag=>{
     };
   }
 
-  function addPlayersToRoster(names){
-    const a=app(); if(!a.tbRoster||!a.tbAddPlayer) return {error:'Team builder not loaded.'};
-    const all=allPlayers(); let added=0,failed=[];
-    names.forEach(n=>{ const m=all.find(r=>(r.Player||'').toLowerCase().includes(n.toLowerCase()));
-      if(m){try{a.tbAddPlayer(m);added++;}catch(e){failed.push(n);}} else failed.push(n); });
+  function addPlayersToRoster(names, team, conference, limit){
+    const a=app(); if(!a.tbRoster) return {error:'Team builder not loaded.'};
+    const all=allPlayers();
+    const safeNum = a.safeNum || (v => isNaN(+v) ? 0 : +v);
+
+    // 1. Resolve candidates. When team/conference is provided, pull from the pool directly
+    //    instead of requiring an explicit name list. This lets Gemini call
+    //    add_players_to_roster({team:"Toledo"}) in one turn rather than doing
+    //    get_top_players first (which can cause empty-response failures on large result sets).
+    const toAdd=[], notFound=[];
+    if(team || conference){
+      let pool = all.filter(r=>{
+        if(team && !(r.Team||'').toLowerCase().includes(team.toLowerCase())) return false;
+        if(conference && !(r.Conference||'').toLowerCase().includes(conference.toLowerCase())) return false;
+        return true;
+      });
+      if(limit) pool = pool.slice(0, limit);
+      pool.forEach(r => toAdd.push(r));
+      if(!toAdd.length) return {added:0, failed:[`No players found for team="${team||''}" conference="${conference||''}"`], rosterSize:a.tbRoster.length, adjustments:{}};
+    } else {
+      // Name-based lookup (original path)
+      (names||[]).forEach(n=>{
+        const m=all.find(r=>(r.Player||'').toLowerCase().includes(n.toLowerCase()));
+        if(m) toAdd.push(m); else notFound.push(n);
+      });
+      if(!toAdd.length) return {added:0, failed:notFound, rosterSize:a.tbRoster.length, adjustments:{}};
+    }
+
+    // 2. Drop duplicates and league-violating players (the only constraints we keep).
+    const keyFn = a.tbPlayerKey || (r=>(r.Player||'')+'|'+(r.Team||''));
+    const leagueFn = a.tbPlayerLeague || (()=>'MBB');
+    const rosterKeys = new Set(a.tbRoster.map(keyFn));
+    const rosterLeague = a.tbRoster.length > 0 ? leagueFn(a.tbRoster[0]) : null;
+    const valid=[], skipped=[];
+    toAdd.forEach(r=>{
+      if(rosterKeys.has(keyFn(r))){ skipped.push(r.Player||'?'); return; }
+      if(rosterLeague && leagueFn(r) !== rosterLeague){ skipped.push(r.Player||'?'); return; }
+      valid.push(r);
+    });
+
+    // 3. Auto-expand all three constraints to fit every valid player.
+    //    We update the DOM inputs (which tbAddPlayer/tbRefresh read) so the UI
+    //    reflects the new settings after the action completes.
+    const adjustments={};
+    const maxREl=document.getElementById('tbMaxRoster');
+    const capEl=document.getElementById('tbPlayerCap');
+    const budgetEl=document.getElementById('tbBudget');
+
+    // Roster size
+    const neededRoster = a.tbRoster.length + valid.length;
+    const currentMax = Number(maxREl?.value) || 13;
+    if(neededRoster > currentMax && maxREl){
+      maxREl.value = neededRoster;
+      adjustments.maxRoster = {from:currentMax, to:neededRoster};
+    }
+
+    // Per-player cap — raise to fit the single most expensive player being added
+    const currentCap = Number(capEl?.value) || Infinity;
+    const maxVal = Math.max(0, ...valid.map(r=>safeNum(r.ActualValuation_calc)||0));
+    if(Number.isFinite(currentCap) && maxVal > currentCap && capEl){
+      const newCap = Math.ceil(maxVal/1000)*1000;
+      capEl.value = newCap;
+      adjustments.playerCap = {from:currentCap, to:newCap};
+    }
+
+    // Total budget — raise to cover existing roster cost + all new players
+    const currentBudget = Number(budgetEl?.value) || Infinity;
+    const usedCost = a.tbRoster.reduce((s,x)=>s+(safeNum(x.ActualValuation_calc)||0), 0);
+    const addCost  = valid.reduce((s,r)=>s+(safeNum(r.ActualValuation_calc)||0), 0);
+    if(Number.isFinite(currentBudget) && usedCost+addCost > currentBudget && budgetEl){
+      const newBudget = Math.ceil((usedCost+addCost)/1000)*1000;
+      budgetEl.value = newBudget;
+      adjustments.budget = {from:currentBudget, to:newBudget};
+    }
+
+    // 4. Push directly to tbRoster — bypasses tbAddPlayer so constraints
+    //    cannot block players that were just approved and accommodated above.
+    valid.forEach(r => a.tbRoster.push(r));
     if(a.tbRefresh) a.tbRefresh();
-    return {added,failed,rosterSize:a.tbRoster.length};
+
+    const failed=[...notFound, ...skipped];
+    return {added:valid.length, failed, rosterSize:a.tbRoster.length, adjustments};
   }
 
   function removeFromRoster(name){
@@ -3477,11 +3596,11 @@ archetypeTags(r).forEach(tag=>{
         limit:{type:'NUMBER',description:'# results (default 10)'}}}},
     {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
       parameters:{type:'OBJECT',properties:{}}},
-    {name:'add_players_to_roster',description:'Add players to roster. MUST ask user confirmation first.',
-      parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'}}},required:['playerNames']}},
-    {name:'remove_player_from_roster',description:'Remove player from roster. MUST ask user confirmation first.',
+    {name:'add_players_to_roster',description:'Add players to roster. Use playerNames for specific players. Use team or conference (without playerNames) to add ALL players from a team/conference — e.g. when user says "add all Toledo players" call with {team:"Toledo"}. Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically.',
+      parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'},description:'Specific player names to add'},team:{type:'STRING',description:'Add ALL players from this team (use instead of playerNames for bulk team adds)'},conference:{type:'STRING',description:'Add ALL players from this conference'},limit:{type:'NUMBER',description:'Max players when using team/conference (optional)'}}}},
+    {name:'remove_player_from_roster',description:'Remove player from roster. Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically.',
       parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
-    {name:'swap_roster_player',description:'Swap one roster player for another. MUST ask user confirmation first.',
+    {name:'swap_roster_player',description:'Swap one roster player for another. Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically.',
       parameters:{type:'OBJECT',properties:{dropPlayer:{type:'STRING'},addPlayer:{type:'STRING'}},required:['dropPlayer','addPlayer']}},
     {name:'compare_players',description:'Compare two players side-by-side with visual stats table. ALWAYS use this for comparisons.',
       parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
@@ -3521,7 +3640,7 @@ archetypeTags(r).forEach(tag=>{
       case 'get_player_profile': return getPlayerProfile(a.playerName||'');
       case 'get_top_players': return getTopPlayers(a);
       case 'get_dashboard_context': return getDashboardContext();
-      case 'add_players_to_roster': return addPlayersToRoster(a.playerNames||[]);
+      case 'add_players_to_roster': return addPlayersToRoster(a.playerNames||[], a.team, a.conference, a.limit);
       case 'remove_player_from_roster': return removeFromRoster(a.playerName||'');
       case 'swap_roster_player': return swapPlayer(a.dropPlayer||'',a.addPlayer||'');
       case 'compare_players': return comparePlayers(a.player1||'',a.player2||'');
@@ -3542,8 +3661,8 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
  RULES (strict):
  1) TOOL ORDER: Use dashboard tools first. Get constraints via get_dashboard_context when needed, then use search_players/get_top_players/get_player_profile/compare_players. Only use web_search AFTER the dashboard pass for anything the dashboard cannot know or that may have changed recently.
  2) COMPARE: For player vs player, ALWAYS call compare_players (do not hand-compare raw stats).
- 3) FINDING PLAYERS: Use get_top_players with sortBy. For shooters ALWAYS sort by 3PT_Rating (never raw 3P%). For defenders use DRtg; for rim protection use BPG; scorers PPG; playmakers APG. Apply minPerf and maxValue when relevant.
- 4) ROSTER ACTIONS: For add/remove/swap, recommend first with reasoning, ask "Want me to do this?", and only call the function AFTER the user confirms.
+ 3) FINDING PLAYERS: Use get_top_players with sortBy. For shooters ALWAYS sort by 3PT_Rating (never raw 3P%). For defenders use DRtg; for rim protection use BPG; scorers PPG; playmakers APG. Apply minPerf and maxValue when relevant. CRITICAL: NEVER recommend a player by name unless you have seen that player in a dashboard tool result (get_top_players, search_players, or get_player_profile) in this conversation. Do NOT use your training knowledge to invent player names.
+ 4) ROSTER ACTIONS: For swap requests, you MUST call get_top_players first to find real candidates from the dashboard, then pick your recommendation from those results. Give your recommendation with reasoning, then IMMEDIATELY call swap_roster_player in the same response — the system shows Yes/No buttons automatically. Do NOT ask "Want me to do this?" and wait.
   5) WEB_SEARCH REQUIRED: If the user says "latest/most recent/today/this week/yesterday/tomorrow", asks about injuries/suspensions/availability/transfer portal/role/minutes changes/NIL/coaching news, OR asks any valuation question (worth $, fair, overpay, steal, invest), you MUST call web_search after dashboard lookup.
  6) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality (MBB/WBB separation). Web = current context/status. If web context changes your recommendation, say so and reduce confidence.
  7) WEB REPORTING: When you use web_search, include concrete dates (not relative phrasing). If sources conflict, state the conflict and be conservative.
@@ -3617,12 +3736,48 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
         const modelMsg={role:'model',parts:[{functionCall:call}]};
 
         if(CONFIRM_ACTIONS.has(call.name)){
+          // For swap actions, validate the replacement player actually exists in the dashboard
+          // before showing confirmation buttons. If not found, self-correct: inject real
+          // candidates and re-query Gemini so the user never sees a bad recommendation.
+          if(call.name === 'swap_roster_player'){
+            const addName = (call.args?.addPlayer || '').trim().toLowerCase();
+            const playerExists = addName && allPlayers().some(r=>(r.Player||'').toLowerCase().includes(addName));
+            if(!playerExists && addName){
+              // Determine the position of the player being dropped for a tighter candidate filter.
+              // Check both Position (group label: "Guards"/"Bigs") and Pos (specific: G/F/C).
+              const dropRow = app().tbRoster?.find(r=>(r.Player||'').toLowerCase().includes((call.args?.dropPlayer||'').toLowerCase()));
+              const dropPosStr = ((dropRow?.Position||'')+(dropRow?.Pos||'')).toLowerCase();
+              const isGuard = dropPosStr.includes('guard')||/\bg\b|pg|sg|g-f/.test(dropPosStr);
+              const isBig = dropPosStr.includes('big')||dropPosStr.includes('forward')||dropPosStr.includes('center')||/\bf\b|\bc\b|pf|sf|f-c|c-f/.test(dropPosStr);
+              const posHint = isGuard ? 'guard' : isBig ? 'big' : null;
+              const ctx = getDashboardContext();
+              const candidates = getTopPlayers({position: posHint||undefined, limit:10, maxValue: ctx.playerCap||undefined});
+              // Inject the bad call + a correction so Gemini has real data to pick from
+              chatHistory.push(modelMsg);
+              chatHistory.push({role:'user',parts:[{functionResponse:{name:'swap_roster_player',response:{result:{
+                success:false,
+                error:`"${call.args.addPlayer}" is not in the dashboard database. You must only recommend players confirmed in the dashboard. Here are the top available ${posHint||'players'} — pick one of these:`,
+                availablePlayers: candidates.results
+              }}}}]});
+              turnHasDashboardLookup = true;
+              addMsg('system','⚠️ '+call.args.addPlayer+' not in database — finding real candidates...');
+              try{ const d2=await callGemini(null,null); await processResp(d2,depth+1); }
+              catch(e){ addMsg('ai','Error: '+e.message); }
+              return;
+            }
+          }
+
           pendingAction={call,modelMsg};
+          const confirmBtns='<div class="aiConfirm"><button class="aiConfirmBtn yes" onclick="window._aiConfirm(true)">✓ Yes, do it</button><button class="aiConfirmBtn no" onclick="window._aiConfirm(false)">✕ Cancel</button></div>';
           if(!hasText){
-            const desc=call.name==='add_players_to_roster'?'Add '+(call.args?.playerNames||[]).join(', ')+' to roster'
-              :call.name==='remove_player_from_roster'?'Remove '+call.args?.playerName
-              :'Swap '+call.args?.dropPlayer+' → '+call.args?.addPlayer;
-            addMsg('ai','I\'d like to: <b>'+desc+'</b>.<br>Should I go ahead? (yes/no)');
+            const names=(call.args?.playerNames||[]).join(', ');
+            const teamLabel=call.args?.team?'all <b>'+call.args.team+'</b> players':names?'<b>'+names+'</b>':'players';
+            const desc=call.name==='add_players_to_roster'?'Add '+teamLabel+' to roster'
+              :call.name==='remove_player_from_roster'?'Remove <b>'+call.args?.playerName+'</b> from roster'
+              :'Swap <b>'+call.args?.dropPlayer+'</b> → <b>'+call.args?.addPlayer+'</b>';
+            addMsg('ai','I\'d like to: '+desc+'.'+confirmBtns);
+          } else {
+            addMsg('ai',confirmBtns);
           }
           return;
         }
@@ -3645,11 +3800,9 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
 
               // If query mentions a loaded player name, pass the full profile; otherwise provide
               // candidate matches so Gemini can anchor analysis to dashboard records first.
-              const all = allPlayers();
-              const ql = normalizeName(q);
-              const nameSet = [...new Set(all.map(r=>r.Player).filter(Boolean))].sort((a,b)=>b.length-a.length);
-              const matched = nameSet.find(n => ql.includes(normalizeName(n)));
-              const profile = matched ? getPlayerProfile(matched) : null;
+              const matchedPlayerObj = matchLoadedPlayer(q);
+              const matched = matchedPlayerObj?.Player || null;
+              const profile = matched ? getPlayerProfile(matched, matchedPlayerObj?.Team) : null;
               if(profile) pushFnResult('get_player_profile', {playerName: matched}, profile);
               else pushFnResult('search_players', {query: q}, searchPlayers(q));
 
@@ -3722,6 +3875,27 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
     return html;
   }
 
+  // ---- Confirm action (called by Yes/No buttons AND text fallback) ----
+  async function executeConfirm(confirmed){
+    if(!pendingAction) return;
+    // Disable buttons immediately to prevent double-execution
+    document.querySelectorAll('.aiConfirmBtn').forEach(b => { b.disabled=true; b.style.opacity='0.4'; });
+    if(confirmed){
+      addMsg('system','⚡ Executing...');
+      let result; try{result=execCall(pendingAction.call);}catch(e){result={error:e.message};}
+      const pa=pendingAction; pendingAction=null;
+      sendBtn.disabled=true;
+      try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
+      catch(err){ addMsg('ai','Done! '+(result.error||result.added+' added'||JSON.stringify(result))); }
+      sendBtn.disabled=false;
+    } else {
+      pendingAction=null;
+      addMsg('ai','Cancelled. What else?');
+    }
+  }
+  // Expose for button onclick handlers (defined inside IIFE so needs window bridge)
+  window._aiConfirm = executeConfirm;
+
   // ---- Send ----
   async function send(){
     const text=input.value.trim(); if(!text) return; input.value='';
@@ -3730,13 +3904,8 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
       const yes=/^(yes|yep|yea|yeah|sure|do it|go ahead|proceed|ok|confirm|absolutely|swap|add|remove)/i.test(text);
       const no=/^(no|nah|nope|cancel|never|don't|stop)/i.test(text);
       addMsg('user',text);
-      if(yes){
-        addMsg('system','⚡ Executing...');
-        let result; try{result=execCall(pendingAction.call);}catch(e){result={error:e.message};}
-        const pa=pendingAction; pendingAction=null;
-        try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
-        catch(err){ addMsg('ai','Done! '+(result.error||result.added+' added'||JSON.stringify(result))); }
-      } else if(no){ pendingAction=null; addMsg('ai','Cancelled. What else?'); }
+      if(yes){ await executeConfirm(true); }
+      else if(no){ await executeConfirm(false); }
       else { pendingAction=null; await doSend(text); }
       return;
     }

@@ -130,6 +130,78 @@ When a `functionCall` arrives:
 
 ---
 
+## Roster action confirmation — button system
+
+### How it works
+Roster-mutating actions (`add_players_to_roster`, `remove_player_from_roster`, `swap_roster_player`) are intercepted by `CONFIRM_ACTIONS` in `processResp`. When Gemini calls one of these tools, the call is paused and Yes/No buttons are rendered in the chat instead of executing immediately.
+
+### Key components
+- **CSS classes** (already in stylesheet): `.aiConfirm`, `.aiConfirmBtn`, `.yes`, `.no`
+- **`executeConfirm(confirmed)`**: shared async function that executes or cancels the pending action. Disables both buttons immediately on click to prevent double-execution. Exposed globally as `window._aiConfirm` for button `onclick` handlers (needed because all AI code is inside an IIFE).
+- **`pendingAction`**: holds `{call, modelMsg}` while waiting for user approval. Cleared on execution or cancel.
+
+### Button rendering in `processResp`
+```js
+const confirmBtns = '<div class="aiConfirm">...</div>';
+if (!hasText) {
+  // Gemini was silent — show our own description + buttons
+  addMsg('ai', 'I\'d like to: ' + desc + '.' + confirmBtns);
+} else {
+  // Gemini already wrote its recommendation — append buttons below it
+  addMsg('ai', confirmBtns);
+}
+```
+The `hasText` branch is critical: if Gemini produces a recommendation text AND a function call in the same response, `hasText` is `true` and we must still append buttons — not skip them.
+
+### System prompt rule (rule 4) and tool descriptions
+Gemini is instructed to call the action function **immediately** after its recommendation text, in the same response. It must NOT ask "Want me to do this?" and wait for a text reply — the button system handles user approval.
+
+Tool descriptions for all three action tools say: *"Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically."*
+
+**Do not revert rule 4 or tool descriptions to "MUST ask user confirmation first"** — that causes Gemini to wait for a text "yes" before ever emitting the function call, so buttons never appear.
+
+---
+
+## `addPlayersToRoster` — constraint auto-expansion
+
+When a bulk add is approved (e.g. "add all Toledo players"), the function **must not** be blocked by budget, per-player cap, or roster size limits. The approved intent overrides all three.
+
+### Implementation
+`addPlayersToRoster(names)` in the AI IIFE:
+1. **Resolve all names first** into `valid[]` and `notFound[]` before touching any constraint — so the math is exact.
+2. **Filter only** for duplicates and league violations (the only constraints that always hold).
+3. **Auto-expand all three DOM inputs** to fit every valid player:
+   - `tbMaxRoster` → `current roster size + valid.length`
+   - `tbPlayerCap` → `ceil(maxPlayerVal / 1000) * 1000`
+   - `tbBudget` → `ceil((usedCost + addCost) / 1000) * 1000`
+   Inputs are only raised, never lowered.
+4. **Push directly to `tbRoster`** — bypasses `tbAddPlayer` entirely, which re-enforces constraints per-player and would block players as accumulated cost grows. Direct push is safe because constraints were already expanded in step 3.
+5. Call `tbRefresh()` once at the end.
+6. Return `{added, failed, rosterSize, adjustments}` so Gemini can report what was changed.
+
+### Critical rule
+Do **not** call `tbAddPlayer` in a loop after expanding constraints. `tbAddPlayer` recalculates `used` from the live `tbRoster` on each call — by the time player N is added, the accumulated cost may exceed the old (or even newly set) budget, and players are silently dropped. Always push directly to `tbRoster` for approved bulk actions.
+
+---
+
+## Swap validation — player-must-exist-in-dashboard guard
+
+Before confirmation buttons are shown for `swap_roster_player`, the runtime validates that the `addPlayer` name actually exists in `allPlayers()`. If not found, the bad recommendation is intercepted silently:
+
+1. The invalid `swap_roster_player` call + an error `functionResponse` (containing the actual top candidates from `getTopPlayers`) are injected into `chatHistory`.
+2. Gemini is re-queried immediately — it now has real dashboard players to pick from.
+3. The user only ever sees the corrected recommendation with valid buttons.
+
+This prevents the failure loop where Gemini keeps hallucinating player names from its training data.
+
+**System prompt rules updated**:
+- Rule 3: "NEVER recommend a player by name unless you have seen that player in a dashboard tool result in this conversation."
+- Rule 4: "For swap requests, MUST call `get_top_players` first to find real candidates from the dashboard, then pick from those results."
+
+**Position detection in guard**: Uses both `Position` (group label: "Guards"/"Bigs") and `Pos` (specific: G/F/C/PG/SG/PF/SF) to infer the right position filter for `getTopPlayers` when building the candidate list.
+
+---
+
 ## Known bugs fixed
 
 ### Gemini API error: "function call turn must come immediately after a user turn"
@@ -157,6 +229,20 @@ user: functionResponse(web_search)
 **Root cause 2**: `matchLoadedPlayerName` and `buildForcedWebQuery` did raw `.toLowerCase()` comparison. Names like `"Leroy Blyden Jr."` (with period) would not match `"leroy blyden jr"` from the query.
 
 **Fix**: Added `normalizeName(s)` helper that strips `.,` punctuation and `Jr/Sr/II/III/IV` suffixes before comparison. Used consistently in `matchLoadedPlayerName`, `buildForcedWebQuery`, and the `processResp` deferral block.
+
+**Root cause 3**: When multiple players share the same name (e.g. two players named "Brandon Benjamin" at different schools), `matchLoadedPlayerName` always returned the first one in the pool, ignoring team context stated in the query (e.g. "Brandon Benjamin from Fairfield").
+
+**Fix**: Added two new helpers:
+- `extractTeamHint(text, pool)` — extracts a team name from patterns like `"from Fairfield"`, `"at Toledo"`, `"(San Diego)"`, then validates the candidate against actual team names in the player pool.
+- `matchLoadedPlayer(text)` → returns the **full player row** (not just the name). When the query contains a team hint and multiple players share a name, it picks the one whose `Team` field matches. Falls back to longest-name match otherwise.
+
+`matchLoadedPlayerName(text)` now delegates to `matchLoadedPlayer` and returns `p.Player`.
+
+`getPlayerProfile(name, team)` — now accepts an optional `team` param. When provided, it first tries `player.name includes name AND player.team includes team` before falling back to name-only match.
+
+`buildForcedWebQuery` now uses `matchLoadedPlayer` and appends `player.Team` to the search string (e.g. `"Brandon Benjamin Fairfield college basketball NIL..."`), so Google hits the right player.
+
+**All call sites updated**: `runValuationComparePipeline` and the `processResp` deferral block both use `matchLoadedPlayer(text)` and pass `matchedPlayerObj?.Team` to `getPlayerProfile`.
 
 ---
 
