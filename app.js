@@ -1,5 +1,8 @@
   // ---------- Auth ----------
 
+  // ⚠️  DEV ONLY — flip to true to skip login screen during local testing
+  const DEV_BYPASS_AUTH = false;
+
   const AUTH_KEY = 'ncaa_auth_token';
   const AUTH_USER_KEY = 'ncaa_auth_user';
 
@@ -86,8 +89,8 @@
       });
     }
 
-    // Check existing session
-    if (authGetToken()) {
+    // Check existing session (or dev bypass)
+    if (DEV_BYPASS_AUTH || authGetToken()) {
       authShowDashboard();
     } else {
       authShowOverlay();
@@ -112,7 +115,39 @@
 
   // ---------- Notes ----------
 
+  // Local escape helper (escapeHtml lives in a different scope)
+  function _esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
   const NOTES_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/notes';
+
+  // localStorage-backed mock used when DEV_BYPASS_AUTH = true
+  function _devNotesStore()      { try { return JSON.parse(localStorage.getItem('_devNotes') || '[]'); } catch { return []; } }
+  function _devNotesWrite(arr)   { localStorage.setItem('_devNotes', JSON.stringify(arr)); }
+  async function _notesFetchDev(path, opts) {
+    const method = (opts?.method || 'GET').toUpperCase();
+    let notes = _devNotesStore();
+    if (method === 'GET') return notes;
+    if (method === 'POST') {
+      const body = JSON.parse(opts.body || '{}');
+      const note = { id: Date.now().toString(), title: body.title || 'Untitled', content: body.content || '',
+                     created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      notes.unshift(note);
+      _devNotesWrite(notes);
+      return note;
+    }
+    const id = path.replace(/^\//, '');
+    if (method === 'PUT') {
+      const body = JSON.parse(opts.body || '{}');
+      const idx = notes.findIndex(n => n.id === id);
+      if (idx !== -1) notes[idx] = { ...notes[idx], ...body, updated_at: new Date().toISOString() };
+      _devNotesWrite(notes);
+      return notes[idx] || null;
+    }
+    if (method === 'DELETE') {
+      _devNotesWrite(notes.filter(n => n.id !== id));
+      return null;
+    }
+  }
 
   const notesState = {
     notes: [],
@@ -122,6 +157,7 @@
   };
 
   async function notesFetch(path = '', opts = {}) {
+    if (DEV_BYPASS_AUTH) return _notesFetchDev(path, opts);
     const res = await fetch(NOTES_BASE + path, {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -149,16 +185,22 @@
   }
 
   async function notesCreate() {
+    const newBtn = document.getElementById('notesNew');
+    if (newBtn) { newBtn.disabled = true; newBtn.textContent = '…'; }
     try {
       const note = await notesFetch('', {
         method: 'POST',
         body: JSON.stringify({ title: 'Untitled', content: '' }),
       });
+      if (!note || !note.id) throw new Error('Unexpected server response');
       notesState.notes.unshift(note);
       notesState.activeId = note.id;
       notesRender();
     } catch (e) {
-      console.warn('Note create failed:', e.message);
+      const list = document.getElementById('notesList');
+      if (list) list.innerHTML = `<div class="notesEmpty" style="color:var(--bad)">Failed: ${e.message}</div>`;
+    } finally {
+      if (newBtn) { newBtn.disabled = false; newBtn.textContent = '+ New'; }
     }
   }
 
@@ -238,7 +280,7 @@
     }
     list.innerHTML = notesState.notes.map(n => `
       <div class="notesItem${n.id === notesState.activeId ? ' active' : ''}" data-id="${n.id}">
-        <div class="notesItemTitle">${escapeHtml(n.title || 'Untitled')}</div>
+        <div class="notesItemTitle">${_esc(n.title || 'Untitled')}</div>
         <div class="notesItemDate">${notesFormatDate(n.updated_at || n.created_at)}</div>
       </div>
     `).join('');
@@ -258,9 +300,9 @@
     wrap.innerHTML = `
       <div class="notesEditorInner">
         <div class="notesEditorTop">
-          <input id="noteTitle" class="notesTitleInput" value="${escapeHtml(note.title || '')}" placeholder="Note title…">
+          <input id="noteTitle" class="notesTitleInput" value="${_esc(note.title || '')}" placeholder="Note title…">
         </div>
-        <textarea id="noteContent" class="notesTextarea" placeholder="Start writing…">${escapeHtml(note.content || '')}</textarea>
+        <textarea id="noteContent" class="notesTextarea" placeholder="Start writing…">${_esc(note.content || '')}</textarea>
         <div class="notesEditorFooter">
           <button type="button" class="secondary" id="notesDeleteBtn" style="padding:4px 12px;font-size:11px;color:var(--bad);border-color:rgba(248,113,113,.25);box-shadow:none">Delete</button>
           <span id="notesSaveStatus" class="notesSaveStatus"></span>
@@ -1642,13 +1684,58 @@ archetypeTags(r).forEach(tag=>{
       }
     };
 
+    // Scout Notes drawer — per-player, stored in localStorage
+    const _noteKey    = `scoutNote_${player}_${team}`;
+    const _drawer     = document.getElementById('mNotesDrawer');
+    const _notesBtn   = document.getElementById('mNotesBtn');
+    const _noteTa     = document.getElementById('mScoutNotes');
+    const _noteStatus = document.getElementById('mScoutNoteStatus');
+
+    // Reset drawer state for new player
+    if (_drawer)   { _drawer.style.display = 'none'; _drawer.style.flexDirection = 'column'; }
+    if (_notesBtn) {
+      // Remove previous listener by replacing the node clone
+      const freshBtn = _notesBtn.cloneNode(true);
+      _notesBtn.parentNode.replaceChild(freshBtn, _notesBtn);
+      freshBtn.addEventListener('click', () => {
+        const open = _drawer.style.display === 'flex';
+        _drawer.style.display = open ? 'none' : 'flex';
+        freshBtn.style.borderColor = open ? '' : 'rgba(255,210,0,.5)';
+        freshBtn.style.color       = open ? '' : 'var(--accent)';
+        if (!open) _noteTa.focus();
+      });
+    }
+    if (_noteTa) {
+      _noteTa.value = localStorage.getItem(_noteKey) || '';
+      _noteStatus.textContent = '';
+      clearTimeout(_noteTa._saveTimer);
+      _noteTa.oninput = function () {
+        _noteStatus.textContent = 'Unsaved…';
+        _noteStatus.style.color = 'var(--warn)';
+        clearTimeout(_noteTa._saveTimer);
+        _noteTa._saveTimer = setTimeout(() => {
+          localStorage.setItem(_noteKey, _noteTa.value);
+          _noteStatus.textContent = 'Saved';
+          _noteStatus.style.color = 'var(--good)';
+        }, 1000);
+      };
+      _noteTa._flushNote = () => {
+        clearTimeout(_noteTa._saveTimer);
+        localStorage.setItem(_noteKey, _noteTa.value);
+      };
+    }
+
     modalBack.style.display = 'flex';
   }
 
   // Store last comparison for re-opening
   let _lastCompare = null;
 
-  function closeProfile(){ modalBack.style.display = 'none'; }
+  function closeProfile(){
+    const ta = document.getElementById('mScoutNotes');
+    if (ta?._flushNote) ta._flushNote();
+    modalBack.style.display = 'none';
+  }
 
   function openStatInfo(stat){
     const statBack = document.getElementById('statBack');
