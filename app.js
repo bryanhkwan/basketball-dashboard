@@ -184,7 +184,9 @@
   async function notesLoad() {
     try {
       const data = await notesFetch();
-      notesState.notes = Array.isArray(data) ? data : (data?.notes || []);
+      const raw = Array.isArray(data) ? data : (data?.notes || []);
+      // Normalize all IDs to strings to avoid integer vs string === mismatches
+      notesState.notes = raw.map(n => ({ ...n, id: String(n.id) }));
       if (!notesState.activeId && notesState.notes.length) {
         notesState.activeId = notesState.notes[0].id;
       }
@@ -201,11 +203,12 @@
     try {
       const note = await notesFetch('', {
         method: 'POST',
-        body: JSON.stringify({ title: 'Untitled', content: '' }),
+        body: JSON.stringify({ title: 'Untitled', content: ' ' }),
       });
       if (!note || !note.id) throw new Error('Unexpected server response');
-      notesState.notes.unshift(note);
-      notesState.activeId = note.id;
+      const normalized = { ...note, id: String(note.id) };
+      notesState.notes.unshift(normalized);
+      notesState.activeId = normalized.id;
       notesRender();
     } catch (e) {
       const list = document.getElementById('notesList');
@@ -222,7 +225,7 @@
         body: JSON.stringify({ title, content }),
         keepalive,
       });
-      const idx = notesState.notes.findIndex(n => n.id === id);
+      const idx = notesState.notes.findIndex(n => String(n.id) === String(id));
       if (idx !== -1) notesState.notes[idx] = { ...notesState.notes[idx], title, content, ...(updated || {}) };
       notesState.dirty = false;
       notesSetSaveStatus('saved', 'Saved');
@@ -290,7 +293,7 @@
       return;
     }
     list.innerHTML = notesState.notes.map(n => `
-      <div class="notesItem${n.id === notesState.activeId ? ' active' : ''}" data-id="${n.id}">
+      <div class="notesItem${String(n.id) === String(notesState.activeId) ? ' active' : ''}" data-id="${n.id}">
         <div class="notesItemTitle">${_esc(n.title || 'Untitled')}</div>
         <div class="notesItemDate">${notesFormatDate(n.updated_at || n.created_at)}</div>
       </div>
@@ -303,7 +306,7 @@
   function notesRenderEditor() {
     const wrap = document.getElementById('notesEditorWrap');
     if (!wrap) return;
-    const note = notesState.notes.find(n => n.id === notesState.activeId);
+    const note = notesState.notes.find(n => String(n.id) === String(notesState.activeId));
     if (!note) {
       wrap.innerHTML = '<div class="notesPickHint">Select or create a note.</div>';
       return;
@@ -329,7 +332,7 @@
 
   function notesSelectNote(id) {
     notesSaveImmediate();
-    notesState.activeId = id;
+    notesState.activeId = String(id);
     notesState.dirty = false;
     notesRender();
   }
