@@ -3,8 +3,7 @@
   const AUTH_KEY = 'ncaa_auth_token';
   const AUTH_USER_KEY = 'ncaa_auth_user';
 
-  const LOGIN_URL    = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
-  const REGISTER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/register';
+  const LOGIN_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
 
   function authGetToken()    { return localStorage.getItem(AUTH_KEY); }
   function authGetUser()     { return localStorage.getItem(AUTH_USER_KEY); }
@@ -46,26 +45,9 @@
   }
 
   function authInit() {
-    const overlay    = document.getElementById('authOverlay');
-    const tabLogin   = document.getElementById('authTabLogin');
-    const tabReg     = document.getElementById('authTabRegister');
-    const loginForm  = document.getElementById('loginForm');
-    const regForm    = document.getElementById('registerForm');
-    const loginErr   = document.getElementById('loginError');
-    const regErr     = document.getElementById('regError');
-    const logoutBtn  = document.getElementById('logoutBtn');
-
-    // Tab switching
-    tabLogin.addEventListener('click', () => {
-      tabLogin.classList.add('active'); tabReg.classList.remove('active');
-      loginForm.style.display = ''; regForm.style.display = 'none';
-      loginErr.textContent = '';
-    });
-    tabReg.addEventListener('click', () => {
-      tabReg.classList.add('active'); tabLogin.classList.remove('active');
-      regForm.style.display = ''; loginForm.style.display = 'none';
-      regErr.textContent = '';
-    });
+    const loginForm = document.getElementById('loginForm');
+    const loginErr  = document.getElementById('loginError');
+    const logoutBtn = document.getElementById('logoutBtn');
 
     // Login submit
     loginForm.addEventListener('submit', async (e) => {
@@ -86,36 +68,13 @@
       }
     });
 
-    // Register submit
-    regForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      regErr.textContent = '';
-      const username = document.getElementById('regUsername').value.trim();
-      const password = document.getElementById('regPassword').value;
-      const confirm  = document.getElementById('regConfirm').value;
-      if (password !== confirm) { regErr.textContent = 'Passwords do not match.'; return; }
-      const btn = regForm.querySelector('button[type="submit"]');
-      btn.disabled = true; btn.textContent = 'Creating account…';
-      try {
-        const data = await authPost(REGISTER_URL, { username, password });
-        authSave(data.token || data.jwt || data.access_token || '', username);
-        authShowDashboard();
-      } catch (err) {
-        regErr.textContent = err.message;
-      } finally {
-        btn.disabled = false; btn.textContent = 'Create Account';
-      }
-    });
-
     // Logout
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
         authClear();
         authShowOverlay();
-        // Reset forms
-        loginForm.reset(); regForm.reset();
-        loginErr.textContent = ''; regErr.textContent = '';
-        tabLogin.click();
+        loginForm.reset();
+        loginErr.textContent = '';
       });
     }
 
