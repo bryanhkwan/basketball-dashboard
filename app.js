@@ -35,6 +35,7 @@
   async function authPost(url, body) {
     const res = await fetch(url, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -71,6 +72,13 @@
     // Logout
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
+        notesSaveImmediate();  // flush any unsaved note before session ends
+        // hide notes panel
+        const notesPanel = document.getElementById('notesPanel');
+        if (notesPanel) notesPanel.classList.add('hidden');
+        notesState.notes = [];
+        notesState.activeId = null;
+        notesState.dirty = false;
         authClear();
         authShowOverlay();
         loginForm.reset();
@@ -101,6 +109,219 @@
     const sheetEl = document.getElementById('activeSheet');
     if(sheetEl && (sheetEl.textContent||'').trim() === '—') sheetEl.textContent = 'Ready (upload workbook)';
   });
+
+  // ---------- Notes ----------
+
+  const NOTES_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/notes';
+
+  const notesState = {
+    notes: [],
+    activeId: null,
+    dirty: false,
+    saveTimer: null,
+  };
+
+  async function notesFetch(path = '', opts = {}) {
+    const res = await fetch(NOTES_BASE + path, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || `Error ${res.status}`);
+    }
+    return res.json().catch(() => null);
+  }
+
+  async function notesLoad() {
+    try {
+      const data = await notesFetch();
+      notesState.notes = Array.isArray(data) ? data : (data?.notes || []);
+      if (!notesState.activeId && notesState.notes.length) {
+        notesState.activeId = notesState.notes[0].id;
+      }
+      notesRender();
+    } catch (e) {
+      const list = document.getElementById('notesList');
+      if (list) list.innerHTML = `<div class="notesEmpty">Failed to load notes.</div>`;
+    }
+  }
+
+  async function notesCreate() {
+    try {
+      const note = await notesFetch('', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Untitled', content: '' }),
+      });
+      notesState.notes.unshift(note);
+      notesState.activeId = note.id;
+      notesRender();
+    } catch (e) {
+      console.warn('Note create failed:', e.message);
+    }
+  }
+
+  async function notesSaveToServer(id, title, content, keepalive = false) {
+    try {
+      const updated = await notesFetch(`/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title, content }),
+        keepalive,
+      });
+      const idx = notesState.notes.findIndex(n => n.id === id);
+      if (idx !== -1) notesState.notes[idx] = { ...notesState.notes[idx], title, content, ...(updated || {}) };
+      notesState.dirty = false;
+      notesSetSaveStatus('saved', 'Saved');
+      notesRenderList();
+    } catch (e) {
+      notesSetSaveStatus('', 'Save failed');
+    }
+  }
+
+  async function notesDelete(id) {
+    try {
+      await notesFetch(`/${id}`, { method: 'DELETE' });
+      notesState.notes = notesState.notes.filter(n => n.id !== id);
+      if (notesState.activeId === id) {
+        notesState.activeId = notesState.notes[0]?.id || null;
+      }
+      notesRender();
+    } catch (e) {
+      console.warn('Note delete failed:', e.message);
+    }
+  }
+
+  function notesCurrentValues() {
+    const titleEl   = document.getElementById('noteTitle');
+    const contentEl = document.getElementById('noteContent');
+    return titleEl && contentEl ? { title: titleEl.value, content: contentEl.value } : null;
+  }
+
+  function notesSaveImmediate(keepalive = false) {
+    if (!notesState.dirty || !notesState.activeId) return;
+    clearTimeout(notesState.saveTimer);
+    const vals = notesCurrentValues();
+    if (vals) notesSaveToServer(notesState.activeId, vals.title, vals.content, keepalive);
+  }
+
+  function notesScheduleSave() {
+    notesState.dirty = true;
+    notesSetSaveStatus('unsaved', 'Unsaved…');
+    clearTimeout(notesState.saveTimer);
+    notesState.saveTimer = setTimeout(() => {
+      const vals = notesCurrentValues();
+      if (vals && notesState.activeId) {
+        notesSaveToServer(notesState.activeId, vals.title, vals.content);
+      }
+    }, 1500);
+  }
+
+  function notesSetSaveStatus(cls, text) {
+    const el = document.getElementById('notesSaveStatus');
+    if (!el) return;
+    el.className = 'notesSaveStatus' + (cls ? ` ${cls}` : '');
+    el.textContent = text;
+  }
+
+  function notesRender() {
+    notesRenderList();
+    notesRenderEditor();
+  }
+
+  function notesRenderList() {
+    const list = document.getElementById('notesList');
+    if (!list) return;
+    if (!notesState.notes.length) {
+      list.innerHTML = '<div class="notesEmpty">No notes yet.<br>Click <b>+ New</b> to start.</div>';
+      return;
+    }
+    list.innerHTML = notesState.notes.map(n => `
+      <div class="notesItem${n.id === notesState.activeId ? ' active' : ''}" data-id="${n.id}">
+        <div class="notesItemTitle">${escapeHtml(n.title || 'Untitled')}</div>
+        <div class="notesItemDate">${notesFormatDate(n.updated_at || n.created_at)}</div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.notesItem').forEach(el => {
+      el.addEventListener('click', () => notesSelectNote(el.dataset.id));
+    });
+  }
+
+  function notesRenderEditor() {
+    const wrap = document.getElementById('notesEditorWrap');
+    if (!wrap) return;
+    const note = notesState.notes.find(n => n.id === notesState.activeId);
+    if (!note) {
+      wrap.innerHTML = '<div class="notesPickHint">Select or create a note.</div>';
+      return;
+    }
+    wrap.innerHTML = `
+      <div class="notesEditorInner">
+        <div class="notesEditorTop">
+          <input id="noteTitle" class="notesTitleInput" value="${escapeHtml(note.title || '')}" placeholder="Note title…">
+        </div>
+        <textarea id="noteContent" class="notesTextarea" placeholder="Start writing…">${escapeHtml(note.content || '')}</textarea>
+        <div class="notesEditorFooter">
+          <button type="button" class="secondary" id="notesDeleteBtn" style="padding:4px 12px;font-size:11px;color:var(--bad);border-color:rgba(248,113,113,.25);box-shadow:none">Delete</button>
+          <span id="notesSaveStatus" class="notesSaveStatus"></span>
+        </div>
+      </div>
+    `;
+    document.getElementById('noteTitle').addEventListener('input', notesScheduleSave);
+    document.getElementById('noteContent').addEventListener('input', notesScheduleSave);
+    document.getElementById('notesDeleteBtn').addEventListener('click', () => {
+      if (confirm('Delete this note?')) notesDelete(note.id);
+    });
+  }
+
+  function notesSelectNote(id) {
+    notesSaveImmediate();
+    notesState.activeId = id;
+    notesState.dirty = false;
+    notesRender();
+  }
+
+  function notesFormatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  }
+
+  function notesInit() {
+    const toggleBtn = document.getElementById('notesToggle');
+    const panel     = document.getElementById('notesPanel');
+    const closeBtn  = document.getElementById('notesClose');
+    const newBtn    = document.getElementById('notesNew');
+
+    toggleBtn.addEventListener('click', () => {
+      if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        notesLoad();
+      } else {
+        notesSaveImmediate();
+        panel.classList.add('hidden');
+      }
+    });
+
+    closeBtn.addEventListener('click', () => {
+      notesSaveImmediate();
+      panel.classList.add('hidden');
+    });
+
+    newBtn.addEventListener('click', notesCreate);
+
+    // Auto-save on tab/window close
+    window.addEventListener('beforeunload', () => notesSaveImmediate(true));
+
+    // Auto-save when tab goes to background
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) notesSaveImmediate();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', notesInit);
 
   // ---------- Helpers ----------
 
