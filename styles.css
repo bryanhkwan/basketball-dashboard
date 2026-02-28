@@ -242,3 +242,18 @@
     .aiTyping span:nth-child(3){animation-delay:.4s}
     @keyframes aiBounce{to{opacity:1;transform:translateY(-4px)}}
     @media(max-width:640px){.aiPanel{width:calc(100vw - 32px);right:16px;bottom:80px;max-height:60vh}.aiToggle{bottom:16px;right:16px;width:48px;height:48px;font-size:20px}}
+
+    /* ---------- Auth Overlay ---------- */
+    .authOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg);background-image:radial-gradient(ellipse 80% 60% at 20% 0%,rgba(0,62,126,.55) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 90% 100%,rgba(0,40,80,.45) 0%,transparent 50%);backdrop-filter:blur(4px)}
+    .authOverlay.hidden{display:none}
+    .authCard{background:var(--card);border:1px solid rgba(255,210,0,.18);border-radius:20px;padding:36px 32px 32px;width:100%;max-width:380px;box-shadow:0 24px 64px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);animation:fadeUp .35s ease-out both}
+    .authLogo{font-size:22px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;margin-bottom:24px}
+    .authTabs{display:flex;gap:6px;margin-bottom:22px;background:rgba(0,15,40,.5);border-radius:12px;padding:4px}
+    .authTab{flex:1;background:transparent;border:none;color:var(--muted);border-radius:9px;padding:9px 0;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:none}
+    .authTab.active{background:rgba(255,210,0,.12);color:var(--accent);border:1px solid rgba(255,210,0,.3)}
+    .authTab:hover:not(.active){color:var(--text);transform:none}
+    .authForm{display:flex;flex-direction:column;gap:14px}
+    .authField{display:flex;flex-direction:column;gap:5px}
+    .authLabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+    .authField input{width:100%}
+    .authError{min-height:18px;font-size:12px;color:var(--bad);font-weight:500;text-align:center;line-height:1.4}
