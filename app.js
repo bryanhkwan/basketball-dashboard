@@ -63,7 +63,15 @@
       btn.disabled = true; btn.textContent = 'Logging in…';
       try {
         const data = await authPost(LOGIN_URL, { username, password });
-        authSave(data.token || data.jwt || data.access_token || '', username);
+        console.log('[Auth] login response:', JSON.stringify(data));
+        const token = data.token || data.jwt || data.access_token || data.accessToken
+          || data.session_token || data.sessionToken || data.auth_token || data.authToken
+          || data.id_token || data.idToken || data.key || data.bearer
+          || (data.data && (data.data.token || data.data.jwt || data.data.access_token))
+          || (data.user && (data.user.token || data.user.jwt))
+          || '';
+        console.log('[Auth] extracted token:', token ? `${token.slice(0,16)}…` : '(empty — check response above)');
+        authSave(token, username);
         authShowDashboard();
       } catch (err) {
         loginErr.textContent = err.message;
