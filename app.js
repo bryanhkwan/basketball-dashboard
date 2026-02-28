@@ -3373,7 +3373,8 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
  8) OUTPUT FORMAT: (1) Recommendation: steal/fair/overpay/avoid (2) Dashboard evidence (3) Web evidence w/ dates (if used) (4) Risks/assumptions (5) Next action.
  9) EFFICIENCY: Minimize tool calls. Do at most 1 web_search unless the top option has a red-flag or the user explicitly asks for broader verification.
  10) LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}.
- 11) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.`}]};
+ 11) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.
+ 12) POST-EXECUTION: When you receive a function result with "added", "rosterSize", or "success", the action has ALREADY been executed — the user confirmed it and it ran. ALWAYS confirm what was done (e.g. "Added 14 Toledo players to your roster"). NEVER say you "can't" do something, refuse, or second-guess a user-confirmed action after execution. If the roster is large or imbalanced after a bulk add, mention it as a brief note AFTER confirming success — never as a reason to refuse.`}]};
   }
 
   // ---- API call ----
