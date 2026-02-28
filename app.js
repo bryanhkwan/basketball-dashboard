@@ -2171,7 +2171,7 @@ archetypeTags(r).forEach(tag=>{
 
   // Render a list of swap suggestion rows into rebalanceInfo.
   // toDrop: [{r, i, pct}], candidates: player pool, fallbackLabel: position name, usedKeys: Set
-  function renderSwapRows(toDrop, candidates, fallbackLabel, usedKeys){
+  function renderSwapRows(toDrop, candidates, fallbackLabel, usedKeys, rebalanceInfo){
     toDrop.forEach(({r: dropPlayer, i: dropIdx, pct}) => {
       const candidate = candidates.find(c => !usedKeys.has(tbPlayerKey(c)));
       if(candidate) usedKeys.add(tbPlayerKey(candidate));
@@ -2262,7 +2262,7 @@ archetypeTags(r).forEach(tag=>{
         header.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${neededBigs} more big${neededBigs>1?'s':''}</b>. Click a swap to execute:`;
         rebalanceInfo.appendChild(header);
 
-        renderSwapRows(toDrop, allBigs, 'Big', usedBigKeys);
+        renderSwapRows(toDrop, allBigs, 'Big', usedBigKeys, rebalanceInfo);
       }
 
       if(excessBigs > 0 && guards < targetG){
@@ -2280,7 +2280,7 @@ archetypeTags(r).forEach(tag=>{
         header.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${neededGuards} more guard${neededGuards>1?'s':''}</b>. Click a swap to execute:`;
         rebalanceInfo.appendChild(header);
 
-        renderSwapRows(toDrop, allGrds, 'Guard', usedGrdKeys);
+        renderSwapRows(toDrop, allGrds, 'Guard', usedGrdKeys, rebalanceInfo);
       }
 
       if(excessGuards > 0 && bigs >= targetB){
