@@ -29,12 +29,8 @@
 <div id="authOverlay" class="authOverlay">
   <div class="authCard">
     <div class="authLogo">🏀 NCAA Scouting</div>
-    <div class="authTabs">
-      <button type="button" class="authTab active" id="authTabLogin">Login</button>
-      <button type="button" class="authTab" id="authTabRegister">Register</button>
-    </div>
+    <div class="authSub">Sign in to your account</div>
 
-    <!-- Login Form -->
     <form id="loginForm" class="authForm">
       <div class="authField">
         <label class="authLabel">Username</label>
@@ -45,25 +41,7 @@
         <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
       </div>
       <div class="authError" id="loginError"></div>
-      <button type="submit" class="primary" style="width:100%;margin-top:4px">Login</button>
-    </form>
-
-    <!-- Register Form -->
-    <form id="registerForm" class="authForm" style="display:none">
-      <div class="authField">
-        <label class="authLabel">Username</label>
-        <input type="text" id="regUsername" placeholder="Choose a username" required autocomplete="username">
-      </div>
-      <div class="authField">
-        <label class="authLabel">Password</label>
-        <input type="password" id="regPassword" placeholder="Choose a password" required autocomplete="new-password">
-      </div>
-      <div class="authField">
-        <label class="authLabel">Confirm Password</label>
-        <input type="password" id="regConfirm" placeholder="Confirm password" required autocomplete="new-password">
-      </div>
-      <div class="authError" id="regError"></div>
-      <button type="submit" class="primary" style="width:100%;margin-top:4px">Create Account</button>
+      <button type="submit" class="primary authSubmitBtn">Login</button>
     </form>
   </div>
 </div>
