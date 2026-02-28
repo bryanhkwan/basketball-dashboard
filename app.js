@@ -158,9 +158,12 @@
 
   async function notesFetch(path = '', opts = {}) {
     if (DEV_BYPASS_AUTH) return _notesFetchDev(path, opts);
+    const token = authGetToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(NOTES_BASE + path, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       ...opts,
     });
     if (!res.ok) {
