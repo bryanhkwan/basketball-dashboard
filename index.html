@@ -510,6 +510,26 @@
   </div>
 </div>
 
+<!-- Notes -->
+<button class="notesToggle" id="notesToggle" title="My Notes">📝</button>
+<div class="notesPanel hidden" id="notesPanel">
+  <div class="notesHeader">
+    <b>📝 My Notes</b>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button type="button" class="secondary" id="notesNew" style="padding:4px 12px;font-size:11px;box-shadow:none">+ New</button>
+      <button type="button" class="close" id="notesClose" style="font-size:16px;padding:4px 8px">✕</button>
+    </div>
+  </div>
+  <div class="notesPanelBody">
+    <div class="notesList" id="notesList">
+      <div class="notesEmpty">Loading…</div>
+    </div>
+    <div class="notesEditorWrap" id="notesEditorWrap">
+      <div class="notesPickHint">Select or create a note.</div>
+    </div>
+  </div>
+</div>
+
 <!-- AI Chat -->
 <button class="aiToggle" id="aiToggle" title="Ask AI Assistant">🤖</button>
 <div class="aiPanel hidden" id="aiPanel">
