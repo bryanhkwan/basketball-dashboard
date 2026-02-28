@@ -1,3 +1,135 @@
+  // ---------- Auth ----------
+
+  const AUTH_KEY = 'ncaa_auth_token';
+  const AUTH_USER_KEY = 'ncaa_auth_user';
+
+  const LOGIN_URL    = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
+  const REGISTER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/register';
+
+  function authGetToken()    { return localStorage.getItem(AUTH_KEY); }
+  function authGetUser()     { return localStorage.getItem(AUTH_USER_KEY); }
+  function authSave(token, username) {
+    localStorage.setItem(AUTH_KEY, token);
+    localStorage.setItem(AUTH_USER_KEY, username);
+  }
+  function authClear() {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+  }
+
+  function authShowDashboard() {
+    document.getElementById('authOverlay').classList.add('hidden');
+    const userEl = document.getElementById('authUser');
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (userEl) userEl.textContent = authGetUser() || '';
+    if (logoutBtn) logoutBtn.style.display = '';
+  }
+
+  function authShowOverlay() {
+    document.getElementById('authOverlay').classList.remove('hidden');
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    const userEl = document.getElementById('authUser');
+    if (userEl) userEl.textContent = '';
+  }
+
+  async function authPost(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) throw new Error(data.message || data.error || `Error ${res.status}`);
+    return data;
+  }
+
+  function authInit() {
+    const overlay    = document.getElementById('authOverlay');
+    const tabLogin   = document.getElementById('authTabLogin');
+    const tabReg     = document.getElementById('authTabRegister');
+    const loginForm  = document.getElementById('loginForm');
+    const regForm    = document.getElementById('registerForm');
+    const loginErr   = document.getElementById('loginError');
+    const regErr     = document.getElementById('regError');
+    const logoutBtn  = document.getElementById('logoutBtn');
+
+    // Tab switching
+    tabLogin.addEventListener('click', () => {
+      tabLogin.classList.add('active'); tabReg.classList.remove('active');
+      loginForm.style.display = ''; regForm.style.display = 'none';
+      loginErr.textContent = '';
+    });
+    tabReg.addEventListener('click', () => {
+      tabReg.classList.add('active'); tabLogin.classList.remove('active');
+      regForm.style.display = ''; loginForm.style.display = 'none';
+      regErr.textContent = '';
+    });
+
+    // Login submit
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginErr.textContent = '';
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const btn = loginForm.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = 'Logging in…';
+      try {
+        const data = await authPost(LOGIN_URL, { username, password });
+        authSave(data.token || data.jwt || data.access_token || '', username);
+        authShowDashboard();
+      } catch (err) {
+        loginErr.textContent = err.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Login';
+      }
+    });
+
+    // Register submit
+    regForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      regErr.textContent = '';
+      const username = document.getElementById('regUsername').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const confirm  = document.getElementById('regConfirm').value;
+      if (password !== confirm) { regErr.textContent = 'Passwords do not match.'; return; }
+      const btn = regForm.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = 'Creating account…';
+      try {
+        const data = await authPost(REGISTER_URL, { username, password });
+        authSave(data.token || data.jwt || data.access_token || '', username);
+        authShowDashboard();
+      } catch (err) {
+        regErr.textContent = err.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Create Account';
+      }
+    });
+
+    // Logout
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        authClear();
+        authShowOverlay();
+        // Reset forms
+        loginForm.reset(); regForm.reset();
+        loginErr.textContent = ''; regErr.textContent = '';
+        tabLogin.click();
+      });
+    }
+
+    // Check existing session
+    if (authGetToken()) {
+      authShowDashboard();
+    } else {
+      authShowOverlay();
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', authInit);
+
+  // ---------- Runtime error display ----------
   // Surface runtime errors in the UI (so you don't need DevTools)
   window.addEventListener('error', (e) => {
     const box = document.getElementById('warn');
@@ -16,6 +148,7 @@
   const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
   const clamp01 = (x) => clamp(x, 0, 1);
   const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
+  const deepClone = obj => JSON.parse(JSON.stringify(obj));
   const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
   // Convert Google Sheets AOA (array-of-arrays) into row objects using header row.
   function aoaToObjects(aoa){
@@ -445,8 +578,8 @@ function loadScoringWeight(){
       {stat:'TOPG', w:5, min:3.5, max:0.5, dir:'lower'},
     ];
 
-    excelWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
-    currentWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
+    excelWeights = {Guards: deepClone(GUARD_DEFAULTS), Bigs: deepClone(BIG_DEFAULTS)};
+    currentWeights = {Guards: deepClone(GUARD_DEFAULTS), Bigs: deepClone(BIG_DEFAULTS)};
     baseStatsAll = [...new Set([...GUARD_DEFAULTS.map(x=>x.stat), ...BIG_DEFAULTS.map(x=>x.stat)])];
     return true;
   }
@@ -730,36 +863,31 @@ function renderWeights(){
     };
 
     const tags = [];
+    const chk = (pv, thr) => Number.isFinite(pv) && pv >= thr;
     if(pos === 'Guards'){
-      const p3 = p('3P%'), pefg = p('eFG%'), pft = p('FT%'), pppg = p('PPG');
-      const papg = p('APG'), pato = p('A/TO'), ptopg = p('TOPG');
-      const pspg = p('SPG'), pdr = p('DR%'), pbpm = p('BPM');
-
-      if(Number.isFinite(p3) && p3 >= 0.80) tags.push({t:'Shooter', c:'var(--accent2)'});
-      if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient', c:'var(--good)'});
-      if(Number.isFinite(pppg) && pppg >= 0.80) tags.push({t:'Scorer', c:'var(--accent)'});
-      if(Number.isFinite(papg) && papg >= 0.80) tags.push({t:'Playmaker', c:'var(--accent2)'});
-      if(Number.isFinite(pato) && pato >= 0.75) tags.push({t:'Low TO', c:'var(--good)'});
-      if(Number.isFinite(pspg) && pspg >= 0.80) tags.push({t:'Disruptor', c:'var(--warn)'});
-      if(Number.isFinite(pdr) && pdr >= 0.75) tags.push({t:'Defender', c:'var(--warn)'});
-      if(Number.isFinite(pbpm) && pbpm >= 0.75) tags.push({t:'Impact', c:'var(--accent)'});
-
-      if(tags.length === 0) tags.push({t:'Role Player', c:'var(--muted)'});
-      return tags.slice(0, 6);
-    }else{
-      const pbpg = p('BPG'), pdrtg = p('DRtg'), pdr = p('DR%'), por = p('OR%'), pdrb = p('DRB/G');
-      const pefg = p('eFG%'), p3 = p('3P%');
-
-      if(Number.isFinite(pbpg) && pbpg >= 0.80) tags.push({t:'Rim Protector', c:'var(--warn)'});
-      if((Number.isFinite(pdr) && pdr >= 0.80) || (Number.isFinite(pdrb) && pdrb >= 0.80)) tags.push({t:'Rebounder', c:'var(--accent2)'});
-      if(Number.isFinite(pdrtg) && pdrtg >= 0.75) tags.push({t:'Anchor Defender', c:'var(--warn)'});
-      if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient Finisher', c:'var(--good)'});
-      if(Number.isFinite(por) && por >= 0.75) tags.push({t:'Extra Possessions', c:'var(--accent)'});
-      if(Number.isFinite(p3) && p3 >= 0.75) tags.push({t:'Stretch Big', c:'var(--accent2)'});
-
-      if(tags.length === 0) tags.push({t:'Frontcourt Role', c:'var(--muted)'});
-      return tags.slice(0, 6);
+      [
+        [chk(p('3P%'),       0.80), 'Shooter',   'var(--accent2)'],
+        [chk(p('eFG%'),      0.80), 'Efficient', 'var(--good)'],
+        [chk(p('PPG'),       0.80), 'Scorer',    'var(--accent)'],
+        [chk(p('APG'),       0.80), 'Playmaker', 'var(--accent2)'],
+        [chk(p('A/TO'),      0.75), 'Low TO',    'var(--good)'],
+        [chk(p('SPG'),       0.80), 'Disruptor', 'var(--warn)'],
+        [chk(p('DR%'),       0.75), 'Defender',  'var(--warn)'],
+        [chk(p('BPM'),       0.75), 'Impact',    'var(--accent)'],
+      ].forEach(([test, t, c]) => { if(test) tags.push({t, c}); });
+      if(!tags.length) tags.push({t:'Role Player', c:'var(--muted)'});
+    } else {
+      [
+        [chk(p('BPG'),   0.80),                          'Rim Protector',     'var(--warn)'],
+        [chk(p('DR%'),   0.80) || chk(p('DRB/G'), 0.80), 'Rebounder',         'var(--accent2)'],
+        [chk(p('DRtg'),  0.75),                          'Anchor Defender',   'var(--warn)'],
+        [chk(p('eFG%'),  0.80),                          'Efficient Finisher','var(--good)'],
+        [chk(p('OR%'),   0.75),                          'Extra Possessions', 'var(--accent)'],
+        [chk(p('3P%'),   0.75),                          'Stretch Big',       'var(--accent2)'],
+      ].forEach(([test, t, c]) => { if(test) tags.push({t, c}); });
+      if(!tags.length) tags.push({t:'Frontcourt Role', c:'var(--muted)'});
     }
+    return tags.slice(0, 6);
   }
 
   // ---------- Conference multiplier ----------
@@ -799,7 +927,7 @@ function renderWeights(){
   };
 
   // Live working copy (user-editable) — keyed by canonical name only
-  let confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
+  let confMultipliers = deepClone(DEFAULT_CONF_VALUES);
   const confMultToggleEl = document.getElementById('confMultToggle');
   const confMultBodyEl = document.getElementById('confMultBody');
   const confMultTableBody = document.getElementById('confMultTableBody');
@@ -852,7 +980,7 @@ function renderWeights(){
   });
 
   resetConfMultBtn.addEventListener('click', ()=>{
-    confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
+    confMultipliers = deepClone(DEFAULT_CONF_VALUES);
     renderConfMultTable();
     if(wb) computeAll();
   });
@@ -1390,42 +1518,30 @@ archetypeTags(r).forEach(tag=>{
   window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeProfile(); closeStatInfo(); } });
 
   // ---------- League/pos tabs ----------
-  document.getElementById('tabMBB').addEventListener('click', ()=>{
-    if(league === 'MBB') return;
-    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== 'MBB'){
-      if(!confirm(`Your roster has ${tbRoster.length} WBB players. Switching to MBB will clear your roster. Continue?`)) return;
+  function switchLeague(newLeague){
+    if(league === newLeague) return;
+    const other = newLeague === 'MBB' ? 'WBB' : 'MBB';
+    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== newLeague){
+      if(!confirm(`Your roster has ${tbRoster.length} ${other} players. Switching to ${newLeague} will clear your roster. Continue?`)) return;
       tbRoster.length = 0;
     }
-    league = 'MBB';
-    setActiveTab(document.getElementById('tabMBB'), '.tab[data-league]');
+    league = newLeague;
+    setActiveTab(document.getElementById(`tab${newLeague}`), '.tab[data-league]');
     applyLeagueDefaults(false);
     renderConfMultTable();
     reloadActiveSheet();
-  });
-  document.getElementById('tabWBB').addEventListener('click', ()=>{
-    if(league === 'WBB') return;
-    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== 'WBB'){
-      if(!confirm(`Your roster has ${tbRoster.length} MBB players. Switching to WBB will clear your roster. Continue?`)) return;
-      tbRoster.length = 0;
-    }
-    league = 'WBB';
-    setActiveTab(document.getElementById('tabWBB'), '.tab[data-league]');
-    applyLeagueDefaults(false);
-    renderConfMultTable();
-    reloadActiveSheet();
-  });
-  document.getElementById('tabGuards').addEventListener('click', ()=>{
-    pos = 'Guards';
-    setActiveTab(document.getElementById('tabGuards'), '.tab[data-pos]');
+  }
+  document.getElementById('tabMBB').addEventListener('click', ()=> switchLeague('MBB'));
+  document.getElementById('tabWBB').addEventListener('click', ()=> switchLeague('WBB'));
+
+  function switchPos(newPos){
+    pos = newPos;
+    setActiveTab(document.getElementById(`tab${newPos}`), '.tab[data-pos]');
     renderWeights();
     reloadActiveSheet();
-  });
-  document.getElementById('tabBigs').addEventListener('click', ()=>{
-    pos = 'Bigs';
-    setActiveTab(document.getElementById('tabBigs'), '.tab[data-pos]');
-    renderWeights();
-    reloadActiveSheet();
-  });
+  }
+  document.getElementById('tabGuards').addEventListener('click', ()=> switchPos('Guards'));
+  document.getElementById('tabBigs').addEventListener('click', ()=> switchPos('Bigs'));
 
   fitPresetEl.addEventListener('change', ()=>{
     activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
@@ -1542,7 +1658,7 @@ archetypeTags(r).forEach(tag=>{
 
   resetWeightsBtn.addEventListener('click', ()=>{
     // Reset to your Excel defaults, but keep any extra stats (with W=0) available in this sheet.
-    const base = JSON.parse(JSON.stringify(excelWeights));
+    const base = deepClone(excelWeights);
     currentWeights[pos] = base[pos] || [];
     ensureWeightsCoverStats(pos, rows);
     renderWeights();
@@ -1691,6 +1807,30 @@ archetypeTags(r).forEach(tag=>{
     tbRefresh();
   }
 
+  // Render a list of swap suggestion rows into rebalanceInfo.
+  // toDrop: [{r, i, pct}], candidates: player pool, fallbackLabel: position name, usedKeys: Set
+  function renderSwapRows(toDrop, candidates, fallbackLabel, usedKeys){
+    toDrop.forEach(({r: dropPlayer, i: dropIdx, pct}) => {
+      const candidate = candidates.find(c => !usedKeys.has(tbPlayerKey(c)));
+      if(candidate) usedKeys.add(tbPlayerKey(candidate));
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
+      const dropVal = safeNum(dropPlayer.ActualValuation_calc)||0;
+      if(candidate){
+        const cVal = safeNum(candidate.ActualValuation_calc)||0;
+        row.innerHTML = `
+          <span class="tbAddBtn" data-rebal-drop="${dropIdx}" data-rebal-add="${tbPlayerKey(candidate)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
+          <b style="color:var(--bad)">${dropPlayer.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(dropVal)})</span>
+          <span style="color:var(--muted)">→</span>
+          <b style="color:var(--good)">${candidate.Player}</b> <span class="muted">(${candidate.Position||fallbackLabel}, ${(candidate.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
+        `;
+      } else {
+        row.innerHTML = `<b style="color:var(--bad)">${dropPlayer.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(dropVal)}) — no ${fallbackLabel.toLowerCase()} candidates in budget</span>`;
+      }
+      rebalanceInfo.appendChild(row);
+    });
+  }
+
   function tbRefresh(){
     const maxR = Number(tbMaxRosterEl.value) || 13;
     const budget = Number(tbBudgetEl.value) || 0;
@@ -1760,28 +1900,7 @@ archetypeTags(r).forEach(tag=>{
         header.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${neededBigs} more big${neededBigs>1?'s':''}</b>. Click a swap to execute:`;
         rebalanceInfo.appendChild(header);
 
-        toDrop.forEach(({r: grd, i: gIdx, pct}) => {
-          // Pick the best available big not yet used
-          const bigCand = allBigs.find(c => !usedBigKeys.has(tbPlayerKey(c)));
-          if(bigCand) usedBigKeys.add(tbPlayerKey(bigCand));
-
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
-          const gVal = safeNum(grd.ActualValuation_calc)||0;
-
-          if(bigCand){
-            const cVal = safeNum(bigCand.ActualValuation_calc)||0;
-            row.innerHTML = `
-              <span class="tbAddBtn" data-rebal-drop="${gIdx}" data-rebal-add="${tbPlayerKey(bigCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-              <b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)})</span>
-              <span style="color:var(--muted)">→</span>
-              <b style="color:var(--good)">${bigCand.Player}</b> <span class="muted">(${bigCand.Position||'Big'}, ${(bigCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
-            `;
-          } else {
-            row.innerHTML = `<b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)}) — no big candidates in budget</span>`;
-          }
-          rebalanceInfo.appendChild(row);
-        });
+        renderSwapRows(toDrop, allBigs, 'Big', usedBigKeys);
       }
 
       if(excessBigs > 0 && guards < targetG){
@@ -1799,27 +1918,7 @@ archetypeTags(r).forEach(tag=>{
         header.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${neededGuards} more guard${neededGuards>1?'s':''}</b>. Click a swap to execute:`;
         rebalanceInfo.appendChild(header);
 
-        toDrop.forEach(({r: big, i: bIdx, pct}) => {
-          const grdCand = allGrds.find(c => !usedGrdKeys.has(tbPlayerKey(c)));
-          if(grdCand) usedGrdKeys.add(tbPlayerKey(grdCand));
-
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
-          const bVal = safeNum(big.ActualValuation_calc)||0;
-
-          if(grdCand){
-            const cVal = safeNum(grdCand.ActualValuation_calc)||0;
-            row.innerHTML = `
-              <span class="tbAddBtn" data-rebal-drop="${bIdx}" data-rebal-add="${tbPlayerKey(grdCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-              <b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)})</span>
-              <span style="color:var(--muted)">→</span>
-              <b style="color:var(--good)">${grdCand.Player}</b> <span class="muted">(${grdCand.Position||'Guard'}, ${(grdCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
-            `;
-          } else {
-            row.innerHTML = `<b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)}) — no guard candidates in budget</span>`;
-          }
-          rebalanceInfo.appendChild(row);
-        });
+        renderSwapRows(toDrop, allGrds, 'Guard', usedGrdKeys);
       }
 
       if(excessGuards > 0 && bigs >= targetB){
