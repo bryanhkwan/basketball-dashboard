@@ -164,6 +164,7 @@
     dirty: false,
     saveTimer: null,
     loaded: false,   // true after first successful server fetch
+    playersOpen: true, // folder expansion state for [Scout] notes
   };
 
   async function notesFetch(path = '', opts = {}) {
@@ -291,19 +292,49 @@
   function notesRenderList() {
     const list = document.getElementById('notesList');
     if (!list) return;
+
+    const generalNotes = notesState.notes.filter(n => !String(n.title || '').startsWith('[Scout]'));
+    const playerNotes  = notesState.notes.filter(n =>  String(n.title || '').startsWith('[Scout]'));
+
     if (!notesState.notes.length) {
       list.innerHTML = '<div class="notesEmpty">No notes yet.<br>Click <b>+ New</b> to start.</div>';
       return;
     }
-    list.innerHTML = notesState.notes.map(n => `
-      <div class="notesItem${String(n.id) === String(notesState.activeId) ? ' active' : ''}" data-id="${n.id}">
-        <div class="notesItemTitle">${_esc(n.title || 'Untitled')}</div>
+
+    const makeItem = (n, displayTitle) => `
+      <div class="notesItem${String(n.id) === String(notesState.activeId) ? ' active' : ''}" data-id="${_esc(n.id)}">
+        <div class="notesItemTitle">${_esc(displayTitle || 'Untitled')}</div>
         <div class="notesItemDate">${notesFormatDate(n.updated_at || n.created_at)}</div>
+      </div>`;
+
+    let html = generalNotes.map(n => makeItem(n, n.title)).join('');
+
+    if (playerNotes.length) {
+      const isOpen = notesState.playersOpen !== false;
+      html += `
+      <div class="notesFolderRow${isOpen ? ' open' : ''}" id="notesFolderPlayers">
+        <span class="notesFolderArrow">${isOpen ? '▾' : '▸'}</span>
+        <span>📁 Players</span>
+        <span class="notesFolderCount">${playerNotes.length}</span>
       </div>
-    `).join('');
+      <div class="notesFolderItems${isOpen ? '' : ' hidden'}" id="notesFolderItems">
+        ${playerNotes.map(n => makeItem(n, String(n.title).replace(/^\[Scout\]\s*/, ''))).join('')}
+      </div>`;
+    }
+
+    list.innerHTML = html;
+
     list.querySelectorAll('.notesItem').forEach(el => {
       el.addEventListener('click', () => notesSelectNote(el.dataset.id));
     });
+
+    const folderRow = document.getElementById('notesFolderPlayers');
+    if (folderRow) {
+      folderRow.addEventListener('click', () => {
+        notesState.playersOpen = !notesState.playersOpen;
+        notesRenderList();
+      });
+    }
   }
 
   function notesRenderEditor() {
