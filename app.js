@@ -1397,6 +1397,7 @@ function renderWeights(){
   // ---------- Table rendering ----------
   const LIST_COLS = [
     {key:'_tb_add', label:''},
+    {key:'_opp_add', label:'⚔'},
     {key:'CalcRank', label:'#'},
     {key:'Player', label:'Player'},
     {key:'Team', label:'Team'},
@@ -1486,6 +1487,14 @@ function renderWeights(){
           } else {
             td.innerHTML = `<span class="tbAddBtn" title="Add to roster">＋</span>`;
             td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); tbAddPlayer(r); });
+          }
+        }else if(c.key === '_opp_add'){
+          const onOpp = oppRoster.some(x => x.Player === r.Player && x.Team === r.Team);
+          if(onOpp){
+            td.innerHTML = `<span class="oppAddBtn on-opp" title="Already on opponent roster">✓</span>`;
+          } else {
+            td.innerHTML = `<span class="oppAddBtn" title="Add to opponent roster">⚔</span>`;
+            td.querySelector('.oppAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); oppAddPlayer(r); });
           }
         }else if(c.key === 'Player'){
           td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
@@ -2169,6 +2178,325 @@ archetypeTags(r).forEach(tag=>{
     tbRefresh();
   }
 
+  // ---------- Opponent Roster ----------
+  var oppRoster = [];
+
+  function oppAddPlayer(r){
+    if(oppRoster.some(x => tbPlayerKey(x) === tbPlayerKey(r))) return {success:false, message:`${r.Player} is already on the opponent roster.`};
+    oppRoster.push(r);
+    oppRefresh();
+    // Re-render player table to update ⚔ column state
+    renderPlayers();
+    return {success:true, message:`Added ${r.Player} to opponent roster.`};
+  }
+
+  function oppRemovePlayer(idx){
+    oppRoster.splice(idx, 1);
+    oppRefresh();
+    renderPlayers();
+  }
+
+  function oppRefresh(){
+    const body = document.getElementById('oppRosterBody');
+    const emptyEl = document.getElementById('oppRosterEmpty');
+    const barsEl = document.getElementById('oppGapBars');
+    const tagsEl = document.getElementById('oppGapTags');
+    const gapEmptyEl = document.getElementById('oppGapEmpty');
+    const scoutBody = document.getElementById('oppScoutBody');
+    const scoutEmpty = document.getElementById('oppScoutEmpty');
+    const countEl = document.getElementById('oppCount');
+    const guardEl = document.getElementById('oppGuardCount');
+    const bigEl = document.getElementById('oppBigCount');
+
+    if(!body) return;
+
+    // KPIs
+    let guards=0, bigs=0;
+    oppRoster.forEach(r => { if(tbPosGroup(r)==='guard') guards++; else bigs++; });
+    if(countEl) countEl.textContent = oppRoster.length;
+    if(guardEl) guardEl.textContent = guards;
+    if(bigEl) bigEl.textContent = bigs;
+
+    // Roster table
+    body.innerHTML = '';
+    if(!oppRoster.length){
+      if(emptyEl) emptyEl.style.display = '';
+    } else {
+      if(emptyEl) emptyEl.style.display = 'none';
+      oppRoster.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'tbRosterRow';
+        const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'Guard':'Big');
+        tr.innerHTML = `
+          <td style="font-size:11px;color:var(--muted);text-align:center">${idx+1}</td>
+          <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span></td>
+          <td style="font-size:11px">${r.Team||'—'}</td>
+          <td style="font-size:11px">${rPos}</td>
+          <td style="font-size:11px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
+          <td style="font-size:11px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+          <td><button class="tbRemoveBtn" title="Remove">✕</button></td>
+        `;
+        tr.querySelector('.link').addEventListener('click', ()=> openProfile(r));
+        tr.querySelector('.tbRemoveBtn').addEventListener('click', ()=> oppRemovePlayer(idx));
+        body.appendChild(tr);
+      });
+    }
+
+    // Gap bars (reuse same logic as tbRenderGaps but for oppRoster)
+    tbRenderGapBarsForRoster(oppRoster, barsEl, gapEmptyEl, tagsEl);
+
+    // Quick scout: top players not on opponent roster
+    if(scoutBody){
+      scoutBody.innerHTML = '';
+      const allPool = tbGetAllPlayers();
+      const oppKeys = new Set(oppRoster.map(tbPlayerKey));
+      const candidates = allPool.filter(r => !oppKeys.has(tbPlayerKey(r))).slice(0,20);
+      if(!candidates.length){
+        if(scoutEmpty) scoutEmpty.style.display = 'block';
+      } else {
+        if(scoutEmpty) scoutEmpty.style.display = 'none';
+        candidates.forEach(r => {
+          const tr = document.createElement('tr');
+          const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'Guard':'Big');
+          tr.innerHTML = `
+            <td><span class="link" style="font-size:11px">${r.Player||'—'}</span></td>
+            <td style="font-size:11px">${r.Team||'—'}</td>
+            <td style="font-size:11px">${rPos}</td>
+            <td style="font-size:11px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
+            <td style="font-size:11px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+            <td><span class="tbAddBtn" title="Add to opponent">＋</span></td>
+          `;
+          tr.querySelector('.link').addEventListener('click', ()=> openProfile(r));
+          tr.querySelector('.tbAddBtn').addEventListener('click', ()=>{ oppAddPlayer(r); });
+          scoutBody.appendChild(tr);
+        });
+      }
+    }
+
+    // Refresh H2H if on that tab
+    h2hRefresh();
+  }
+
+  // Maps 0-100 percentile to a letter grade + label
+  function pctToGrade(pct){
+    if(pct>=85) return {grade:'A+', label:'Elite'};
+    if(pct>=70) return {grade:'A',  label:'Great'};
+    if(pct>=55) return {grade:'B',  label:'Good'};
+    if(pct>=40) return {grade:'C',  label:'Average'};
+    if(pct>=25) return {grade:'D',  label:'Below Avg'};
+    return             {grade:'F',  label:'Weak'};
+  }
+
+  // Shared gap bar renderer — used by both My Team and Opponent
+  function tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl){
+    if(!barsEl) return;
+    barsEl.innerHTML = '';
+    if(tagsEl) tagsEl.innerHTML = '';
+    if(!roster.length){
+      if(emptyEl) emptyEl.style.display = 'block';
+      return;
+    }
+    if(emptyEl) emptyEl.style.display = 'none';
+
+    const hasGuards = roster.some(r => tbPosGroup(r) === 'guard');
+    const hasBigs = roster.some(r => tbPosGroup(r) !== 'guard');
+    let cats = [];
+    if(hasGuards && hasBigs){
+      const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
+      const seen = new Set();
+      cats = all.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
+    } else if(hasBigs){
+      cats = GAP_CATEGORIES.Bigs || [];
+    } else {
+      cats = GAP_CATEGORIES.Guards || [];
+    }
+
+    const gaps = [];
+    cats.forEach(cat => {
+      let sum = 0, count = 0;
+      cat.stats.forEach(stat => {
+        if(!statDist[stat]) return;
+        roster.forEach(r => {
+          const x = safeNum(r[stat]);
+          if(x === null) return;
+          const p = statPercentile(stat, x);
+          if(Number.isFinite(p)){ sum += p; count++; }
+        });
+      });
+      const avgPct = count > 0 ? sum / count : 0.5;
+      const pct100 = Math.round(avgPct * 100);
+      const level = avgPct < 0.35 ? 'weak' : avgPct < 0.55 ? 'ok' : 'strong';
+      const color = level === 'weak' ? 'var(--bad)' : level === 'ok' ? 'var(--warn)' : 'var(--good)';
+      gaps.push({label:cat.label, avgPct, level, pct100, color});
+
+      const div = document.createElement('div');
+      div.className = 'gapBar';
+      div.innerHTML = `
+        <div class="gapBarLabel"><span>${cat.icon} ${cat.label}</span><span style="color:${color};font-weight:700">${pct100}th</span></div>
+        <div class="gapBarTrack"><div class="gapBarFill" style="width:${pct100}%;background:${color}"></div></div>
+      `;
+      barsEl.appendChild(div);
+    });
+
+    if(tagsEl){
+      gaps.forEach(g => {
+        const tag = document.createElement('span');
+        tag.className = `gapTag ${g.level}`;
+        tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
+        tagsEl.appendChild(tag);
+      });
+    }
+
+    return gaps;
+  }
+
+  // Head-to-Head refresh
+  function h2hRefresh(){
+    const barsEl = document.getElementById('h2hBars');
+    const emptyEl = document.getElementById('h2hEmpty');
+    if(!barsEl) return;
+
+    barsEl.innerHTML = '';
+    if(!tbRoster.length || !oppRoster.length){
+      if(emptyEl) emptyEl.style.display = 'block';
+      return;
+    }
+    if(emptyEl) emptyEl.style.display = 'none';
+
+    const hasGuards = tbRoster.some(r=>tbPosGroup(r)==='guard') || oppRoster.some(r=>tbPosGroup(r)==='guard');
+    const hasBigs = tbRoster.some(r=>tbPosGroup(r)!=='guard') || oppRoster.some(r=>tbPosGroup(r)!=='guard');
+    let cats = [];
+    if(hasGuards && hasBigs){
+      const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
+      const seen = new Set(); cats = all.filter(c=>{if(seen.has(c.label))return false;seen.add(c.label);return true;});
+    } else if(hasBigs){ cats = GAP_CATEGORIES.Bigs||[]; }
+    else { cats = GAP_CATEGORIES.Guards||[]; }
+
+    // Legend
+    const legend = document.createElement('div');
+    legend.className = 'h2hLegend';
+    legend.innerHTML = `<span><span class="dot" style="background:#60a5fa"></span>My Team</span><span><span class="dot" style="background:#f87171"></span>Opponent</span>`;
+    barsEl.appendChild(legend);
+
+    const catResults = [];
+    cats.forEach(cat => {
+      let mySum=0, myCount=0, oppSum=0, oppCount=0;
+      cat.stats.forEach(stat => {
+        if(!statDist[stat]) return;
+        tbRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){mySum+=p;myCount++;} });
+        oppRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){oppSum+=p;oppCount++;} });
+      });
+      const myPct = Math.round((myCount>0?mySum/myCount:0.5)*100);
+      const oppPct = Math.round((oppCount>0?oppSum/oppCount:0.5)*100);
+      const myWins = myPct >= oppPct;
+      const margin = Math.abs(myPct - oppPct);
+      catResults.push({label:cat.label, icon:cat.icon, myPct, oppPct, myWins, margin});
+
+      // Winner's number: brighter + highlight pill; loser's: dimmed
+      const myNumStyle = myWins
+        ? `font-weight:800;font-size:13px;color:#60a5fa;min-width:42px;text-align:right;background:rgba(96,165,250,0.15);border-radius:4px;padding:1px 6px`
+        : `font-weight:500;font-size:11px;color:rgba(96,165,250,0.35);min-width:42px;text-align:right`;
+      const oppNumStyle = !myWins
+        ? `font-weight:800;font-size:13px;color:#f87171;min-width:42px;background:rgba(248,113,113,0.15);border-radius:4px;padding:1px 6px`
+        : `font-weight:500;font-size:11px;color:rgba(248,113,113,0.35);min-width:42px`;
+
+      const row = document.createElement('div');
+      row.className = 'h2hRow';
+      row.innerHTML = `
+        <div class="h2hRowLabel">
+          <span style="${myNumStyle}">${myPct}th</span>
+          <span class="catLabel">${cat.icon} ${cat.label}</span>
+          <span style="${oppNumStyle}">${oppPct}th</span>
+        </div>
+        <div class="h2hDualTrack">
+          <div class="h2hTrackLeft"><div class="h2hFillLeft" style="width:${myPct}%;background:#60a5fa"></div></div>
+          <div class="h2hDot"></div>
+          <div class="h2hTrackRight"><div class="h2hFillRight" style="width:${oppPct}%;background:#f87171"></div></div>
+        </div>
+      `;
+      barsEl.appendChild(row);
+    });
+
+    // Auto-analysis section
+    const myTeamName = tbRoster[0]?.Team || 'My Team';
+    const oppTeamName = oppRoster[0]?.Team || 'Opponent';
+    const myAdvantages = catResults.filter(r => r.myWins && r.margin >= 10);
+    const oppAdvantages = catResults.filter(r => !r.myWins && r.margin >= 10);
+    const myWinCount = catResults.filter(r => r.myWins).length;
+
+    const analysis = document.createElement('div');
+    analysis.className = 'h2hAnalysis';
+
+    const overallText = myWinCount > catResults.length/2
+      ? `<b style="color:#60a5fa">${myTeamName}</b> leads in ${myWinCount}/${catResults.length} categories`
+      : myWinCount < catResults.length/2
+      ? `<b style="color:#f87171">${oppTeamName}</b> leads in ${catResults.length-myWinCount}/${catResults.length} categories`
+      : `Even matchup — each team leads ${myWinCount} categories`;
+
+    const strengthsHtml = myAdvantages.length
+      ? myAdvantages.map(r=>`<span class="h2hTag h2hTagMy">${r.icon} ${r.label} <b>+${r.margin}</b></span>`).join('')
+      : `<span style="color:var(--muted);font-size:11px">No significant advantages</span>`;
+
+    const vulnsHtml = oppAdvantages.length
+      ? oppAdvantages.map(r=>`<span class="h2hTag h2hTagOpp">${r.icon} ${r.label} <b>+${r.margin}</b></span>`).join('')
+      : `<span style="color:var(--muted);font-size:11px">No significant vulnerabilities</span>`;
+
+    analysis.innerHTML = `
+      <div class="h2hAnalysisOverall">${overallText}</div>
+      <div class="h2hAnalysisBlock">
+        <div class="h2hAnalysisTitle" style="color:#60a5fa">✅ ${myTeamName}'s Strengths</div>
+        <div class="h2hTagRow">${strengthsHtml}</div>
+      </div>
+      <div class="h2hAnalysisBlock">
+        <div class="h2hAnalysisTitle" style="color:#f87171">⚠️ Vulnerabilities vs ${oppTeamName}</div>
+        <div class="h2hTagRow">${vulnsHtml}</div>
+      </div>
+    `;
+    barsEl.appendChild(analysis);
+  }
+
+  // ---------- Quick-add widget ----------
+  function setupQuickAdd(inputId, dropdownId, addFn){
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    if(!input || !dropdown) return;
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if(q.length < 2){ dropdown.style.display = 'none'; return; }
+      const allPool = tbGetAllPlayers();
+      const results = allPool.filter(r => (r.Player||'').toLowerCase().includes(q) || (r.Team||'').toLowerCase().includes(q)).slice(0, 12);
+      if(!results.length){ dropdown.style.display = 'none'; return; }
+
+      dropdown.innerHTML = '';
+      results.forEach(r => {
+        const isOnTarget = addFn === tbAddPlayer
+          ? tbRoster.some(x=>tbPlayerKey(x)===tbPlayerKey(r))
+          : oppRoster.some(x=>tbPlayerKey(x)===tbPlayerKey(r));
+        const item = document.createElement('div');
+        item.className = 'tbQuickAddItem';
+        const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'G':'F');
+        item.innerHTML = `
+          <div><div class="qName">${r.Player||'—'}</div><div class="qMeta">${r.Team||'—'} · ${rPos} · ${fmtMoney(safeNum(r.ActualValuation_calc))}</div></div>
+          <button class="qAdd${isOnTarget?' on-opp':''}" ${isOnTarget?'disabled':''} title="${isOnTarget?'Already added':'Add'}">${isOnTarget?'✓':'＋ Add'}</button>
+        `;
+        if(!isOnTarget){
+          item.querySelector('.qAdd').addEventListener('click', (e)=>{
+            e.stopPropagation();
+            addFn(r);
+            input.value = '';
+            dropdown.style.display = 'none';
+          });
+        }
+        dropdown.appendChild(item);
+      });
+      dropdown.style.display = 'block';
+    });
+
+    input.addEventListener('keydown', e=>{ if(e.key==='Escape'){ dropdown.style.display='none'; input.blur(); }});
+    document.addEventListener('click', e=>{ if(!input.contains(e.target)&&!dropdown.contains(e.target)) dropdown.style.display='none'; });
+  }
+
   // Render a list of swap suggestion rows into rebalanceInfo.
   // toDrop: [{r, i, pct}], candidates: player pool, fallbackLabel: position name, usedKeys: Set
   function renderSwapRows(toDrop, candidates, fallbackLabel, usedKeys, rebalanceInfo){
@@ -2522,91 +2850,49 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function tbRenderGaps(){
-    tbGapBars.innerHTML = '';
+    // Use shared renderer for My Team gap bars
+    const gaps = tbRenderGapBarsForRoster(tbRoster, tbGapBars, tbGapEmpty, null);
     tbGapTags.innerHTML = '';
-    if(!tbRoster.length){ tbGapEmpty.style.display = 'block'; return; }
-    tbGapEmpty.style.display = 'none';
 
-    // Pick categories based on who's on the roster
-    const hasGuards = tbRoster.some(r => tbPosGroup(r) === 'guard');
-    const hasBigs = tbRoster.some(r => tbPosGroup(r) !== 'guard');
-    let cats = [];
-    if(hasGuards && hasBigs){
-      // Merge both, dedup by label
-      const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
-      const seen = new Set();
-      cats = all.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
-    } else if(hasBigs){
-      cats = GAP_CATEGORIES.Bigs || [];
-    } else {
-      cats = GAP_CATEGORIES.Guards || [];
-    }
-    const gaps = []; // {label, avgPct, level}
-
-    cats.forEach(cat => {
-      // Average percentile of roster players in these stats
-      let sum = 0, count = 0;
-      cat.stats.forEach(stat => {
-        if(!statDist[stat]) return;
-        tbRoster.forEach(r => {
-          const x = safeNum(r[stat]);
-          if(x === null) return;
-          const p = statPercentile(stat, x);
-          if(Number.isFinite(p)){ sum += p; count++; }
+    // Gap tags with click-to-explain (My Team specific — has explain tooltip)
+    if(gaps && gaps.length){
+      gaps.forEach(g => {
+        const tag = document.createElement('span');
+        tag.className = `gapTag ${g.level}`;
+        tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
+        tag.title = 'Click for explanation';
+        tag.addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll('.gapExplain').forEach(el => el.remove());
+          const expl = GAP_EXPLANATIONS[g.label] || 'No description available.';
+          const levelText = g.level === 'weak' ? 'Your team is weak here.' : g.level === 'ok' ? 'Your team is average here.' : 'Your team is strong here.';
+          const tip = document.createElement('div');
+          tip.className = 'gapExplain';
+          tip.innerHTML = `<span class="gapExplainClose" id="gapTipClose">✕</span><b>${g.label}</b> — ${expl}<br><br><em style="color:${g.level==='weak'?'var(--bad)':g.level==='ok'?'var(--warn)':'var(--good)'}">${levelText} (${g.pct100}th percentile)</em>`;
+          document.body.appendChild(tip);
+          const rect = e.target.getBoundingClientRect();
+          const tipHeight = tip.offsetHeight || 140;
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const leftPos = Math.max(8, Math.min(rect.left, window.innerWidth - 340));
+          tip.style.left = leftPos + 'px';
+          if(spaceBelow < tipHeight + 16){
+            tip.style.top = Math.max(8, rect.top - tipHeight - 8) + 'px';
+          } else {
+            tip.style.top = (rect.bottom + 8) + 'px';
+          }
+          const closeTip = () => { tip.remove(); };
+          tip.querySelector('#gapTipClose').addEventListener('click', closeTip);
+          setTimeout(() => {
+            const dismiss = (ev) => { if(!tip.contains(ev.target) && ev.target !== e.target){ closeTip(); document.removeEventListener('click', dismiss); }};
+            document.addEventListener('click', dismiss);
+          }, 50);
         });
+        tbGapTags.appendChild(tag);
       });
-      const avgPct = count > 0 ? sum / count : 0.5;
-      const pct100 = Math.round(avgPct * 100);
-      const level = avgPct < 0.35 ? 'weak' : avgPct < 0.55 ? 'ok' : 'strong';
-      const color = level === 'weak' ? 'var(--bad)' : level === 'ok' ? 'var(--warn)' : 'var(--good)';
+    }
 
-      gaps.push({label:cat.label, avgPct, level, stats:cat.stats});
-
-      const div = document.createElement('div');
-      div.className = 'gapBar';
-      div.innerHTML = `
-        <div class="gapBarLabel"><span>${cat.icon} ${cat.label}</span><span style="color:${color};font-weight:700">${pct100}th</span></div>
-        <div class="gapBarTrack"><div class="gapBarFill" style="width:${pct100}%;background:${color}"></div></div>
-      `;
-      tbGapBars.appendChild(div);
-    });
-
-    // Gap tags with click-to-explain
-    gaps.forEach(g => {
-      const tag = document.createElement('span');
-      tag.className = `gapTag ${g.level}`;
-      tag.textContent = g.level === 'weak' ? `Weak: ${g.label}` : g.level === 'ok' ? `Avg: ${g.label}` : `Strong: ${g.label}`;
-      tag.title = 'Click for explanation';
-      tag.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // Remove any existing explanation tooltip
-        document.querySelectorAll('.gapExplain').forEach(el => el.remove());
-        const expl = GAP_EXPLANATIONS[g.label] || 'No description available.';
-        const levelText = g.level === 'weak' ? 'Your team is weak here.' : g.level === 'ok' ? 'Your team is average here.' : 'Your team is strong here.';
-        const tip = document.createElement('div');
-        tip.className = 'gapExplain';
-        tip.innerHTML = `<span class="gapExplainClose" id="gapTipClose">✕</span><b>${g.label}</b> — ${expl}<br><br><em style="color:${g.level==='weak'?'var(--bad)':g.level==='ok'?'var(--warn)':'var(--good)'}">${levelText} (${Math.round(g.avgPct*100)}th percentile)</em>`;
-        document.body.appendChild(tip);
-        const rect = e.target.getBoundingClientRect();
-        const tipHeight = tip.offsetHeight || 140;
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const leftPos = Math.max(8, Math.min(rect.left, window.innerWidth - 340));
-        tip.style.left = leftPos + 'px';
-        // Show above if not enough space below
-        if(spaceBelow < tipHeight + 16){
-          tip.style.top = Math.max(8, rect.top - tipHeight - 8) + 'px';
-        } else {
-          tip.style.top = (rect.bottom + 8) + 'px';
-        }
-        const closeTip = () => { tip.remove(); };
-        tip.querySelector('#gapTipClose').addEventListener('click', closeTip);
-        setTimeout(() => {
-          const dismiss = (ev) => { if(!tip.contains(ev.target) && ev.target !== e.target){ closeTip(); document.removeEventListener('click', dismiss); }};
-          document.addEventListener('click', dismiss);
-        }, 50);
-      });
-      tbGapTags.appendChild(tag);
-    });
+    // Also refresh H2H whenever My Team gaps are recalculated
+    h2hRefresh();
   }
 
   function tbRenderSuggestions(){
@@ -2708,7 +2994,46 @@ archetypeTags(r).forEach(tag=>{
   window.addEventListener('DOMContentLoaded', () => {
     if(gsKeyInput) gsKeyInput.value = DEFAULT_GS_API_KEY;
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 80);
+    initPageNav();
+    initTbSubNav();
+    setupQuickAdd('tbQuickAddInput', 'tbQuickAddDropdown', tbAddPlayer);
+    setupQuickAdd('oppQuickAddInput', 'oppQuickAddDropdown', oppAddPlayer);
+    // Opponent clear button
+    const oppClearBtn = document.getElementById('oppClear');
+    if(oppClearBtn) oppClearBtn.addEventListener('click', ()=>{ oppRoster=[]; oppRefresh(); });
   });
+
+  function initPageNav(){
+    const pages = ['pagePlayers','pageTeamBuilder','pageMethodology'];
+    document.querySelectorAll('.pageNavBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.page;
+        pages.forEach(id => {
+          const el = document.getElementById(id);
+          if(el) el.style.display = id === target ? '' : 'none';
+        });
+        document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.toggle('active', b.dataset.page === target));
+        // If switching to Team Builder, refresh H2H
+        if(target === 'pageTeamBuilder') h2hRefresh();
+      });
+    });
+  }
+
+  function initTbSubNav(){
+    const subs = ['tbSubMyTeam','tbSubH2H','tbSubOpponent'];
+    document.querySelectorAll('.tbSubBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.sub;
+        subs.forEach(id => {
+          const el = document.getElementById(id);
+          if(el) el.style.display = id === target ? '' : 'none';
+        });
+        document.querySelectorAll('.tbSubBtn').forEach(b => b.classList.toggle('active', b.dataset.sub === target));
+        if(target === 'tbSubH2H') h2hRefresh();
+        if(target === 'tbSubOpponent') oppRefresh();
+      });
+    });
+  }
 
   // --- Comparison modal ---
   function openCompare(name1, name2){
@@ -2815,6 +3140,8 @@ archetypeTags(r).forEach(tag=>{
   window._app = {
     get tbRoster(){ return tbRoster; },
     set tbRoster(v){ tbRoster = v; },
+    get oppRoster(){ return oppRoster; },
+    set oppRoster(v){ oppRoster = v; },
     get computed(){ return computed; },
     get pos(){ return pos; },
     get league(){ return league; },
@@ -2822,7 +3149,8 @@ archetypeTags(r).forEach(tag=>{
     get currentWeights(){ return currentWeights; },
     tbAddPlayer, tbRefresh, tbGetAllPlayers, openProfile, openCompare, tbPlayerLeague,
     safeNum, fmtMoney, tbPlayerKey, tbPosGroup, tbPlayerAvgPct, statPercentile,
-    barColor, getInvertForStat
+    barColor, getInvertForStat,
+    oppAddPlayer, oppRemovePlayer, oppRefresh, h2hRefresh
   };
 
 
@@ -3111,7 +3439,7 @@ archetypeTags(r).forEach(tag=>{
 
   // ---- Tool implementations ----
   function getDashboardContext(){
-    const a=app(), roster=a.tbRoster||[];
+    const a=app(), roster=a.tbRoster||[], opp=oppRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
       rosterSize:roster.length, roster:roster.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
       perf:r.Score?r.Score.toFixed(1):'—',value:r.ActualValuation_calc?'$'+Math.round(r.ActualValuation_calc).toLocaleString():'—'})),
@@ -3119,7 +3447,103 @@ archetypeTags(r).forEach(tag=>{
       playerCap:document.getElementById('tbPlayerCap')?.value||'150000',
       maxRoster:document.getElementById('tbMaxRoster')?.value||'13',
       targetGuards:document.getElementById('tbTargetGuards')?.value||'8',
-      targetBigs:document.getElementById('tbTargetBigs')?.value||'5' };
+      targetBigs:document.getElementById('tbTargetBigs')?.value||'5',
+      opponentRosterSize:opp.length,
+      opponentRoster:opp.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
+        perf:r.Score?r.Score.toFixed(1):'—',value:r.ActualValuation_calc?'$'+Math.round(r.ActualValuation_calc).toLocaleString():'—'})) };
+  }
+
+  function addPlayersToOpponent(names, team, conference, limit){
+    const pool = allPlayers();
+    if(!pool.length) return {error:'No player data loaded.'};
+    let candidates;
+    // team always wins — do NOT combine with playerNames to avoid cross-contamination
+    if(team){
+      const tl = team.toLowerCase();
+      candidates = pool.filter(r => (r.Team||'').toLowerCase().includes(tl));
+    } else if(names && names.length){
+      // Strict per-name lookup: find exact player matches
+      candidates = [];
+      names.forEach(n => {
+        const nl = n.toLowerCase().trim();
+        const match = pool.find(r => (r.Player||'').toLowerCase().includes(nl));
+        if(match && !candidates.some(c => tbPlayerKey(c) === tbPlayerKey(match))) candidates.push(match);
+      });
+    } else {
+      candidates = pool;
+    }
+    if(conference){ const cl=conference.toLowerCase(); candidates=candidates.filter(r=>(r.Conference||'').toLowerCase().includes(cl)); }
+    const toAdd = limit ? candidates.slice(0, limit) : candidates;
+    if(!toAdd.length) return {error:`No players found${team?' for team "'+team+'"':''}.`};
+    let added=0, skipped=0;
+    toAdd.forEach(r=>{ const res=oppAddPlayer(r); if(res.success) added++; else skipped++; });
+    oppRefresh();
+    return {success:true, added, skipped, opponentRosterSize:oppRoster.length,
+      message:`Added ${added} player${added!==1?'s':''} to opponent roster${skipped>0?` (${skipped} already on opponent)`:''}.`};
+  }
+
+  function getHeadToHead(){
+    if(!tbRoster.length) return {error:'Your roster is empty. Add players to My Team first.'};
+    if(!oppRoster.length) return {error:'Opponent roster is empty. Add players to the Opponent tab first.'};
+    const cats = (()=>{
+      const hasGuards = [...tbRoster,...oppRoster].some(r=>tbPosGroup(r)==='guard');
+      const hasBigs = [...tbRoster,...oppRoster].some(r=>tbPosGroup(r)!=='guard');
+      if(hasGuards&&hasBigs){ const all=[...(GAP_CATEGORIES.Guards||[]),...(GAP_CATEGORIES.Bigs||[])]; const seen=new Set(); return all.filter(c=>{if(seen.has(c.label))return false;seen.add(c.label);return true;}); }
+      return hasBigs ? GAP_CATEGORIES.Bigs||[] : GAP_CATEGORIES.Guards||[];
+    })();
+    const results = cats.map(cat=>{
+      let mySum=0,myN=0,oppSum=0,oppN=0;
+      cat.stats.forEach(stat=>{
+        if(!statDist[stat]) return;
+        tbRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){mySum+=p;myN++;} });
+        oppRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){oppSum+=p;oppN++;} });
+      });
+      const myPct=myN>0?Math.round(mySum/myN*100):50;
+      const oppPct=oppN>0?Math.round(oppSum/oppN*100):50;
+      return {category:cat.label, icon:cat.icon, myTeam:myPct, opponent:oppPct, advantage:myPct>=oppPct?'my_team':'opponent', margin:Math.abs(myPct-oppPct)};
+    });
+    const myWins=results.filter(r=>r.advantage==='my_team').length;
+    const oppWins=results.length-myWins;
+
+    // Significant gaps (15+ point margin)
+    const myStrengths=results.filter(r=>r.advantage==='my_team'&&r.margin>=15)
+      .map(r=>`${r.icon} ${r.category} (edge: +${r.margin})`);
+    const myWeaknesses=results.filter(r=>r.advantage==='opponent'&&r.margin>=15)
+      .map(r=>`${r.icon} ${r.category} (gap: -${r.margin})`);
+
+    // Map categories to suggested player types for weakness patching
+    const SKILL_MAP = {
+      'Scoring':'high-usage scorer (high PPG, PTS_Rating)',
+      'Playmaking':'pass-first guard (high AST, low TO)',
+      'Rebounding':'physical big (high REB, TRB)',
+      '3PT Shooting':'floor spacer (high 3P%, 3PA)',
+      'Interior Scoring':'post scorer or rim runner (high FG% near basket)',
+      'Defense':'defensive stopper (high STL+BLK, low opp PPG)',
+      'Ball Handling':'combo guard (low TOV, high AST/TO ratio)',
+      'Shot Creation':'iso scorer (high USG%, 3PT_Rating)',
+      'Athleticism':'athletic wing or PF (high BLK, STL)',
+    };
+    const patchSuggestions=results
+      .filter(r=>r.advantage==='opponent'&&r.margin>=10)
+      .sort((a,b)=>b.margin-a.margin)
+      .slice(0,3)
+      .map(r=>`• Patch ${r.icon} ${r.category}: target a ${SKILL_MAP[r.category]||'specialist in '+r.category}`);
+
+    const myTeamName = tbRoster[0]?.Team || 'My Team';
+    const oppTeamName = oppRoster[0]?.Team || 'Opponent';
+
+    return {
+      categories: results,
+      myWins, oppWins, totalCategories: results.length,
+      myStrengths, myWeaknesses,
+      patchSuggestions,
+      summary: `${myTeamName} wins ${myWins} of ${results.length} stat categories vs. ${oppTeamName}.`,
+      analysisHint: [
+        myStrengths.length ? `Strengths: ${myStrengths.join(', ')}.` : 'No dominant strengths.',
+        myWeaknesses.length ? `Vulnerabilities: ${myWeaknesses.join(', ')}.` : 'No major vulnerabilities.',
+        patchSuggestions.length ? `Suggested roster moves:\n${patchSuggestions.join('\n')}` : ''
+      ].filter(Boolean).join(' ')
+    };
   }
 
   function searchPlayers(q){
@@ -3267,7 +3691,10 @@ archetypeTags(r).forEach(tag=>{
     const di=a.tbRoster.findIndex(r=>(r.Player||'').toLowerCase().includes(drop.toLowerCase()));
     if(di===-1) return {success:false,message:drop+' not on roster.'};
     const ap=all.find(r=>(r.Player||'').toLowerCase().includes(add.toLowerCase()));
-    if(!ap) return {success:false,message:add+' not found.'};
+    if(!ap) return {success:false,message:add+' not found in database.'};
+    // Prevent swapping in a player who is already on the roster
+    const alreadyOnRoster=a.tbRoster.some((r,i)=>i!==di&&(r.Player||'').toLowerCase().includes(add.toLowerCase()));
+    if(alreadyOnRoster) return {success:false,message:`${ap.Player} is already on the roster. Choose a player not currently on the team.`};
     const dropped=a.tbRoster[di].Player; a.tbRoster.splice(di,1,ap);
     if(a.tbRefresh) a.tbRefresh();
     return {success:true,dropped,added:ap.Player,rosterSize:a.tbRoster.length};
@@ -3300,7 +3727,7 @@ archetypeTags(r).forEach(tag=>{
         limit:{type:'NUMBER',description:'# results (default 10)'}}}},
     {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
       parameters:{type:'OBJECT',properties:{}}},
-    {name:'add_players_to_roster',description:'Add players to roster. Use playerNames for specific players. Use team or conference (without playerNames) to add ALL players from a team/conference — e.g. when user says "add all Toledo players" call with {team:"Toledo"}. Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically.',
+    {name:'add_players_to_roster',description:'Add players to YOUR OWN roster (not the opponent). Use when user says "add X to my team/roster", "load X", "build my team with X". Use team param to add a full team. UI shows Yes/No confirmation. NEVER use this for the opposing team — use add_players_to_opponent instead.',
       parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'},description:'Specific player names to add'},team:{type:'STRING',description:'Add ALL players from this team (use instead of playerNames for bulk team adds)'},conference:{type:'STRING',description:'Add ALL players from this conference'},limit:{type:'NUMBER',description:'Max players when using team/conference (optional)'}}}},
     {name:'remove_player_from_roster',description:'Remove player from roster. Call this immediately after your recommendation — the UI shows Yes/No buttons to the user automatically.',
       parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
@@ -3308,6 +3735,10 @@ archetypeTags(r).forEach(tag=>{
       parameters:{type:'OBJECT',properties:{dropPlayer:{type:'STRING'},addPlayer:{type:'STRING'}},required:['dropPlayer','addPlayer']}},
     {name:'compare_players',description:'Compare two players side-by-side with visual stats table. ALWAYS use this for comparisons.',
       parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
+    {name:'add_players_to_opponent',description:'Add players to the OPPONENT roster (the team you are playing AGAINST). Executes immediately — no confirmation needed. Use when: user says "X is the opponent", "playing against X", "scout X", "add X to opponent". NEVER call this for the user\'s own team. Use team param to add a full team.',
+      parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'},description:'Specific player names to add to opponent'},team:{type:'STRING',description:'Add ALL players from this team to opponent'},conference:{type:'STRING',description:'Filter by conference'},limit:{type:'NUMBER',description:'Max players to add (default 13)'}}}},
+    {name:'get_head_to_head',description:'Get head-to-head stat category comparison between my team and the opponent roster.',
+      parameters:{type:'OBJECT',properties:{}}},
     // Keep this description aligned with runtime enforcement: dashboard tools first, then web context.
     {name:'web_search',description:'Search Google for external information about a player or topic (injury news, transfer portal, scouting reports, recruiting rankings, role/minutes updates, team news, recaps). IMPORTANT: always look up dashboard data first (get_dashboard_context + get_player_profile/search_players/get_top_players/compare_players). Only call web_search AFTER the dashboard pass when the question depends on current external context (news/injuries/portal/availability/rumors).',
       parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Google search query, e.g. "Brandon Benjamin Fairfield basketball 2025 scouting report"'}},required:['query']}},
@@ -3348,6 +3779,8 @@ archetypeTags(r).forEach(tag=>{
       case 'remove_player_from_roster': return removeFromRoster(a.playerName||'');
       case 'swap_roster_player': return swapPlayer(a.dropPlayer||'',a.addPlayer||'');
       case 'compare_players': return comparePlayers(a.player1||'',a.player2||'');
+      case 'add_players_to_opponent': return addPlayersToOpponent(a.playerNames||[], a.team, a.conference, a.limit);
+      case 'get_head_to_head': return getHeadToHead();
       case 'web_search': return doWebSearch(a.query||'');
       default: return {error:'Unknown: '+c.name};
     }
@@ -3361,12 +3794,19 @@ archetypeTags(r).forEach(tag=>{
 STATE: ${ctx.league}, ${ctx.position} tab, ${ctx.totalPlayers} players loaded
 ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetBigs}B
 ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+r.team+', '+r.pos+', Perf:'+r.perf+', Val:'+r.value+')').join('\n'):'ROSTER: empty'}
+OPPONENT: ${ctx.opponentRosterSize} players${ctx.opponentRoster.length?' — '+ctx.opponentRoster.map(r=>r.player+' ('+r.team+')').join(', '):''}
 
  RULES (strict):
  1) TOOL ORDER: Use dashboard tools first. Get constraints via get_dashboard_context when needed, then use search_players/get_top_players/get_player_profile/compare_players. Only use web_search AFTER the dashboard pass for anything the dashboard cannot know or that may have changed recently.
  2) COMPARE: For player vs player, ALWAYS call compare_players (do not hand-compare raw stats).
  3) FINDING PLAYERS: Use get_top_players with sortBy. For shooters ALWAYS sort by 3PT_Rating (never raw 3P%). For defenders use DRtg; for rim protection use BPG; scorers PPG; playmakers APG. Apply minPerf and maxValue when relevant. CRITICAL: NEVER recommend a player by name unless you have seen that player in a dashboard tool result (get_top_players, search_players, or get_player_profile) in this conversation. Do NOT use your training knowledge to invent player names.
- 4) ROSTER ACTIONS: For swap requests, you MUST call get_top_players first to find real candidates from the dashboard, then pick your recommendation from those results. Give your recommendation with reasoning, then IMMEDIATELY call swap_roster_player in the same response — the system shows Yes/No buttons automatically. Do NOT ask "Want me to do this?" and wait.
+ 4) SWAP OPTIMIZATION: When the user asks to swap, upgrade, or replace a roster player:
+    a) Call get_player_profile on the player to be dropped — record their PerfScore, position, team, and value.
+    b) Call get_top_players: same position as dropped player, maxValue = playerCap, limit 20, sortBy Score.
+    c) From the results, ONLY pick a candidate who: (1) is NOT already in the current ROSTER list from get_dashboard_context — cross-check every name carefully, (2) has PerfScore ≥ dropped player's PerfScore (an upgrade or strong lateral), (3) is within the playerCap budget.
+    d) NEVER recommend a player who is already on the roster under any circumstance. If all top candidates are on the roster, say so and ask the user to adjust budget or position filter.
+    e) State the upgrade reasoning (new perf vs old perf, key stat improvements), then IMMEDIATELY call swap_roster_player — do NOT ask "Want me to do this?".
+    f) "Swap X for a better Y" is ALWAYS a swap request — call swap_roster_player, NEVER add_players_to_roster.
   5) WEB_SEARCH REQUIRED: If the user says "latest/most recent/today/this week/yesterday/tomorrow", asks about injuries/suspensions/availability/transfer portal/role/minutes changes/NIL/coaching news, OR asks any valuation question (worth $, fair, overpay, steal, invest), you MUST call web_search after dashboard lookup.
  6) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality (MBB/WBB separation). Web = current context/status. If web context changes your recommendation, say so and reduce confidence.
  7) WEB REPORTING: When you use web_search, include concrete dates (not relative phrasing). If sources conflict, state the conflict and be conservative.
@@ -3374,7 +3814,32 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
  9) EFFICIENCY: Minimize tool calls. Do at most 1 web_search unless the top option has a red-flag or the user explicitly asks for broader verification.
  10) LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}.
  11) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.
- 12) POST-EXECUTION: When you receive a function result with "added", "rosterSize", or "success", the action has ALREADY been executed — the user confirmed it and it ran. ALWAYS confirm what was done (e.g. "Added 14 Toledo players to your roster"). NEVER say you "can't" do something, refuse, or second-guess a user-confirmed action after execution. If the roster is large or imbalanced after a bulk add, mention it as a brief note AFTER confirming success — never as a reason to refuse.`}]};
+ 12) POST-EXECUTION: When you receive a function result with "added", "rosterSize", or "success", the action has ALREADY been executed — the user confirmed it and it ran. ALWAYS confirm what was done (e.g. "Added 14 Toledo players to your roster"). NEVER say you "can't" do something, refuse, or second-guess a user-confirmed action after execution. If the roster is large or imbalanced after a bulk add, mention it as a brief note AFTER confirming success — never as a reason to refuse.
+ 13) OPPONENT/H2H — STRICT INTENT RULES (read carefully, follow exactly):
+
+   TOOL SELECTION:
+   • add_players_to_roster  → YOUR roster only. Phrases: "add X to my roster/team", "load X players", "build my team with X". Requires Yes/No confirm.
+   • add_players_to_opponent → OPPONENT roster only. Phrases: "add X to opponent", "X is the opponent", "scout X", "playing against X", "we play X next", "X to opponent". Executes immediately, NO confirm needed.
+
+   COMPOUND COMMAND "X against Y" / "X vs Y" / "X versus Y":
+   • X (first team) = YOUR team → call add_players_to_roster({team:"X"}) [shows confirm]
+   • Y (second team) = OPPONENT → call add_players_to_opponent({team:"Y"}) [executes immediately]
+   • ALWAYS call add_players_to_opponent FIRST (it's instant), then add_players_to_roster.
+   • Example: "Add all Toledo players against Bowling Green" → add_players_to_opponent({team:"Bowling Green"}), then add_players_to_roster({team:"Toledo"})
+   • Example: "Toledo vs Bowling Green" → same split.
+   • MESSAGING: In your text response before calling add_players_to_roster, ALWAYS state that you've already added the opponent. Example: "✅ Added Bowling Green (15 players) to the opponent roster. Now I'd like to add Toledo to your team:" This ensures the user sees both teams mentioned.
+
+   CRITICAL RULES:
+   • NEVER add both teams to the same roster. "X against Y" is NEVER two opponent adds.
+   • When calling add_players_to_opponent, ALWAYS pass team:"TeamName" — never pass playerNames for a full team add.
+
+   H2H ANALYSIS — after both rosters are set, call get_head_to_head. Then provide a full structured analysis:
+   1. **Matchup Summary**: Who wins more categories and by how much.
+   2. **My Team's Strengths**: List categories from myStrengths in the result (edge advantage ▲).
+   3. **Vulnerabilities**: List categories from myWeaknesses (gap ▼). For each, explain what the opponent does well there.
+   4. **How to Counter**: For each vulnerability, suggest a specific strategy or player type. Use patchSuggestions from the result.
+   5. **Recommended Roster Moves**: Call get_top_players to find 1-2 real players from the dashboard who address the biggest gap. Name them with stats.
+   Tell the user to check the ⚔️ Head-to-Head tab for the visual breakdown.`}]};
   }
 
   // ---- API call ----
@@ -3446,26 +3911,42 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
           // candidates and re-query Gemini so the user never sees a bad recommendation.
           if(call.name === 'swap_roster_player'){
             const addName = (call.args?.addPlayer || '').trim().toLowerCase();
+            const a2 = app();
+            const rosterNames = new Set((a2.tbRoster||[]).map(r=>(r.Player||'').toLowerCase()));
             const playerExists = addName && allPlayers().some(r=>(r.Player||'').toLowerCase().includes(addName));
-            if(!playerExists && addName){
-              // Determine the position of the player being dropped for a tighter candidate filter.
-              // Check both Position (group label: "Guards"/"Bigs") and Pos (specific: G/F/C).
-              const dropRow = app().tbRoster?.find(r=>(r.Player||'').toLowerCase().includes((call.args?.dropPlayer||'').toLowerCase()));
+            const alreadyOnRoster = addName && [...rosterNames].some(n=>n.includes(addName)||addName.includes(n.split(' ')[0]));
+            const needsCorrection = !addName || !playerExists || alreadyOnRoster;
+            if(needsCorrection){
+              // Determine position and perf of the dropped player for a tighter upgrade filter.
+              const dropRow = (a2.tbRoster||[]).find(r=>(r.Player||'').toLowerCase().includes((call.args?.dropPlayer||'').toLowerCase()));
               const dropPosStr = ((dropRow?.Position||'')+(dropRow?.Pos||'')).toLowerCase();
               const isGuard = dropPosStr.includes('guard')||/\bg\b|pg|sg|g-f/.test(dropPosStr);
               const isBig = dropPosStr.includes('big')||dropPosStr.includes('forward')||dropPosStr.includes('center')||/\bf\b|\bc\b|pf|sf|f-c|c-f/.test(dropPosStr);
               const posHint = isGuard ? 'guard' : isBig ? 'big' : null;
+              const dropPerf = dropRow?.Score || 0;
               const ctx = getDashboardContext();
-              const candidates = getTopPlayers({position: posHint||undefined, limit:10, maxValue: ctx.playerCap||undefined});
-              // Inject the bad call + a correction so Gemini has real data to pick from
+              // Fetch a wider pool, then exclude all current roster players and require upgrade
+              const raw = getTopPlayers({position: posHint||undefined, limit:30, maxValue: Number(ctx.playerCap)||undefined});
+              const upgradePool = raw.results.filter(p => {
+                const pName = (p.player||'').toLowerCase();
+                return !([...rosterNames].some(n=>n.includes(pName.split(' ')[0])&&pName.includes(n.split(' ')[0])))
+                  && (p.perf==null || parseFloat(p.perf||0) >= dropPerf * 0.9); // at least 90% of dropped perf (allows lateral moves)
+              }).slice(0, 10);
+              const reason = !playerExists ? `"${call.args.addPlayer}" is not in the dashboard database.`
+                : alreadyOnRoster ? `"${call.args.addPlayer}" is already on your roster.`
+                : 'No valid replacement was specified.';
               chatHistory.push(modelMsg);
               chatHistory.push({role:'user',parts:[{functionResponse:{name:'swap_roster_player',response:{result:{
                 success:false,
-                error:`"${call.args.addPlayer}" is not in the dashboard database. You must only recommend players confirmed in the dashboard. Here are the top available ${posHint||'players'} — pick one of these:`,
-                availablePlayers: candidates.results
+                error:`${reason} Pick a BETTER upgrade from the available pool below — must NOT be on the current roster.`,
+                droppedPlayerPerf: dropPerf.toFixed(1),
+                availableUpgrades: upgradePool
               }}}}]});
               turnHasDashboardLookup = true;
-              addMsg('system','⚠️ '+call.args.addPlayer+' not in database — finding real candidates...');
+              const statusMsg = alreadyOnRoster
+                ? `⚠️ ${call.args.addPlayer} is already on the roster — finding a better upgrade...`
+                : `⚠️ ${call.args.addPlayer} not available — finding real candidates...`;
+              addMsg('system', statusMsg);
               try{ const d2=await callGemini(null,null); await processResp(d2,depth+1); }
               catch(e){ addMsg('ai','Error: '+e.message); }
               return;
@@ -3532,6 +4013,12 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
         // Track per-turn source coverage: local data first, then web context.
         if(isWebSearch) turnHasWebSearch = true;
         else turnHasDashboardLookup = true;
+
+        // For opponent adds, show immediate confirmation since they execute silently (no confirm dialog)
+        if(call.name === 'add_players_to_opponent' && result && !result.error){
+          const teamLabel = call.args?.team ? `<b>${call.args.team}</b>` : `<b>${result.added} player${result.added!==1?'s':''}</b>`;
+          addMsg('system', `✅ ${teamLabel} added to opponent roster (${result.opponentRosterSize} total).`);
+        }
 
         // For compare_players, don't send back to Gemini — the modal is already open
         if(call.name === 'compare_players'){
@@ -3611,8 +4098,19 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
           msg = `✅ Removed <b>${result.removed || pa.call.args?.playerName}</b> from roster. Roster is now <b>${result.rosterSize}</b> player${result.rosterSize !== 1 ? 's' : ''}.`;
         } else if(pa.call.name === 'swap_roster_player'){
           msg = `✅ Swapped <b>${result.dropped}</b> → <b>${result.added}</b>. Roster size: <b>${result.rosterSize}</b>.`;
+        } else if(pa.call.name === 'add_players_to_opponent'){
+          const added = result.added || 0;
+          const teamLabel = pa.call.args?.team ? `all <b>${pa.call.args.team}</b> players` : `<b>${added}</b> player${added !== 1 ? 's' : ''}`;
+          msg = `✅ Added ${teamLabel} to opponent roster. Opponent now has <b>${result.opponentRosterSize}</b> player${result.opponentRosterSize !== 1 ? 's' : ''}.`;
+          if(result.skipped) msg += ` <span style="color:var(--muted)">(${result.skipped} already on opponent roster)</span>`;
         }
         addMsg('ai', msg);
+        // Maintain chatHistory structure: push the model's functionCall and our synthetic
+        // text reply so the next user message doesn't immediately follow a user message.
+        // Without this, Gemini sees two consecutive user messages and misfires on the next turn.
+        chatHistory.push(pa.modelMsg);
+        chatHistory.push({role:'user', parts:[{functionResponse:{name:pa.call.name, response:{result}}}]});
+        chatHistory.push({role:'model', parts:[{text: msg.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}]});
         return;
       }
 

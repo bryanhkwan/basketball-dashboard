@@ -280,6 +280,65 @@
     .notesSaveStatus.unsaved{color:var(--warn)}
     @media(max-width:640px){.notesPanel{width:calc(100vw - 32px);right:16px;bottom:80px;height:65vh}.notesToggle{bottom:16px;right:80px;width:48px;height:48px;font-size:20px}.notesList{width:130px;min-width:130px}}
 
+    /* ---------- Page Navigation ---------- */
+    .pageNav{display:flex;gap:6px;padding:10px 20px;background:rgba(0,18,48,.7);border-bottom:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:sticky;top:57px;z-index:25;flex-wrap:wrap}
+    .pageNavBtn{background:rgba(0,15,40,.5);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:7px 18px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none}
+    .pageNavBtn:hover{border-color:rgba(255,210,0,.3);color:var(--text);transform:none;box-shadow:none}
+    .pageNavBtn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow);box-shadow:0 0 12px rgba(255,210,0,.1)}
+    /* ---------- Team Builder Sub-tabs ---------- */
+    .tbSubNav{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+    .tbSubBtn{background:rgba(0,15,40,.5);border:1px solid var(--line);color:var(--muted);border-radius:10px;padding:8px 18px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none}
+    .tbSubBtn:hover{border-color:rgba(255,210,0,.3);color:var(--text);transform:none;box-shadow:none}
+    .tbSubBtn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+    /* ---------- Quick-add widget ---------- */
+    .tbQuickAddWrap{position:relative;width:100%;max-width:420px}
+    .tbQuickAddInput{width:100%;background:rgba(0,15,40,.7);border:1px solid var(--line);color:var(--text);padding:10px 14px;border-radius:10px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+    .tbQuickAddInput:focus{border-color:rgba(255,210,0,.45);box-shadow:0 0 0 3px var(--accent-glow)}
+    .tbQuickAddDropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:rgba(0,18,48,.97);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.5);z-index:500;max-height:280px;overflow-y:auto;animation:fadeIn .15s ease-out}
+    .tbQuickAddItem{padding:9px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line2);font-size:12.5px;transition:background .12s}
+    .tbQuickAddItem:last-child{border-bottom:none}
+    .tbQuickAddItem:hover{background:rgba(255,210,0,.06)}
+    .tbQuickAddItem .qName{font-weight:700;color:var(--text)}
+    .tbQuickAddItem .qMeta{font-size:11px;color:var(--muted)}
+    .tbQuickAddItem .qAdd{font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;border:1px solid rgba(52,211,153,.3);color:var(--good);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .12s}
+    .tbQuickAddItem .qAdd:hover{background:rgba(52,211,153,.12)}
+    .tbQuickAddItem .qAdd.on-roster{border-color:rgba(255,210,0,.4);color:var(--accent);cursor:default}
+    /* ---------- Opponent add button in player table ---------- */
+    .oppAddBtn{background:none;border:1px solid rgba(251,191,36,.3);color:var(--warn);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;box-shadow:none;white-space:nowrap}
+    .oppAddBtn:hover{background:rgba(251,191,36,.12);border-color:var(--warn);transform:none;box-shadow:none}
+    .oppAddBtn.on-opp{border-color:rgba(251,191,36,.6);color:var(--accent);opacity:.6;cursor:default}
+    /* ---------- Head-to-Head ---------- */
+    .h2hRow{display:flex;flex-direction:column;gap:4px}
+    .h2hRowLabel{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;gap:8px}
+    .h2hRowLabel .catLabel{font-weight:600;color:var(--muted);min-width:100px;text-align:center;flex-shrink:0}
+    .h2hDualTrack{display:flex;align-items:center;gap:6px;height:14px}
+    .h2hTrackLeft{flex:1;height:10px;background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:999px;overflow:hidden;display:flex;justify-content:flex-end}
+    .h2hTrackRight{flex:1;height:10px;background:rgba(0,15,40,.6);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+    .h2hFillLeft{height:100%;border-radius:999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+    .h2hFillRight{height:100%;border-radius:999px;transition:width .5s cubic-bezier(.22,1,.36,1)}
+    .h2hDot{width:8px;height:8px;border-radius:50%;background:var(--line);flex-shrink:0}
+    .h2hLegend{display:flex;gap:14px;justify-content:center;font-size:11px;margin-top:10px;flex-wrap:wrap}
+    .h2hLegend span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+    .h2hLegend .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .h2hAnalysis{margin-top:14px;padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;display:flex;flex-direction:column;gap:10px}
+    .h2hAnalysisOverall{font-size:12px;color:var(--muted);text-align:center}
+    .h2hAnalysisBlock{display:flex;flex-direction:column;gap:6px}
+    .h2hAnalysisTitle{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+    .h2hTagRow{display:flex;flex-wrap:wrap;gap:5px}
+    .h2hTag{font-size:11px;padding:3px 8px;border-radius:999px;white-space:nowrap}
+    .h2hTagMy{background:rgba(96,165,250,0.12);color:#93c5fd;border:1px solid rgba(96,165,250,0.25)}
+    .h2hTagOpp{background:rgba(248,113,113,0.12);color:#fca5a5;border:1px solid rgba(248,113,113,0.25)}
+    /* ---------- Methodology ---------- */
+    .methodologyPage{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+    .methodSection{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+    .methodHead{padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(0,18,48,.7);font-weight:800;font-size:13px;letter-spacing:-.1px}
+    .methodBody{padding:16px;font-size:13px;line-height:1.65;color:var(--text)}
+    .methodBody p{margin:0}
+    .methodBody ul{margin:0}
+    .methodBody li{line-height:1.6}
+    .methodBody b{color:var(--accent)}
+    .methodBody code{background:rgba(0,15,40,.6);padding:2px 7px;border-radius:6px;border:1px solid var(--line);font-size:11.5px;font-family:monospace}
+    .methodBody em{color:var(--muted)}
     /* ---------- Auth Overlay ---------- */
     .authOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);background-image:radial-gradient(ellipse 80% 60% at 20% 0%,rgba(0,62,126,.55) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 90% 100%,rgba(0,40,80,.45) 0%,transparent 50%)}
     .authOverlay.hidden{display:none}
