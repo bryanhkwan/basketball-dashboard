@@ -3589,9 +3589,41 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
       addMsg('system','⚡ Executing...');
       let result; try{result=execCall(pendingAction.call);}catch(e){result={error:e.message};}
       const pa=pendingAction; pendingAction=null;
+
+      // For roster mutations generate the confirmation message directly — do NOT send back
+      // to Gemini, which can second-guess or refuse a user-confirmed action.
+      if(!result.error && (pa.call.name === 'add_players_to_roster' || pa.call.name === 'remove_player_from_roster' || pa.call.name === 'swap_roster_player')){
+        let msg = '';
+        if(pa.call.name === 'add_players_to_roster'){
+          const added = result.added || 0;
+          const teamLabel = pa.call.args?.team
+            ? `all <b>${pa.call.args.team}</b> players`
+            : `<b>${added}</b> player${added !== 1 ? 's' : ''}`;
+          msg = `✅ Added ${teamLabel} to your roster. Roster is now <b>${result.rosterSize}</b> player${result.rosterSize !== 1 ? 's' : ''}.`;
+          if(result.failed?.length) msg += ` <span style="color:var(--warn)">(${result.failed.length} skipped: already on roster or wrong league)</span>`;
+          const adj = result.adjustments || {};
+          const adjParts = [];
+          if(adj.maxRoster) adjParts.push(`roster size → ${adj.maxRoster.to}`);
+          if(adj.budget)    adjParts.push(`budget → $${Number(adj.budget.to).toLocaleString()}`);
+          if(adj.playerCap) adjParts.push(`player cap → $${Number(adj.playerCap.to).toLocaleString()}`);
+          if(adjParts.length) msg += `<br><span style="color:var(--muted);font-size:11px">Auto-adjusted: ${adjParts.join(', ')}</span>`;
+        } else if(pa.call.name === 'remove_player_from_roster'){
+          msg = `✅ Removed <b>${result.removed || pa.call.args?.playerName}</b> from roster. Roster is now <b>${result.rosterSize}</b> player${result.rosterSize !== 1 ? 's' : ''}.`;
+        } else if(pa.call.name === 'swap_roster_player'){
+          msg = `✅ Swapped <b>${result.dropped}</b> → <b>${result.added}</b>. Roster size: <b>${result.rosterSize}</b>.`;
+        }
+        addMsg('ai', msg);
+        return;
+      }
+
+      // For errors or non-roster calls, let Gemini respond to the result.
       sendBtn.disabled=true;
-      try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
-      catch(err){ addMsg('ai','Done! '+(result.error||result.added+' added'||JSON.stringify(result))); }
+      if(result.error){
+        addMsg('ai', `❌ Action failed: ${result.error}`);
+      } else {
+        try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
+        catch(err){ addMsg('ai','Done! '+JSON.stringify(result)); }
+      }
       sendBtn.disabled=false;
     } else {
       pendingAction=null;
