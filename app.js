@@ -90,6 +90,7 @@
         notesState.notes = [];
         notesState.activeId = null;
         notesState.dirty = false;
+        notesState.loaded = false;
         authClear();
         authShowOverlay();
         loginForm.reset();
@@ -162,6 +163,7 @@
     activeId: null,
     dirty: false,
     saveTimer: null,
+    loaded: false,   // true after first successful server fetch
   };
 
   async function notesFetch(path = '', opts = {}) {
@@ -187,6 +189,7 @@
       const raw = Array.isArray(data) ? data : (data?.notes || []);
       // Normalize all IDs to strings to avoid integer vs string === mismatches
       notesState.notes = raw.map(n => ({ ...n, id: String(n.id) }));
+      notesState.loaded = true;
       if (!notesState.activeId && notesState.notes.length) {
         notesState.activeId = notesState.notes[0].id;
       }
@@ -1698,17 +1701,17 @@ archetypeTags(r).forEach(tag=>{
       }
     };
 
-    // Scout Notes drawer — per-player, stored in localStorage
-    const _noteKey    = `scoutNote_${player}_${team}`;
+    // Scout Notes drawer — per-player, stored server-side via /notes API
+    // Title convention: "[Scout] Player Name (Team)" — unique per player, visible in notes panel
+    const _playerNoteTitle = `[Scout] ${player} (${team})`;
     const _drawer     = document.getElementById('mNotesDrawer');
     const _notesBtn   = document.getElementById('mNotesBtn');
     const _noteTa     = document.getElementById('mScoutNotes');
     const _noteStatus = document.getElementById('mScoutNoteStatus');
 
-    // Reset drawer state for new player
-    if (_drawer)   { _drawer.style.display = 'none'; _drawer.style.flexDirection = 'column'; }
+    // Reset drawer for new player
+    if (_drawer) { _drawer.style.display = 'none'; _drawer.style.flexDirection = 'column'; }
     if (_notesBtn) {
-      // Remove previous listener by replacing the node clone
       const freshBtn = _notesBtn.cloneNode(true);
       _notesBtn.parentNode.replaceChild(freshBtn, _notesBtn);
       freshBtn.addEventListener('click', () => {
@@ -1719,23 +1722,70 @@ archetypeTags(r).forEach(tag=>{
         if (!open) _noteTa.focus();
       });
     }
+
     if (_noteTa) {
-      _noteTa.value = localStorage.getItem(_noteKey) || '';
+      _noteTa.value = '';
+      _noteTa._playerNoteId = null;
       _noteStatus.textContent = '';
       clearTimeout(_noteTa._saveTimer);
+
+      // Load this player's note from server (fetch all notes once if not already loaded)
+      (async () => {
+        try {
+          if (!notesState.loaded) {
+            const data = await notesFetch('');
+            const raw = Array.isArray(data) ? data : (data?.notes || []);
+            notesState.notes = raw.map(n => ({ ...n, id: String(n.id) }));
+            notesState.loaded = true;
+          }
+          const existing = notesState.notes.find(n => n.title === _playerNoteTitle);
+          if (existing) {
+            _noteTa.value = existing.content || '';
+            _noteTa._playerNoteId = existing.id;
+          }
+        } catch (e) { /* not logged in or network error — textarea stays empty */ }
+      })();
+
+      // Save helper — creates note on first save, updates on subsequent saves
+      async function _savePlayerNote(keepalive = false) {
+        const content = _noteTa.value;
+        try {
+          if (_noteTa._playerNoteId) {
+            const updated = await notesFetch(`/${_noteTa._playerNoteId}`, {
+              method: 'PUT',
+              body: JSON.stringify({ title: _playerNoteTitle, content }),
+              keepalive,
+            });
+            const idx = notesState.notes.findIndex(n => String(n.id) === String(_noteTa._playerNoteId));
+            if (idx !== -1) notesState.notes[idx] = { ...notesState.notes[idx], content, ...(updated || {}) };
+          } else {
+            // Lazy-create: only hit the server when the user has actually typed something
+            if (!content.trim()) return;
+            const note = await notesFetch('', {
+              method: 'POST',
+              body: JSON.stringify({ title: _playerNoteTitle, content }),
+            });
+            _noteTa._playerNoteId = String(note.id);
+            notesState.notes.push({ ...note, id: String(note.id) });
+          }
+          _noteStatus.textContent = 'Saved';
+          _noteStatus.style.color = 'var(--good)';
+        } catch (e) {
+          _noteStatus.textContent = 'Save failed';
+          _noteStatus.style.color = 'var(--bad)';
+        }
+      }
+
       _noteTa.oninput = function () {
         _noteStatus.textContent = 'Unsaved…';
         _noteStatus.style.color = 'var(--warn)';
         clearTimeout(_noteTa._saveTimer);
-        _noteTa._saveTimer = setTimeout(() => {
-          localStorage.setItem(_noteKey, _noteTa.value);
-          _noteStatus.textContent = 'Saved';
-          _noteStatus.style.color = 'var(--good)';
-        }, 1000);
+        _noteTa._saveTimer = setTimeout(() => _savePlayerNote(), 1000);
       };
+
       _noteTa._flushNote = () => {
         clearTimeout(_noteTa._saveTimer);
-        localStorage.setItem(_noteKey, _noteTa.value);
+        _savePlayerNote(true);
       };
     }
 
