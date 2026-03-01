@@ -1889,18 +1889,46 @@ archetypeTags(r).forEach(tag=>{
   window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeProfile(); closeStatInfo(); } });
 
   // ---------- League/pos tabs ----------
+
+  // Per-league roster storage — in-memory only, cleared automatically on page reload/logout.
+  const leagueRosters = { MBB: {tb:[], opp:[]}, WBB: {tb:[], opp:[]} };
+
+  function applyLeagueTheme(lg){
+    document.body.classList.toggle('wbb', lg === 'WBB');
+    const swInput = document.getElementById('leagueSwitchInput');
+    if(swInput) swInput.checked = (lg === 'WBB');
+    const mbbLabel = document.getElementById('lsLabelMBB');
+    const wbbLabel = document.getElementById('lsLabelWBB');
+    if(mbbLabel) mbbLabel.classList.toggle('active', lg === 'MBB');
+    if(wbbLabel) wbbLabel.classList.toggle('active', lg === 'WBB');
+  }
+
   function switchLeague(newLeague){
     if(league === newLeague) return;
-    const other = newLeague === 'MBB' ? 'WBB' : 'MBB';
-    if(tbRoster.length > 0 && tbPlayerLeague(tbRoster[0]) !== newLeague){
-      if(!confirm(`Your roster has ${tbRoster.length} ${other} players. Switching to ${newLeague} will clear your roster. Continue?`)) return;
-      tbRoster.length = 0;
-    }
+
+    // Save current league's rosters before switching
+    leagueRosters[league].tb = tbRoster.slice();
+    leagueRosters[league].opp = oppRoster.slice();
+
+    // Clear current rosters
+    tbRoster.length = 0;
+    oppRoster.length = 0;
+
+    // Switch league
     league = newLeague;
     setActiveTab(document.getElementById(`tab${newLeague}`), '.tab[data-league]');
     applyLeagueDefaults(false);
+    applyLeagueTheme(newLeague);
     renderConfMultTable();
     reloadActiveSheet();
+
+    // Restore new league's saved rosters
+    leagueRosters[newLeague].tb.forEach(r => tbRoster.push(r));
+    leagueRosters[newLeague].opp.forEach(r => oppRoster.push(r));
+
+    // Refresh Team Builder and Opponent UI with restored rosters
+    tbRefresh();
+    oppRefresh();
   }
   document.getElementById('tabMBB').addEventListener('click', ()=> switchLeague('MBB'));
   document.getElementById('tabWBB').addEventListener('click', ()=> switchLeague('WBB'));
@@ -3001,6 +3029,13 @@ archetypeTags(r).forEach(tag=>{
     // Opponent clear button
     const oppClearBtn = document.getElementById('oppClear');
     if(oppClearBtn) oppClearBtn.addEventListener('click', ()=>{ oppRoster=[]; oppRefresh(); });
+    // Header league toggle switch
+    const leagueSwitchInput = document.getElementById('leagueSwitchInput');
+    if(leagueSwitchInput){
+      leagueSwitchInput.addEventListener('change', () => switchLeague(leagueSwitchInput.checked ? 'WBB' : 'MBB'));
+    }
+    // Set initial theme state
+    applyLeagueTheme(league);
   });
 
   function initPageNav(){
@@ -3454,6 +3489,7 @@ archetypeTags(r).forEach(tag=>{
   }
 
   function addPlayersToOpponent(names, team, conference, limit){
+    const a = app();
     const pool = allPlayers();
     if(!pool.length) return {error:'No player data loaded.'};
     let candidates;
@@ -3475,10 +3511,17 @@ archetypeTags(r).forEach(tag=>{
     if(conference){ const cl=conference.toLowerCase(); candidates=candidates.filter(r=>(r.Conference||'').toLowerCase().includes(cl)); }
     const toAdd = limit ? candidates.slice(0, limit) : candidates;
     if(!toAdd.length) return {error:`No players found${team?' for team "'+team+'"':''}.`};
+    // Bulk-push directly to oppRoster via window._app bridge (same pattern as addPlayersToRoster).
+    // Avoids calling oppAddPlayer() per-player which triggers oppRefresh()+renderPlayers() N times.
+    const roster = a.oppRoster;
     let added=0, skipped=0;
-    toAdd.forEach(r=>{ const res=oppAddPlayer(r); if(res.success) added++; else skipped++; });
-    oppRefresh();
-    return {success:true, added, skipped, opponentRosterSize:oppRoster.length,
+    toAdd.forEach(r => {
+      if(roster.some(x => tbPlayerKey(x) === tbPlayerKey(r))){ skipped++; return; }
+      roster.push(r);
+      added++;
+    });
+    if(a.oppRefresh) a.oppRefresh();
+    return {success:true, added, skipped, opponentRosterSize:roster.length,
       message:`Added ${added} player${added!==1?'s':''} to opponent roster${skipped>0?` (${skipped} already on opponent)`:''}.`};
   }
 
@@ -4151,7 +4194,40 @@ OPPONENT: ${ctx.opponentRosterSize} players${ctx.opponentRoster.length?' — '+c
     turnHasWebSearch = false;
     turnForcedWebForValuation = false;
     addMsg('user',text);
+
+    // Compound command: "X against Y" / "X vs Y" — handle deterministically, never trust Gemini to split.
+    const compound = parseCompoundCmd(text);
+    if (compound) {
+      const oppResult = addPlayersToOpponent([], compound.oppTeam);
+      if (oppResult.error) {
+        addMsg('system', `⚠️ Could not find opponent team "<b>${compound.oppTeam}</b>": ${oppResult.error}`);
+      } else {
+        addMsg('system', `✅ Added <b>${compound.oppTeam}</b> (${oppResult.added} players) to opponent roster.`);
+      }
+      // Let Gemini handle adding the first team to my roster with the normal confirm dialog
+      lastUserText = `Add all ${compound.myTeam} players to my roster`;
+      await doSend(lastUserText);
+      return;
+    }
+
     await doSend(text);
+  }
+
+  // ---- Compound command parser: "X against Y" / "X vs Y" ----
+  // Returns {myTeam, oppTeam} or null. Client-side so we never rely on Gemini to split teams.
+  function parseCompoundCmd(text) {
+    // "add [all] TEAM1 [players] against TEAM2 [players]"
+    let m = text.match(/^add\s+(?:all\s+)?(.+?)\s+(?:players?\s+)?against\s+(.+?)(?:\s+players?)?$/i);
+    if (m) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
+    // "add [all] TEAM1 [players] vs/versus TEAM2 [players]"
+    m = text.match(/^add\s+(?:all\s+)?(.+?)\s+(?:players?\s+)?(?:vs\.?|versus)\s+(.+?)(?:\s+players?)?$/i);
+    if (m) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
+    // "TEAM1 vs/versus TEAM2" (short form without "add" — guard against question sentences)
+    if (!text.includes('?') && text.length < 50) {
+      m = text.match(/^(.+?)\s+(?:vs\.?|versus)\s+(.+?)$/i);
+      if (m) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
+    }
+    return null;
   }
 
   async function doSend(text){

@@ -49,7 +49,15 @@
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
   <h1>🏀 NCAA Scouting Dashboard</h1>
-  <div style="display:flex;align-items:center;gap:12px">
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="leagueSwitch" id="leagueSwitch" title="Switch league">
+      <span class="lsLabel active" id="lsLabelMBB">MBB</span>
+      <label class="lsTrackWrap">
+        <input type="checkbox" id="leagueSwitchInput">
+        <span class="lsTrack"></span>
+      </label>
+      <span class="lsLabel" id="lsLabelWBB">WBB</span>
+    </div>
     <span id="authUser" style="font-size:12px;color:var(--muted);font-weight:600"></span>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
   </div>
@@ -83,13 +91,9 @@
       </div>
 
 
-      <div>
-        <label>League</label><br/>
-        <div class="tabs">
-          <button class="tab active" data-league="MBB" id="tabMBB">MBB</button>
-          <button class="tab" data-league="WBB" id="tabWBB">WBB</button>
-        </div>
-      </div>
+      <!-- Hidden league tabs kept for JS compatibility; use header toggle to switch -->
+      <button class="tab active" data-league="MBB" id="tabMBB" style="display:none"></button>
+      <button class="tab" data-league="WBB" id="tabWBB" style="display:none"></button>
 
       <div>
         <label>Position rules</label><br/>
