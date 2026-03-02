@@ -21,6 +21,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <!-- Modules — load in dependency order (no deps first, coordinator last) -->
+  <script src="modules/config.js" defer></script>
+  <script src="modules/auth.js" defer></script>
+  <script src="modules/notes.js" defer></script>
+  <script src="modules/data.js" defer></script>
+  <script src="modules/players.js" defer></script>
+  <script src="modules/profile.js" defer></script>
+  <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/chat.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
