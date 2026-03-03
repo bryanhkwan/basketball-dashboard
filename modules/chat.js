@@ -19,6 +19,7 @@
   let turnWebSearchDeferred = false;
   let turnHasWebSearch = false;
   let turnForcedWebForValuation = false;
+  let pendingLeagueNote = null; // injected at next doSend when league switches
 
   toggle.addEventListener('click', () => { panel.classList.toggle('hidden'); if(!panel.classList.contains('hidden')) input.focus(); });
   document.getElementById('aiClose').addEventListener('click', () => panel.classList.add('hidden'));
@@ -467,7 +468,7 @@
       parameters:{type:'OBJECT',properties:{player1:{type:'STRING'},player2:{type:'STRING'}},required:['player1','player2']}},
     {name:'add_players_to_opponent',description:'Add players to the opponent roster for head-to-head analysis. Executes immediately (no confirmation).',
       parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'}},team:{type:'STRING'},conference:{type:'STRING'},limit:{type:'NUMBER'}}}},
-    {name:'get_head_to_head',description:'Get per-category stat comparison between my roster and opponent roster.',
+    {name:'get_head_to_head',description:'Get per-category stat comparison between my roster and opponent roster. ALWAYS call this when the user asks for head-to-head, matchup analysis, or to compare teams. After getting results, provide a thorough strategic analysis: which team leads each category, key advantages to exploit, key vulnerabilities to defend, and an overall matchup verdict.',
       parameters:{type:'OBJECT',properties:{}}},
     {name:'web_search',description:'Search Google for external information about a player or topic (injury news, transfer portal, scouting reports, recruiting rankings, role/minutes updates, team news, recaps). IMPORTANT: always look up dashboard data first (get_dashboard_context + get_player_profile/search_players/get_top_players/compare_players). Only call web_search AFTER the dashboard pass when the question depends on current external context.',
       parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Google search query'}},required:['query']}},
@@ -532,8 +533,9 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
  7) WEB REPORTING: When you use web_search, include concrete dates (not relative phrasing). If sources conflict, state the conflict and be conservative.
  8) OUTPUT FORMAT: (1) Recommendation: steal/fair/overpay/avoid (2) Dashboard evidence (3) Web evidence w/ dates (if used) (4) Risks/assumptions (5) Next action.
  9) EFFICIENCY: Minimize tool calls. Do at most 1 web_search unless the top option has a red-flag or the user explicitly asks for broader verification.
- 10) LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}.
- 11) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.`}]};
+ 10) LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}. If the user switches leagues, treat all previous roster context as cleared.
+ 11) HEAD-TO-HEAD: When the user asks for head-to-head, matchup analysis, or to scout an opponent, ALWAYS call get_head_to_head first. Then give a thorough analysis: (a) overall verdict — which team is stronger, (b) categories where MY team has the edge, (c) categories where the OPPONENT has the edge, (d) top 2-3 strategic recommendations. The H2H tab will auto-open.
+ 12) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.`}]};
   }
 
   // ---- API call ----
@@ -686,6 +688,12 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
           return;
         }
 
+        // get_head_to_head: auto-switch UI to H2H sub-tab so the bars are visible
+        if(call.name === 'get_head_to_head' && !result.error){
+          const h2hBtn = document.querySelector('.tbSubBtn[data-sub="tbSubH2H"]');
+          if(h2hBtn) h2hBtn.click();
+        }
+
         // add_players_to_opponent executes immediately (not in CONFIRM_ACTIONS)
         if(call.name === 'add_players_to_opponent'){
           chatHistory.push(modelMsg);
@@ -733,8 +741,20 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
       let result; try{result=execCall(pendingAction.call);}catch(e){result={error:e.message};}
       const pa=pendingAction; pendingAction=null;
       sendBtn.disabled=true;
-      try{ const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg}); await processResp(d); }
-      catch(err){ addMsg('ai','Done! '+(result.error||result.added+' added'||JSON.stringify(result))); }
+      try{
+        const d=await callGemini(null,{name:pa.call.name,result,modelMsg:pa.modelMsg});
+        // If Gemini returns empty parts (common after roster mutations), show a direct result message.
+        const parts=d?.candidates?.[0]?.content?.parts||[];
+        if(!parts.length){
+          const added=result.added||0, skipped=result.failed?.length||0;
+          addMsg('ai', result.error
+            ? '❌ '+result.error
+            : `✅ Done! Added **${added}** player${added!==1?'s':''} to the roster.`+(skipped?` (${skipped} skipped)`.replace('skipped','already on roster or not found'):''));
+        } else {
+          await processResp(d);
+        }
+      }
+      catch(err){ addMsg('ai','Done! '+(result.error||(result.added!=null?result.added+' added':'')||JSON.stringify(result))); }
       sendBtn.disabled=false;
     } else {
       pendingAction=null;
@@ -752,10 +772,11 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
     // "add [all] TEAM1 [players] vs/versus TEAM2 [players]"
     m = text.match(/^add\s+(?:all\s+)?(.+?)\s+(?:players?\s+)?(?:vs\.?|versus)\s+(.+?)(?:\s+players?)?$/i);
     if (m) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
-    // "TEAM1 vs/versus TEAM2" (short form without "add" — guard against question sentences)
+    // "TEAM1 vs/versus TEAM2" (short form — block query verbs so "Show H2H vs X" isn't misinterpreted)
+    const QUERY_STARTERS = /^(show|tell|get|find|what|how|analyze|analyse|compare|display|check|summarize|give|look|explain|head|h2h|describe|evaluate|assess|review)/i;
     if (!text.includes('?') && text.length < 50) {
       m = text.match(/^(.+?)\s+(?:vs\.?|versus)\s+(.+?)$/i);
-      if (m) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
+      if (m && !QUERY_STARTERS.test(m[1].trim())) return { myTeam: m[1].trim(), oppTeam: m[2].trim() };
     }
     return null;
   }
@@ -800,6 +821,12 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
   }
 
   async function doSend(text){
+    // If league was switched since last message, inject a context note so Gemini knows
+    if(pendingLeagueNote){
+      chatHistory.push({role:'user', parts:[{text: pendingLeagueNote}]});
+      chatHistory.push({role:'model', parts:[{text:`Understood. Roster and opponent have been cleared for the new league.`}]});
+      pendingLeagueNote = null;
+    }
     showTyping(); sendBtn.disabled=true;
     try{
       if(await runValuationComparePipeline(text)){
@@ -813,6 +840,11 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
     catch(err){ hideTyping(); console.error('Scout AI error:',err); addMsg('ai','Error: '+err.message+'<br><br>Check your Cloudflare Worker is running.'); }
     sendBtn.disabled=false;
   }
+
+  // Called by switchLeague() in data.js to tell the AI the league changed
+  window._chatOnLeagueSwitch = function(newLeague){
+    pendingLeagueNote = `[LEAGUE SWITCH: Now in ${newLeague === 'WBB' ? "Women's Basketball (WBB)" : "Men's Basketball (MBB)"}. Roster and opponent roster have been cleared. All previous roster context from the other league is no longer valid.]`;
+  };
 })();
 
 // --- Class wrapper (organizational) ---

@@ -758,6 +758,9 @@ function switchLeague(newLeague){
   // Refresh Team Builder and Opponent UI with restored rosters
   tbRefresh();
   oppRefresh();
+
+  // Notify AI chat that league changed (clears stale roster context from history)
+  if (typeof window._chatOnLeagueSwitch === 'function') window._chatOnLeagueSwitch(newLeague);
 }
 
 function switchPos(newPos){

@@ -616,6 +616,7 @@ function tbRefresh(){
   tbRenderGaps();
   tbRenderSuggestions();
   renderPlayersPage();
+  h2hRefresh();
 }
 
 // --- Roster render ---
@@ -845,61 +846,37 @@ function tbRenderSuggestions(){
 // --- Page navigation ---
 
 function initPageNav(){
-  const pages = {
-    'navPlayers': 'pagePlayers',
-    'navTeamBuilder': 'pageTeamBuilder',
-    'navMethodology': 'pageMethodology'
-  };
-
-  Object.keys(pages).forEach(navId => {
-    const btn = document.getElementById(navId);
-    if(!btn) return;
+  // Buttons use data-page attribute (no IDs) — use querySelectorAll
+  document.querySelectorAll('.pageNavBtn').forEach(btn => {
     btn.addEventListener('click', () => {
-      Object.values(pages).forEach(pid => {
-        const el = document.getElementById(pid);
-        if(el) el.style.display = 'none';
+      const targetId = btn.dataset.page;
+      document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology').forEach(el => {
+        el.style.display = 'none';
       });
-      document.querySelectorAll('.pageNav button').forEach(b => b.classList.remove('active'));
-      const target = document.getElementById(pages[navId]);
+      const target = document.getElementById(targetId);
       if(target) target.style.display = '';
       btn.classList.add('active');
     });
   });
-
-  // Show players tab by default
-  const firstPage = document.getElementById('pagePlayers');
-  if(firstPage) firstPage.style.display = '';
-  const firstBtn = document.getElementById('navPlayers');
-  if(firstBtn) firstBtn.classList.add('active');
+  // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)
 }
 
 function initTbSubNav(){
-  const subPages = {
-    'tbNavMyTeam': 'tbSubMyTeam',
-    'tbNavH2H': 'tbSubH2H',
-    'tbNavOpponent': 'tbSubOpponent'
-  };
-
-  Object.keys(subPages).forEach(navId => {
-    const btn = document.getElementById(navId);
-    if(!btn) return;
+  // Buttons use data-sub attribute (no IDs) — use querySelectorAll
+  document.querySelectorAll('.tbSubBtn').forEach(btn => {
     btn.addEventListener('click', () => {
-      Object.values(subPages).forEach(pid => {
-        const el = document.getElementById(pid);
-        if(el) el.style.display = 'none';
+      const targetId = btn.dataset.sub;
+      document.querySelectorAll('.tbSubBtn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#tbSubMyTeam, #tbSubH2H, #tbSubOpponent').forEach(el => {
+        el.style.display = 'none';
       });
-      document.querySelectorAll('.tbSubNav button').forEach(b => b.classList.remove('active'));
-      const target = document.getElementById(subPages[navId]);
+      const target = document.getElementById(targetId);
       if(target) target.style.display = '';
       btn.classList.add('active');
     });
   });
-
-  // Show My Team by default
-  const firstSub = document.getElementById('tbSubMyTeam');
-  if(firstSub) firstSub.style.display = '';
-  const firstSubBtn = document.getElementById('tbNavMyTeam');
-  if(firstSubBtn) firstSubBtn.classList.add('active');
+  // Initial state is already set correctly in HTML (tbSubMyTeam visible, others hidden)
 }
 
 // --- Swap rows helper (for AI swap confirmations) ---
