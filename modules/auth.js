@@ -3,7 +3,7 @@
 // Dependencies: notes.js (notesSaveImmediate, notesState) — loaded after this file
 
 // ⚠️  DEV ONLY — flip to true to skip login screen during local testing
-var DEV_BYPASS_AUTH = true;
+var DEV_BYPASS_AUTH = false;
 
 var AUTH_KEY = 'ncaa_auth_token';
 var AUTH_USER_KEY = 'ncaa_auth_user';
