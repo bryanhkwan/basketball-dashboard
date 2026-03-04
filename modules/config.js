@@ -173,10 +173,28 @@ const STAT_GLOSSARY = {
   'OR%': 'Offensive Rebound %. Percent of available offensive rebounds a player gets while on court.',
   'DR%': 'Defensive Rebound %. Percent of available defensive rebounds a player gets while on court.',
   'WS': 'Win Shares. Estimated wins contributed (context/team dependent).',
+  'WS/40': 'Win Shares per 40 minutes. Per-minute adjusted win contributions; accounts for playing time differences.',
   'Ortg': 'Offensive Rating. Points produced per 100 possessions (higher is better).',
   'DRtg': 'Defensive Rating. Points allowed per 100 possessions while on court; lower is better.',
   'BPM': 'Box Plus/Minus. Overall impact per 100 possessions vs average player (higher is better).',
-  'PER': 'Player Efficiency Rating. Box-score efficiency measure (higher is better).'
+  'PER': 'Player Efficiency Rating. Box-score efficiency measure (higher is better).',
+  'RPG': 'Rebounds per game. Combines offensive and defensive rebounding volume; higher is better.',
+  'TRB%': 'Total Rebound Percentage. Percent of available rebounds (offensive + defensive) a player gets while on court.',
+  'USG%': 'Usage Percentage. Percent of team possessions a player uses (via FGA, FTA, or TOV); higher usage means more touches.',
+  'TS%': 'True Shooting Percentage. Adjusted scoring efficiency: Points / (2 × (FGA + 0.44×FTA)). Higher is more efficient than FG%.',
+  'AST%': 'Assist Percentage. Percent of teammate FGs a player assisted on while on court; higher is more playmaking.',
+  'STL%': 'Steal Percentage. Percent of opponent possessions that end in a steal when player is on court; higher is more disruptive.',
+  'BLK%': 'Block Percentage. Percent of opponent 2PT attempts blocked when player is on court; higher is more rim protection.',
+  'TOV%': 'Turnover Percentage. Percent of possessions that end in a turnover; lower is better for possession efficiency.',
+  'MPG': 'Minutes per game. Average playing time; higher means more opportunity and impact potential.',
+  'OWS': 'Offensive Win Shares. Estimated wins contributed on the offensive end (context/team dependent).',
+  'DWS': 'Defensive Win Shares. Estimated wins contributed on the defensive end (context/team dependent).',
+  'ORtg': 'Offensive Rating. Points produced per 100 possessions on offense (higher is better).',
+  'OBPM': 'Offensive Box Plus/Minus. Per-100-possession offensive impact vs average player (higher is better).',
+  'DBPM': 'Defensive Box Plus/Minus. Per-100-possession defensive impact vs average player (higher is better; lower allowed is good).',
+  '3PT_Rating': 'Three-Point Rating. Composite 3PT metric: (3P% × vol_factor × games_factor). Vol_factor caps 3PA/G volume (need 2+ attempts/game). Games_factor scales by games played (need 10+ games). Prevents high % on low volume or few games.',
+  '3PA/G': 'Three-Point Attempts per game. Volume of 3PT shots; higher indicates more perimeter usage.',
+  '2P%': 'Two-Point Percentage. Share of 2PT shots made. Complements 3P% for overall field goal efficiency.'
 };
 
 const DEFAULT_DIR = {

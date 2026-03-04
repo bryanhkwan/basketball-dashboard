@@ -390,3 +390,161 @@
     .welcomeText{font-size:clamp(28px,5vw,58px);font-weight:800;color:#fff;letter-spacing:1px;text-align:center;text-shadow:0 2px 24px rgba(0,0,0,.6)}
     .welcomeText span{color:var(--accent,#FFD200)}
     @keyframes welcomeFadeIn{to{opacity:1}}
+
+/* =====================================================================
+   GUIDED TOUR
+   ===================================================================== */
+
+/* Tour trigger button in the header */
+#tourBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.07);
+  color: #a8bdd4;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .2s, color .2s, border-color .2s, transform .15s;
+  line-height: 1;
+}
+#tourBtn:hover {
+  background: rgba(74,158,255,.18);
+  color: #4a9eff;
+  border-color: #4a9eff;
+  transform: scale(1.08);
+}
+
+/* Spotlight highlight ring (fixed, covers the target) */
+.tourHL {
+  position: fixed;
+  z-index: 9200;
+  border-radius: 10px;
+  border: 2px solid rgba(74,158,255,.85);
+  /* The massive box-shadow dims everything OUTSIDE this element */
+  box-shadow:
+    0 0 0 9999px rgba(0,0,0,.72),
+    0 0 0 4px rgba(74,158,255,.22),
+    0 0 20px rgba(74,158,255,.35);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    top    .28s cubic-bezier(.4,0,.2,1),
+    left   .28s cubic-bezier(.4,0,.2,1),
+    width  .28s cubic-bezier(.4,0,.2,1),
+    height .28s cubic-bezier(.4,0,.2,1),
+    opacity .2s ease;
+}
+
+/* Tooltip card */
+.tourTT {
+  position: fixed;
+  z-index: 9201;
+  width: 320px;
+  background: #0b1a30;
+  border: 1px solid rgba(74,158,255,.28);
+  border-radius: 14px;
+  padding: 4px 18px 14px;
+  box-shadow: 0 10px 48px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04);
+  transition:
+    top  .28s cubic-bezier(.4,0,.2,1),
+    left .28s cubic-bezier(.4,0,.2,1);
+}
+
+/* Progress pips row */
+.tourPips {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  padding: 10px 0 8px;
+}
+.tourPip {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  transition: background .2s, transform .2s;
+}
+.tourPip.active {
+  background: #4a9eff;
+  transform: scale(1.25);
+}
+
+.tourTT-prog {
+  font-size: 10px;
+  font-weight: 700;
+  color: #4a9eff;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.tourTT-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #f0f4ff;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+.tourTT-body {
+  font-size: 12.5px;
+  color: #a8bdd4;
+  line-height: 1.65;
+  margin-bottom: 14px;
+}
+.tourTT-body b { color: #d6e6f8; }
+.tourTT-body i { color: #8ab4d8; }
+
+.tourTT-btns {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(255,255,255,.07);
+  padding-top: 11px;
+  margin-top: 2px;
+}
+.tourTT-skip {
+  background: none;
+  border: none;
+  color: #5a7a96;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+.tourTT-skip:hover {
+  color: #a8bdd4;
+  background: rgba(255,255,255,.06);
+}
+.tourTT-prev {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: #a8bdd4;
+  transition: background .15s;
+}
+.tourTT-prev:hover { background: rgba(255,255,255,.12); }
+.tourTT-next {
+  padding: 7px 18px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  transition: background .15s, transform .1s;
+}
+.tourTT-next:hover { background: #3b82f6; }
+.tourTT-next:active { transform: scale(.97); }
