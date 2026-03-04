@@ -30,6 +30,7 @@
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
   <script src="modules/chat.js" defer></script>
+  <script src="modules/tour.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -83,6 +84,7 @@
     <span id="authUser" style="font-size:12px;color:var(--muted);font-weight:600"></span>
     <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
+    <button type="button" id="tourBtn" title="Take a guided tour" aria-label="Start guided tour">?</button>
   </div>
   </div>
   <p class="sub">
@@ -193,7 +195,7 @@
 
     <!-- RIGHT: Controls -->
     <div class="rightstack">
-      <div class="card">
+      <div class="card" id="weightsCard">
         <div class="row" style="justify-content:space-between">
           <div>
             <div style="font-size:13px; font-weight:1000">Weights / Min / Max</div>
@@ -232,7 +234,7 @@
 <div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). Defaults are optimized to avoid multicollinearity. Add any available stat with W=0 if you want to customize.</div>
       </div>
 
-      <div class="card">
+      <div class="card" id="valuationCard">
         <div class="row" style="justify-content:space-between">
           <div>
             <div style="font-size:13px; font-weight:1000">Valuation settings</div>
@@ -403,7 +405,7 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="tbStatProfile">
           <div class="panelHead">Team stat profile</div>
           <div class="panelBody">
             <div id="tbGapBars" style="display:flex;flex-direction:column;gap:10px"></div>
