@@ -261,3 +261,92 @@ Functions that must use `allPlayers()`:
 - `buildForcedWebQuery` ✓
 
 If you add a new AI tool function that reads the player pool, always start with `allPlayers()`.
+
+---
+
+## Opponent roster / Head-to-Head — AI tool intent rules
+
+### Two separate rosters
+- `tbRoster[]` — the user's own team (My Team sub-tab)
+- `oppRoster[]` — the opponent roster (Opponent sub-tab)
+
+These are **completely independent**. Never add players from one intent into the other.
+
+### Tool selection rules
+| Tool | Roster | Trigger phrases |
+|---|---|---|
+| `add_players_to_roster` | My team | "add X to my roster/team", "load X", "build my team with X" |
+| `add_players_to_opponent` | Opponent | "add X to opponent", "X is the opponent", "scout X", "playing against X", "add X against Y" (X=my, Y=opp) |
+
+### Compound command — "X against Y" pattern
+Phrases like **"Add [team A] against [team B]"** or **"[A] vs [B]"** mean:
+- **A (first/subject team) → `add_players_to_roster`** (my team)
+- **B (second/opponent team) → `add_players_to_opponent`** (opponent)
+
+**Critical execution order**: call `add_players_to_opponent` FIRST (executes immediately), then call `add_players_to_roster` (shows confirm buttons). This is necessary because `add_players_to_opponent` is NOT in `CONFIRM_ACTIONS` (instant) while `add_players_to_roster` IS (gated).
+
+Example:
+```
+"Add all Toledo players against Bowling Green"
+→ add_players_to_opponent({team: "Bowling Green"})   ← runs first, instant
+→ add_players_to_roster({team: "Toledo"})            ← runs second, shows confirm
+```
+
+### `addPlayersToOpponent(names, team, conference, limit)` — filter exclusivity
+`team` and `names` are **mutually exclusive** — `team` always wins:
+```js
+if (team) {
+  // Only filter by team — ignore names entirely
+  candidates = pool.filter(r => r.Team.toLowerCase().includes(tl));
+} else if (names && names.length) {
+  // Strict per-name lookup (exact match per player, no cross-team contamination)
+  candidates = names.map(n => pool.find(r => r.Player.toLowerCase().includes(n.toLowerCase()))).filter(Boolean);
+} else {
+  candidates = pool;
+}
+```
+
+**Why**: When Gemini passes `names` from prior chatHistory context (e.g. Toledo player names from a previous turn), combining with `team` filter would return wrong results. Making them exclusive prevents cross-team contamination.
+
+**Rule**: When adding a full team, Gemini must ALWAYS pass `team:"TeamName"`, never `playerNames` for a bulk team add.
+
+### `add_players_to_opponent` is NOT in `CONFIRM_ACTIONS`
+This is intentional. `CONFIRM_ACTIONS` can only hold ONE pending action at a time. If `add_players_to_opponent` required confirmation, compound commands (opponent + my team in a single Gemini turn) would drop the second action.
+
+Do NOT add `add_players_to_opponent` back to `CONFIRM_ACTIONS`.
+
+### `executeConfirm` — chatHistory must be kept valid after bypass
+When `executeConfirm(true)` runs the approved action and shows a success message without calling Gemini, it must still record the full exchange in `chatHistory` to prevent consecutive-user-turn errors on the next Gemini call:
+
+```js
+// After executing the action and building the success msg:
+chatHistory.push(pa.modelMsg);  // the model's functionCall
+chatHistory.push({role:'user', parts:[{functionResponse:{name:pa.call.name, response:{result}}}]});
+chatHistory.push({role:'model', parts:[{text: msg.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()}]});
+```
+
+Without this, the next user message sees two consecutive `user` turns in history, which Gemini rejects with "function call turn must come immediately after a user turn".
+
+### `get_head_to_head` tool
+Returns per-category stat comparison between `tbRoster` and `oppRoster`. After setting both rosters, the system prompt instructs Gemini to call this tool and mention the ⚔️ Head-to-Head tab.
+
+### Common AI command patterns (reference)
+```
+Roster management:
+  "Add all Toledo players"              → add_players_to_roster({team:"Toledo"})
+  "Add [player name]"                   → add_players_to_roster({playerNames:[...]})
+  "Remove [player]"                     → remove_player_from_roster
+  "Swap [player] for a better guard"    → get_top_players first, then swap_roster_player
+
+Game prep (opponent/H2H):
+  "Add all Bowling Green to opponent"   → add_players_to_opponent({team:"Bowling Green"})
+  "Add Toledo against Bowling Green"    → add_players_to_opponent({team:"BG"}), then add_players_to_roster({team:"Toledo"})
+  "Scout Akron's roster"                → add_players_to_opponent({team:"Akron"})
+  "Show head-to-head vs Bowling Green"  → get_head_to_head (after both rosters set)
+
+Scouting / search:
+  "Find a shooter big under $80K"       → get_top_players({position:'big', sortBy:'3PT_Rating', maxValue:80000})
+  "Compare Player A vs Player B"        → compare_players
+  "Is Player X worth $200K?"            → runValuationComparePipeline (dual-source)
+  "Any injury news on Player X?"        → runValuationComparePipeline (news trigger)
+```

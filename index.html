@@ -21,17 +21,84 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <!-- Modules — load in dependency order (no deps first, coordinator last) -->
+  <script src="modules/config.js" defer></script>
+  <script src="modules/auth.js" defer></script>
+  <script src="modules/notes.js" defer></script>
+  <script src="modules/data.js" defer></script>
+  <script src="modules/players.js" defer></script>
+  <script src="modules/profile.js" defer></script>
+  <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/chat.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
+
+<!-- Auth Overlay -->
+<div id="authOverlay" class="authOverlay">
+  <div class="authCard">
+    <div class="authLogo">🏀 NCAA Scouting</div>
+    <div class="authSub">Sign in to your account</div>
+
+    <form id="loginForm" class="authForm">
+      <div class="authField">
+        <label class="authLabel">Username</label>
+        <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+      </div>
+      <div class="authField">
+        <label class="authLabel">Password</label>
+        <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
+      </div>
+      <div class="authError" id="loginError"></div>
+      <button type="submit" class="primary authSubmitBtn">Login</button>
+    </form>
+    <div class="authDivider"><span>or</span></div>
+    <button type="button" id="guestBtn" class="authGuestBtn">Continue as Guest</button>
+    <p class="authGuestNote">Explore the model freely · 10 free AI messages · no saving</p>
+  </div>
+</div>
+
+<!-- Loading Overlay (shown between auth and dashboard) -->
+<div id="loadingOverlay" class="loadingOverlay hidden">
+  <video id="loadingVideo" class="loadingVideo" playsinline muted>
+    <source src="ut_vid.mp4" type="video/mp4">
+  </video>
+  <div id="welcomeOverlay" class="welcomeOverlay hidden">
+    <div class="welcomeText">Welcome, <span id="welcomeName"></span></div>
+  </div>
+</div>
+
 <header>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
   <h1>🏀 NCAA Scouting Dashboard</h1>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="leagueSwitch" id="leagueSwitch" title="Switch league">
+      <span class="lsLabel active" id="lsLabelMBB">MBB</span>
+      <label class="lsTrackWrap">
+        <input type="checkbox" id="leagueSwitchInput">
+        <span class="lsTrack"></span>
+      </label>
+      <span class="lsLabel" id="lsLabelWBB">WBB</span>
+    </div>
+    <span id="authUser" style="font-size:12px;color:var(--muted);font-weight:600"></span>
+    <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
+    <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
+  </div>
+  </div>
   <p class="sub">
     Click a player to open their full stat profile with percentiles, archetypes, and fit score.
     Uses: <b>Men Data</b> and <b>Women Data</b> sheets with position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
   </p>
 </header>
 
+<!-- Page Navigation -->
+<nav class="pageNav">
+  <button class="pageNavBtn active" data-page="pagePlayers">🏀 Players</button>
+  <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
+  <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
+</nav>
+
+<div id="pagePlayers">
 <div class="wrap">
   <div class="topbar">
     <div class="row">
@@ -47,13 +114,9 @@
       </div>
 
 
-      <div>
-        <label>League</label><br/>
-        <div class="tabs">
-          <button class="tab active" data-league="MBB" id="tabMBB">MBB</button>
-          <button class="tab" data-league="WBB" id="tabWBB">WBB</button>
-        </div>
-      </div>
+      <!-- Hidden league tabs kept for JS compatibility; use header toggle to switch -->
+      <button class="tab active" data-league="MBB" id="tabMBB" style="display:none"></button>
+      <button class="tab" data-league="WBB" id="tabWBB" style="display:none"></button>
 
       <div>
         <label>Position rules</label><br/>
@@ -264,9 +327,21 @@
     </div>
   </div>
 </div>
+</div><!-- /pagePlayers -->
 
-<!-- Team Builder -->
+<!-- Team Builder Page -->
+<div id="pageTeamBuilder" style="display:none">
 <div class="wrap tbSection">
+
+  <!-- Sub-tab Navigation -->
+  <div class="tbSubNav">
+    <button class="tbSubBtn active" data-sub="tbSubMyTeam">🏀 My Team</button>
+    <button class="tbSubBtn" data-sub="tbSubH2H">⚔️ Head-to-Head</button>
+    <button class="tbSubBtn" data-sub="tbSubOpponent">🎯 Opponent</button>
+  </div>
+
+  <!-- My Team Sub-section -->
+  <div id="tbSubMyTeam">
   <div class="card">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
@@ -287,6 +362,12 @@
         </div>
         <div style="align-self:end"><button id="tbClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear roster</button></div>
       </div>
+    </div>
+
+    <!-- Quick-add search widget -->
+    <div class="tbQuickAddWrap" style="margin-top:12px">
+      <input id="tbQuickAddInput" type="text" placeholder="🔍 Quick-add player to roster…" class="tbQuickAddInput" autocomplete="off">
+      <div id="tbQuickAddDropdown" class="tbQuickAddDropdown" style="display:none"></div>
     </div>
 
     <div class="tbKpis" id="tbKpis">
@@ -347,7 +428,181 @@
       </div>
     </div>
   </div>
+  </div><!-- /tbSubMyTeam -->
+
+  <!-- Head-to-Head Sub-section -->
+  <div id="tbSubH2H" style="display:none">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">⚔️ Head-to-Head Analysis</div>
+        <div class="muted" style="font-size:12px;margin-top:4px">Compare your team vs. opponent across key stat categories.</div>
+      </div>
+    </div>
+    <div id="h2hContent" style="margin-top:16px">
+      <div id="h2hEmpty" class="hint" style="text-align:center;padding:24px;opacity:.6">Add players to both rosters (My Team + Opponent) to see head-to-head comparison.</div>
+      <div id="h2hBars" style="display:flex;flex-direction:column;gap:14px"></div>
+    </div>
+  </div>
+  </div><!-- /tbSubH2H -->
+
+  <!-- Opponent Sub-section -->
+  <div id="tbSubOpponent" style="display:none">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">🎯 Opponent Builder</div>
+        <div class="muted" style="font-size:12px;margin-top:4px">Build your opponent's roster to analyze match-up gaps.</div>
+      </div>
+      <div><button id="oppClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear opponent</button></div>
+    </div>
+
+    <!-- Quick-add for opponent -->
+    <div class="tbQuickAddWrap" style="margin-top:12px">
+      <input id="oppQuickAddInput" type="text" placeholder="🔍 Search player to add to opponent…" class="tbQuickAddInput" autocomplete="off">
+      <div id="oppQuickAddDropdown" class="tbQuickAddDropdown" style="display:none"></div>
+    </div>
+
+    <div class="tbKpis" id="oppKpis" style="margin-top:10px">
+      <span class="pill">Roster: <b id="oppCount">0</b></span>
+      <span class="pill">Guards: <b id="oppGuardCount">0</b></span>
+      <span class="pill">Bigs: <b id="oppBigCount">0</b></span>
+    </div>
+
+    <div class="tbGrid" style="margin-top:14px">
+      <!-- Left: Opponent Roster + Stat Profile -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <div class="panelHead">Opponent roster</div>
+          <div class="panelBody" style="padding:0">
+            <div class="tbRoster">
+              <table>
+                <thead><tr><th style="width:4%"></th><th>Player</th><th>Team</th><th>Pos</th><th>Perf</th><th>Value</th><th></th></tr></thead>
+                <tbody id="oppRosterBody"></tbody>
+              </table>
+            </div>
+            <div id="oppRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Use search above or click <b>⚔</b> in the Players tab to add opponent players.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">Opponent stat profile</div>
+          <div class="panelBody">
+            <div id="oppGapBars" style="display:flex;flex-direction:column;gap:10px"></div>
+            <div id="oppGapEmpty" class="hint" style="text-align:center;margin:0;opacity:.6">Add players to see opponent stat analysis.</div>
+            <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" id="oppGapTags"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Top players not on opponent roster -->
+      <div class="panel">
+        <div class="panelHead">Quick scout</div>
+        <div class="panelBody" style="padding:0">
+          <div class="tbSuggest">
+            <table>
+              <thead><tr><th>Player</th><th>Team</th><th>Pos</th><th>Perf</th><th>Value</th><th></th></tr></thead>
+              <tbody id="oppScoutBody"></tbody>
+            </table>
+          </div>
+          <div id="oppScoutEmpty" class="hint" style="text-align:center;padding:20px;margin:0;opacity:.6">Top available players will appear here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /tbSubOpponent -->
+
+</div><!-- /tbSection wrap -->
+</div><!-- /pageTeamBuilder -->
+
+<!-- Methodology Page -->
+<div id="pageMethodology" style="display:none">
+<div class="wrap">
+  <div class="methodologyPage">
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">📖 Methodology</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:24px">How the NCAA Scouting Dashboard calculates player value, fit scores, and team analysis.</p>
+
+    <div class="methodSection">
+      <div class="methodHead">🎯 PerfScore</div>
+      <div class="methodBody">
+        <p>PerfScore is a weighted composite of key statistical percentiles. Each stat is normalized to a 0–1 scale between your configured Min and Max, then multiplied by its weight. Higher-is-better stats (like PPG, APG) produce higher percentiles at the top; lower-is-better stats (like DRtg, TOPG) are automatically inverted.</p>
+        <p style="margin-top:10px"><b>Formula:</b> PerfScore = Σ(weight × normalized_stat) / Σ(weight)</p>
+        <p style="margin-top:10px">Percentiles are computed within the selected position group (Guards or Bigs) and league (MBB or WBB). Players are only compared to peers in the same group.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">💰 Valuation</div>
+      <div class="methodBody">
+        <p>Player valuation uses an exponential curve anchored to your average pay setting. The curve is calibrated so the average player earns <em>avgPay</em> and a star-level player earns <em>starValue</em>:</p>
+        <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf − avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay × exp(k × (PerfScore − avgPerf)))</p>
+        <p style="margin-top:10px">A <b>minutes multiplier</b> (<code>min(1, sqrt(MP / MP_p))</code>) is then applied to reduce inflation for low-minutes players. If the <b>Conference Multiplier</b> is enabled, PerfScore is boosted/reduced by the conference strength factor before valuation — MAC = 1.00 is the baseline.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">📊 Position Groups</div>
+      <div class="methodBody">
+        <p>Players are bucketed into two position groups for all percentile calculations:</p>
+        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li><b>Guards</b> — Positions: G, G-F</li>
+          <li><b>Bigs</b> — Positions: F, C, F-C, C-F</li>
+        </ul>
+        <p style="margin-top:10px">Guards are never compared to Bigs, and vice versa. Switch between groups using the Guards / Bigs tab in the Players page. The Team Builder analyzes gaps for whichever position groups exist on your roster.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">🏷️ Role Tags</div>
+      <div class="methodBody">
+        <p>Role tags are archetype labels assigned based on percentile thresholds across key stats. A player can hold multiple tags simultaneously. Examples:</p>
+        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li><b>Elite Scorer</b> — PPG ≥ 80th percentile</li>
+          <li><b>Floor General</b> — APG ≥ 75th, A/TO ≥ 70th</li>
+          <li><b>3-and-D</b> — 3P% ≥ 65th, SPG ≥ 60th</li>
+          <li><b>Rim Anchor</b> — BPG ≥ 70th, RPG ≥ 65th (Bigs)</li>
+          <li><b>Stretch Big</b> — 3P% ≥ 60th (Bigs)</li>
+          <li><b>High Usage</b> — USG% ≥ 75th</li>
+        </ul>
+        <p style="margin-top:10px">Tags appear in player profiles and drive the similar-player matching algorithm.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">🏆 Team Builder</div>
+      <div class="methodBody">
+        <p>The Team Builder lets you assemble a roster within budget and slot constraints:</p>
+        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li><b>Budget</b> — Total NIL budget across all players</li>
+          <li><b>Player cap</b> — Maximum per-player valuation</li>
+          <li><b>Max roster</b> — Maximum roster size</li>
+          <li><b>Guards / Bigs targets</b> — Position slot targets for balance</li>
+          <li><b>Weak below</b> — Percentile threshold for flagging swap candidates</li>
+        </ul>
+        <p style="margin-top:10px">The <b>Team Stat Profile</b> shows your roster's average percentile across key categories. Red (weak) areas signal recruiting gaps. The <b>Recommended Fits</b> panel surfaces players who address your weakest categories within budget.</p>
+        <p style="margin-top:10px">Use the <b>⚔️ Head-to-Head</b> sub-tab to compare your team vs. an opponent stat-by-stat, and the <b>🎯 Opponent</b> sub-tab to build and scout your next opponent.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">🤖 AI Scout</div>
+      <div class="methodBody">
+        <p>Scout AI (powered by Google Gemini) has direct access to your dashboard data through a tool-use system:</p>
+        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li><b>get_top_players</b> — Query the full player database by position, stat, value</li>
+          <li><b>get_player_profile</b> — Get a specific player's full stat profile and percentiles</li>
+          <li><b>get_team_roster</b> — View current roster details and budget status</li>
+          <li><b>add_players_to_roster / remove_player_from_roster / swap_roster_player</b> — Roster management (requires confirmation)</li>
+          <li><b>add_players_to_opponent</b> — Add players to the opponent builder</li>
+          <li><b>compare_players</b> — Open a visual side-by-side stat comparison</li>
+          <li><b>web_search</b> — Search the web for NIL values, injury news, transfer portal updates</li>
+        </ul>
+        <p style="margin-top:10px">For valuation and current-event questions, AI runs a dual-source pipeline: dashboard data first, then web search for real-world market context. All roster-modifying actions require your explicit approval.</p>
+      </div>
+    </div>
+  </div>
 </div>
+</div><!-- /pageMethodology -->
 
 <!-- Modal -->
 <div class="modalBack" id="modalBack">
@@ -360,10 +615,21 @@
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
+        <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📝 Notes</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>
     </div>
+
+    <!-- Scout Notes Drawer (toggled by 📝 Notes button) -->
+    <div id="mNotesDrawer" style="display:none;border-bottom:1px solid var(--line);background:rgba(0,15,40,.5);padding:12px 20px;gap:10px;flex-direction:column">
+      <textarea id="mScoutNotes" placeholder="Add your scouting notes for this player…"
+        style="width:100%;height:110px;resize:vertical;background:rgba(0,10,28,.6);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.6;outline:none;transition:border-color .2s,box-shadow .2s"></textarea>
+      <div style="display:flex;justify-content:flex-end">
+        <span id="mScoutNoteStatus" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+    </div>
+
     <div class="modalBody">
       <div class="profileGrid">
         <div class="panel">
@@ -434,6 +700,7 @@
           <div class="panel" style="border:none;border-radius:0" id="mAllStats"></div>
         </div>
       </div>
+
     </div>
   </div>
 
@@ -482,6 +749,26 @@
   </div>
 </div>
 
+<!-- Notes -->
+<button class="notesToggle" id="notesToggle" title="My Notes">📝</button>
+<div class="notesPanel hidden" id="notesPanel">
+  <div class="notesHeader">
+    <b>📝 My Notes</b>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button type="button" class="secondary" id="notesNew" style="padding:4px 12px;font-size:11px;box-shadow:none">+ New</button>
+      <button type="button" class="close" id="notesClose" style="font-size:16px;padding:4px 8px">✕</button>
+    </div>
+  </div>
+  <div class="notesPanelBody">
+    <div class="notesList" id="notesList">
+      <div class="notesEmpty">Loading…</div>
+    </div>
+    <div class="notesEditorWrap" id="notesEditorWrap">
+      <div class="notesPickHint">Select or create a note.</div>
+    </div>
+  </div>
+</div>
+
 <!-- AI Chat -->
 <button class="aiToggle" id="aiToggle" title="Ask AI Assistant">🤖</button>
 <div class="aiPanel hidden" id="aiPanel">
@@ -493,7 +780,7 @@
     </div>
   </div>
   <div class="aiMessages" id="aiMessages">
-    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Add all Toledo players"</b> → loads into roster builder<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br><br>I can also <b>search the web</b> 🌐:<br>• <b>"Is Brandon Benjamin worth $200K?"</b> → stats + opinion + web intel<br>• <b>"Any injury news on Player X?"</b> → live Google search<br>• <b>"What's the latest on the transfer portal?"</b> → recruiting news<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
+    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Add all Toledo players"</b> → loads into your roster<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br><br>I can <b>build game prep</b> 🏆:<br>• <b>"Add Toledo against Bowling Green"</b> → Toledo to my roster, BG to opponent<br>• <b>"Add all Bowling Green to opponent"</b> → opponent roster builder<br>• <b>"Show head-to-head vs Bowling Green"</b> → stat comparison by category<br>• <b>"Scout Akron's roster"</b> → loads opponent + shows match-up gaps<br><br>I can also <b>search the web</b> 🌐:<br>• <b>"Is Brandon Benjamin worth $200K?"</b> → stats + opinion + web intel<br>• <b>"Any injury news on Player X?"</b> → live Google search<br>• <b>"What's the latest on the transfer portal?"</b> → recruiting news<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
   </div>
   <div id="aiQuickActions" style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-top:1px solid var(--line)">
     <button class="aiQuickBtn" data-q="Analyze my current roster and suggest improvements">Analyze roster</button>
