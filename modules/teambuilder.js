@@ -19,6 +19,11 @@ var oppBudgetEl, oppCountEl, oppCostEl;
 // H2H DOM refs
 var h2hBars;
 
+// --- Performance: batch mode + player pool cache ---
+var _tbBatchMode = false;
+var _cachedAllPlayers = null;
+var _cachedAllPlayersLg = '';
+
 function initTeamBuilderDOMRefs(){
   tbBudgetEl = document.getElementById('tbBudget');
   tbPlayerCapEl = document.getElementById('tbPlayerCap');
@@ -72,6 +77,7 @@ function tbPosGroup(r){
 
 function tbGetAllPlayers(forLeague){
   const lg = forLeague || league;
+  if(_cachedAllPlayers && _cachedAllPlayersLg === lg) return _cachedAllPlayers;
   const seen = new Set();
   const all = [];
   for(const [key, arr] of Object.entries(tbAllComputed)){
@@ -87,6 +93,8 @@ function tbGetAllPlayers(forLeague){
       all.push(r);
     });
   }
+  _cachedAllPlayers = all;
+  _cachedAllPlayersLg = lg;
   return all;
 }
 
@@ -132,7 +140,7 @@ function tbAddPlayer(r){
   if(Number.isFinite(budget) && used + val > budget){ showWarn(`Adding ${r.Player} would exceed budget.`); return; }
   tbRoster.push(r);
   clearWarn();
-  tbRefresh();
+  if(!_tbBatchMode) tbRefresh();
 }
 
 function tbRemovePlayer(idx){
@@ -143,12 +151,14 @@ function tbRemovePlayer(idx){
 // --- Opponent ---
 
 function oppAddPlayer(r){
-  const a = window._app || {};
   const roster = oppRoster;
   if(roster.some(x => tbPlayerKey(x) === tbPlayerKey(r))) return;
   roster.push(r);
-  oppRefresh();
-  renderPlayersPage();
+  if(!_tbBatchMode){
+    oppRefresh();
+    var _pp = document.getElementById('pagePlayers');
+    if(!_pp || _pp.style.display !== 'none') renderPlayersPage();
+  }
 }
 
 function oppRemovePlayer(idx){
@@ -479,7 +489,11 @@ function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
         e.stopPropagation();
         const team = btn.dataset.team;
         const teamPlayers = pool.filter(r => r.Team === team);
+        _tbBatchMode = true;
         teamPlayers.forEach(r => addFn(r));
+        _tbBatchMode = false;
+        if(addFn === tbAddPlayer) tbRefresh();
+        else oppRefresh();
         input.value = '';
         closeDropdown();
       });
@@ -678,7 +692,9 @@ function tbRefresh(){
   tbRenderRoster();
   tbRenderGaps();
   tbRenderSuggestions();
-  renderPlayersPage();
+  // Only re-render player table if Players page is visible
+  var _pp = document.getElementById('pagePlayers');
+  if(!_pp || _pp.style.display !== 'none') renderPlayersPage();
   h2hRefresh();
 }
 
@@ -920,6 +936,8 @@ function initPageNav(){
       const target = document.getElementById(targetId);
       if(target) target.style.display = '';
       btn.classList.add('active');
+      // Refresh player table when switching back (roster icons may be stale)
+      if(targetId === 'pagePlayers') renderPlayersPage();
     });
   });
   // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)

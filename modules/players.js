@@ -81,9 +81,14 @@ function renderPlayersPage(){
   const pageData = filteredData.slice(start, start + PAGE_SIZE);
   const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
 
+  // Pre-compute roster key sets for O(1) lookups instead of O(n) per row
+  const _rosterKeySet = new Set(tbRoster.map(tbPlayerKey));
+  const _oppKeySet = (typeof oppRoster !== 'undefined') ? new Set(oppRoster.map(tbPlayerKey)) : new Set();
+
   const frag = document.createDocumentFragment();
   pageData.forEach(r => {
     const tr = document.createElement('tr');
+    const _rk = tbPlayerKey(r);
     colsToShow.forEach(c => {
       const td = document.createElement('td');
       let v = r[c.key];
@@ -94,7 +99,7 @@ function renderPlayersPage(){
         else v = fmtMoney(n);
       }
       if(c.key === '_tb_add'){
-        const onRoster = tbRoster.some(x => x.Player === r.Player && x.Team === r.Team);
+        const onRoster = _rosterKeySet.has(_rk);
         if(onRoster){
           td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">✓</span>`;
         } else {
@@ -102,7 +107,7 @@ function renderPlayersPage(){
           td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); tbAddPlayer(r); });
         }
       }else if(c.key === '_opp_add'){
-        const onOpp = typeof oppRoster !== 'undefined' && oppRoster.some(x => x.Player === r.Player && x.Team === r.Team);
+        const onOpp = _oppKeySet.has(_rk);
         if(onOpp){
           td.innerHTML = `<span class="tbAddBtn on-roster" title="Already in opponent">✓</span>`;
         } else {

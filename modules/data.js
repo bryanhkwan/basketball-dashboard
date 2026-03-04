@@ -628,6 +628,7 @@ function computeAll(){
   kpiStarPerf.textContent = Number.isFinite(lastPerfStar) ? lastPerfStar.toFixed(2) : '—';
 
   tbAllComputed[league + '_' + pos] = computed.slice();
+  _cachedAllPlayers = null; // invalidate player pool cache
 
   renderPlayers();
 }
