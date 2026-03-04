@@ -390,6 +390,17 @@
     }
 
     const keyFn = a.tbPlayerKey || (r=>(r.Player||'')+'|'+(r.Team||''));
+
+    // If adding a whole team and opponent already has players from a different team, ask for replacement
+    if(team && a.oppRoster.length > 0){
+      const existingTeams = [...new Set(a.oppRoster.map(r => r.Team).filter(Boolean))];
+      const incomingTeam = toAdd.length > 0 ? (toAdd[0].Team || team) : team;
+      const hasDiffTeam = existingTeams.some(t => t.toLowerCase() !== incomingTeam.toLowerCase());
+      if(hasDiffTeam){
+        return { needsReplaceConfirm: true, existingTeams, incomingTeam, toAdd, oppRosterSize: a.oppRoster.length };
+      }
+    }
+
     const existingKeys = new Set(a.oppRoster.map(keyFn));
     const valid=[], skipped=[];
     toAdd.forEach(r=>{
@@ -403,6 +414,15 @@
     if(a.oppRefresh) a.oppRefresh();
 
     return {added:valid.length, failed:[...notFound,...skipped], oppRosterSize:a.oppRoster.length};
+  }
+
+  function replaceOpponentRoster(toAdd){
+    const a=app();
+    if(!a.oppRoster) return {error:'Opponent roster not available.'};
+    a.oppRoster.splice(0, a.oppRoster.length);
+    (toAdd||[]).forEach(r => a.oppRoster.push(r));
+    if(a.oppRefresh) a.oppRefresh();
+    return {replaced:true, added:(toAdd||[]).length, oppRosterSize:a.oppRoster.length};
   }
 
   function removeFromRoster(name){
@@ -508,6 +528,7 @@
       case 'swap_roster_player': return swapPlayer(a.dropPlayer||'',a.addPlayer||'');
       case 'compare_players': return comparePlayers(a.player1||'',a.player2||'');
       case 'add_players_to_opponent': return addPlayersToOpponent(a.playerNames||[], a.team, a.conference, a.limit);
+      case 'replace_opponent_roster': return replaceOpponentRoster(a.toAdd||[]);
       case 'get_head_to_head': return getHeadToHead();
       case 'web_search': return doWebSearch(a.query||'');
       default: return {error:'Unknown: '+c.name};
@@ -696,6 +717,21 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
 
         // add_players_to_opponent executes immediately (not in CONFIRM_ACTIONS)
         if(call.name === 'add_players_to_opponent'){
+          // If the function detected an existing opponent from a different team, ask for confirmation
+          if(result.needsReplaceConfirm){
+            const existingList = result.existingTeams.join(', ');
+            const confirmBtns = '<div class="aiConfirm"><button class="aiConfirmBtn yes" onclick="window._aiConfirm(true)">✓ Yes, replace</button><button class="aiConfirmBtn no" onclick="window._aiConfirm(false)">✕ Cancel</button></div>';
+            // Synthetic pending action: on confirm, clear oppRoster and load the new team
+            pendingAction = {
+              call: { name: 'replace_opponent_roster', args: { toAdd: result.toAdd, incomingTeam: result.incomingTeam } },
+              modelMsg: { role:'model', parts:[{ functionCall:{ name:'replace_opponent_roster', args:{ team: result.incomingTeam } } }] }
+            };
+            // Push the original call + a pending response into history so Gemini has context
+            chatHistory.push(modelMsg);
+            chatHistory.push({role:'user',parts:[{functionResponse:{name:call.name,response:{result:{status:'awaiting_confirmation'}}}}]});
+            addMsg('ai', `The opponent already has <b>${result.oppRosterSize}</b> player(s) from <b>${existingList}</b>. Replace them with <b>${result.incomingTeam}</b>?${confirmBtns}`);
+            return;
+          }
           chatHistory.push(modelMsg);
           chatHistory.push({role:'user',parts:[{functionResponse:{name:call.name,response:{result}}}]});
           const msg = result.error ? `Error: ${result.error}` : `Added ${result.added} player(s) to opponent roster.`;
@@ -794,6 +830,16 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
       return;
     }
 
+    // Guest AI usage limit (checked after pendingAction so confirmations always work)
+    if (typeof authIsGuest === 'function' && authIsGuest()) {
+      const GUEST_LIMIT = 10;
+      const used = parseInt(localStorage.getItem('ncaa_guest_ai_uses') || '0', 10);
+      if (used >= GUEST_LIMIT) {
+        addMsg('ai', '🔒 You\'ve used all <b>10 free AI messages</b>. <a href="#" onclick="document.getElementById(\'guestLoginBtn\').click();return false;" style="color:var(--accent)">Sign in</a> for unlimited access.');
+        return;
+      }
+    }
+
     // Initialize per-turn orchestration state for dashboard-first enforcement.
     lastUserText = text;
     turnHasDashboardLookup = false;
@@ -826,6 +872,15 @@ ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+
       chatHistory.push({role:'user', parts:[{text: pendingLeagueNote}]});
       chatHistory.push({role:'model', parts:[{text:`Understood. Roster and opponent have been cleared for the new league.`}]});
       pendingLeagueNote = null;
+    }
+    // Increment guest AI usage counter
+    if (typeof authIsGuest === 'function' && authIsGuest()) {
+      const used = parseInt(localStorage.getItem('ncaa_guest_ai_uses') || '0', 10);
+      const remaining = 10 - used - 1;
+      localStorage.setItem('ncaa_guest_ai_uses', String(used + 1));
+      if (remaining > 0 && remaining <= 3) {
+        addMsg('system', `⚠️ ${remaining} free AI message${remaining !== 1 ? 's' : ''} remaining. <a href="#" onclick="document.getElementById('guestLoginBtn').click();return false;" style="color:var(--accent)">Sign in</a> for unlimited access.`);
+      }
     }
     showTyping(); sendBtn.disabled=true;
     try{

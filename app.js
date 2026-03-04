@@ -131,12 +131,11 @@ window.addEventListener('DOMContentLoaded', () => {
   initTbSubNav();
 
   // Quick add widgets (roster + opponent)
-  setupQuickAdd('tbQuickAddInput', 'tbQuickAddDropdown', tbAddPlayer);
-  setupQuickAdd('oppQuickAddInput', 'oppQuickAddDropdown', oppAddPlayer);
+  setupQuickAdd('tbQuickAddInput',  'tbQuickAddDropdown',  tbAddPlayer,  () => tbRoster);
+  setupQuickAdd('oppQuickAddInput', 'oppQuickAddDropdown', oppAddPlayer, () => oppRoster);
 
-  // Auto-populate API key and load Google Sheet
+  // Auto-populate API key (data load is triggered by auth flow via authStartLoading)
   if(gsKeyInput) gsKeyInput.value = DEFAULT_GS_API_KEY;
-  setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 80);
 });
 
 // ============ window._app BRIDGE ============

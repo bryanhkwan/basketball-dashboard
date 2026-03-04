@@ -7,6 +7,10 @@ var DEV_BYPASS_AUTH = false;
 
 var AUTH_KEY = 'ncaa_auth_token';
 var AUTH_USER_KEY = 'ncaa_auth_user';
+var AUTH_GUEST_KEY = 'ncaa_guest_mode';
+var GUEST_AI_KEY = 'ncaa_guest_ai_uses';
+
+function authIsGuest() { return !authGetToken() && localStorage.getItem(AUTH_GUEST_KEY) === '1'; }
 
 var LOGIN_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
 
@@ -19,20 +23,112 @@ function authSave(token, username) {
 function authClear() {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(AUTH_GUEST_KEY);
+}
+
+// Loading coordination — both flags must be true before Welcome shows
+var _loadDataReady = false;
+var _loadVideoEnded = false;
+
+function authEnterGuest() {
+  localStorage.setItem(AUTH_GUEST_KEY, '1');
+  authStartLoading();
+}
+
+/* Show loading screen and start video + data fetch in parallel */
+function authStartLoading() {
+  _loadDataReady = false;
+  _loadVideoEnded = false;
+
+  document.getElementById('authOverlay').classList.add('hidden');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+  // Set up video — mark ended when it finishes (or errors / can't autoplay)
+  const video = document.getElementById('loadingVideo');
+  if (video) {
+    const onVideoEnd = () => { _loadVideoEnded = true; _checkLoadingComplete(); };
+    video.addEventListener('ended', onVideoEnd, { once: true });
+    video.addEventListener('error', onVideoEnd, { once: true });
+    video.play().catch(onVideoEnd);
+  } else {
+    _loadVideoEnded = true;
+  }
+
+  // Trigger data load in parallel
+  if (typeof loadFromGoogleSheets === 'function') {
+    setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 50);
+  }
+}
+
+/* Called by data.js when data is fully loaded */
+function authFinishLoading() {
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
+    _loadDataReady = true;
+    _checkLoadingComplete();
+  } else {
+    // Loading overlay not visible (e.g. manual Refresh Data button) — just update header
+    _authSetupHeader();
+  }
+}
+
+/* Show Welcome overlay once BOTH video has ended AND data is ready */
+function _checkLoadingComplete() {
+  if (!_loadDataReady || !_loadVideoEnded) return;
+
+  const welcomeOverlay = document.getElementById('welcomeOverlay');
+  const welcomeName   = document.getElementById('welcomeName');
+  const name = authIsGuest() ? 'Guest' : (authGetUser() || 'Coach');
+  if (welcomeName) welcomeName.textContent = name;
+  if (welcomeOverlay) welcomeOverlay.classList.remove('hidden');
+
+  // Auto-dismiss after 2 s
+  setTimeout(() => {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('fade-out');
+      }, 500);
+    }
+    _authSetupHeader();
+  }, 1000);
 }
 
 function authShowDashboard() {
   document.getElementById('authOverlay').classList.add('hidden');
-  const userEl = document.getElementById('authUser');
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (userEl) userEl.textContent = authGetUser() || '';
-  if (logoutBtn) logoutBtn.style.display = '';
+  _authSetupHeader();
+}
+
+/* Internal: set header user/buttons after auth */
+function _authSetupHeader() {
+  const userEl      = document.getElementById('authUser');
+  const logoutBtn   = document.getElementById('logoutBtn');
+  const guestLoginBtn = document.getElementById('guestLoginBtn');
+  const notesToggle = document.getElementById('notesToggle');
+  if (authIsGuest()) {
+    if (userEl)       userEl.textContent = 'Guest';
+    if (logoutBtn)    logoutBtn.style.display = 'none';
+    if (guestLoginBtn) guestLoginBtn.style.display = '';
+    if (notesToggle)  notesToggle.style.display = 'none';
+  } else {
+    if (userEl)       userEl.textContent = authGetUser() || '';
+    if (logoutBtn)    logoutBtn.style.display = '';
+    if (guestLoginBtn) guestLoginBtn.style.display = 'none';
+    if (notesToggle)  notesToggle.style.display = '';
+  }
 }
 
 function authShowOverlay() {
   document.getElementById('authOverlay').classList.remove('hidden');
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) logoutBtn.style.display = 'none';
+  const logoutBtn   = document.getElementById('logoutBtn');
+  const guestLoginBtn = document.getElementById('guestLoginBtn');
+  const notesToggle = document.getElementById('notesToggle');
+  if (logoutBtn)    logoutBtn.style.display = 'none';
+  if (guestLoginBtn) guestLoginBtn.style.display = 'none';
+  if (notesToggle)  notesToggle.style.display = 'none';
   const userEl = document.getElementById('authUser');
   if (userEl) userEl.textContent = '';
 }
@@ -51,9 +147,26 @@ async function authPost(url, body) {
 }
 
 function authInit() {
-  const loginForm = document.getElementById('loginForm');
-  const loginErr  = document.getElementById('loginError');
-  const logoutBtn = document.getElementById('logoutBtn');
+  const loginForm   = document.getElementById('loginForm');
+  const loginErr    = document.getElementById('loginError');
+  const logoutBtn   = document.getElementById('logoutBtn');
+  const guestBtn    = document.getElementById('guestBtn');
+  const guestLoginBtn = document.getElementById('guestLoginBtn');
+
+  // Guest entry
+  if (guestBtn) {
+    guestBtn.addEventListener('click', () => authEnterGuest());
+  }
+
+  // Guest → Login (re-shows overlay, clears guest flag)
+  if (guestLoginBtn) {
+    guestLoginBtn.addEventListener('click', () => {
+      localStorage.removeItem(AUTH_GUEST_KEY);
+      const notesToggle = document.getElementById('notesToggle');
+      if (notesToggle) notesToggle.style.display = 'none';
+      authShowOverlay();
+    });
+  }
 
   // Login submit
   loginForm.addEventListener('submit', async (e) => {
@@ -74,7 +187,8 @@ function authInit() {
         || '';
       console.log('[Auth] extracted token:', token ? `${token.slice(0,16)}…` : '(empty — check response above)');
       authSave(token, username);
-      authShowDashboard();
+      localStorage.removeItem(AUTH_GUEST_KEY);  // exit guest mode on real login
+      authStartLoading();
     } catch (err) {
       loginErr.textContent = err.message;
     } finally {
@@ -100,9 +214,9 @@ function authInit() {
     });
   }
 
-  // Check existing session (or dev bypass)
-  if (DEV_BYPASS_AUTH || authGetToken()) {
-    authShowDashboard();
+  // Check existing session, guest mode, or dev bypass
+  if (DEV_BYPASS_AUTH || authGetToken() || authIsGuest()) {
+    authStartLoading();
   } else {
     authShowOverlay();
   }

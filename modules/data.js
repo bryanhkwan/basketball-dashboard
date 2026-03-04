@@ -637,10 +637,19 @@ function computeAll(){
 async function loadFromGoogleSheets(url, apiKey){
   url = url || DEFAULT_GS_URL;
   apiKey = apiKey || DEFAULT_GS_API_KEY;
+  var loadingOverlayEl = document.getElementById('loadingOverlay');
+  var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
+
+  function setProgress(pct, msg) { /* no-op: video loading screen has no progress bar */ }
+
+  function finishIfInitial() {
+    if (isInitialLoad && typeof authFinishLoading === 'function') authFinishLoading();
+  }
+
   try{
     const sid = extractSpreadsheetId(url);
-    if(!sid) { showWarn('Could not parse spreadsheet ID from the link.'); return; }
-    if(!apiKey) { showWarn('Missing API key.'); return; }
+    if(!sid) { showWarn('Could not parse spreadsheet ID from the link.'); finishIfInitial(); return; }
+    if(!apiKey) { showWarn('Missing API key.'); finishIfInitial(); return; }
 
     const ranges = [
       `${SHEET_MAP.MBB}!A1:ZZ`,
@@ -650,19 +659,23 @@ async function loadFromGoogleSheets(url, apiKey){
     const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
     const endpoint = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchGet?key=${encodeURIComponent(apiKey)}&valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS&${qs}`;
 
-    showWarn('Loading from Google Sheets…');
+    setProgress(10, 'Connecting to Google Sheets…');
+    if (!isInitialLoad) showWarn('Loading from Google Sheets…');
     const res = await fetch(endpoint);
+    setProgress(40, 'Downloading player data…');
     const data = await res.json();
 
     if(!res.ok){
       const msg = data?.error?.message || ('Google Sheets API error ('+res.status+')');
       showWarn(msg);
-      return;
+      finishIfInitial(); return;
     }
     if(!data.valueRanges || !data.valueRanges.length){
       showWarn('No data returned from Google Sheets API. Check permissions + sheet names.');
-      return;
+      finishIfInitial(); return;
     }
+
+    setProgress(55, 'Processing spreadsheet data…');
 
     wb = { SheetNames: [], Sheets: {} };
     data.valueRanges.forEach(vr => {
@@ -686,12 +699,31 @@ async function loadFromGoogleSheets(url, apiKey){
     recalcBtn.disabled = false;
     exportBtn.disabled = false;
 
+    setProgress(65, 'Computing player scores…');
     applyLeagueDefaults(true);
     renderWeights();
     activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+
+    // Use requestAnimationFrame to let the progress bar paint before heavy computation
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     reloadActiveSheet();
+
+    setProgress(90, 'Caching all positions…');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    setProgress(100, 'Ready!');
+
+    // Signal loading complete — reveal dashboard
+    if (isInitialLoad && typeof authFinishLoading === 'function') {
+      authFinishLoading();
+    }
   }catch(err){
     showWarn(String(err?.message || err));
+    // Even on error, finish loading so user isn't stuck
+    if (isInitialLoad && typeof authFinishLoading === 'function') {
+      authFinishLoading();
+    }
   }
 }
 

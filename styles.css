@@ -1,6 +1,6 @@
     :root{
       --bg:#001c3d;--bg2:#002952;--card:rgba(0,42,88,.65);--card-solid:#002a58;
-      --accent-rgb:255,210,0;--accent-dark:var(--accent-dark);
+      --accent-rgb:255,210,0;--accent-dark:#c9a800;
       --line:rgba(var(--accent-rgb),.12);--line2:rgba(var(--accent-rgb),.06);
       --text:#f0f4ff;--muted:#8eadd4;
       --accent:#FFD200;--accent2:#ffe566;--accent-glow:rgba(var(--accent-rgb),.10);--accent-glow2:rgba(var(--accent-rgb),.04);
@@ -299,6 +299,8 @@
     .tbQuickAddItem{padding:9px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line2);font-size:12.5px;transition:background .12s}
     .tbQuickAddItem:last-child{border-bottom:none}
     .tbQuickAddItem:hover{background:rgba(var(--accent-rgb),.06)}
+    .tbQuickTeamRow{background:rgba(var(--accent-rgb),.04);border-left:3px solid rgba(var(--accent-rgb),.35);cursor:default}
+    .tbQuickTeamRow:hover{background:rgba(var(--accent-rgb),.08)}
     .tbQuickAddItem .qName{font-weight:700;color:var(--text)}
     .tbQuickAddItem .qMeta{font-size:11px;color:var(--muted)}
     .tbQuickAddItem .qAdd{font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;border:1px solid rgba(52,211,153,.3);color:var(--good);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .12s}
@@ -352,6 +354,11 @@
     .authField input{width:100%}
     .authError{min-height:20px;font-size:12px;color:var(--bad);font-weight:500;text-align:center;line-height:1.4;margin-top:-4px}
     .authSubmitBtn{width:100%;padding:12px;font-size:14px}
+    .authDivider{display:flex;align-items:center;gap:12px;margin:4px 0;color:var(--muted);font-size:11px}
+    .authDivider::before,.authDivider::after{content:'';flex:1;height:1px;background:var(--line)}
+    .authGuestBtn{width:100%;padding:10px;font-size:13px;font-weight:600;background:transparent;border:1px solid rgba(var(--accent-rgb),.3);color:var(--muted);border-radius:8px;cursor:pointer;transition:all .18s}
+    .authGuestBtn:hover{border-color:rgba(var(--accent-rgb),.6);color:var(--text);background:rgba(var(--accent-rgb),.06)}
+    .authGuestNote{text-align:center;font-size:11px;color:var(--muted);margin-top:8px;opacity:.7}
 
     /* ---- League toggle switch (header) ---- */
     .leagueSwitch{display:flex;align-items:center;gap:8px}
@@ -371,4 +378,15 @@
       --accent-glow:rgba(255,192,203,.10);--accent-glow2:rgba(255,192,203,.04);
       --line:rgba(255,192,203,.12);--line2:rgba(255,192,203,.06);
     }
-    body.wbb button:not(.secondary):not(.tab):not(.tbRemoveBtn):not(.tbSubBtn):not(.pageNavBtn):not(.close):not(.aiConfirmBtn):not(.pill){color:#3d0015}
+    body.wbb button:not(.secondary):not(.tab):not(.tbRemoveBtn):not(.tbSubBtn):not(.pageNavBtn):not(.close):not(.aiConfirmBtn):not(.pill):not(.qAdd):not(.qAddAll){color:#3d0015}
+
+    /* ---- Loading Overlay ---- */
+    .loadingOverlay{position:fixed;inset:0;z-index:9998;background:#000;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease}
+    .loadingOverlay.hidden{display:none}
+    .loadingOverlay.fade-out{opacity:0;pointer-events:none}
+    .loadingVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .welcomeOverlay{position:absolute;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;opacity:0;animation:welcomeFadeIn .7s ease forwards}
+    .welcomeOverlay.hidden{display:none!important}
+    .welcomeText{font-size:clamp(28px,5vw,58px);font-weight:800;color:#fff;letter-spacing:1px;text-align:center;text-shadow:0 2px 24px rgba(0,0,0,.6)}
+    .welcomeText span{color:var(--accent,#FFD200)}
+    @keyframes welcomeFadeIn{to{opacity:1}}

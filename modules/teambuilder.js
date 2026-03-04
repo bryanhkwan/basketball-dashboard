@@ -410,41 +410,104 @@ function h2hRefresh(){
 }
 
 // --- Quick add widget ---
+// getRoster: optional function returning the current roster array (used for on-roster highlighting)
 
-function setupQuickAdd(inputId, dropdownId, addFn){
-  const input = document.getElementById(inputId);
+function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
+  const input    = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
   if(!input || !dropdown) return;
+  if(!getRoster) getRoster = () => tbRoster;
+
+  function closeDropdown(){ dropdown.innerHTML = ''; dropdown.style.display = 'none'; }
+
+  function renderDropdown(q){
+    const pool = tbGetAllPlayers();
+    const roster = getRoster();
+    const rosterKeys = new Set(roster.map(tbPlayerKey));
+
+    // --- Team matches ---
+    const allTeams = [...new Set(pool.map(r => r.Team).filter(Boolean))];
+    const matchedTeams = allTeams.filter(t => t.toLowerCase().includes(q));
+
+    // --- Player name matches (exclude players whose team is already shown as a team row) ---
+    const teamRowSet = new Set(matchedTeams.map(t => t.toLowerCase()));
+    const playerMatches = pool
+      .filter(r => (r.Player||'').toLowerCase().includes(q) && !teamRowSet.has((r.Team||'').toLowerCase()))
+      .slice(0, 8);
+
+    if(!matchedTeams.length && !playerMatches.length){ closeDropdown(); return; }
+
+    let html = '';
+
+    // Team rows
+    matchedTeams.slice(0, 4).forEach(team => {
+      const teamPlayers = pool.filter(r => r.Team === team);
+      const alreadyOnRoster = teamPlayers.filter(r => rosterKeys.has(tbPlayerKey(r))).length;
+      const toAdd = teamPlayers.length - alreadyOnRoster;
+      html += `
+        <div class="tbQuickAddItem tbQuickTeamRow" data-team="${team}">
+          <div>
+            <div class="qName">🏀 ${team}</div>
+            <div class="qMeta">${teamPlayers.length} players${alreadyOnRoster ? ` · ${alreadyOnRoster} already added` : ''}</div>
+          </div>
+          <button class="qAdd qAddAll" data-team="${team}" ${toAdd === 0 ? 'disabled' : ''}>
+            ${toAdd === 0 ? '✓ All added' : `+ Add all ${toAdd}`}
+          </button>
+        </div>`;
+    });
+
+    // Player rows
+    playerMatches.forEach(r => {
+      const onRoster = rosterKeys.has(tbPlayerKey(r));
+      html += `
+        <div class="tbQuickAddItem" data-key="${tbPlayerKey(r)}">
+          <div>
+            <div class="qName">${r.Player}</div>
+            <div class="qMeta">${r.Team||''} · ${r.Position||r.Pos||''} · ${r.Score?r.Score.toFixed(1):'—'} perf</div>
+          </div>
+          <button class="qAdd${onRoster ? ' on-roster' : ''}" ${onRoster ? 'disabled' : ''}>${onRoster ? '✓ Added' : '+ Add'}</button>
+        </div>`;
+    });
+
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'block';
+
+    // "Add all" for team rows
+    dropdown.querySelectorAll('.qAddAll').forEach(btn => {
+      if(btn.disabled) return;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const team = btn.dataset.team;
+        const teamPlayers = pool.filter(r => r.Team === team);
+        teamPlayers.forEach(r => addFn(r));
+        input.value = '';
+        closeDropdown();
+      });
+    });
+
+    // Individual player rows
+    dropdown.querySelectorAll('.tbQuickAddItem:not(.tbQuickTeamRow)').forEach(el => {
+      const addBtn = el.querySelector('.qAdd:not(.on-roster)');
+      const doAdd = () => {
+        const key = el.dataset.key;
+        const player = pool.find(r => tbPlayerKey(r) === key);
+        if(player){ addFn(player); input.value = ''; closeDropdown(); }
+      };
+      el.addEventListener('click', (e) => { if(e.target.tagName !== 'BUTTON') doAdd(); });
+      if(addBtn) addBtn.addEventListener('click', (e) => { e.stopPropagation(); doAdd(); });
+    });
+  }
 
   let _timer = null;
   input.addEventListener('input', () => {
     clearTimeout(_timer);
     const q = input.value.trim().toLowerCase();
-    if(!q){ dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
-    _timer = setTimeout(() => {
-      const pool = tbGetAllPlayers();
-      const matches = pool.filter(r => (r.Player||'').toLowerCase().includes(q)).slice(0, 8);
-      if(!matches.length){ dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
-      dropdown.innerHTML = matches.map(r => `
-        <div class="quickAddItem" data-key="${tbPlayerKey(r)}" style="padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--line)">
-          <b>${r.Player}</b> <span class="muted">${r.Team||''} · ${r.Position||r.Pos||''} · ${r.Score?r.Score.toFixed(1):'—'} perf</span>
-        </div>
-      `).join('');
-      dropdown.style.display = 'block';
-      dropdown.querySelectorAll('.quickAddItem').forEach(el => {
-        el.addEventListener('click', () => {
-          const key = el.dataset.key;
-          const player = pool.find(r => tbPlayerKey(r) === key);
-          if(player){ addFn(player); input.value = ''; dropdown.innerHTML = ''; dropdown.style.display = 'none'; }
-        });
-      });
-    }, 120);
+    if(!q){ closeDropdown(); return; }
+    _timer = setTimeout(() => renderDropdown(q), 120);
   });
 
   document.addEventListener('click', (e) => {
-    if(!dropdown.contains(e.target) && e.target !== input){
-      dropdown.innerHTML = ''; dropdown.style.display = 'none';
-    }
+    if(!dropdown.contains(e.target) && e.target !== input) closeDropdown();
   });
 }
 
@@ -959,7 +1022,7 @@ class TeamBuilder {
   oppAddPlayer(r){ return oppAddPlayer(r); }
   oppRemovePlayer(idx){ return oppRemovePlayer(idx); }
   oppRefresh(){ return oppRefresh(); }
-  setupQuickAdd(inputId, dropdownId, addFn){ return setupQuickAdd(inputId, dropdownId, addFn); }
+  setupQuickAdd(inputId, dropdownId, addFn, getRoster){ return setupQuickAdd(inputId, dropdownId, addFn, getRoster); }
   initPageNav(){ return initPageNav(); }
   initTbSubNav(){ return initTbSubNav(); }
   pctToGrade(pct){ return pctToGrade(pct); }
