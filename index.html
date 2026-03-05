@@ -583,6 +583,33 @@
         <div class="muted" style="padding:24px;text-align:center">Load a team to see head-to-head breakdowns.</div>
       </div>
     </div>
+
+    <!-- Team DNA -->
+    <div class="thSection">
+      <div class="thSectionHead">🧬 Team DNA</div>
+      <div class="thSectionSub">Shooting zones heatmap, scoring profile, four factors (offense vs what opponents do defensively), and auto-generated strengths &amp; weaknesses.</div>
+      <div id="thDNA" class="card thDNACard">
+        <div class="muted" style="padding:32px;text-align:center">Load a team to see their DNA.</div>
+      </div>
+    </div>
+
+    <!-- Compare Teams -->
+    <div class="thSection">
+      <div class="thSectionHead">⚡ Compare vs Another Team</div>
+      <div class="thSectionSub">Side-by-side efficiency ratings, four factors, scoring profile, and auto-generated edge analysis. Load a primary team first.</div>
+      <div class="card thCompareSearchCard">
+        <div class="thSearchRow">
+          <div class="thSearchGroup">
+            <label class="thLabel">Compare against</label>
+            <select id="thCompareTeam" class="thTeamSelect"><option value="">— Select opponent team —</option></select>
+          </div>
+          <button id="thCompareBtn" class="thLoadBtn">Compare →</button>
+        </div>
+      </div>
+      <div id="thCompare" class="card thCompareCard" style="margin-top:12px">
+        <div class="muted" style="padding:24px;text-align:center">Load a primary team above, then pick a team to compare.</div>
+      </div>
+    </div>
   </div>
 </div>
 </div><!-- /pageTeams -->

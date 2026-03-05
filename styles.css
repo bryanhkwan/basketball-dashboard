@@ -831,6 +831,21 @@
   color: var(--muted);
   margin-top: 2px;
 }
+.thRatSub {
+  font-size: 9.5px;
+  color: rgba(148,163,184,.45);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+/* Team context card tooltip line */
+.tcTip {
+  font-size: 9px;
+  color: rgba(148,163,184,.4);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
 /* Threats table */
 .thThreatsTable, .thH2HTable, .thGameLogTable {
   display: flex;
@@ -951,3 +966,211 @@
 }
 .tourTT-next:hover { background: #3b82f6; }
 .tourTT-next:active { transform: scale(.97); }
+
+/* ======== Team DNA section ======================================= */
+.thDNACard, .thCompareCard { padding: 0; overflow: hidden; }
+.thCompareSearchCard { padding: 16px 20px; }
+.thDNAGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+@media (max-width: 860px) { .thDNAGrid { grid-template-columns: 1fr; } }
+.thDNALeft {
+  padding: 20px;
+  border-right: 1px solid var(--line);
+}
+@media (max-width: 860px) { .thDNALeft { border-right: none; border-bottom: 1px solid var(--line); } }
+.thDNARight { padding: 20px; }
+.thDNASectionLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 12px;
+}
+.thDNAInsights {
+  padding: 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* Scoring Profile card */
+.thProfCard {
+  background: rgba(0,10,28,.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.thProfRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(27,79,153,.12);
+  font-size: 12.5px;
+}
+.thProfRow:last-child { border-bottom: none; }
+.thProfLabel { color: var(--muted); }
+.thProfVal { font-weight: 700; color: var(--text); }
+
+/* Four Factors card */
+.thFFCard {
+  background: rgba(0,10,28,.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.thFFHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0,8,22,.5);
+  border-bottom: 1px solid var(--line);
+}
+.thFFHeadCol { text-align: center; min-width: 70px; }
+.thFFHeadTitle { font-size: 12px; font-weight: 700; }
+.thFFHeadSub { font-size: 9.5px; color: var(--muted); margin-top: 2px; }
+.thFFTitle {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  align-self: center;
+}
+.thFFBody { padding: 4px 0; }
+.thFFRow {
+  display: grid;
+  grid-template-columns: 80px 1fr 80px;
+  padding: 7px 14px;
+  align-items: center;
+  border-bottom: 1px solid rgba(27,79,153,.1);
+  font-size: 13px;
+}
+.thFFRow:last-child { border-bottom: none; }
+.thFFVal     { font-weight: 700; text-align: left; font-size: 13.5px; }
+.thFFVal--def { text-align: right; }
+.thFFLabel   { text-align: center; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.thFFNote    { padding: 7px 14px; font-size: 9.5px; color: rgba(148,163,184,.45); border-top: 1px solid rgba(27,79,153,.12); }
+
+/* Insights */
+.thInsightsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.thInsight {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+.thInsight--strength {
+  background: rgba(21,128,61,.08);
+  border-color: rgba(21,128,61,.2);
+}
+.thInsight--weakness {
+  background: rgba(239,68,68,.07);
+  border-color: rgba(239,68,68,.18);
+}
+.thInsight--style {
+  background: rgba(37,99,235,.07);
+  border-color: rgba(37,99,235,.18);
+}
+.thInsIcon { flex-shrink: 0; font-size: 14px; }
+
+/* ======== Compare section ======================================== */
+.thCmpHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.thCmpTeamBlock { text-align: center; }
+.thCmpTeamName { font-size: 18px; font-weight: 800; line-height: 1.2; }
+.thCmpRank { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.thCmpVs {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 1px;
+  background: rgba(0,10,28,.6);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.thCmpGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  padding: 0;
+}
+@media (max-width: 900px) { .thCmpGrid { grid-template-columns: 1fr; } }
+.thCmpSection {
+  padding: 16px;
+  border-right: 1px solid var(--line);
+}
+.thCmpSection:last-child { border-right: none; }
+@media (max-width: 900px) { .thCmpSection { border-right: none; border-bottom: 1px solid var(--line); } }
+@media (max-width: 900px) { .thCmpSection:last-child { border-bottom: none; } }
+.thCmpSectionLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.thCmpSectionSub { font-size: 10px; color: rgba(148,163,184,.4); margin-bottom: 10px; }
+.thCmpColHeads {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.thCmpColHeads span:first-child  { text-align: left; }
+.thCmpColHeads span:nth-child(2) { text-align: center; color: var(--muted); }
+.thCmpColHeads span:last-child   { text-align: right; }
+.thCmpRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(27,79,153,.1);
+  font-size: 12.5px;
+  align-items: center;
+}
+.thCmpRow:last-child { border-bottom: none; }
+.thCmpVal { font-weight: 700; }
+.thCmpVal:first-child { text-align: left; }
+.thCmpVal:last-child  { text-align: right; }
+.thCmpLabel { text-align: center; font-size: 10.5px; color: var(--muted); }
+.thCmpWin { font-size: 13.5px; }
+.thEdgeSection {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--line);
+}
+.thEdgeList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.thEdgeItem {
+  padding: 9px 14px;
+  background: rgba(0,10,28,.5);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}

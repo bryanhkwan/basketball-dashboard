@@ -301,25 +301,29 @@ function renderTeamContext(r) {
   const rankColor = t.rank <= 10 ? 'var(--good)' : t.rank <= 25 ? 'var(--accent)' : t.rank <= 50 ? 'var(--warn)' : 'var(--muted)';
   el.innerHTML = `
     <div class="teamContextGrid">
-      <div class="tcStat">
+      <div class="tcStat" title="Adjusted Offensive Efficiency — points scored per 100 possessions, adjusted for opponent difficulty. National avg ~105. Higher is better.">
         <div class="tcVal" style="color:${gc(oPct)}">${fmt(t.adjO)}</div>
         <div class="tcLabel">Adj O</div>
         <div class="tcPct">${oPct != null ? oPct+'th %ile' : '—'}</div>
+        <div class="tcTip">pts/100 poss (adj)</div>
       </div>
-      <div class="tcStat">
+      <div class="tcStat" title="Adjusted Defensive Efficiency — points allowed per 100 possessions, adjusted for opponent difficulty. National avg ~105. Lower is better.">
         <div class="tcVal" style="color:${gc(dPct)}">${fmt(t.adjD)}</div>
         <div class="tcLabel">Adj D</div>
         <div class="tcPct">${dPct != null ? dPct+'th %ile' : '—'}</div>
+        <div class="tcTip">pts allowed/100 (adj)</div>
       </div>
-      <div class="tcStat">
+      <div class="tcStat" title="Net Efficiency = Adj Offense − Adj Defense. The team's efficiency margin per 100 possessions. Positive means they outscore opponents per possession.">
         <div class="tcVal" style="color:${Number.isFinite(t.adjEM)&&t.adjEM>=0?'var(--good)':'var(--bad)'}">${emSign}${fmt(t.adjEM)}</div>
         <div class="tcLabel">Net Eff</div>
-        <div class="tcPct">net rating</div>
+        <div class="tcPct">AdjO − AdjD</div>
+        <div class="tcTip">efficiency margin</div>
       </div>
-      <div class="tcStat">
+      <div class="tcStat" title="National ranking by Net Efficiency. #1 = most efficient team in the country.">
         <div class="tcVal" style="color:${rankColor};font-size:18px">${rankStr}</div>
         <div class="tcLabel">Natl Rank</div>
         <div class="tcPct">${Number.isFinite(t.srs) ? 'SRS '+fmt(t.srs) : '—'}</div>
+        <div class="tcTip">by net efficiency</div>
       </div>
     </div>
     <div class="hint" style="margin-top:6px;font-size:11px">${t.conference || '—'}</div>`;

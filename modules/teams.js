@@ -8,6 +8,11 @@ var thTeamSearch, thSeasonInput, thLoadBtn;
 var thOverviewEl, thThreatsEl, thGameLogEl, thH2HEl;
 var thLoadingEl;
 
+// ── State (persisted across renders for compare feature) ──────────────────────
+var thCurrentTeam   = '';
+var thCurrentSeason = '2026';
+var _thCurrentStats = null;
+
 function initTeamsDOMRefs() {
   thTeamSearch  = document.getElementById('thTeamSearch');
   thSeasonInput = document.getElementById('thSeason');
@@ -148,8 +153,10 @@ function thRenderThreats(teamData, gamesData) {
   }
 
   const conf = teamData.conference;
+  // Filter to the same season as teamData to avoid showing duplicate historical rows
+  const targetSeason = teamData.season || +(thSeasonInput ? thSeasonInput.value : '2026');
   const confTeams = allRatingsData
-    .filter(t => t.conference === conf)
+    .filter(t => t.conference === conf && +t.season === +targetSeason)
     .sort((a, b) => (b.adjEM || 0) - (a.adjEM || 0));
 
   if (!confTeams.length) {
@@ -320,6 +327,275 @@ function thRenderH2H(teamData, gamesData) {
   thH2HEl.innerHTML = html;
 }
 
+// ── thRenderDNA — court heatmap + scoring profile + four factors + insights ────
+function thRenderDNA(teamData, statsData, shootingData) {
+  const el = document.getElementById('thDNA');
+  if (!el) return;
+  if (!statsData && !shootingData) {
+    el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No team stats available for this team/season.</div>';
+    return;
+  }
+  const s  = statsData;
+  const ts = s ? s.teamStats    : null;
+  const os = s ? s.opponentStats : null;
+  const g  = (s && s.games) || 1;
+
+  const ppg       = ts ? +(ts.points.total / g).toFixed(1)                                    : null;
+  const oppg      = os ? +(os.points.total / g).toFixed(1)                                    : null;
+  const paintPct  = ts ? Math.round(ts.points.inPaint / ts.points.total * 100)                : null;
+  const fbPct     = ts ? Math.round(ts.points.fastBreak / ts.points.total * 100)              : null;
+  const topPct    = ts ? Math.round(ts.points.offTurnovers / ts.points.total * 100)           : null;
+  const threeTend = ts ? Math.round(ts.threePointFieldGoals.attempted / ts.fieldGoals.attempted * 100) : null;
+  const astRate   = ts ? Math.round(ts.assists / ts.fieldGoals.made * 100)                    : null;
+  const pace      = s  ? s.pace : null;
+
+  const ff  = ts ? ts.fourFactors : null;
+  const ofs = os ? os.fourFactors : null;
+  const offEfg  = ff  ? ff.effectiveFieldGoalPct          : null;
+  const offTov  = ff  ? Math.round(ff.turnoverRatio * 100) : null;
+  const offOreb = ff  ? ff.offensiveReboundPct             : null;
+  const offFtr  = ff  ? ff.freeThrowRate                   : null;
+  const defEfg  = ofs ? ofs.effectiveFieldGoalPct          : null;
+  const defTov  = ofs ? Math.round(ofs.turnoverRatio * 100) : null;
+  const defOreb = ofs ? ofs.offensiveReboundPct             : null;
+  const defFtr  = ofs ? ofs.freeThrowRate                   : null;
+
+  // Auto-generate insights from the numbers
+  const insights = [];
+  if (offEfg != null) {
+    if (offEfg >= 56) insights.push({ type: 'strength', text: `Elite shooting — eFG% of ${offEfg}% is well above the national avg (~50%). Creating high-quality looks consistently.` });
+    else if (offEfg >= 52) insights.push({ type: 'strength', text: `Good shooting efficiency — eFG% of ${offEfg}% is above the national average.` });
+    else if (offEfg <= 46) insights.push({ type: 'weakness', text: `Shooting struggles — eFG% of ${offEfg}% is below average. Needs better shot quality or improved shooting.` });
+  }
+  if (defEfg != null) {
+    if (defEfg <= 44) insights.push({ type: 'strength', text: `Elite perimeter defense — holding opponents to just ${defEfg}% eFG. Significantly disrupts opponent offense.` });
+    else if (defEfg <= 48) insights.push({ type: 'strength', text: `Good defensive shooting suppression — opponents at ${defEfg}% eFG.` });
+    else if (defEfg >= 54) insights.push({ type: 'weakness', text: `Defensive concern — opponents shoot ${defEfg}% eFG. Giving up too many quality looks.` });
+  }
+  if (offTov != null) {
+    if (offTov <= 13) insights.push({ type: 'strength', text: `Exceptional ball security — only ${offTov}% turnover rate. Rarely gives opponents easy transition buckets.` });
+    else if (offTov >= 20) insights.push({ type: 'weakness', text: `Turnover issue — ${offTov}% TO rate hurts offensive possessions and creates transition opportunities for opponents.` });
+  }
+  if (defTov != null) {
+    if (defTov >= 22) insights.push({ type: 'strength', text: `Disruptive defense — forcing ${defTov}% opponent turnover rate. Creates easy transition opportunities.` });
+    else if (defTov <= 14) insights.push({ type: 'weakness', text: `Lacks defensive pressure — only forcing ${defTov}% opponent TO rate. Opponents handle the ball too freely.` });
+  }
+  if (offOreb != null) {
+    if (offOreb >= 32) insights.push({ type: 'strength', text: `Dominant on the offensive glass — ${offOreb}% OReb rate means lots of extra possessions.` });
+    else if (offOreb <= 22) insights.push({ type: 'weakness', text: `Weak offensive rebounding — only ${offOreb}% OReb rate. Rarely converts misses into second chances.` });
+  }
+  if (defOreb != null) {
+    if (defOreb <= 24) insights.push({ type: 'strength', text: `Excellent defensive rebounding — holding opponents to ${defOreb}% OReb rate. Boxes out well.` });
+    else if (defOreb >= 35) insights.push({ type: 'weakness', text: `Gets out-rebounded — opponents grab ${defOreb}% of their own misses, generating second-chance points.` });
+  }
+  if (paintPct != null) {
+    if (paintPct >= 48) insights.push({ type: 'style', text: `Inside-out attack — ${paintPct}% of points in the paint. Forces opponents to commit to interior defense.` });
+    else if (paintPct <= 34) insights.push({ type: 'style', text: `Perimeter-oriented offense — only ${paintPct}% of points come from the paint. Very jump-shot dependent.` });
+  }
+  if (threeTend != null) {
+    if (threeTend >= 48) insights.push({ type: 'style', text: `Heavy three-point volume — ${threeTend}% of FGA are 3s. Live-or-die by the three style.` });
+    else if (threeTend <= 26) insights.push({ type: 'style', text: `Post and mid-range focus — only ${threeTend}% of shots are 3-pointers.` });
+  }
+  if (fbPct != null && fbPct >= 15) insights.push({ type: 'style', text: `Transition threat — ${fbPct}% of points come in transition. Loves to push pace and score in the open court.` });
+  if (pace != null) {
+    if (pace >= 72) insights.push({ type: 'style', text: `Up-tempo identity — ${pace} possessions/game. Creates havoc through volume and pace.` });
+    else if (pace <= 63) insights.push({ type: 'style', text: `Deliberate half-court team — only ${pace} possessions/game. Controls tempo and grinds out wins.` });
+  }
+
+  // Four factors rows: label | our offense val | what opp does vs us (defense)
+  function ffRow(label, offVal, defVal, offIsGood, defIsGood, offTip, defTip) {
+    const fmtV = v => v != null ? (+v).toFixed(1) + '%' : '—';
+    const oc = offIsGood == null ? 'var(--muted)' : offIsGood ? 'var(--good)' : 'var(--bad)';
+    const dc = defIsGood == null ? 'var(--muted)' : defIsGood ? 'var(--good)' : 'var(--bad)';
+    return `<div class="thFFRow">
+      <div class="thFFVal" style="color:${oc}" title="${offTip||''}">${fmtV(offVal)}</div>
+      <div class="thFFLabel">${label}</div>
+      <div class="thFFVal thFFVal--def" style="color:${dc}" title="${defTip||''}">${fmtV(defVal)}</div>
+    </div>`;
+  }
+  function grade(v, goodThresh, badThresh) {
+    if (v == null) return null;
+    if (v >= goodThresh) return true;
+    if (v <= badThresh)  return false;
+    return null;
+  }
+
+  const ff4Html = ts ? `
+    <div class="thFFCard">
+      <div class="thFFHead">
+        <div class="thFFHeadCol"><div class="thFFHeadTitle" style="color:var(--accent)">Our Offense</div><div class="thFFHeadSub">what we do</div></div>
+        <div class="thFFTitle">Four Factors</div>
+        <div class="thFFHeadCol"><div class="thFFHeadTitle" style="color:var(--muted)">Defense</div><div class="thFFHeadSub">what opp does vs us</div></div>
+      </div>
+      <div class="thFFBody">
+        ${ffRow('Eff. FG%',  offEfg,  defEfg,  grade(offEfg,54,46),                       defEfg!=null?(defEfg<=48?true:defEfg>=54?false:null):null, 'Our shooting efficiency (higher=better)', 'Opp eFG% against us (lower=better defense)')}
+        ${ffRow('TO Rate',   offTov,  defTov,  offTov!=null?(offTov<=15?true:offTov>=21?false:null):null, defTov!=null?(defTov>=21?true:defTov<=14?false:null):null, 'Our turnover rate (lower=better)', 'Opp TO rate we force (higher=better)')}
+        ${ffRow('Off. Reb%', offOreb, defOreb, grade(offOreb,30,22),                       defOreb!=null?(defOreb<=26?true:defOreb>=35?false:null):null, 'Our offensive rebound rate (higher=better)', 'Opp OReb% we allow (lower=better)')}
+        ${ffRow('FT Rate',   offFtr,  defFtr,  grade(offFtr,35,22),                        defFtr!=null?(defFtr<=20?true:defFtr>=35?false:null):null,   'Our FT attempt rate (higher=better)', 'Opp FT rate we give up (lower=better)')}
+      </div>
+      <div class="thFFNote">eFG% = (FGM + 0.5×3PM) / FGA &nbsp;|&nbsp; TO Rate = TO / Poss &nbsp;|&nbsp; FT Rate = FTA / FGA</div>
+    </div>` : '';
+
+  const profHtml = [
+    ppg       != null ? `<div class="thProfRow"><span class="thProfLabel">Points / game</span><span class="thProfVal">${ppg}</span></div>` : '',
+    oppg      != null ? `<div class="thProfRow"><span class="thProfLabel">Opp Pts / game</span><span class="thProfVal">${oppg}</span></div>` : '',
+    pace      != null ? `<div class="thProfRow"><span class="thProfLabel" title="Estimated possessions per 40 min game">Pace</span><span class="thProfVal">${pace} poss/g</span></div>` : '',
+    paintPct  != null ? `<div class="thProfRow"><span class="thProfLabel">Paint scoring</span><span class="thProfVal">${paintPct}% of pts</span></div>` : '',
+    fbPct     != null ? `<div class="thProfRow"><span class="thProfLabel">Fast break pts</span><span class="thProfVal">${fbPct}% of pts</span></div>` : '',
+    topPct    != null ? `<div class="thProfRow"><span class="thProfLabel">Pts off TOs</span><span class="thProfVal">${topPct}% of pts</span></div>` : '',
+    threeTend != null ? `<div class="thProfRow"><span class="thProfLabel" title="3-point attempts as % of all FGA">3PT tendency</span><span class="thProfVal">${threeTend}% of FGA</span></div>` : '',
+    astRate   != null ? `<div class="thProfRow"><span class="thProfLabel" title="Assists per made field goal">Assist rate</span><span class="thProfVal">${astRate}% of FGM</span></div>` : '',
+    ts && ts.trueShooting != null ? `<div class="thProfRow"><span class="thProfLabel" title="Points per shot attempt including FTs. Best overall shooting efficiency measure.">True Shooting%</span><span class="thProfVal">${ts.trueShooting}%</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  const insightsHtml = insights.length
+    ? insights.map(i => `<div class="thInsight thInsight--${i.type}"><span class="thInsIcon">${i.type==='strength'?'✅':i.type==='weakness'?'⚠️':'💡'}</span><span>${i.text}</span></div>`).join('')
+    : '<div class="muted" style="padding:8px 0">Load team to generate analysis.</div>';
+
+  const heatmapHtml = shootingData
+    ? _buildCourtHeatmap(shootingData)
+    : '<div class="muted" style="padding:24px;text-align:center;font-size:12px">Shooting zone data unavailable</div>';
+
+  el.innerHTML = `
+    <div class="thDNAGrid">
+      <div class="thDNALeft">
+        <div class="thDNASectionLabel">🏀 Team Shooting Zones</div>
+        ${heatmapHtml}
+      </div>
+      <div class="thDNARight">
+        <div class="thDNASectionLabel">📊 Scoring Profile</div>
+        <div class="thProfCard">${profHtml || '<div class="muted">Stats unavailable</div>'}</div>
+        <div style="height:16px"></div>
+        ${ff4Html}
+      </div>
+    </div>
+    <div class="thDNAInsights">
+      <div class="thDNASectionLabel">🔍 Strengths &amp; Weaknesses Analysis</div>
+      <div class="thInsightsGrid">${insightsHtml}</div>
+    </div>`;
+}
+
+// ── thRenderCompare — side-by-side team comparison ────────────────────────────
+function thRenderCompare(teamA, ratA, statsA, teamB, ratB, statsB) {
+  const el = document.getElementById('thCompare');
+  if (!el) return;
+  if (!teamA || !teamB) {
+    el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Load a primary team first, then pick a team to compare.</div>';
+    return;
+  }
+  const tsA = statsA ? statsA.teamStats     : null;
+  const osA = statsA ? statsA.opponentStats : null;
+  const tsB = statsB ? statsB.teamStats     : null;
+  const osB = statsB ? statsB.opponentStats : null;
+  const ffA = tsA ? tsA.fourFactors : null;
+  const ffB = tsB ? tsB.fourFactors : null;
+  const gA  = (statsA && statsA.games) || 1;
+  const gB  = (statsB && statsB.games) || 1;
+
+  function cmpRow(label, vA, vB, higherBetter, fmtFn) {
+    const a = parseFloat(vA), b = parseFloat(vB);
+    const fmt = fmtFn || (v => Number.isFinite(+v) ? (+v).toFixed(1) : '—');
+    const aWins = Number.isFinite(a) && Number.isFinite(b) && (higherBetter ? a > b : a < b);
+    const bWins = Number.isFinite(a) && Number.isFinite(b) && (higherBetter ? b > a : b < a);
+    const aColor = aWins ? 'color:var(--good)' : bWins ? 'color:var(--bad)' : '';
+    const bColor = bWins ? 'color:var(--good)' : aWins ? 'color:var(--bad)' : '';
+    return `<div class="thCmpRow">
+      <div class="thCmpVal${aWins?' thCmpWin':''}" style="${aColor}">${Number.isFinite(a)?fmt(a):'—'}</div>
+      <div class="thCmpLabel">${label}</div>
+      <div class="thCmpVal${bWins?' thCmpWin':''}" style="${bColor}">${Number.isFinite(b)?fmt(b):'—'}</div>
+    </div>`;
+  }
+
+  // Edge analysis
+  const edges = [];
+  function checkEdge(name, vA, vB, higherBetter) {
+    const a = parseFloat(vA), b = parseFloat(vB);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a - b) < 1.5) return;
+    const aWins = higherBetter ? a > b : a < b;
+    edges.push({ winner: aWins ? teamA : teamB, name, vW: (aWins?a:b).toFixed(1), vL: (aWins?b:a).toFixed(1), higher: higherBetter });
+  }
+  if (ratA && ratB) {
+    checkEdge('Net Efficiency (adjEM)', ratA.adjEM, ratB.adjEM, true);
+    checkEdge('Adjusted Offense',       ratA.adjO,  ratB.adjO,  true);
+    checkEdge('Adjusted Defense',       ratA.adjD,  ratB.adjD,  false);
+  }
+  if (ffA && ffB) {
+    checkEdge('effective FG%',        ffA.effectiveFieldGoalPct, ffB.effectiveFieldGoalPct, true);
+    checkEdge('turnover rate',        ffA.turnoverRatio*100,      ffB.turnoverRatio*100,      false);
+    checkEdge('offensive rebounding', ffA.offensiveReboundPct,   ffB.offensiveReboundPct,   true);
+    checkEdge('free-throw rate',      ffA.freeThrowRate,          ffB.freeThrowRate,          true);
+  }
+  if (tsA && tsB) {
+    checkEdge('true shooting%', tsA.trueShooting,                  tsB.trueShooting,                  true);
+    checkEdge('3-point%',       tsA.threePointFieldGoals.pct,      tsB.threePointFieldGoals.pct,      true);
+    checkEdge('scoring',        tsA.points.total/gA,               tsB.points.total/gB,               true);
+  }
+
+  const edgeHtml = edges.length
+    ? edges.slice(0, 6).map(e =>
+        `<div class="thEdgeItem"><b style="color:var(--accent)">${e.winner}</b> has a clear edge in <b>${e.name}</b> · ${e.vW} vs ${e.vL}</div>`
+      ).join('')
+    : '<div class="muted" style="padding:8px 0">Teams are closely matched — no standout advantages found.</div>';
+
+  const rankA = ratA && ratA.rank ? '#' + ratA.rank : '—';
+  const rankB = ratB && ratB.rank ? '#' + ratB.rank : '—';
+
+  el.innerHTML = `
+    <div class="thCmpHeader">
+      <div class="thCmpTeamBlock"><div class="thCmpTeamName" style="color:var(--accent)">${teamA}</div><div class="thCmpRank">${rankA}</div></div>
+      <div class="thCmpVs">VS</div>
+      <div class="thCmpTeamBlock"><div class="thCmpTeamName" style="color:var(--warn)">${teamB}</div><div class="thCmpRank">${rankB}</div></div>
+    </div>
+    <div class="thCmpGrid">
+      <div class="thCmpSection">
+        <div class="thCmpSectionLabel">Efficiency Ratings</div>
+        <div class="thCmpColHeads"><span style="color:var(--accent)">${teamA}</span><span></span><span style="color:var(--warn)">${teamB}</span></div>
+        ${cmpRow('Adj. Offense',   ratA&&ratA.adjO,  ratB&&ratB.adjO,  true)}
+        ${cmpRow('Adj. Defense',   ratA&&ratA.adjD,  ratB&&ratB.adjD,  false, v=>(+v).toFixed(1)+'↓')}
+        ${cmpRow('Net Efficiency', ratA&&ratA.adjEM, ratB&&ratB.adjEM, true)}
+        ${cmpRow('Natl Rank',      ratA&&ratA.rank,  ratB&&ratB.rank,  false, v=>'#'+Math.round(+v))}
+        ${cmpRow('SRS',            ratA&&ratA.srs,   ratB&&ratB.srs,   true)}
+      </div>
+      ${(ffA || ffB) ? `<div class="thCmpSection">
+        <div class="thCmpSectionLabel">Four Factors (Offense)</div>
+        <div class="thCmpColHeads"><span style="color:var(--accent)">${teamA}</span><span></span><span style="color:var(--warn)">${teamB}</span></div>
+        ${cmpRow('Eff. FG%',  ffA&&ffA.effectiveFieldGoalPct,  ffB&&ffB.effectiveFieldGoalPct,  true,  v=>(+v).toFixed(1)+'%')}
+        ${cmpRow('TO Rate',   ffA&&(ffA.turnoverRatio*100),     ffB&&(ffB.turnoverRatio*100),    false, v=>(+v).toFixed(1)+'%')}
+        ${cmpRow('OReb%',     ffA&&ffA.offensiveReboundPct,     ffB&&ffB.offensiveReboundPct,    true,  v=>(+v).toFixed(1)+'%')}
+        ${cmpRow('FT Rate',   ffA&&ffA.freeThrowRate,           ffB&&ffB.freeThrowRate,          true,  v=>(+v).toFixed(1)+'%')}
+      </div>` : ''}
+      ${(tsA || tsB) ? `<div class="thCmpSection">
+        <div class="thCmpSectionLabel">Scoring Profile</div>
+        <div class="thCmpColHeads"><span style="color:var(--accent)">${teamA}</span><span></span><span style="color:var(--warn)">${teamB}</span></div>
+        ${cmpRow('Pts / game',   tsA&&(tsA.points.total/gA),            tsB&&(tsB.points.total/gB),            true)}
+        ${cmpRow('True Shoot%', tsA&&tsA.trueShooting,                  tsB&&tsB.trueShooting,                  true,  v=>(+v).toFixed(1)+'%')}
+        ${cmpRow('3P%',          tsA&&tsA.threePointFieldGoals.pct,     tsB&&tsB.threePointFieldGoals.pct,     true,  v=>(+v).toFixed(1)+'%')}
+        ${cmpRow('Pace',         statsA&&statsA.pace,                   statsB&&statsB.pace,                   true,  v=>(+v).toFixed(1))}
+        ${cmpRow('Opp Pts/g',   osA&&(osA.points.total/gA),            osB&&(osB.points.total/gB),            false)}
+      </div>` : ''}
+    </div>
+    <div class="thEdgeSection">
+      <div class="thDNASectionLabel">🏆 Edge Analysis</div>
+      <div class="thEdgeList">${edgeHtml}</div>
+    </div>`;
+}
+
+// ── thLoadCompare — load second team stats and render comparison ──────────────
+async function thLoadCompare() {
+  const compareTeamEl = document.getElementById('thCompareTeam');
+  const compareTeam   = compareTeamEl ? compareTeamEl.value : '';
+  if (!compareTeam) { if (typeof showWarn === 'function') showWarn('Please select a team to compare against.'); return; }
+  if (!thCurrentTeam)  { if (typeof showWarn === 'function') showWarn('Please load a primary team first.'); return; }
+  const el = document.getElementById('thCompare');
+  if (el) el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Loading comparison…</div>';
+  const [statsB] = await Promise.all([
+    loadTeamStats(compareTeam, thCurrentSeason),
+  ]);
+  const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
+  const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
+  thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
+}
+
 // ── thLoadOpponent — load a team's players into the opponent slot ─────────────
 function thLoadOpponent(teamName) {
   if (typeof tbGetAllPlayers !== 'function') return;
@@ -347,24 +623,34 @@ function thLoadOpponent(teamName) {
 // ── thLoadTeam — main entry point when Load button clicked ───────────────────
 async function thLoadTeam(teamName, season) {
   if (!teamName) return;
+  thCurrentTeam   = teamName;
+  thCurrentSeason = season || '2026';
+  _thCurrentStats = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
   const teamData = teamRatings[teamKey] || null;
 
-  // Show overview immediately from cached ratings while games load
+  // Show overview immediately while rest loads in parallel
   thRenderOverview(teamData, null);
-  if (thThreatsEl)  thThreatsEl.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>';
-  if (thGameLogEl)  thGameLogEl.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Fetching game log…</div>';
-  if (thH2HEl)      thH2HEl.innerHTML     = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>';
+  const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
+    document.getElementById('thDNA'), document.getElementById('thCompare')];
+  loadingEls.forEach(el => { if (el) el.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>'; });
 
-  const gamesData = await loadGamesForTeam(teamName, season || '2026');
+  // Parallel fetch: games + team stats + team shooting zones
+  const [gamesData, statsData, shootingData] = await Promise.all([
+    loadGamesForTeam(teamName, thCurrentSeason),
+    loadTeamStats(teamName, thCurrentSeason),
+    loadTeamShootingZones(teamName, thCurrentSeason),
+  ]);
+  _thCurrentStats = statsData;
   _thLoading('');
 
   thRenderOverview(teamData, gamesData);
   thRenderThreats(teamData, gamesData);
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);
+  thRenderDNA(teamData, statsData, shootingData);
 }
 
 // ── Populate team dropdown ────────────────────────────────────────────────────
@@ -375,7 +661,12 @@ function thPopulateTeams() {
       .map(p => p.Team || '')
       .filter(Boolean)
   )].sort();
-  thTeamSearch.innerHTML = '<option value="">— Select a team —</option>' +
+  const opts = '<option value="">— Select a team —</option>' +
+    teams.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+  thTeamSearch.innerHTML = opts;
+  // Also populate compare dropdown
+  const cmpEl = document.getElementById('thCompareTeam');
+  if (cmpEl) cmpEl.innerHTML = '<option value="">— Select opponent team —</option>' +
     teams.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
 }
 
@@ -396,6 +687,12 @@ function initTeamsPage() {
       if (!team) { if (typeof showWarn === 'function') showWarn('Please select a team first.'); return; }
       thLoadTeam(team, season);
     });
+  }
+
+  // Compare button
+  const thCompareBtn = document.getElementById('thCompareBtn');
+  if (thCompareBtn) {
+    thCompareBtn.addEventListener('click', () => thLoadCompare());
   }
 
   // Allow pressing Enter in team search select (or hitting Enter in season input)

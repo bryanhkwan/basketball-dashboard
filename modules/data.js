@@ -29,8 +29,10 @@ var teamRatings    = {};  // keyed by lowercase team name → {team, adjO, adjD,
 var allRatingsData = [];  // full array for cross-team comparisons / threats board
 var _ratingsReady  = false;
 
-var teamShootingCache = {}; // keyed "teamName:season" → array of player shooting objects
-var teamGamesCache    = {}; // keyed "teamName:season" → {games, teamStats}
+var teamShootingCache      = {}; // keyed "teamName:season" → array of player shooting objects
+var teamGamesCache         = {}; // keyed "teamName:season" → {games, teamStats}
+var teamStatsCache         = {}; // keyed "teamName:season" → full team season stats object
+var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shooting zone object
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 
@@ -945,7 +947,9 @@ async function loadTeamRatings(year) {
     const r = await fetch(WORKER_URL + '/api/cbdata/ratings?season=' + year);
     if (!r.ok) return;
     const data = await r.json();
-    allRatingsData = data.teams || [];
+    // Filter to requested season only — API returns all historical seasons,
+    // keeping only the target year ensures teamRatings and percentiles are correct.
+    allRatingsData = (data.teams || []).filter(t => +t.season === +year);
     teamRatings = {};
     allRatingsData.forEach(t => {
       if (t.team) teamRatings[t.team.toLowerCase()] = t;
@@ -974,6 +978,34 @@ async function loadShootingForTeam(team, year) {
   } catch (e) {
     return [];
   }
+}
+
+// ── loadTeamStats — full team season stats (offense + defense + four factors) ─
+async function loadTeamStats(team, year) {
+  year = year || 2026;
+  const key = (team + ':' + year).toLowerCase();
+  if (teamStatsCache[key] !== undefined) return teamStatsCache[key];
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/teamstats?team=' + encodeURIComponent(team) + '&season=' + year);
+    if (!r.ok) return null;
+    const data = await r.json();
+    teamStatsCache[key] = data.stats || null;
+    return teamStatsCache[key];
+  } catch (e) { return null; }
+}
+
+// ── loadTeamShootingZones — team-level shooting zone breakdown ────────────────
+async function loadTeamShootingZones(team, year) {
+  year = year || 2026;
+  const key = (team + ':' + year).toLowerCase();
+  if (teamShootingZonesCache[key] !== undefined) return teamShootingZonesCache[key];
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/teamshooting?team=' + encodeURIComponent(team) + '&season=' + year);
+    if (!r.ok) return null;
+    const data = await r.json();
+    teamShootingZonesCache[key] = data.shooting || null;
+    return teamShootingZonesCache[key];
+  } catch (e) { return null; }
 }
 
 // ── loadGamesForTeam — season game log + team box scores ─────────────────────
