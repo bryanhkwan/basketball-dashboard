@@ -159,6 +159,9 @@ function openProfile(r){
   };
 
   renderCareerHistory(r);
+  renderTeamContext(r);
+  renderShootingZones(r);
+  renderRecruitingBadge(r);
   modalBack.style.display = 'flex';
 }
 
@@ -262,6 +265,165 @@ function renderCareerHistory(r) {
 
   html += '</div>';
   el.innerHTML = html;
+}
+
+// ── renderTeamContext — AdjO/AdjD/AdjEM/Tempo card inside player profile ─────
+function renderTeamContext(r) {
+  const el = document.getElementById('mTeamContext');
+  if (!el) return;
+  if (typeof league !== 'undefined' && league !== 'MBB') {
+    const panel = document.getElementById('mTeamContextPanel');
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  const panel = document.getElementById('mTeamContextPanel');
+  if (panel) panel.style.display = '';
+
+  if (!_ratingsReady) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading team ratings…</div>';
+    window._onRatingsReady = () => { if (_currentProfilePlayer) renderTeamContext(_currentProfilePlayer); };
+    return;
+  }
+  const t = teamRatings[(r.Team || '').toLowerCase()];
+  if (!t) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">No ratings found for ' + (r.Team || 'this team') + '.</div>';
+    return;
+  }
+  const pctOf = (arr, v) => !arr.length || !Number.isFinite(v) ? null : Math.round(arr.filter(x => x <= v).length / arr.length * 100);
+  const adjOs = allRatingsData.map(x => x.adjO).filter(Number.isFinite).sort((a,b)=>a-b);
+  const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
+  const oPct  = pctOf(adjOs, t.adjO);
+  const dPct  = t.adjD != null ? (100 - pctOf(adjDs, t.adjD)) : null;
+  const fmt   = (v, d=1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const gc    = p => !Number.isFinite(p) ? 'var(--muted)' : p >= 80 ? 'var(--good)' : p >= 55 ? 'var(--accent)' : p >= 35 ? 'var(--warn)' : 'var(--bad)';
+  const tempoLabel = !Number.isFinite(t.adjT) ? '—' : t.adjT >= 72 ? 'Fast' : t.adjT >= 68 ? 'Med' : 'Slow';
+  const emSign = (t.adjEM >= 0) ? '+' : '';
+  el.innerHTML = `
+    <div class="teamContextGrid">
+      <div class="tcStat">
+        <div class="tcVal" style="color:${gc(oPct)}">${fmt(t.adjO)}</div>
+        <div class="tcLabel">Adj O</div>
+        <div class="tcPct">${oPct != null ? oPct+'th' : ''}</div>
+      </div>
+      <div class="tcStat">
+        <div class="tcVal" style="color:${gc(dPct)}">${fmt(t.adjD)}</div>
+        <div class="tcLabel">Adj D</div>
+        <div class="tcPct">${dPct != null ? dPct+'th' : ''}</div>
+      </div>
+      <div class="tcStat">
+        <div class="tcVal" style="color:${(t.adjEM||0)>=0?'var(--good)':'var(--bad)'}">${emSign}${fmt(t.adjEM)}</div>
+        <div class="tcLabel">Net Eff</div>
+        <div class="tcPct">${fmt(t.srs)} SRS</div>
+      </div>
+      <div class="tcStat">
+        <div class="tcVal">${fmt(t.adjT)}</div>
+        <div class="tcLabel">Tempo</div>
+        <div class="tcPct">${tempoLabel}</div>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:6px;font-size:11px">
+      ${t.conference || '—'} · SOS: <b>${fmt(t.sos)}</b>
+    </div>`;
+}
+
+// ── renderShootingZones — shot-type breakdown chart ───────────────────────────
+async function renderShootingZones(r) {
+  const el = document.getElementById('mShootingZones');
+  if (!el) return;
+  const panel = document.getElementById('mShootingPanel');
+  if (typeof league !== 'undefined' && league !== 'MBB') {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  if (panel) panel.style.display = '';
+  el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading shot data…</div>';
+
+  const team = r.Team || '';
+  const seasonEl = document.getElementById('cbdSeason');
+  const season = seasonEl ? (seasonEl.value || '2026') : '2026';
+  const playerName = (r.Player || '').toLowerCase().trim();
+
+  const players = await loadShootingForTeam(team, season);
+  if (!players || !players.length) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">No shooting data available.</div>';
+    return;
+  }
+  const norm = s => (s || '').toLowerCase().trim();
+  const p = players.find(x => norm(x.athleteName) === playerName)
+         || players.find(x => {
+           const n = norm(x.athleteName);
+           const parts = playerName.split(' ');
+           return parts.length > 1 && n.includes(parts[0]) && n.includes(parts[parts.length-1]);
+         });
+  if (!p) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Shot data not available for this player.</div>';
+    return;
+  }
+
+  const zones = [
+    { key:'dunks',             label:'Dunks',      col:'var(--good)' },
+    { key:'layups',            label:'Layups',     col:'var(--accent)' },
+    { key:'tipIns',            label:'Tip-ins',    col:'var(--accent2)' },
+    { key:'twoPointJumpers',   label:'Mid-range',  col:'var(--warn)' },
+    { key:'threePointJumpers', label:'3-pointers', col:'#a78bfa' },
+    { key:'freeThrows',        label:'Free throws',col:'var(--muted)' },
+  ];
+  const breakdown = p.attemptsBreakdown || {};
+  const totalShare = Object.values(breakdown).reduce((s,v)=>s+(v||0),0) || 1;
+  const pctColor = pct => pct >= 60 ? 'var(--good)' : pct >= 45 ? 'var(--accent)' : pct >= 30 ? 'var(--warn)' : 'var(--bad)';
+
+  let zoneHtml = `<div class="szMeta">
+    ${p.trackedShots||0} tracked shots · ${p.assistedPct||0}% of makes assisted · FT rate: ${p.freeThrowRate||0}%
+  </div><div class="shootingZones">`;
+
+  zones.forEach(z => {
+    const d = p[z.key];
+    if (!d || !d.attempted) return;
+    const share = Math.round((breakdown[z.key] || 0) / totalShare * 100);
+    const astLabel = d.assistedPct != null ? `<span class="muted" style="font-size:10px">${(+d.assistedPct).toFixed(0)}% ast</span>` : '';
+    zoneHtml += `<div class="szRow">
+      <div class="szLabel">${z.label}</div>
+      <div class="szBarWrap"><div class="szFill" style="width:${share}%;background:${z.col}"></div></div>
+      <div class="szStats">
+        <span class="szPct" style="color:${pctColor(d.pct||0)}">${(d.pct||0).toFixed(1)}%</span>
+        <span class="muted" style="font-size:10px">${d.made}/${d.attempted}</span>
+        ${astLabel}
+      </div>
+    </div>`;
+  });
+  zoneHtml += '</div>';
+  el.innerHTML = zoneHtml;
+}
+
+// ── renderRecruitingBadge — star-rating badge in profile header ───────────────
+async function renderRecruitingBadge(r) {
+  const el = document.getElementById('mRecruitBadge');
+  if (!el) return;
+  if (typeof league !== 'undefined' && league !== 'MBB') { el.style.display = 'none'; return; }
+
+  const pName = (r.Player || '').toLowerCase().trim();
+  const recruits = await loadRecruitingData();
+  if (!recruits.length) { el.style.display = 'none'; return; }
+
+  const norm = s => (s || '').toLowerCase().trim();
+  const parts = pName.split(' ');
+  const match = recruits.find(p => norm(p.name) === pName)
+             || recruits.find(p => {
+               const n = norm(p.name);
+               return parts.length > 1 && n.includes(parts[0]) && n.includes(parts[parts.length-1]) && parts[parts.length-1].length > 2;
+             });
+
+  if (!match || !match.stars) { el.style.display = 'none'; return; }
+
+  const stars   = Math.min(5, Math.max(0, match.stars));
+  const filled  = '★'.repeat(stars);
+  const empty   = '☆'.repeat(5 - stars);
+  const rankStr = match.ranking ? ` · #${match.ranking}` : '';
+  const classStr = match.classYear ? ` · Class of ${match.classYear}` : '';
+
+  el.style.display = 'inline-flex';
+  el.innerHTML = `<span class="recruitStars">${filled}<span style="opacity:.3">${empty}</span></span>
+    <span class="recruitLabel">${stars}★ recruit${rankStr}${classStr}</span>`;
 }
 
 function openStatInfo(stat){

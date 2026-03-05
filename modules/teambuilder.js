@@ -930,7 +930,7 @@ function initPageNav(){
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.page;
       document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology').forEach(el => {
+      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology, #pageTeams').forEach(el => {
         el.style.display = 'none';
       });
       const target = document.getElementById(targetId);

@@ -24,6 +24,16 @@ var leagueRosters = {MBB:{tb:[],opp:[]}, WBB:{tb:[],opp:[]}};
 var careerData = {};
 var _careerDataReady = false;
 
+// ── Team intelligence caches (loaded in background after player data) ────────
+var teamRatings    = {};  // keyed by lowercase team name → {team, adjO, adjD, adjEM, adjT, srs, sos, conference}
+var allRatingsData = [];  // full array for cross-team comparisons / threats board
+var _ratingsReady  = false;
+
+var teamShootingCache = {}; // keyed "teamName:season" → array of player shooting objects
+var teamGamesCache    = {}; // keyed "teamName:season" → {games, teamStats}
+var recruitingCache   = []; // flat array of recruit objects across multiple class years
+var _recruitingReady  = false;
+
 // Live working copy (user-editable) — keyed by canonical name only
 var confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
 
@@ -880,6 +890,9 @@ async function loadAllData(year) {
     // Populate career history in background — does not block initial render
     _careerDataReady = false;
     loadCareerSeasons().catch(() => {});
+    // Populate team ratings in background — used by profiles and Team Hub
+    _ratingsReady = false;
+    loadTeamRatings(year).catch(() => {});
     finishIfInitial();
 
   } catch (err) {
@@ -919,6 +932,78 @@ async function loadCareerSeasons() {
   if (typeof window._onCareerDataReady === 'function') {
     window._onCareerDataReady();
     window._onCareerDataReady = null;
+  }
+}
+
+// ── Shared worker URL ──────────────────────────────────────────────────────
+var WORKER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+
+// ── loadTeamRatings — adjusted efficiency + SRS for all MBB teams ──────────
+async function loadTeamRatings(year) {
+  year = year || 2026;
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/ratings?season=' + year);
+    if (!r.ok) return;
+    const data = await r.json();
+    allRatingsData = data.teams || [];
+    teamRatings = {};
+    allRatingsData.forEach(t => {
+      if (t.team) teamRatings[t.team.toLowerCase()] = t;
+    });
+    _ratingsReady = true;
+    if (typeof window._onRatingsReady === 'function') {
+      window._onRatingsReady();
+      window._onRatingsReady = null;
+    }
+  } catch (e) {
+    console.warn('loadTeamRatings failed:', e);
+  }
+}
+
+// ── loadShootingForTeam — shot-type breakdown for a team's players ───────────
+async function loadShootingForTeam(team, year) {
+  year = year || 2026;
+  const key = (team + ':' + year).toLowerCase();
+  if (teamShootingCache[key]) return teamShootingCache[key];
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/shooting?team=' + encodeURIComponent(team) + '&season=' + year);
+    if (!r.ok) return [];
+    const data = await r.json();
+    teamShootingCache[key] = data.players || [];
+    return teamShootingCache[key];
+  } catch (e) {
+    return [];
+  }
+}
+
+// ── loadGamesForTeam — season game log + team box scores ─────────────────────
+async function loadGamesForTeam(team, year) {
+  year = year || 2026;
+  const key = (team + ':' + year).toLowerCase();
+  if (teamGamesCache[key]) return teamGamesCache[key];
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/games?team=' + encodeURIComponent(team) + '&season=' + year);
+    if (!r.ok) return null;
+    const data = await r.json();
+    teamGamesCache[key] = data;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ── loadRecruitingData — multi-class recruiting data ─────────────────────────
+async function loadRecruitingData() {
+  if (_recruitingReady && recruitingCache.length) return recruitingCache;
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/recruiting?seasons=2025,2024,2023,2022');
+    if (!r.ok) return [];
+    const data = await r.json();
+    recruitingCache = data.recruits || [];
+    _recruitingReady = true;
+    return recruitingCache;
+  } catch (e) {
+    return [];
   }
 }
 

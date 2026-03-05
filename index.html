@@ -29,6 +29,7 @@
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/teams.js" defer></script>
   <script src="modules/chat.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="app.js" defer></script>
@@ -97,6 +98,7 @@
 <nav class="pageNav">
   <button class="pageNavBtn active" data-page="pagePlayers">🏀 Players</button>
   <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
+  <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
 </nav>
 
@@ -525,6 +527,66 @@
 </div><!-- /tbSection wrap -->
 </div><!-- /pageTeamBuilder -->
 
+<!-- Teams Hub Page -->
+<div id="pageTeams" style="display:none">
+<div class="wrap">
+  <div class="thPage">
+    <div class="thHeader">
+      <h2 class="thTitle">🏟️ Team Hub</h2>
+      <p class="muted" style="font-size:13px">Program analysis, conference threats, game log, and head-to-head records.</p>
+    </div>
+
+    <div class="card thSearchCard">
+      <div class="thSearchRow">
+        <div class="thSearchGroup">
+          <label class="thLabel">Team</label>
+          <select id="thTeamSearch" class="thTeamSelect"><option value="">— Select a team —</option></select>
+        </div>
+        <div class="thSearchGroup">
+          <label class="thLabel">Season</label>
+          <input id="thSeason" type="number" value="2026" min="2020" max="2030" class="thSeasonInput">
+        </div>
+        <button id="thLoadBtn" class="thLoadBtn">Load Team →</button>
+      </div>
+      <div id="thLoading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0"></div>
+    </div>
+
+    <!-- Program Overview -->
+    <div class="thSection">
+      <div class="thSectionHead">📊 Program Overview</div>
+      <div id="thOverview" class="card thOverviewCard">
+        <div class="muted" style="padding:32px;text-align:center">Select a team above to load program analysis.</div>
+      </div>
+    </div>
+
+    <!-- Conference Threats -->
+    <div class="thSection">
+      <div class="thSectionHead">⚠️ Conference Threats</div>
+      <div class="thSectionSub">Conference teams ranked by net efficiency. Click ⚔ to load a team as your opponent in Team Builder.</div>
+      <div id="thThreats" class="card thThreatsCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see conference standings.</div>
+      </div>
+    </div>
+
+    <!-- Game Log -->
+    <div class="thSection">
+      <div class="thSectionHead">📅 Season Game Log</div>
+      <div id="thGameLog" class="card thGameLogCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see game results.</div>
+      </div>
+    </div>
+
+    <!-- H2H Records -->
+    <div class="thSection">
+      <div class="thSectionHead">🆚 Head-to-Head Records</div>
+      <div id="thH2H" class="card thH2HCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see head-to-head breakdowns.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /pageTeams -->
+
 <!-- Methodology Page -->
 <div id="pageMethodology" style="display:none">
 <div class="wrap">
@@ -622,6 +684,7 @@
         <div class="modalTitle" id="mTitle">Player</div>
         <div class="modalSub" id="mSub">—</div>
         <div class="chipRow" id="mTags"></div>
+        <div id="mRecruitBadge" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:12px"></div>
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
@@ -702,6 +765,20 @@
       <div style="margin-top:12px" class="panel">
         <div class="panelHead">📅 Career History</div>
         <div id="mCareer" style="padding:0;overflow-x:auto"></div>
+      </div>
+
+      <div id="mTeamContextPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🏫 Team Context</div>
+        <div class="panelBody" id="mTeamContext" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <div id="mShootingPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🎯 Shooting Zones</div>
+        <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
       </div>
 
       <div style="margin-top:12px" class="panel">

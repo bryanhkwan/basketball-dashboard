@@ -549,6 +549,371 @@
   transition: background .15s;
 }
 .tourTT-prev:hover { background: rgba(255,255,255,.12); }
+
+/* ============================================================
+   PROFILE — Team Context panel
+   ============================================================ */
+.teamContextGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+@media (max-width: 560px) { .teamContextGrid { grid-template-columns: repeat(2, 1fr); } }
+.tcStat {
+  background: rgba(0,14,36,.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 8px 8px;
+  text-align: center;
+}
+.tcVal {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.5px;
+}
+.tcLabel {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.tcPct {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ============================================================
+   PROFILE — Shooting Zones panel
+   ============================================================ */
+.szMeta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.shootingZones {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.szRow {
+  display: grid;
+  grid-template-columns: 78px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.szLabel {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.szBarWrap {
+  height: 8px;
+  background: rgba(255,255,255,.07);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.szFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.szStats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 80px;
+  justify-content: flex-end;
+}
+.szPct {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ============================================================
+   PROFILE — Recruit Stars badge
+   ============================================================ */
+.recruitStars {
+  font-size: 15px;
+  color: var(--warn);
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.recruitLabel {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ============================================================
+   TEAM HUB PAGE
+   ============================================================ */
+.thPage {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.thHeader { margin-bottom: 4px; }
+.thTitle {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.thSearchCard {
+  padding: 16px 20px;
+}
+.thSearchRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.thSearchGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.thLabel {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.thTeamSelect {
+  background: rgba(0,12,32,.8);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  min-width: 230px;
+  cursor: pointer;
+}
+.thSeasonInput {
+  background: rgba(0,12,32,.8);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  width: 90px;
+}
+.thLoadBtn {
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent-glow);
+  color: var(--accent);
+  transition: background .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.thLoadBtn:hover {
+  background: rgba(var(--accent-rgb),.18);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb),.2);
+}
+.thSection { display: flex; flex-direction: column; gap: 8px; }
+.thSectionHead {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+}
+.thSectionSub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: -4px;
+}
+/* Overview hero */
+.thHeroCard {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.thHeroLeft {
+  flex: 1;
+  min-width: 180px;
+}
+.thTeamName {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -.5px;
+  color: var(--text);
+}
+.thConf {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.thRecord {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-top: 8px;
+}
+.thStyleLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.thStyleTag {
+  font-size: 11px;
+  background: rgba(0,15,40,.6);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--muted);
+}
+.thRatingsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 720px) { .thRatingsGrid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 480px) { .thRatingsGrid { grid-template-columns: repeat(2, 1fr); } }
+.thRatCard {
+  background: rgba(0,14,36,.6);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 8px 8px;
+  text-align: center;
+}
+.thRatVal {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -.5px;
+}
+.thRatLabel {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.thRatPct {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+/* Threats table */
+.thThreatsTable, .thH2HTable, .thGameLogTable {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: auto;
+}
+.thThreatHead, .thH2HHead, .thGameLogHead {
+  display: grid;
+  padding: 7px 12px;
+  background: rgba(0,10,28,.6);
+  border-radius: 8px 8px 0 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  border-bottom: 1px solid var(--line);
+}
+.thThreatHead { grid-template-columns: 30px 1fr 80px 70px 60px 44px; }
+.thThreatRow {
+  display: grid;
+  grid-template-columns: 30px 1fr 80px 70px 60px 44px;
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(27,79,153,.15);
+  font-size: 13px;
+  align-items: center;
+  transition: background .12s;
+}
+.thThreatRow:hover { background: rgba(var(--accent-rgb),.05); }
+.thThreatUs {
+  background: rgba(var(--accent-rgb),.08);
+  border-left: 3px solid var(--accent);
+}
+.thThreatDanger { border-left: 3px solid var(--bad); }
+.thThreatRank { color: var(--muted); font-size: 11.5px; }
+.thThreatName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.thYouBadge, .thDangerBadge {
+  font-size: 9.5px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-weight: 700;
+}
+.thYouBadge {
+  background: rgba(var(--accent-rgb),.15);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb),.3);
+}
+.thDangerBadge {
+  background: rgba(239,68,68,.12);
+  color: var(--bad);
+  border: 1px solid rgba(239,68,68,.25);
+}
+.thOppBtn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+/* Game Log */
+.thGameLogHead { grid-template-columns: 72px 1fr 40px 120px 90px; }
+.thGameRow {
+  display: grid;
+  grid-template-columns: 72px 1fr 40px 120px 90px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(27,79,153,.15);
+  font-size: 12.5px;
+  align-items: center;
+  transition: background .12s;
+}
+.thGameRow:hover { background: rgba(var(--accent-rgb),.04); }
+.thGameDate { color: var(--muted); }
+.thGameOpp { font-weight: 600; }
+.thGameHA { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.thGameWL { font-weight: 700; }
+.thGameStreak { font-size: 10.5px; color: var(--muted); font-weight: 400; }
+.thGameScore { font-weight: 700; }
+.thGameLogFooter {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: rgba(0,10,28,.4);
+  border-radius: 0 0 8px 8px;
+}
+/* H2H */
+.thH2HHead { grid-template-columns: 1fr 50px 50px 80px 80px 80px; }
+.thH2HRow {
+  display: grid;
+  grid-template-columns: 1fr 50px 50px 80px 80px 80px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(27,79,153,.15);
+  font-size: 12.5px;
+  align-items: center;
+  transition: background .12s;
+}
+.thH2HRow:hover { background: rgba(var(--accent-rgb),.04); }
+.thH2HOpp {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
 .tourTT-next {
   padding: 7px 18px;
   border-radius: 8px;

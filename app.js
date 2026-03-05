@@ -88,6 +88,7 @@ window.addEventListener('DOMContentLoaded', () => {
       var seasonEl = document.getElementById('cbdSeason');
       var seasonVal = seasonEl ? (seasonEl.value || '2026') : '2026';
       await loadAllData(seasonVal);
+      if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     });
   }
   recalcBtn.addEventListener('click', ()=>{ if(wb) computeAll(); });
@@ -130,6 +131,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Page navigation
   initPageNav();
   initTbSubNav();
+  initTeamsPage();
 
   // Quick add widgets (roster + opponent)
   setupQuickAdd('tbQuickAddInput',  'tbQuickAddDropdown',  tbAddPlayer,  () => tbRoster);
@@ -172,4 +174,10 @@ window._app = {
   statPercentile,
   barColor,
   getInvertForStat,
+  // Teams Hub / ratings
+  get teamRatings()      { return teamRatings; },
+  get allRatingsData()   { return allRatingsData; },
+  loadGamesForTeam,
+  loadShootingForTeam,
+  thLoadOpponent,
 };
