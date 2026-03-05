@@ -730,7 +730,7 @@ async function loadFromGoogleSheets(url, apiKey){
 
 // ── loadFromCBData — College Basketball Data API (MBB only) ────────────────
 async function loadFromCBData(year) {
-  year = year || new Date().getFullYear();
+  year = year || 2026;
   var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
   var loadingOverlayEl = document.getElementById('loadingOverlay');
   var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
