@@ -577,22 +577,54 @@ function thRenderTeamScout(teamName, teamData, statsData) {
   el.innerHTML = html || '<div class="muted" style="padding:18px;text-align:center">Not enough data for full team scouting report.</div>';
 }
 
-// ── thRunDeepAnalysis — send comprehensive matchup context to AI chat ─────────
-function thRunDeepAnalysis() {
+// ── _thFmtDeepText — lightweight markdown → HTML for deep analysis output ─────
+function _thFmtDeepText(text) {
+  // Process line by line for lists, then inline for bold/italic
+  const lines = text.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    let l = lines[i];
+    // Section headers (## or #)
+    if (/^#{1,2} /.test(l)) {
+      l = '<h4 class="thDeepHead">' + l.replace(/^#{1,2} /, '') + '</h4>';
+    } else if (/^### /.test(l)) {
+      l = '<h5 class="thDeepSubHead">' + l.replace(/^### /, '') + '</h5>';
+    } else if (/^\d+[\.\)]\s/.test(l)) {
+      // Numbered list item
+      l = '<div class="thDeepItem">' + l.replace(/^(\d+)[\.\)]\s/, '<span class="thDeepNum">$1.</span> ') + '</div>';
+    } else if (/^[-•*]\s/.test(l)) {
+      // Bullet
+      l = '<div class="thDeepBullet">' + l.replace(/^[-•*]\s/, '') + '</div>';
+    } else if (l.trim() === '') {
+      l = '<div class="thDeepSpacer"></div>';
+    } else {
+      l = '<div class="thDeepLine">' + l + '</div>';
+    }
+    // Inline bold
+    l = l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Inline italic
+    l = l.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    out.push(l);
+  }
+  return out.join('');
+}
+
+// ── thRunDeepAnalysis — call Gemini directly and render results in-page ───────
+async function thRunDeepAnalysis() {
   if (!thCurrentTeam || !thCurrentCompareTeam) {
     if (typeof showWarn === 'function') showWarn('Load a team and compare opponent first.');
     return;
   }
-  const input = document.getElementById('aiChatInput');
-  const sendBtn = document.getElementById('aiSendBtn');
-  const aiPanel = document.getElementById('aiPanel');
+  const btn = document.querySelector('.thDeepBtn');
   const status = document.getElementById('thDeepAnalysisStatus');
-  if (!input || !sendBtn) {
-    if (typeof showWarn === 'function') showWarn('AI Chat UI not available.');
-    return;
-  }
+  const output = document.getElementById('thDeepOutput');
+  if (!output) return;
 
-  if (aiPanel && aiPanel.classList.contains('hidden')) aiPanel.classList.remove('hidden');
+  // Show loading state
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
+  if (status) status.textContent = '';
+  output.style.display = 'block';
+  output.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running deep analysis on all available matchup data…</div>';
 
   function teamSnapshot(name, ratings, stats) {
     const ts = stats ? stats.teamStats : null;
@@ -638,19 +670,55 @@ function thRunDeepAnalysis() {
     matchupShots: _thLastMatchupCtx,
   };
 
-  const prompt = `Deep matchup analysis request for ${aName} vs ${bName}.\n\n` +
-    `Use ALL available context below to provide a coach-level report with:\n` +
-    `1) Overall verdict and confidence\n` +
-    `2) ${aName} strengths/weaknesses/tendencies/development areas\n` +
-    `3) ${bName} strengths/weaknesses/tendencies/development areas\n` +
-    `4) Head-to-head matchup notes (how to guard each team, how each defends, exploitable mismatches)\n` +
-    `5) Specific game plan: 5 offensive keys, 5 defensive keys, 3 in-game adjustment triggers\n` +
-    `6) Red flags and what data confidence is weak on\n\n` +
-    `Structured context JSON:\n${JSON.stringify(context, null, 2)}`;
+  const systemInstruction = {
+    parts: [{ text: 'You are an expert NCAA basketball analyst and coach. You have deep knowledge of advanced statistics, four factors, shot charting, and strategic game planning. Analyze only the structured data provided — do not reference external news or speculation. Be specific, data-driven, and actionable. Use markdown formatting with ## headers and bullet points for readability.' }]
+  };
 
-  input.value = prompt;
-  sendBtn.click();
-  if (status) status.textContent = 'Deep analysis sent to AI chat.';
+  const userPrompt = `Produce a complete coach-level deep analysis for **${aName} vs ${bName}**.\n\n` +
+    `Structure your response with these exact sections:\n` +
+    `## Overall Verdict\n` +
+    `## ${aName} — Strengths\n` +
+    `## ${aName} — Weaknesses\n` +
+    `## ${aName} — Tendencies\n` +
+    `## ${bName} — Strengths\n` +
+    `## ${bName} — Weaknesses\n` +
+    `## ${bName} — Tendencies\n` +
+    `## Head-to-Head Matchup Notes\n` +
+    `(How to guard each team, how each defends, mismatches to exploit)\n` +
+    `## Game Plan: Offensive Keys (5 items for each team)\n` +
+    `## Game Plan: Defensive Keys (5 items for each team)\n` +
+    `## In-Game Adjustment Triggers (3 specific situations)\n` +
+    `## Data Confidence & Red Flags\n\n` +
+    `All analysis must be grounded in this structured data only:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
+
+  try {
+    const res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-2.5-flash-lite',
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        systemInstruction,
+        generationConfig: { temperature: 0.65, maxOutputTokens: 4096 }
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+    if (!rawText) throw new Error('Empty response from AI.');
+    output.innerHTML =
+      '<div class="thDeepHeader">' +
+        '<span class="thDeepIcon">🧠</span>' +
+        '<strong>Deep Analysis — ' + aName + ' vs ' + bName + '</strong>' +
+        '<button class="thDeepClose" onclick="document.getElementById(\'thDeepOutput\').style.display=\'none\'">✕</button>' +
+      '</div>' +
+      '<div class="thDeepBody">' + _thFmtDeepText(rawText) + '</div>';
+  } catch (e) {
+    output.innerHTML = '<div class="thDeepError">⚠ Analysis failed: ' + e.message + '. Check console for details.</div>';
+    console.error('[thRunDeepAnalysis]', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🧠 Deep Analysis'; }
+  }
 }
 
 // ── thRenderCompare — side-by-side team comparison ────────────────────────────
@@ -1095,8 +1163,8 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
         <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
       </div>
       <div class="thInsightsGrid">${insightHtml}</div>
-      <div id="thDeepAnalysisStatus" class="muted" style="font-size:11px;margin-top:8px"></div>
-    </div>`;
+    </div>
+    <div id="thDeepOutput" class="thDeepOutput" style="display:none"></div>`;
   setTimeout(() => thInitShotChart('thMatchup'), 50);
 }
 
