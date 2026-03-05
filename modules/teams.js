@@ -11,6 +11,7 @@ var thLoadingEl;
 // ── State (persisted across renders for compare feature) ──────────────────────
 var thCurrentTeam   = '';
 var thCurrentSeason = '2026';
+var thMatchupMode   = 'season'; // 'season' | 'history'
 var _thCurrentStats = null;
 
 function initTeamsDOMRefs() {
@@ -613,6 +614,7 @@ function _thShotToSVG(shot, attacksLeft) {
 }
 
 // ── _th_buildShotChartSVG — SVG court with dots for made/missed shots ─────────
+function _escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 function _th_buildShotChartSVG(shots, teamName, color) {
   // Detect which basket this team attacks (avg x of rim shots)
   const rimShots = shots.filter(s => s.range === 'rim');
@@ -636,13 +638,20 @@ function _th_buildShotChartSVG(shots, teamName, color) {
     if (shot.range === 'free_throw') return;
     const { x, y } = _thShotToSVG(shot, attacksLeft);
     if (x < 0 || x > W || y < -20 || y > H + 20) return; // outside visible area
-    const c = shot.made ? (rangeColor[shot.range] || 'rgba(200,200,200,0.8)') : (rangeMissColor[shot.range] || 'rgba(200,200,200,0.35)');
+    const c  = shot.made ? (rangeColor[shot.range] || 'rgba(200,200,200,0.8)') : (rangeMissColor[shot.range] || 'rgba(200,200,200,0.35)');
+    const da = `class="shot-dot" data-player="${_escAttr(shot.shooter)}" data-zone="${shot.range}" data-made="${shot.made?'1':'0'}" data-period="${shot.period||''}" data-clock="${_escAttr(shot.clock||'')}"`;
     if (shot.made) {
-      dots += `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="rgba(0,0,0,0.4)" stroke-width="0.8"/>`;
+      dots += `<g ${da}>`
+             + `<circle cx="${x}" cy="${y}" r="7" fill="rgba(0,0,0,0)" stroke="none" pointer-events="all"/>`
+             + `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="rgba(0,0,0,0.4)" stroke-width="0.8"/>`
+             + `</g>`;
     } else {
-      const d = 4;
-      dots += `<line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`;
-      dots += `<line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`;
+      const d  = 4;
+      dots += `<g ${da}>`
+             + `<rect x="${x-8}" y="${y-8}" width="16" height="16" fill="rgba(0,0,0,0)" stroke="none" pointer-events="all"/>`
+             + `<line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`
+             + `<line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`
+             + `</g>`;
     }
   });
 
@@ -698,8 +707,41 @@ function _th_buildShotChartSVG(shots, teamName, color) {
   </div>`;
 }
 
+// ── thInitShotTooltips — hover tooltip for shot chart dots ───────────────────
+function thInitShotTooltips(containerId) {
+  const container = document.getElementById(containerId);
+  const tooltip   = document.getElementById('pShotTooltip');
+  if (!container || !tooltip) return;
+  const zl = { rim: 'At Rim', jumper: 'Mid-Range', three_pointer: '3-Pointer', free_throw: 'Free Throw' };
+
+  container.addEventListener('mouseover', function(e) {
+    const dot = e.target.closest && e.target.closest('.shot-dot');
+    if (!dot) { tooltip.style.display = 'none'; return; }
+    const pl  = dot.getAttribute('data-player') || 'Unknown';
+    const zn  = zl[dot.getAttribute('data-zone')] || (dot.getAttribute('data-zone') || '');
+    const mk  = dot.getAttribute('data-made') === '1';
+    const per = dot.getAttribute('data-period');
+    const clk = dot.getAttribute('data-clock');
+    tooltip.innerHTML =
+      `<div style="font-size:12px;font-weight:700;color:#e2e8f0">${pl}</div>` +
+      `<div style="font-size:11px;margin-top:3px;color:${mk?'rgba(34,197,94,.9)':'rgba(239,68,68,.85)'}">${mk?'✓ Made':'✗ Missed'} · ${zn}</div>` +
+      ((per || clk) ? `<div style="font-size:10px;color:rgba(150,170,200,.65);margin-top:2px">Period ${per||'—'} · ${clk||''}</div>` : '');
+    tooltip.style.display = 'block';
+  });
+  container.addEventListener('mousemove', function(e) {
+    const dot = e.target.closest && e.target.closest('.shot-dot');
+    if (!dot) { tooltip.style.display = 'none'; return; }
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 44)  + 'px';
+  });
+  container.addEventListener('mouseleave', function() {
+    tooltip.style.display = 'none';
+  });
+}
+
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
-function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores) {
+function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
+  mode = mode || 'season';
   const el = document.getElementById('thMatchup');
   if (!el) return;
   if (!teamA || !teamB) {
@@ -796,10 +838,18 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores) {
     </div>`;
   }).join('');
 
+  const modeSubtitle = mode === 'history'
+    ? `${gamesPlayed} most recent game${gamesPlayed!==1?'s':''} (multi-season)`
+    : `${gamesPlayed} game${gamesPlayed!==1?'s':''} this season`;
+
   el.innerHTML = `
+    <div class="thMatchupToggleRow">
+      <button class="thMatchupToggleBtn${mode==='season'?' active':''}" onclick="thLoadMatchup('${teamB.replace(/'/g,"\\'")}','season')">This Season</button>
+      <button class="thMatchupToggleBtn${mode==='history'?' active':''}" onclick="thLoadMatchup('${teamB.replace(/'/g,"\\'")}','history')">Last 5 Matchups</button>
+    </div>
     <div class="thMatchupHeader">
       <div class="thMatchupTeam" style="color:var(--accent)">${teamA}</div>
-      <div class="thMatchupVs">${gamesPlayed} game${gamesPlayed!==1?'s':''} this season</div>
+      <div class="thMatchupVs">${modeSubtitle}</div>
       <div class="thMatchupTeam" style="color:var(--warn)">${teamB}</div>
     </div>
     ${avgPtsA ? `<div class="thMatchupScore"><span style="color:var(--accent)">${avgPtsA} ppg</span> <span class="muted" style="font-size:11px">avg score</span> <span style="color:var(--warn)">${avgPtsB} ppg</span></div>` : ''}
@@ -820,46 +870,76 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores) {
       <div class="thDNASectionLabel">🎯 Matchup Insights</div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>`;
+  setTimeout(() => thInitShotTooltips('thMatchup'), 50);
 }
 
-// ── thLoadMatchup — find games between teams, load play-by-play, render ───────
-async function thLoadMatchup(compareTeam) {
+// ── thLoadMatchup — find games, load play-by-play, render; supports history ───
+async function thLoadMatchup(compareTeam, mode) {
+  mode = mode || thMatchupMode || 'season';
+  thMatchupMode = mode;
   const el = document.getElementById('thMatchup');
   if (!el || !thCurrentTeam || !compareTeam) return;
 
-  // Find games between the two teams from already-loaded gamesData
-  const gamesDataCached = typeof teamGamesCache !== 'undefined'
-    ? teamGamesCache[(thCurrentTeam + ':' + thCurrentSeason).toLowerCase()]
-    : null;
-  const allGames = gamesDataCached ? (gamesDataCached.games || []) : [];
-  const matchupGames = allGames.filter(g => {
-    const hn = (g.homeTeam || '').toLowerCase(), an = (g.awayTeam || '').toLowerCase();
-    const bn = (compareTeam || '').toLowerCase();
-    return hn === bn || an === bn;
-  });
+  let matchupGames = [];
+
+  if (mode === 'season') {
+    // Use already-loaded game cache for current season
+    const gamesDataCached = typeof teamGamesCache !== 'undefined'
+      ? teamGamesCache[(thCurrentTeam + ':' + thCurrentSeason).toLowerCase()]
+      : null;
+    const allGames = gamesDataCached ? (gamesDataCached.games || []) : [];
+    matchupGames = allGames.filter(g => {
+      const hn = (g.homeTeam || '').toLowerCase();
+      const an = (g.awayTeam || '').toLowerCase();
+      const bn = (compareTeam || '').toLowerCase();
+      return hn === bn || an === bn;
+    });
+  } else {
+    // History mode: scan last 3 seasons, collect up to 5 most recent matchups
+    el.innerHTML = `<div class="muted" style="padding:20px;text-align:center">Loading matchup history across seasons…</div>`;
+    const curYear = parseInt(thCurrentSeason, 10) || 2026;
+    const seasons = [curYear, curYear - 1, curYear - 2];
+    const seasonData = await Promise.all(
+      seasons.map(s => loadGamesForTeam(thCurrentTeam, String(s)).catch(() => null))
+    );
+    seasonData.forEach(data => {
+      if (!data) return;
+      const found = (data.games || []).filter(g => {
+        const hn = (g.homeTeam || '').toLowerCase();
+        const an = (g.awayTeam || '').toLowerCase();
+        const bn = (compareTeam || '').toLowerCase();
+        return hn === bn || an === bn;
+      });
+      matchupGames.push(...found);
+    });
+    // Most recent first, cap at 5
+    matchupGames.sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+    matchupGames = matchupGames.slice(0, 5);
+  }
 
   if (!matchupGames.length) {
-    el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No games found between <b>${thCurrentTeam}</b> and <b>${compareTeam}</b> this season.</div>`;
+    el.innerHTML = `<div class="thMatchupToggleRow">
+      <button class="thMatchupToggleBtn${mode==='season'?' active':''}" onclick="thLoadMatchup('${compareTeam.replace(/'/g,"\\'")}','season')">This Season</button>
+      <button class="thMatchupToggleBtn${mode==='history'?' active':''}" onclick="thLoadMatchup('${compareTeam.replace(/'/g,"\\'")}','history')">Last 5 Matchups</button>
+    </div><div class="muted" style="padding:24px;text-align:center">No games found between <b>${thCurrentTeam}</b> and <b>${compareTeam}</b>.</div>`;
     return;
   }
 
   el.innerHTML = `<div class="muted" style="padding:20px;text-align:center">Loading play-by-play for ${matchupGames.length} game${matchupGames.length!==1?'s':''}…</div>`;
 
-  // Load plays for each matchup game in parallel
   const playsArrays = await Promise.all(matchupGames.map(g => loadPlaysForGame(g.id)));
   const allShots = playsArrays.flat();
 
-  // Build box score summary from matchupGames
   const boxScores = matchupGames.map(g => {
-    const tn = (thCurrentTeam||'').toLowerCase();
-    const isHome = (g.homeTeam||'').toLowerCase() === tn;
+    const tn = (thCurrentTeam || '').toLowerCase();
+    const isHome = (g.homeTeam || '').toLowerCase() === tn;
     return {
       ptsA: isHome ? g.homePoints : g.awayPoints,
       ptsB: isHome ? g.awayPoints : g.homePoints,
     };
   });
 
-  thRenderMatchup(thCurrentTeam, compareTeam, allShots, matchupGames.length, boxScores);
+  thRenderMatchup(thCurrentTeam, compareTeam, allShots, matchupGames.length, boxScores, mode);
 }
 
 // ── thLoadOpponent — load a team's players into the opponent slot ─────────────

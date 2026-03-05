@@ -34,6 +34,7 @@ var teamGamesCache         = {}; // keyed "teamName:season" → {games, teamStat
 var teamStatsCache         = {}; // keyed "teamName:season" → full team season stats object
 var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shooting zone object
 var playsCache             = {}; // keyed by gameId → compact shots array
+var playerShotsCache       = {}; // keyed "team:season:playerName" → shots array
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 
@@ -1034,6 +1035,24 @@ async function loadPlaysForGame(gameId) {
     const data = await r.json();
     playsCache[gameId] = data.plays || [];
     return playsCache[gameId];
+  } catch (e) { return []; }
+}
+
+// ── loadPlayerShots — all season shots for one player via the worker ──────────
+async function loadPlayerShots(team, season, playerName) {
+  if (!team || !season || !playerName) return [];
+  const key = (team + ':' + season + ':' + playerName).toLowerCase();
+  if (playerShotsCache[key]) return playerShotsCache[key];
+  try {
+    const r = await fetch(
+      WORKER_URL + '/api/cbdata/playershots?team=' + encodeURIComponent(team) +
+      '&season=' + encodeURIComponent(season) +
+      '&playerName=' + encodeURIComponent(playerName)
+    );
+    const data = await r.json();
+    const shots = data.shots || [];
+    playerShotsCache[key] = shots;
+    return shots;
   } catch (e) { return []; }
 }
 

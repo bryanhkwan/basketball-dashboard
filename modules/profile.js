@@ -162,6 +162,30 @@ function openProfile(r){
   renderTeamContext(r);
   renderShootingZones(r);
   renderRecruitingBadge(r);
+
+  // Player shot chart (uses play-by-play data via worker)
+  const mShotChart = document.getElementById('mShotChart');
+  if (mShotChart) {
+    const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
+    mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data…</div>';
+    if (typeof loadPlayerShots === 'function') {
+      loadPlayerShots(team, yr, player).then(function(shots) {
+        if (!shots || !shots.length) {
+          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
+          return;
+        }
+        const svgHtml = typeof _th_buildShotChartSVG === 'function'
+          ? _th_buildShotChartSVG(shots, player, 'var(--accent)')
+          : '';
+        mShotChart.innerHTML =
+          '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
+        if (typeof thInitShotTooltips === 'function') thInitShotTooltips('mShotChart');
+      }).catch(function() {
+        mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
+      });
+    }
+  }
+
   modalBack.style.display = 'flex';
 }
 
