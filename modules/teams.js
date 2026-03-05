@@ -79,17 +79,13 @@ function thRenderOverview(teamData, gamesData) {
   const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
   const oPct  = _thPctOf(adjOs, teamData.adjO);
   const dPct  = teamData.adjD != null ? (100 - _thPctOf(adjDs, teamData.adjD)) : null;
-  const emStr = Number.isFinite(teamData.adjEM) ? ((teamData.adjEM >= 0 ? '+' : '') + _thFmt(teamData.adjEM)) : '—';
-  const tempoLabel = !Number.isFinite(teamData.adjT) ? '—' : teamData.adjT >= 72 ? 'Fast-paced' : teamData.adjT >= 68 ? 'Medium pace' : 'Slow-paced';
+  const adjEM = Number.isFinite(teamData.adjEM) ? teamData.adjEM : null;
+  const emStr = adjEM != null ? ((adjEM >= 0 ? '+' : '') + _thFmt(adjEM)) : '—';
+  const rankStr  = teamData.rank ? '#' + teamData.rank : '—';
+  const rankColor = teamData.rank ? (teamData.rank <= 10 ? 'var(--good)' : teamData.rank <= 25 ? 'var(--accent)' : teamData.rank <= 50 ? 'var(--warn)' : 'var(--muted)') : 'var(--muted)';
 
-  // Style-of-play assessments
+  // Style-of-play assessments (only O/D based — tempo unavailable)
   const styleLines = [];
-  if (Number.isFinite(teamData.adjT)) {
-    const tP = _thPctOf(allRatingsData.map(x=>x.adjT).filter(Number.isFinite).sort((a,b)=>a-b), teamData.adjT);
-    if (tP >= 70) styleLines.push('🏃 Up-tempo offense');
-    else if (tP <= 30) styleLines.push('🐢 Deliberate, half-court offense');
-    else styleLines.push('⚖️ Balanced pace');
-  }
   if (oPct != null) {
     if (oPct >= 75) styleLines.push('🔥 Elite offensive efficiency');
     else if (oPct >= 55) styleLines.push('📈 Above-average offense');
@@ -99,6 +95,10 @@ function thRenderOverview(teamData, gamesData) {
     if (dPct >= 75) styleLines.push('🛡️ Elite defense');
     else if (dPct >= 55) styleLines.push('💪 Above-average defense');
     else if (dPct <= 30) styleLines.push('⚠️ Below-average defense');
+  }
+  if (adjEM != null) {
+    if (adjEM >= 20) styleLines.push('⭐ Elite net efficiency');
+    else if (adjEM <= -10) styleLines.push('📉 Negative net efficiency');
   }
 
   thOverviewEl.innerHTML = `
@@ -121,19 +121,19 @@ function thRenderOverview(teamData, gamesData) {
           <div class="thRatPct">${dPct != null ? dPct+'th %ile' : ''}</div>
         </div>
         <div class="thRatCard">
-          <div class="thRatVal" style="color:${(teamData.adjEM||0)>=0?'var(--good)':'var(--bad)'}">${emStr}</div>
+          <div class="thRatVal" style="color:${adjEM!=null&&adjEM>=0?'var(--good)':adjEM!=null?'var(--bad)':'var(--muted)'}">${emStr}</div>
           <div class="thRatLabel">Net Efficiency</div>
-          <div class="thRatPct">SRS: ${_thFmt(teamData.srs)}</div>
+          <div class="thRatPct">net rating</div>
         </div>
         <div class="thRatCard">
-          <div class="thRatVal">${_thFmt(teamData.adjT)}</div>
-          <div class="thRatLabel">Tempo</div>
-          <div class="thRatPct">${tempoLabel}</div>
+          <div class="thRatVal" style="color:${rankColor};font-size:20px">${rankStr}</div>
+          <div class="thRatLabel">Natl Rank</div>
+          <div class="thRatPct">by net efficiency</div>
         </div>
         <div class="thRatCard">
           <div class="thRatVal">${_thFmt(teamData.srs)}</div>
-          <div class="thRatLabel">SRS</div>
-          <div class="thRatPct">SOS: ${_thFmt(teamData.sos)}</div>
+          <div class="thRatLabel">SRS Rating</div>
+          <div class="thRatPct">simple rating</div>
         </div>
       </div>
     </div>`;

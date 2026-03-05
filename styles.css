@@ -587,51 +587,75 @@
 }
 
 /* ============================================================
-   PROFILE — Shooting Zones panel
+   PROFILE — Shooting Zones (SVG court heatmap)
    ============================================================ */
-.szMeta {
-  font-size: 11px;
-  color: var(--muted);
-  margin-bottom: 10px;
-}
-.shootingZones {
+.courtHeatmapWrap {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
 }
-.szRow {
-  display: grid;
-  grid-template-columns: 78px 1fr auto;
-  align-items: center;
-  gap: 8px;
+.courtFooter {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
-.szLabel {
-  font-size: 11.5px;
+.cfStat {
+  background: rgba(0,14,36,.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 16px;
+  text-align: center;
+  min-width: 110px;
+}
+.cfVal {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.cf-good { color: var(--good); }
+.cf-ok   { color: var(--accent); }
+.cf-bad  { color: var(--bad); }
+.cfLabel {
+  font-size: 10.5px;
   color: var(--muted);
-  white-space: nowrap;
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
 }
-.szBarWrap {
-  height: 8px;
-  background: rgba(255,255,255,.07);
-  border-radius: 999px;
-  overflow: hidden;
+.cfSub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
 }
-.szFill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width .35s ease;
+.courtLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 6px 0 2px;
 }
-.szStats {
+.clItem {
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-width: 80px;
-  justify-content: flex-end;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--muted);
 }
-.szPct {
-  font-size: 12px;
-  font-weight: 700;
+.clDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
 }
+.clDot.nz {
+  background: #080f1e;
+  border: 1px solid rgba(255,255,255,.2);
+}
+
+/* Keep old bar chart classes for backward compat (hidden or unused now) */
+.szMeta, .shootingZones, .szRow, .szLabel, .szBarWrap, .szFill, .szStats, .szPct { display: none; }
 
 /* ============================================================
    PROFILE — Recruit Stars badge

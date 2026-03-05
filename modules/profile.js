@@ -267,7 +267,7 @@ function renderCareerHistory(r) {
   el.innerHTML = html;
 }
 
-// ── renderTeamContext — AdjO/AdjD/AdjEM/Tempo card inside player profile ─────
+// ── renderTeamContext — AdjO/AdjD/AdjEM/Rank card inside player profile ─────
 function renderTeamContext(r) {
   const el = document.getElementById('mTeamContext');
   if (!el) return;
@@ -294,39 +294,161 @@ function renderTeamContext(r) {
   const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
   const oPct  = pctOf(adjOs, t.adjO);
   const dPct  = t.adjD != null ? (100 - pctOf(adjDs, t.adjD)) : null;
-  const fmt   = (v, d=1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const fmt   = (v, d=1) => Number.isFinite(+v) ? (+v).toFixed(d) : '—';
   const gc    = p => !Number.isFinite(p) ? 'var(--muted)' : p >= 80 ? 'var(--good)' : p >= 55 ? 'var(--accent)' : p >= 35 ? 'var(--warn)' : 'var(--bad)';
-  const tempoLabel = !Number.isFinite(t.adjT) ? '—' : t.adjT >= 72 ? 'Fast' : t.adjT >= 68 ? 'Med' : 'Slow';
-  const emSign = (t.adjEM >= 0) ? '+' : '';
+  const emSign = Number.isFinite(t.adjEM) && t.adjEM >= 0 ? '+' : '';
+  const rankStr  = t.rank ? '#' + t.rank : '—';
+  const rankColor = t.rank <= 10 ? 'var(--good)' : t.rank <= 25 ? 'var(--accent)' : t.rank <= 50 ? 'var(--warn)' : 'var(--muted)';
   el.innerHTML = `
     <div class="teamContextGrid">
       <div class="tcStat">
         <div class="tcVal" style="color:${gc(oPct)}">${fmt(t.adjO)}</div>
         <div class="tcLabel">Adj O</div>
-        <div class="tcPct">${oPct != null ? oPct+'th' : ''}</div>
+        <div class="tcPct">${oPct != null ? oPct+'th %ile' : '—'}</div>
       </div>
       <div class="tcStat">
         <div class="tcVal" style="color:${gc(dPct)}">${fmt(t.adjD)}</div>
         <div class="tcLabel">Adj D</div>
-        <div class="tcPct">${dPct != null ? dPct+'th' : ''}</div>
+        <div class="tcPct">${dPct != null ? dPct+'th %ile' : '—'}</div>
       </div>
       <div class="tcStat">
-        <div class="tcVal" style="color:${(t.adjEM||0)>=0?'var(--good)':'var(--bad)'}">${emSign}${fmt(t.adjEM)}</div>
+        <div class="tcVal" style="color:${Number.isFinite(t.adjEM)&&t.adjEM>=0?'var(--good)':'var(--bad)'}">${emSign}${fmt(t.adjEM)}</div>
         <div class="tcLabel">Net Eff</div>
-        <div class="tcPct">${fmt(t.srs)} SRS</div>
+        <div class="tcPct">net rating</div>
       </div>
       <div class="tcStat">
-        <div class="tcVal">${fmt(t.adjT)}</div>
-        <div class="tcLabel">Tempo</div>
-        <div class="tcPct">${tempoLabel}</div>
+        <div class="tcVal" style="color:${rankColor};font-size:18px">${rankStr}</div>
+        <div class="tcLabel">Natl Rank</div>
+        <div class="tcPct">${Number.isFinite(t.srs) ? 'SRS '+fmt(t.srs) : '—'}</div>
       </div>
     </div>
-    <div class="hint" style="margin-top:6px;font-size:11px">
-      ${t.conference || '—'} · SOS: <b>${fmt(t.sos)}</b>
-    </div>`;
+    <div class="hint" style="margin-top:6px;font-size:11px">${t.conference || '—'}</div>`;
 }
 
-// ── renderShootingZones — shot-type breakdown chart ───────────────────────────
+// ── _buildCourtHeatmap — SVG half-court zone heatmap ──────────────────────────
+function _buildCourtHeatmap(p) {
+  const dunks  = p.dunks             || {};
+  const layups = p.layups            || {};
+  const tipIns = p.tipIns            || {};
+  const mid    = p.twoPointJumpers   || {};
+  const three  = p.threePointJumpers || {};
+  const ft     = p.freeThrows        || {};
+  const bd     = p.attemptsBreakdown || {};
+
+  // Restricted area = dunks + tip-ins combined (at-rim)
+  const raAtt  = (dunks.attempted||0) + (tipIns.attempted||0);
+  const raMade = (dunks.made||0) + (tipIns.made||0);
+  const raPct  = raAtt > 0 ? Math.round(raMade / raAtt * 100) : null;
+  const raVol  = Math.round(((bd.dunks||0) + (bd.tipIns||0)) * 10) / 10;
+
+  const layupPct = layups.pct != null ? Math.round(+layups.pct) : null;
+  const layupVol = Math.round((bd.layups||0) * 10) / 10;
+  const midPct   = mid.pct   != null ? Math.round(+mid.pct)    : null;
+  const midVol   = Math.round((bd.twoPointJumpers||0) * 10) / 10;
+  const threePct = three.pct != null ? Math.round(+three.pct)  : null;
+  const threeVol = Math.round((bd.threePointJumpers||0) * 10) / 10;
+  const ftPct    = ft.pct    != null ? Math.round(+ft.pct)     : null;
+
+  const NONE = '#080f1e';
+  function zc(pct, vol) {
+    if (pct == null || !vol) return NONE;
+    if (pct >= 65) return 'rgba(21,128,61,0.78)';
+    if (pct >= 55) return 'rgba(101,163,13,0.78)';
+    if (pct >= 45) return 'rgba(161,98,7,0.78)';
+    if (pct >= 35) return 'rgba(194,65,12,0.78)';
+    return 'rgba(185,28,28,0.78)';
+  }
+
+  const W=400, H=455;
+  const bX=200, bY=415;
+  const pL=148, pR=252, pT=265;
+  const ftY=265, ftR=52;
+  const cX1=50, cX2=350, cY=325;
+  // 3PT arc: M 50 325 A 187 187 0 0 0 350 325 (sweep=0 → arcs UP over top of key)
+
+  const c3   = zc(threePct, threeVol);
+  const cMid = zc(midPct, midVol);
+  const cLay = zc(layupPct, layupVol);
+  const cRA  = zc(raPct, raVol);
+  const tW   = 'rgba(255,255,255,0.38)';
+  const tD   = 'rgba(255,255,255,0.22)';
+
+  function lbl(pct, made, att, vol, cx, cy, fs=12) {
+    const has = pct != null && !!vol;
+    const c1  = has ? 'rgba(255,255,255,0.95)' : tD;
+    const c2  = 'rgba(255,255,255,0.5)';
+    const pStr = pct != null ? pct + '%' : '—';
+    const sub  = att ? made+'/'+att+' · '+vol+'%' : '';
+    return '<text x="'+cx+'" y="'+cy+'" text-anchor="middle" font-family="inherit" font-size="'+fs+'" font-weight="700" fill="'+c1+'">'+pStr+'</text>'
+         + (sub ? '<text x="'+cx+'" y="'+(cy+13)+'" text-anchor="middle" font-family="inherit" font-size="9" fill="'+c2+'">'+sub+'</text>' : '');
+  }
+
+  const ftColor = ftPct == null ? 'var(--muted)' : ftPct >= 75 ? 'var(--good)' : ftPct >= 60 ? 'var(--accent)' : ftPct >= 45 ? 'var(--warn)' : 'var(--bad)';
+
+  return '<div class="courtHeatmapWrap">'
+  + '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'"'
+  + ' style="width:100%;max-width:420px;display:block;margin:0 auto;border-radius:10px;overflow:hidden">'
+  + '<defs><clipPath id="courtClip"><rect x="10" y="10" width="380" height="430"/></clipPath></defs>'
+  // Court base
+  + '<rect width="'+W+'" height="'+H+'" fill="#080f1e"/>'
+  + '<rect x="10" y="10" width="380" height="430" rx="3" fill="#0d1b32"/>'
+  // 3PT zone (fills entire court — inner zones will paint over it)
+  + '<rect x="10" y="10" width="380" height="430" fill="'+c3+'" clip-path="url(#courtClip)"/>'
+  // Mid-range zone (inside 3PT arc from baseline to arc)
+  + '<path d="M '+cX1+' 440 L '+cX1+' '+cY+' A 187 187 0 0 0 '+cX2+' '+cY+' L '+cX2+' 440 Z" fill="'+cMid+'" clip-path="url(#courtClip)"/>'
+  // FT circle upper half (mid-range above FT line, inside lane)
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 0 '+pR+' '+ftY+' Z" fill="'+cMid+'"  clip-path="url(#courtClip)"/>'
+  // Paint (layups region)
+  + '<rect x="'+pL+'" y="'+pT+'" width="'+(pR-pL)+'" height="'+(440-pT)+'" fill="'+cLay+'"/>'
+  // Restricted area (at-rim)
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="28" fill="'+cRA+'"/>'
+  // ── Court lines ──
+  + '<rect x="10" y="10" width="380" height="430" rx="3" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<rect x="'+pL+'" y="'+pT+'" width="'+(pR-pL)+'" height="'+(440-pT)+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 0 '+pR+' '+ftY+'" fill="none" stroke="'+tW+'" stroke-width="1.5" stroke-dasharray="4 4"/>'
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 1 '+pR+' '+ftY+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="28" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<line x1="'+cX1+'" y1="440" x2="'+cX1+'" y2="'+cY+'" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<line x1="'+cX2+'" y1="440" x2="'+cX2+'" y2="'+cY+'" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<path d="M '+cX1+' '+cY+' A 187 187 0 0 0 '+cX2+' '+cY+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  // Backboard + basket
+  + '<line x1="'+(bX-20)+'" y1="'+(bY-28)+'" x2="'+(bX+20)+'" y2="'+(bY-28)+'" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>'
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="12" fill="none" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>'
+  // ── Zone labels ──
+  // 3PT zone label
+  + '<text x="200" y="112" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">3-POINTERS · '+threeVol+'% of shots</text>'
+  + lbl(threePct, three.made||0, three.attempted||0, threeVol, 200, 130, 14)
+  // Mid-range labels (left & right)
+  + '<text x="95" y="289" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">MID-RANGE</text>'
+  + lbl(midPct, mid.made||0, mid.attempted||0, midVol, 95, 305, 12)
+  + '<text x="305" y="289" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">MID-RANGE</text>'
+  + (midPct != null ? '<text x="305" y="305" text-anchor="middle" font-family="inherit" font-size="12" font-weight="700" fill="rgba(255,255,255,0.92)">'+midPct+'%</text>' : '')
+  // Layup label
+  + '<text x="200" y="337" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">LAYUPS</text>'
+  + lbl(layupPct, layups.made||0, layups.attempted||0, layupVol, 200, 353, 13)
+  // Restricted area label
+  + '<text x="'+bX+'" y="'+(bY+5)+'" text-anchor="middle" font-family="inherit" font-size="10" font-weight="700" fill="rgba(255,255,255,0.9)">'
+  + (raPct != null ? raPct+'%' : '—') + '</text>'
+  + '<text x="'+bX+'" y="'+(bY+16)+'" text-anchor="middle" font-family="inherit" font-size="7" fill="'+tD+'">AT RIM</text>'
+  + '</svg>'
+  // Footer summary row
+  + '<div class="courtFooter">'
+  + '<div class="cfStat"><div class="cfVal" style="color:'+ftColor+'">'+( ftPct != null ? ftPct+'%' : '—')+'</div><div class="cfLabel">Free Throw</div><div class="cfSub">'+(ft.made||0)+'/'+(ft.attempted||0)+' made</div></div>'
+  + '<div class="cfStat"><div class="cfVal">'+(p.trackedShots||0)+'</div><div class="cfLabel">Tracked Shots</div><div class="cfSub">'+(p.assistedPct||0)+'% ast · FTR '+(p.freeThrowRate||0)+'%</div></div>'
+  + '</div>'
+  // Heat legend
+  + '<div class="courtLegend">'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(21,128,61,0.85)"></span>65%+</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(101,163,13,0.85)"></span>55–64%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(161,98,7,0.85)"></span>45–54%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(194,65,12,0.85)"></span>35–44%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(185,28,28,0.85)"></span>&lt;35%</div>'
+  + '<div class="clItem"><span class="clDot nz"></span>No data</div>'
+  + '</div>'
+  + '</div>';
+}
+
+// ── renderShootingZones — SVG court heatmap ───────────────────────────────────
 async function renderShootingZones(r) {
   const el = document.getElementById('mShootingZones');
   if (!el) return;
@@ -359,40 +481,7 @@ async function renderShootingZones(r) {
     el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Shot data not available for this player.</div>';
     return;
   }
-
-  const zones = [
-    { key:'dunks',             label:'Dunks',      col:'var(--good)' },
-    { key:'layups',            label:'Layups',     col:'var(--accent)' },
-    { key:'tipIns',            label:'Tip-ins',    col:'var(--accent2)' },
-    { key:'twoPointJumpers',   label:'Mid-range',  col:'var(--warn)' },
-    { key:'threePointJumpers', label:'3-pointers', col:'#a78bfa' },
-    { key:'freeThrows',        label:'Free throws',col:'var(--muted)' },
-  ];
-  const breakdown = p.attemptsBreakdown || {};
-  const totalShare = Object.values(breakdown).reduce((s,v)=>s+(v||0),0) || 1;
-  const pctColor = pct => pct >= 60 ? 'var(--good)' : pct >= 45 ? 'var(--accent)' : pct >= 30 ? 'var(--warn)' : 'var(--bad)';
-
-  let zoneHtml = `<div class="szMeta">
-    ${p.trackedShots||0} tracked shots · ${p.assistedPct||0}% of makes assisted · FT rate: ${p.freeThrowRate||0}%
-  </div><div class="shootingZones">`;
-
-  zones.forEach(z => {
-    const d = p[z.key];
-    if (!d || !d.attempted) return;
-    const share = Math.round((breakdown[z.key] || 0) / totalShare * 100);
-    const astLabel = d.assistedPct != null ? `<span class="muted" style="font-size:10px">${(+d.assistedPct).toFixed(0)}% ast</span>` : '';
-    zoneHtml += `<div class="szRow">
-      <div class="szLabel">${z.label}</div>
-      <div class="szBarWrap"><div class="szFill" style="width:${share}%;background:${z.col}"></div></div>
-      <div class="szStats">
-        <span class="szPct" style="color:${pctColor(d.pct||0)}">${(d.pct||0).toFixed(1)}%</span>
-        <span class="muted" style="font-size:10px">${d.made}/${d.attempted}</span>
-        ${astLabel}
-      </div>
-    </div>`;
-  });
-  zoneHtml += '</div>';
-  el.innerHTML = zoneHtml;
+  el.innerHTML = _buildCourtHeatmap(p);
 }
 
 // ── renderRecruitingBadge — star-rating badge in profile header ───────────────
