@@ -128,7 +128,7 @@ const BIG_DEFAULTS = [
   {stat:'FT%', w:5, min:0.55, max:0.85, dir:'higher'},
   {stat:'BPG', w:9, min:0.2, max:2.5, dir:'higher'},
   {stat:'RPG', w:10, min:2, max:12, dir:'higher'},
-  {stat:'OR%', w:7, min:3, max:15, dir:'higher'},
+  {stat:'OR%', w:7, min:8, max:30, dir:'higher'},
   {stat:'DR%', w:7, min:10, max:25, dir:'higher'},
   {stat:'DRtg', w:8, min:115, max:90, dir:'lower'},
   {stat:'BPM', w:10, min:-3, max:8, dir:'higher'},
