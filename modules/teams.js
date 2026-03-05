@@ -680,7 +680,8 @@ function _th_buildShotChartSVG(shots, teamName, color) {
 
   return `<div class="thShotWrap">
     <div class="thShotTitle" style="color:${color}">${teamName}</div>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:340px;display:block;margin:0 auto;border-radius:10px">
+    <div class="thShotFilterHint">Click a make (●) or miss (✕) to filter · click court to reset</div>
+    <svg class="shot-chart-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:340px;display:block;margin:0 auto;border-radius:10px;cursor:pointer">
       <rect width="${W}" height="${H}" fill="#080f1e"/>
       <rect x="10" y="10" width="380" height="430" rx="3" fill="#0d1b32"/>
       <rect x="10" y="10" width="380" height="430" rx="3" fill="none" stroke="${tW}" stroke-width="1.5"/>
@@ -737,6 +738,30 @@ function thInitShotTooltips(containerId) {
   container.addEventListener('mouseleave', function() {
     tooltip.style.display = 'none';
   });
+}
+
+// ── thInitShotFilter — click makes/misses to dim the other group ─────────────
+function thInitShotFilter(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('svg.shot-chart-svg').forEach(function(svgEl) {
+    svgEl.addEventListener('click', function(e) {
+      const dot = e.target.closest && e.target.closest('.shot-dot');
+      if (!dot) {
+        svgEl.removeAttribute('data-filter');
+        return;
+      }
+      const want = dot.getAttribute('data-made') === '1' ? 'makes' : 'misses';
+      if (svgEl.getAttribute('data-filter') === want) svgEl.removeAttribute('data-filter');
+      else svgEl.setAttribute('data-filter', want);
+    });
+  });
+}
+
+// ── thInitShotChart — init both tooltip + filter for a container ─────────────
+function thInitShotChart(containerId) {
+  thInitShotTooltips(containerId);
+  thInitShotFilter(containerId);
 }
 
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
@@ -870,7 +895,7 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDNASectionLabel">🎯 Matchup Insights</div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>`;
-  setTimeout(() => thInitShotTooltips('thMatchup'), 50);
+  setTimeout(() => thInitShotChart('thMatchup'), 50);
 }
 
 // ── thLoadMatchup — find games, load play-by-play, render; supports history ───

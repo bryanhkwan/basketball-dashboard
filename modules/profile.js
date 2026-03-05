@@ -162,6 +162,7 @@ function openProfile(r){
   renderTeamContext(r);
   renderShootingZones(r);
   renderRecruitingBadge(r);
+  renderScoutReport(r);
 
   // Player shot chart (uses play-by-play data via worker)
   const mShotChart = document.getElementById('mShotChart');
@@ -179,7 +180,7 @@ function openProfile(r){
           : '';
         mShotChart.innerHTML =
           '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
-        if (typeof thInitShotTooltips === 'function') thInitShotTooltips('mShotChart');
+        if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
       }).catch(function() {
         mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
       });
@@ -190,6 +191,140 @@ function openProfile(r){
 }
 
 function closeProfile(){ modalBack.style.display = 'none'; }
+
+// ── Scout Report ─────────────────────────────────────────────────────────────
+function renderScoutReport(r) {
+  const el = document.getElementById('mScoutReport');
+  if (!el) return;
+
+  const posGroup = bucketPosition(r.Pos || r.Position || '');
+  function pct(stat) {
+    const v = safeNum(r[stat]);
+    if (!Number.isFinite(v)) return null;
+    const p = statPercentile(stat, v);
+    return Number.isFinite(p) ? p : null;
+  }
+
+  // raw values
+  const ppg   = safeNum(r['PPG']),    efg   = safeNum(r['eFG%']),
+        p3pct = safeNum(r['3P%']),    ft    = safeNum(r['FT%']),
+        apg   = safeNum(r['APG']),    ato   = safeNum(r['A/TO']),
+        topg  = safeNum(r['TOPG']),   spg   = safeNum(r['SPG']),
+        bpg   = safeNum(r['BPG']),    rpg   = safeNum(r['RPG']),
+        orPct = safeNum(r['OR%']),    usg   = safeNum(r['USG%']),
+        bpm   = safeNum(r['BPM']),    drtg  = safeNum(r['DRtg']),
+        ws40  = safeNum(r['WS/40']),  p3paG = safeNum(r['3PA/G']);
+
+  // percentiles
+  const ppgP  = pct('PPG'),   efgP  = pct('eFG%'), p3P   = pct('3P%'),
+        ftP   = pct('FT%'),   apgP  = pct('APG'),  atoP  = pct('A/TO'),
+        topgP = pct('TOPG'),  spgP  = pct('SPG'),  bpgP  = pct('BPG'),
+        rpgP  = pct('RPG'),   orP   = pct('OR%'),  usgP  = pct('USG%'),
+        bpmP  = pct('BPM'),   drtgP = pct('DRtg'), ws40P = pct('WS/40'),
+        drP   = pct('DR%');
+
+  const fPct = v => Number.isFinite(v) ? (v * 100).toFixed(1) + '%' : '—';
+  const fN   = (v, d=1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const top  = p => p != null ? Math.round((1 - p) * 100) : null;
+
+  const strengths = [], weaknesses = [], tendencies = [], development = [], matchup = [];
+
+  // ── STRENGTHS ──────────────────────────────────────────────────────────────
+  if (ppgP  >= 0.82) strengths.push(`Elite scorer — ${fN(ppg)} PPG (top ${top(ppgP)}% of position group)`);
+  if (efgP  >= 0.82) strengths.push(`Highly efficient shooter — ${fPct(efg)} eFG%, creates quality looks and finishes`);
+  if (p3P   >= 0.82 && p3paG >= 1.5) strengths.push(`Dangerous 3PT threat — ${fPct(p3pct)} on ${fN(p3paG)}/g volume; must be contested off screens and DHOs`);
+  if (ftP   >= 0.82) strengths.push(`Reliable FT shooter — ${fPct(ft)} from the line; punishes defenders for reaching`);
+  if (apgP  >= 0.82) strengths.push(`High-level playmaker — ${fN(apg)} APG, reads defenses and creates consistently for teammates`);
+  if (atoP  >= 0.82) strengths.push(`Excellent decision-maker — ${fN(ato,2)} A/TO, protects possessions and limits live-ball turnovers`);
+  if (spgP  >= 0.82) strengths.push(`Elite ball-hawk — ${fN(spg)} SPG, disrupts passing lanes and generates transition chances`);
+  if (bpgP  >= 0.82) strengths.push(`Rim protector — ${fN(bpg)} BPG, deters drives and shifts opponent shot selection away from the paint`);
+  if (rpgP  >= 0.82) strengths.push(`High-volume rebounder — ${fN(rpg)} RPG, controls both glass ends and limits second-chance points`);
+  if (bpmP  >= 0.82) strengths.push(`Strong two-way impact — BPM places them among the most impactful players at this position`);
+  if (drtgP >= 0.82) strengths.push(`Excellent individual defender — ${fN(drtg,0)} DRtg; opponents score inefficiently in these matchups`);
+  if (ws40P >= 0.82) strengths.push(`Wins producer — elite WS/40 confirms genuine per-minute impact on team results`);
+  if (orP   >= 0.82) strengths.push(`Elite offensive rebounder — OR% in the top tier; crashes the glass relentlessly for extra possessions`);
+  if (drP   >= 0.82) strengths.push(`Elite defensive rebounder — stingy on the glass, routinely ends possessions`);
+  if (usgP  >= 0.80 && ppgP != null && ppgP >= 0.55) strengths.push(`Handles heavy load — ${fN(usg,0)}% usage while staying efficient; trusted primary option`);
+
+  // ── WEAKNESSES ─────────────────────────────────────────────────────────────
+  if (ppgP  != null && ppgP  <= 0.22) weaknesses.push(`Limited scoring output — ${fN(ppg)} PPG; offense runs through others`);
+  if (efgP  != null && efgP  <= 0.22) weaknesses.push(`Poor shooting efficiency — ${fPct(efg)} eFG%; misses erode possession quality`);
+  if (p3P   != null && p3P   <= 0.22 && p3paG >= 1.5) weaknesses.push(`Unreliable 3PT shooter on volume — ${fPct(p3pct)} on ${fN(p3paG)}/g; defenders can sag off and clog the paint`);
+  if (ftP   != null && ftP   <= 0.22) weaknesses.push(`Free throw liability — ${fPct(ft)} FT%; hack-a strategy is valid in crunch time`);
+  if (atoP  != null && atoP  <= 0.22) weaknesses.push(`Decision-making concerns — ${fN(ato,2)} A/TO; passing-game issues limit playmaking ceiling`);
+  if (topgP != null && topgP <= 0.22) weaknesses.push(`Ball security issues — ${fN(topg)} TOPG; careless with live ball, gifts transition chances`);
+  if (spgP  != null && bpgP  != null && spgP <= 0.22 && bpgP <= 0.22) weaknesses.push(`Passive defender — low steal and block numbers; rarely creates defensive events`);
+  if (drtgP != null && drtgP <= 0.22) weaknesses.push(`Below-average defender — ${fN(drtg,0)} DRtg; opponents score efficiently when they are the primary assignment`);
+  if (rpgP  != null && rpgP  <= 0.22) weaknesses.push(`Soft on the glass — ${fN(rpg)} RPG; gives up extra possessions and second-chance opportunities`);
+  if (apgP  != null && apgP  <= 0.22 && posGroup === 'Guards') weaknesses.push(`Limited playmaking — ${fN(apg)} APG; off-ball only, not a primary creator or initiator`);
+
+  // ── TENDENCIES ─────────────────────────────────────────────────────────────
+  if      (Number.isFinite(usg) && usg >= 26) tendencies.push(`Primary option (${fN(usg,0)}% USG) — initiates possessions, demands double-team attention in half-court sets`);
+  else if (Number.isFinite(usg) && usg >= 18) tendencies.push(`Secondary option (${fN(usg,0)}% USG) — operates within the offense, accepts touches without demanding the ball`);
+  else if (Number.isFinite(usg) && usg > 0)   tendencies.push(`Role player (${fN(usg,0)}% USG) — low-decision contributor, executes within structure`);
+
+  if      (Number.isFinite(p3paG) && p3paG >= 5)   tendencies.push(`Volume 3PT gunner — ${fN(p3paG)}/g; attacks pull-ups and spot-ups relentlessly, spaces the floor wide`);
+  else if (Number.isFinite(p3paG) && p3paG >= 2.5)  tendencies.push(`Perimeter-oriented — ${fN(p3paG)} 3PA/g; comfortable catch-and-shoot and off-dribble from beyond the arc`);
+  else if (Number.isFinite(p3paG) && p3paG < 1 && posGroup === 'Guards') tendencies.push(`Drive-first guard — rarely attempts 3s (${fN(p3paG)}/g); attacks closeouts going to the basket and FT line`);
+
+  if      (Number.isFinite(apg) && apg >= 5)   tendencies.push(`Floor general — runs every action; master of pick-and-roll, drive-and-kick, and secondary reads`);
+  else if (Number.isFinite(apg) && apg >= 3)   tendencies.push(`Secondary ball-handler — comfortable in PnR as pull-up or pass-first on second-side actions`);
+
+  if (Number.isFinite(orPct) && orPct >= 8)    tendencies.push(`Offensive glass crasher — OR% ${fN(orPct,1)}%; must be tracked and blocked out on every shot`);
+  if (Number.isFinite(spg)  && spg   >= 1.5)   tendencies.push(`Active-hands gambler — digs in passing lanes; skip passes and DHOs can exploit this tendency`);
+  if (Number.isFinite(bpg)  && bpg   >= 1.5)   tendencies.push(`Paint deterrent — active shot-blocker; use shot fakes to take them off their feet before attacking`);
+  if (Number.isFinite(ft)   && ft    >= 0.80 && Number.isFinite(usg) && usg >= 18) tendencies.push(`Draws fouls intentionally — gets to the line and converts; defenders must stay disciplined`);
+
+  // ── DEVELOPMENT AREAS ──────────────────────────────────────────────────────
+  const devCandidates = [];
+  function devCheck(stat, label, msg) {
+    const p = pct(stat); if (p == null) return;
+    if (p >= 0.25 && p < 0.56) devCandidates.push({ p, msg: msg + ` (~${Math.round(p*100)}th pct)` });
+  }
+  devCheck('3P%',  '', `3PT shooting — mechanics and shot-selection improvements could unlock genuine perimeter threat status`);
+  devCheck('FT%',  '', `Free throw reliability — consistent FT% removes hack-a options and adds clutch-game production`);
+  devCheck('APG',  '', `Playmaking volume — adding consistent passing reads would shift them from scorer to dual-threat initiator`);
+  devCheck('A/TO', '', `Decision-making — cleaning up live-ball turnovers is the clearest efficiency floor-raiser`);
+  devCheck('DRtg', '', `Defensive engagement — improved positioning and floor awareness would raise overall two-way value`);
+  devCheck('BPG',  '', `Rim-deterrence — better shot-contest timing and verticality could develop them into a paint anchor`);
+  devCheck('RPG',  '', `Rebounding discipline — box-out fundamentals improvement has a direct impact on team rebound rate`);
+  devCheck('eFG%', '', `Shot quality — higher shot selectivity or finishing improvement pushes eFG% to league-average range`);
+  devCandidates.sort((a, b) => b.p - a.p);
+  development.push(...devCandidates.slice(0, 3).map(d => d.msg));
+
+  // ── MATCHUP NOTES ──────────────────────────────────────────────────────────
+  if (p3P   != null && p3P   >= 0.72 && p3paG >= 2) matchup.push(`🛡️ Guarding offense: Hard close-out — ${fPct(p3pct)} 3PT on volume. Force baseline, funnel to weak hand, stay attached through hand-offs and screens.`);
+  if (usg   >= 26 && apgP   != null  && apgP  >= 0.60) matchup.push(`🛡️ Deny initiation: Primary creator (${fN(usg,0)}% USG) with passing vision — pressure the catch, fight over screens; remove the ball from their hands early in the shot clock.`);
+  if (ftP   != null && ftP   <= 0.58 && usg >= 18) matchup.push(`📌 Hack consideration: ${fPct(ft)} FT% at ${fN(usg,0)}% usage — late-game intentional fouling is a legitimate tactical option.`);
+  if (atoP  != null && atoP  <= 0.30) matchup.push(`⚡ Force live-ball situations: High turnover rate — PnR traps, full-court pressure, and deflection rotations will produce extra possessions.`);
+  if (drtgP != null && drtgP <= 0.30) matchup.push(`🎯 Attack this matchup: Below-average defender (${fN(drtg,0)} DRtg) — target in isolation or PnR; especially attack away from their strong side.`);
+  if (orPct >= 10) matchup.push(`💥 Hard box-outs critical: ${fN(orPct,1)}% OR rate — alert every shooter; nobody leaves the glass early.`);
+  if (spg   >= 1.5) matchup.push(`🖐️ Protect the ball: Active in passing lanes — cut with purpose, avoid cross-court skips when they are in lane position.`);
+  if (bpg   >= 1.5) matchup.push(`🚧 Avoid uncontested drives: ${fN(bpg)} BPG help presence — kick out or shot-fake to take them off their feet before attacking the rim.`);
+  if (drtgP != null && drtgP >= 0.75) matchup.push(`ℹ️ Solid defender: Good DRtg indicates they hold their own — don't overcommit to a mismatch; respect help-side rotation.`);
+  if (efgP  != null && efgP  >= 0.78) matchup.push(`🔥 Efficient scorer: ${fPct(efg)} eFG% — minimal wasted shots; contest every catch, avoid foul situations, don't let them set their feet.`);
+  if (bpgP  != null && bpgP  >= 0.78) matchup.push(`🎯 Their defense — blocks at rim: Anchors weak side with aggressive rotations — skip passes and pop/pocket passes are the answer.`);
+  if (spgP  != null && spgP  >= 0.78) matchup.push(`🎯 Their defense — pressure defense: Active lane presence — set screens early, keep ball moving before they can commit to the gamble.`);
+
+  // ── RENDER ─────────────────────────────────────────────────────────────────
+  function scoutSection(title, icon, items, cls) {
+    if (!items.length) return '';
+    return `<div class="scoutSection">
+      <div class="scoutSectionHead">${icon} ${title}</div>
+      <div class="scoutItems">${items.map(t => `<div class="scoutItem ${cls}">${t}</div>`).join('')}</div>
+    </div>`;
+  }
+
+  const html =
+    scoutSection('Strengths',        '✅', strengths,   'scoutItem--strength') +
+    scoutSection('Weaknesses',       '⚠️', weaknesses,  'scoutItem--weakness') +
+    scoutSection('Tendencies',       '🔄', tendencies,  'scoutItem--tendency') +
+    scoutSection('Development Areas','📈', development, 'scoutItem--dev')      +
+    scoutSection('Matchup Notes',    '🎯', matchup,     'scoutItem--matchup');
+
+  el.innerHTML = html ||
+    '<div class="muted" style="font-size:12px;padding:8px 0">Not enough stat data to generate a scout report for this player.</div>';
+}
 
 // ── Career History ──────────────────────────────────────────
 var CAREER_COLS = [
