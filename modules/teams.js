@@ -13,6 +13,9 @@ var thCurrentTeam   = '';
 var thCurrentSeason = '2026';
 var thMatchupMode   = 'season'; // 'season' | 'history'
 var _thCurrentStats = null;
+var thCurrentCompareTeam = '';
+var _thCompareStats = null;
+var _thLastMatchupCtx = null;
 
 function initTeamsDOMRefs() {
   thTeamSearch  = document.getElementById('thTeamSearch');
@@ -476,6 +479,180 @@ function thRenderDNA(teamData, statsData, shootingData) {
     </div>`;
 }
 
+// ── thRenderTeamScout — full team scouting report sections ───────────────────
+function thRenderTeamScout(teamName, teamData, statsData) {
+  const el = document.getElementById('thScout');
+  if (!el) return;
+  if (!teamData && !statsData) {
+    el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Load a team to generate scouting analysis.</div>';
+    return;
+  }
+
+  const ts = statsData ? statsData.teamStats : null;
+  const os = statsData ? statsData.opponentStats : null;
+  const ff = ts ? ts.fourFactors : null;
+  const ofs = os ? os.fourFactors : null;
+  const g = (statsData && statsData.games) || 1;
+
+  const strengths = [];
+  const weaknesses = [];
+  const tendencies = [];
+  const development = [];
+  const matchup = [];
+
+  const adjO = teamData ? +teamData.adjO : null;
+  const adjD = teamData ? +teamData.adjD : null;
+  const adjEM = teamData ? +teamData.adjEM : null;
+  const pace = statsData ? +statsData.pace : null;
+  const ppg = ts ? +(ts.points.total / g).toFixed(1) : null;
+  const oppg = os ? +(os.points.total / g).toFixed(1) : null;
+  const efg = ff ? +ff.effectiveFieldGoalPct : null;
+  const defEfg = ofs ? +ofs.effectiveFieldGoalPct : null;
+  const tov = ff ? +(ff.turnoverRatio * 100) : null;
+  const forceTov = ofs ? +(ofs.turnoverRatio * 100) : null;
+  const oreb = ff ? +ff.offensiveReboundPct : null;
+  const allowOreb = ofs ? +ofs.offensiveReboundPct : null;
+  const ftr = ff ? +ff.freeThrowRate : null;
+  const allowFtr = ofs ? +ofs.freeThrowRate : null;
+  const threeRate = ts ? +(ts.threePointFieldGoals.attempted / (ts.fieldGoals.attempted || 1) * 100) : null;
+  const paintRate = ts ? +(ts.points.inPaint / (ts.points.total || 1) * 100) : null;
+  const astRate = ts ? +(ts.assists / (ts.fieldGoals.made || 1) * 100) : null;
+
+  const f1 = (v) => Number.isFinite(v) ? (+v).toFixed(1) : '—';
+
+  if (Number.isFinite(adjEM) && adjEM >= 20) strengths.push(`Top-tier overall efficiency profile (adjEM ${f1(adjEM)}).`);
+  if (Number.isFinite(adjO) && adjO >= 112) strengths.push(`High-powered offense (adjO ${f1(adjO)}) consistently creates efficient possessions.`);
+  if (Number.isFinite(adjD) && adjD <= 95) strengths.push(`Elite defense (adjD ${f1(adjD)}) suppresses clean looks and limits scoring runs.`);
+  if (Number.isFinite(efg) && efg >= 54) strengths.push(`Excellent shot quality and finishing (${f1(efg)}% eFG).`);
+  if (Number.isFinite(defEfg) && defEfg <= 48) strengths.push(`Strong shot suppression (opponents only ${f1(defEfg)}% eFG).`);
+  if (Number.isFinite(tov) && tov <= 15) strengths.push(`Secure with the ball (${f1(tov)}% offensive TO rate).`);
+  if (Number.isFinite(forceTov) && forceTov >= 20) strengths.push(`Creates defensive events by forcing turnovers (${f1(forceTov)}%).`);
+  if (Number.isFinite(oreb) && oreb >= 30) strengths.push(`Wins extra possessions on the offensive glass (${f1(oreb)}% OReb).`);
+
+  if (Number.isFinite(adjEM) && adjEM <= 5) weaknesses.push(`Limited margin for error (adjEM ${f1(adjEM)}) — games tend to be volatile.`);
+  if (Number.isFinite(adjO) && adjO <= 101) weaknesses.push(`Offense struggles to generate efficient scoring (adjO ${f1(adjO)}).`);
+  if (Number.isFinite(adjD) && adjD >= 103) weaknesses.push(`Defensive consistency is a concern (adjD ${f1(adjD)}).`);
+  if (Number.isFinite(efg) && efg <= 48) weaknesses.push(`Low shooting efficiency (${f1(efg)}% eFG) caps offensive ceiling.`);
+  if (Number.isFinite(defEfg) && defEfg >= 53) weaknesses.push(`Allows too many clean shots (opponents ${f1(defEfg)}% eFG).`);
+  if (Number.isFinite(tov) && tov >= 20) weaknesses.push(`Turnover-prone offense (${f1(tov)}%) gives away possessions.`);
+  if (Number.isFinite(allowOreb) && allowOreb >= 33) weaknesses.push(`Defensive rebounding leak (allows ${f1(allowOreb)}% OReb).`);
+  if (Number.isFinite(allowFtr) && allowFtr >= 33) weaknesses.push(`Foul discipline issues (opponents high FT rate ${f1(allowFtr)}).`);
+
+  if (Number.isFinite(threeRate) && threeRate >= 44) tendencies.push(`Perimeter-heavy shot profile (${f1(threeRate)}% of FGA from 3).`);
+  if (Number.isFinite(threeRate) && threeRate <= 27) tendencies.push(`Paint/midrange-driven offense (low 3PA rate ${f1(threeRate)}%).`);
+  if (Number.isFinite(paintRate) && paintRate >= 46) tendencies.push(`Strong paint emphasis (${f1(paintRate)}% of points at rim/paint).`);
+  if (Number.isFinite(astRate) && astRate >= 58) tendencies.push(`Ball-sharing identity (assist rate ${f1(astRate)}%).`);
+  if (Number.isFinite(astRate) && astRate <= 45) tendencies.push(`Creation is more individual than system-based (assist rate ${f1(astRate)}%).`);
+  if (Number.isFinite(pace) && pace >= 71) tendencies.push(`Fast-tempo team (${f1(pace)} possessions/game).`);
+  if (Number.isFinite(pace) && pace <= 63) tendencies.push(`Deliberate half-court tempo (${f1(pace)} possessions/game).`);
+
+  if (Number.isFinite(efg) && efg >= 49 && efg < 53) development.push(`Raise eFG from good to elite by improving shot selection/spacing in primary actions.`);
+  if (Number.isFinite(tov) && tov >= 16 && tov <= 19) development.push(`Tighten ball security late-clock to reduce empty possessions.`);
+  if (Number.isFinite(forceTov) && forceTov >= 15 && forceTov < 20) development.push(`Add more point-of-attack pressure to increase forced turnover volume.`);
+  if (Number.isFinite(allowOreb) && allowOreb >= 27 && allowOreb < 33) development.push(`Improve gang rebounding and weak-side box-outs to cut second-chance points.`);
+  if (Number.isFinite(allowFtr) && allowFtr >= 24 && allowFtr < 33) development.push(`Reduce foul rate via better closeout control and verticality at rim.`);
+
+  if (Number.isFinite(threeRate) && threeRate >= 42) matchup.push(`How to guard them: run shooters off line, top-lock movement sets, force paint finishes over length.`);
+  if (Number.isFinite(paintRate) && paintRate >= 44) matchup.push(`How to guard them: build a nail wall, shrink gaps early, force kick-outs to low-efficiency shooters.`);
+  if (Number.isFinite(tov) && tov >= 18) matchup.push(`How to attack them: pressure guards and trap side PnR to force live-ball turnovers.`);
+  if (Number.isFinite(forceTov) && forceTov >= 20) matchup.push(`How they defend: aggressive hands and passing-lane pressure; secure outlets and simplify first pass.`);
+  if (Number.isFinite(defEfg) && defEfg <= 48) matchup.push(`How they defend: disciplined shot contest team; use paint touch + spray to shift help before the shot.`);
+  if (Number.isFinite(allowOreb) && allowOreb >= 32) matchup.push(`How to attack them: crash weak side hard — they give up second chances.`);
+
+  function sec(title, icon, arr, cls) {
+    if (!arr.length) return '';
+    return `<div class="scoutSection">
+      <div class="scoutSectionHead">${icon} ${title}</div>
+      <div class="scoutItems">${arr.map(t => `<div class="scoutItem ${cls}">${t}</div>`).join('')}</div>
+    </div>`;
+  }
+
+  const html =
+    sec('Strengths', '✅', strengths, 'scoutItem--strength') +
+    sec('Weaknesses', '⚠️', weaknesses, 'scoutItem--weakness') +
+    sec('Tendencies', '🔄', tendencies, 'scoutItem--tendency') +
+    sec('Development Areas', '📈', development, 'scoutItem--dev') +
+    sec('Matchup Notes', '🎯', matchup, 'scoutItem--matchup');
+
+  el.innerHTML = html || '<div class="muted" style="padding:18px;text-align:center">Not enough data for full team scouting report.</div>';
+}
+
+// ── thRunDeepAnalysis — send comprehensive matchup context to AI chat ─────────
+function thRunDeepAnalysis() {
+  if (!thCurrentTeam || !thCurrentCompareTeam) {
+    if (typeof showWarn === 'function') showWarn('Load a team and compare opponent first.');
+    return;
+  }
+  const input = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiSendBtn');
+  const aiPanel = document.getElementById('aiPanel');
+  const status = document.getElementById('thDeepAnalysisStatus');
+  if (!input || !sendBtn) {
+    if (typeof showWarn === 'function') showWarn('AI Chat UI not available.');
+    return;
+  }
+
+  if (aiPanel && aiPanel.classList.contains('hidden')) aiPanel.classList.remove('hidden');
+
+  function teamSnapshot(name, ratings, stats) {
+    const ts = stats ? stats.teamStats : null;
+    const os = stats ? stats.opponentStats : null;
+    const ff = ts ? ts.fourFactors : null;
+    const ofs = os ? os.fourFactors : null;
+    const g = (stats && stats.games) || 1;
+    return {
+      team: name,
+      ratings: ratings ? { adjO: ratings.adjO, adjD: ratings.adjD, adjEM: ratings.adjEM, rank: ratings.rank, srs: ratings.srs } : null,
+      scoring: ts ? {
+        ppg: +(ts.points.total / g).toFixed(1),
+        oppg: os ? +(os.points.total / g).toFixed(1) : null,
+        pace: stats ? stats.pace : null,
+        trueShooting: ts.trueShooting,
+        threePct: ts.threePointFieldGoals ? ts.threePointFieldGoals.pct : null,
+        threeAttemptRate: ts.threePointFieldGoals && ts.fieldGoals ? +(ts.threePointFieldGoals.attempted / (ts.fieldGoals.attempted || 1) * 100).toFixed(1) : null,
+        paintRate: +(ts.points.inPaint / (ts.points.total || 1) * 100).toFixed(1),
+        offTurnoverPtsRate: +(ts.points.offTurnovers / (ts.points.total || 1) * 100).toFixed(1),
+      } : null,
+      fourFactors: ff ? {
+        offEfg: ff.effectiveFieldGoalPct,
+        offTovRate: +(ff.turnoverRatio * 100).toFixed(1),
+        offOreb: ff.offensiveReboundPct,
+        offFtr: ff.freeThrowRate,
+        defEfgAllowed: ofs ? ofs.effectiveFieldGoalPct : null,
+        defTovForced: ofs ? +(ofs.turnoverRatio * 100).toFixed(1) : null,
+        defOrebAllowed: ofs ? ofs.offensiveReboundPct : null,
+        defFtrAllowed: ofs ? ofs.freeThrowRate : null,
+      } : null,
+    };
+  }
+
+  const aName = thCurrentTeam;
+  const bName = thCurrentCompareTeam;
+  const ratA = teamRatings[(aName || '').toLowerCase()] || null;
+  const ratB = teamRatings[(bName || '').toLowerCase()] || null;
+  const context = {
+    season: thCurrentSeason,
+    mode: thMatchupMode,
+    teamA: teamSnapshot(aName, ratA, _thCurrentStats),
+    teamB: teamSnapshot(bName, ratB, _thCompareStats),
+    matchupShots: _thLastMatchupCtx,
+  };
+
+  const prompt = `Deep matchup analysis request for ${aName} vs ${bName}.\n\n` +
+    `Use ALL available context below to provide a coach-level report with:\n` +
+    `1) Overall verdict and confidence\n` +
+    `2) ${aName} strengths/weaknesses/tendencies/development areas\n` +
+    `3) ${bName} strengths/weaknesses/tendencies/development areas\n` +
+    `4) Head-to-head matchup notes (how to guard each team, how each defends, exploitable mismatches)\n` +
+    `5) Specific game plan: 5 offensive keys, 5 defensive keys, 3 in-game adjustment triggers\n` +
+    `6) Red flags and what data confidence is weak on\n\n` +
+    `Structured context JSON:\n${JSON.stringify(context, null, 2)}`;
+
+  input.value = prompt;
+  sendBtn.click();
+  if (status) status.textContent = 'Deep analysis sent to AI chat.';
+}
+
 // ── thRenderCompare — side-by-side team comparison ────────────────────────────
 function thRenderCompare(teamA, ratA, statsA, teamB, ratB, statsB) {
   const el = document.getElementById('thCompare');
@@ -594,6 +771,8 @@ async function thLoadCompare() {
   const [statsB] = await Promise.all([
     loadTeamStats(compareTeam, thCurrentSeason),
   ]);
+  thCurrentCompareTeam = compareTeam;
+  _thCompareStats = statsB || null;
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
@@ -777,6 +956,7 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
   const shotsB = allShots.filter(s => (s.team||'').toLowerCase() === (teamB||'').toLowerCase());
 
   if (!allShots.length) {
+    _thLastMatchupCtx = null;
     el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No play-by-play data found for ${teamA} vs ${teamB} this season.</div>`;
     return;
   }
@@ -867,6 +1047,24 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     ? `${gamesPlayed} most recent game${gamesPlayed!==1?'s':''} (multi-season)`
     : `${gamesPlayed} game${gamesPlayed!==1?'s':''} this season`;
 
+  _thLastMatchupCtx = {
+    gamesPlayed,
+    mode,
+    avgScore: {
+      [teamA]: avgPtsA != null ? +avgPtsA : null,
+      [teamB]: avgPtsB != null ? +avgPtsB : null,
+    },
+    shotVolume: {
+      [teamA]: { fga: shotsA.filter(s => s.range !== 'free_throw').length, fta: shotsA.filter(s => s.range === 'free_throw').length },
+      [teamB]: { fga: shotsB.filter(s => s.range !== 'free_throw').length, fta: shotsB.filter(s => s.range === 'free_throw').length },
+    },
+    zones: {
+      rim: { [teamA]: zoneAgg(shotsA, 'rim'), [teamB]: zoneAgg(shotsB, 'rim') },
+      jumper: { [teamA]: zoneAgg(shotsA, 'jumper'), [teamB]: zoneAgg(shotsB, 'jumper') },
+      three_pointer: { [teamA]: zoneAgg(shotsA, 'three_pointer'), [teamB]: zoneAgg(shotsB, 'three_pointer') },
+    },
+  };
+
   el.innerHTML = `
     <div class="thMatchupToggleRow">
       <button class="thMatchupToggleBtn${mode==='season'?' active':''}" onclick="thLoadMatchup('${teamB.replace(/'/g,"\\'")}','season')">This Season</button>
@@ -892,8 +1090,12 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thZoneNote">pct · made/att · (% of FGA)</div>
     </div>
     <div class="thDNAInsights" style="margin-top:16px">
-      <div class="thDNASectionLabel">🎯 Matchup Insights</div>
+      <div class="thDeepAnalysisRow">
+        <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
+        <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
+      </div>
       <div class="thInsightsGrid">${insightHtml}</div>
+      <div id="thDeepAnalysisStatus" class="muted" style="font-size:11px;margin-top:8px"></div>
     </div>`;
   setTimeout(() => thInitShotChart('thMatchup'), 50);
 }
@@ -997,6 +1199,9 @@ async function thLoadTeam(teamName, season) {
   thCurrentTeam   = teamName;
   thCurrentSeason = season || '2026';
   _thCurrentStats = null;
+  thCurrentCompareTeam = '';
+  _thCompareStats = null;
+  _thLastMatchupCtx = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
@@ -1006,7 +1211,7 @@ async function thLoadTeam(teamName, season) {
   thRenderOverview(teamData, null);
   const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
     document.getElementById('thDNA'), document.getElementById('thCompare'),
-    document.getElementById('thMatchup')];
+    document.getElementById('thMatchup'), document.getElementById('thScout')];
   loadingEls.forEach(el => { if (el) el.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>'; });
 
   // Parallel fetch: games + team stats + team shooting zones
@@ -1023,6 +1228,7 @@ async function thLoadTeam(teamName, season) {
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);
   thRenderDNA(teamData, statsData, shootingData);
+  thRenderTeamScout(teamName, teamData, statsData);
   // Reset compare/matchup to prompt state
   const elCmp = document.getElementById('thCompare');
   const elMxp = document.getElementById('thMatchup');
