@@ -105,17 +105,13 @@
   <div class="topbar">
     <div class="row">
       <div>
-        <label>Data source</label>
+        <label>Season</label>
         <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-          <select id="dataSource" style="padding:4px 8px;border-radius:6px;border:1px solid #555;background:#1c2333;color:#e2e8f0;font-size:13px">
-            <option value="sheets">📊 Google Sheets</option>
-            <option value="api">🏀 Live API (MBB)</option>
-          </select>
           <input id="cbdSeason" type="number" value="2026" min="2010" max="2035"
-            style="display:none;width:74px;padding:4px 6px;border-radius:6px;border:1px solid #555;background:#1c2333;color:#e2e8f0;text-align:center"
-            title="Season year">
+            style="width:74px;padding:4px 6px;border-radius:6px;border:1px solid #555;background:#1c2333;color:#e2e8f0;text-align:center"
+            title="MBB season year">
         </div>
-        <div class="hint" id="dsHint">Google Sheet (auto-loads)</div>
+        <div class="hint">MBB: Live API &middot; WBB: Google Sheets</div>
       </div>
       <div>
         <label>API key</label><br/>
@@ -701,6 +697,11 @@
             <div class="bars" id="mBars"></div>
           </div>
         </div>
+      </div>
+
+      <div style="margin-top:12px" class="panel">
+        <div class="panelHead">📅 Career History</div>
+        <div id="mCareer" style="padding:0;overflow-x:auto"></div>
       </div>
 
       <div style="margin-top:12px" class="panel">

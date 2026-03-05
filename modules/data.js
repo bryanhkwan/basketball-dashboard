@@ -20,6 +20,10 @@ var baseStatsAll = [];
 var lastPerfAvg = NaN, lastPerfStar = NaN;
 var leagueRosters = {MBB:{tb:[],opp:[]}, WBB:{tb:[],opp:[]}};
 
+// Career history cache — keyed by player name (lowercase), value: [{_season, ...stats}, …]
+var careerData = {};
+var _careerDataReady = false;
+
 // Live working copy (user-editable) — keyed by canonical name only
 var confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
 
@@ -798,6 +802,123 @@ async function loadFromCBData(year) {
   } catch (err) {
     showWarn('College Basketball API error: ' + (err.message || err));
     finishIfInitial();
+  }
+}
+
+// ── loadAllData — MBB from CBD API, WBB from Google Sheets (parallel) ────────
+async function loadAllData(year) {
+  year = year || 2026;
+  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  var loadingOverlayEl = document.getElementById('loadingOverlay');
+  var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
+
+  function finishIfInitial() {
+    if (isInitialLoad && typeof authFinishLoading === 'function') authFinishLoading();
+  }
+
+  try {
+    if (!isInitialLoad) showWarn('Loading data…');
+
+    // Build Google Sheets URL for WBB only
+    const sid = extractSpreadsheetId(DEFAULT_GS_URL);
+    const wbbRange = encodeURIComponent(SHEET_MAP.WBB + '!A1:ZZ');
+    const sheetsUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid +
+      '/values:batchGet?key=' + encodeURIComponent(DEFAULT_GS_API_KEY) +
+      '&valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS&ranges=' + wbbRange;
+
+    // Fetch both sources in parallel
+    const [mbbSettled, wbbSettled] = await Promise.allSettled([
+      fetch(WORKER + '/api/cbdata/players?season=' + encodeURIComponent(year)),
+      fetch(sheetsUrl)
+    ]);
+
+    wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
+    const warnings = [];
+
+    // — MBB from CBD API —
+    if (mbbSettled.status === 'fulfilled' && mbbSettled.value.ok) {
+      const data = await mbbSettled.value.json();
+      if (data.players && data.players.length) {
+        const players = data.players;
+        const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
+        const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
+        wb.Sheets[SHEET_MAP.MBB] = { __aoa: aoa };
+      } else {
+        warnings.push('No MBB players returned from API (season ' + year + ').');
+        wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
+      }
+    } else {
+      const errText = mbbSettled.reason ? String(mbbSettled.reason) : 'HTTP ' + (mbbSettled.value && mbbSettled.value.status);
+      warnings.push('Could not load MBB data: ' + errText);
+      wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
+    }
+
+    // — WBB from Google Sheets —
+    if (wbbSettled.status === 'fulfilled' && wbbSettled.value.ok) {
+      const sheetsData = await wbbSettled.value.json();
+      const vr = sheetsData.valueRanges && sheetsData.valueRanges[0];
+      wb.Sheets[SHEET_MAP.WBB] = { __aoa: vr ? (vr.values || []) : [] };
+    } else {
+      const errText = wbbSettled.reason ? String(wbbSettled.reason) : 'HTTP ' + (wbbSettled.value && wbbSettled.value.status);
+      warnings.push('Could not load WBB data: ' + errText);
+      wb.Sheets[SHEET_MAP.WBB] = { __aoa: [['Player','Team','Conference','Pos']] };
+    }
+
+    if (warnings.length) showWarn(warnings.join(' | '));
+    else clearWarn();
+
+    resetWeightsBtn.disabled = false;
+    recalcBtn.disabled       = false;
+    exportBtn.disabled       = false;
+
+    applyLeagueDefaults(true);
+    renderWeights();
+    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    reloadActiveSheet();
+    // Populate career history in background — does not block initial render
+    _careerDataReady = false;
+    loadCareerSeasons().catch(() => {});
+    finishIfInitial();
+
+  } catch (err) {
+    showWarn('Data load error: ' + (err.message || err));
+    finishIfInitial();
+  }
+}
+
+// ── loadCareerSeasons — background-fetch 2022–2026 for career history ────────
+async function loadCareerSeasons() {
+  const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  const years = [2022, 2023, 2024, 2025, 2026];
+
+  const results = await Promise.allSettled(
+    years.map(y => fetch(WORKER + '/api/cbdata/players?season=' + y).then(r => r.json()))
+  );
+
+  careerData = {};
+  results.forEach((result, i) => {
+    if (result.status !== 'fulfilled') return;
+    const year = years[i];
+    const players = result.value.players || [];
+    players.forEach(p => {
+      const key = (p.Player || '').toLowerCase().trim();
+      if (!key) return;
+      if (!careerData[key]) careerData[key] = [];
+      careerData[key].push(Object.assign({}, p, { _season: year }));
+    });
+  });
+
+  // Sort each player's history oldest → newest
+  Object.keys(careerData).forEach(k => {
+    careerData[k].sort((a, b) => a._season - b._season);
+  });
+
+  _careerDataReady = true;
+  if (typeof window._onCareerDataReady === 'function') {
+    window._onCareerDataReady();
+    window._onCareerDataReady = null;
   }
 }
 

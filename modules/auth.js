@@ -55,8 +55,10 @@ function authStartLoading() {
     _loadVideoEnded = true;
   }
 
-  // Trigger data load in parallel
-  if (typeof loadFromGoogleSheets === 'function') {
+  // Trigger data load in parallel — MBB from CBD API, WBB from Google Sheets
+  if (typeof loadAllData === 'function') {
+    setTimeout(() => loadAllData(2026), 50);
+  } else if (typeof loadFromGoogleSheets === 'function') {
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 50);
   }
 }

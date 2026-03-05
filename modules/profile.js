@@ -158,10 +158,111 @@ function openProfile(r){
     }
   };
 
+  renderCareerHistory(r);
   modalBack.style.display = 'flex';
 }
 
 function closeProfile(){ modalBack.style.display = 'none'; }
+
+// ── Career History ──────────────────────────────────────────
+var CAREER_COLS = [
+  { key: 'G',     label: 'G',     pct: false, dec: 0 },
+  { key: 'PPG',   label: 'PPG',   pct: false, dec: 1 },
+  { key: 'RPG',   label: 'RPG',   pct: false, dec: 1 },
+  { key: 'APG',   label: 'APG',   pct: false, dec: 1 },
+  { key: 'SPG',   label: 'SPG',   pct: false, dec: 1 },
+  { key: 'BPG',   label: 'BPG',   pct: false, dec: 1 },
+  { key: 'eFG%',  label: 'eFG%',  pct: true,  dec: 1 },
+  { key: 'TS%',   label: 'TS%',   pct: true,  dec: 1 },
+  { key: 'BPM',   label: 'BPM',   pct: false, dec: 2 },
+  { key: 'WS/40', label: 'WS/40', pct: false, dec: 3 },
+];
+
+function _fmtC(col, val) {
+  if (!Number.isFinite(val)) return '—';
+  if (col.pct) return (val * 100).toFixed(col.dec) + '%';
+  if (col.dec === 0) return Math.round(val);
+  return val.toFixed(col.dec);
+}
+
+function renderCareerHistory(r) {
+  const el = document.getElementById('mCareer');
+  if (!el) return;
+
+  const key = (r.Player || '').toLowerCase().trim();
+
+  if (!_careerDataReady) {
+    el.innerHTML = '<div class="muted" style="padding:14px 16px;font-size:12px">Loading career history…</div>';
+    window._onCareerDataReady = () => renderCareerHistory(_currentProfilePlayer);
+    return;
+  }
+
+  const history = careerData[key];
+  if (!history || !history.length) {
+    el.innerHTML = '<div class="muted" style="padding:14px 16px;font-size:12px">No multi-season data found.</div>';
+    return;
+  }
+
+  // If only one season exists, note it is the first recorded year
+  const currentYear = 2026;
+
+  let html = '<div class="careerTable"><table><thead><tr>' +
+    '<th>Season</th><th>Team</th><th>Pos</th>' +
+    CAREER_COLS.map(c => '<th>' + c.label + '</th>').join('') +
+    '</tr></thead><tbody>';
+
+  history.forEach((row, i) => {
+    const isCurrent = row._season === currentYear;
+    const prev = i > 0 ? history[i - 1] : null;
+    const isTransfer = prev && (row.Team || '') !== (prev.Team || '');
+
+    html += '<tr' + (isCurrent ? ' class="career-current"' : '') + '>';
+    html += '<td><b>' + row._season + '</b>' + (isCurrent ? ' ★' : '') + '</td>';
+    html += '<td>' + (row.Team || '—') + (isTransfer ? ' <span class="career-transfer">↗ transfer</span>' : '') + '</td>';
+    html += '<td>' + (row.Pos || '—') + '</td>';
+
+    CAREER_COLS.forEach(col => {
+      const val  = safeNum(row[col.key]);
+      const pval = prev ? safeNum(prev[col.key]) : NaN;
+      const diff = (Number.isFinite(val) && Number.isFinite(pval)) ? val - pval : NaN;
+      const inv  = typeof getInvertForStat === 'function' ? getInvertForStat(col.key) : false;
+      const improved = Number.isFinite(diff) && (inv ? diff < -0.005 : diff > 0.005);
+      const declined = Number.isFinite(diff) && (inv ? diff > 0.005 : diff < -0.005);
+      const arrow = improved ? ' <span class="career-up">▲</span>'
+                  : declined ? ' <span class="career-down">▼</span>' : '';
+      html += '<td>' + _fmtC(col, val) + arrow + '</td>';
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+
+  // Footer — current vs most recent prior season
+  const curr = history.find(h => h._season === currentYear);
+  const prev = [...history].reverse().find(h => h._season !== currentYear);
+  if (curr && prev) {
+    const summaryCols = CAREER_COLS.filter(c => ['PPG','RPG','APG','eFG%','BPM'].includes(c.key));
+    const parts = summaryCols.map(col => {
+      const c = safeNum(curr[col.key]);
+      const p = safeNum(prev[col.key]);
+      if (!Number.isFinite(c) || !Number.isFinite(p)) return null;
+      const diff = c - p;
+      if (Math.abs(diff) < 0.005) return null;
+      const sign = diff > 0 ? '+' : '';
+      const color = diff > 0 ? 'var(--good)' : 'var(--bad)';
+      const fmtDiff = col.pct ? (diff * 100).toFixed(1) + '%' : diff.toFixed(col.dec);
+      return '<span style="color:' + color + '">' + sign + fmtDiff + ' ' + col.label + '</span>';
+    }).filter(Boolean);
+
+    if (parts.length) {
+      html += '<div class="career-footer">Compared to ' + prev._season +
+        ' (' + (prev.Team || '—') + '): ' + parts.join(' · ') + '</div>';
+    }
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
 
 function openStatInfo(stat){
   const statBack = document.getElementById('statBack');

@@ -200,6 +200,20 @@
     @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes modalSlide{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
     @media(max-width:640px){.wrap{padding:12px}header{padding:14px 16px 12px}h1{font-size:17px}.card{padding:12px}.modalHead{padding:14px}.modalBody{padding:14px}}
+
+    /* ─ Career History Table ─ */
+    .careerTable{overflow-x:auto}
+    .careerTable table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+    .careerTable thead th{text-align:right;padding:6px 10px;color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+    .careerTable thead th:nth-child(1),.careerTable thead th:nth-child(2),.careerTable thead th:nth-child(3){text-align:left}
+    .careerTable tbody td{text-align:right;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}
+    .careerTable tbody td:nth-child(1),.careerTable tbody td:nth-child(2),.careerTable tbody td:nth-child(3){text-align:left}
+    .career-current{background:rgba(180,100,25,.22)}
+    .career-current td{font-weight:600}
+    .career-up{color:var(--good);font-size:9px;vertical-align:middle}
+    .career-down{color:var(--bad);font-size:9px;vertical-align:middle}
+    .career-transfer{color:var(--accent);font-size:10px;font-weight:600}
+    .career-footer{padding:8px 12px 10px;font-size:11px;color:var(--muted);border-top:1px solid var(--line);line-height:1.8}
     /* AI Chat */
     .aiToggle{position:fixed;bottom:24px;right:24px;z-index:200;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));color:#001230;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 24px rgba(0,62,126,.5),0 0 0 3px rgba(var(--accent-rgb),.2);transition:all .2s}
     .aiToggle:hover{transform:scale(1.08);box-shadow:0 8px 32px rgba(0,62,126,.7),0 0 0 4px rgba(var(--accent-rgb),.35)}

@@ -82,30 +82,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if(wb) { computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)})); renderPlayers(); }
   });
 
-  // Data load buttons
-  // Datasource toggle: show/hide season year input + update hint
-  var dsToggleEl   = document.getElementById('dataSource');
-  var cbdSeasonEl  = document.getElementById('cbdSeason');
-  var dsHintEl     = document.getElementById('dsHint');
-  if (dsToggleEl) {
-    dsToggleEl.addEventListener('change', () => {
-      var isApi = dsToggleEl.value === 'api';
-      if (cbdSeasonEl) cbdSeasonEl.style.display = isApi ? '' : 'none';
-      if (dsHintEl)    dsHintEl.textContent = isApi
-        ? 'College Basketball Data API (MBB only · 24h cache)'
-        : 'Google Sheet (auto-loads)';
-    });
-  }
-
-  if(loadGsBtn){
-    loadGsBtn.addEventListener('click', async ()=>{
-      if (dsToggleEl && dsToggleEl.value === 'api') {
-        var seasonVal = cbdSeasonEl ? (cbdSeasonEl.value || '2025') : '2025';
-        await loadFromCBData(seasonVal);
-      } else {
-        const key = gsKeyInput?.value?.trim() || DEFAULT_GS_API_KEY;
-        await loadFromGoogleSheets(DEFAULT_GS_URL, key);
-      }
+  // Refresh data — MBB always from CBD API, WBB always from Google Sheets
+  if (loadGsBtn) {
+    loadGsBtn.addEventListener('click', async () => {
+      var seasonEl = document.getElementById('cbdSeason');
+      var seasonVal = seasonEl ? (seasonEl.value || '2026') : '2026';
+      await loadAllData(seasonVal);
     });
   }
   recalcBtn.addEventListener('click', ()=>{ if(wb) computeAll(); });
