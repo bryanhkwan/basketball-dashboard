@@ -586,14 +586,280 @@ async function thLoadCompare() {
   const compareTeam   = compareTeamEl ? compareTeamEl.value : '';
   if (!compareTeam) { if (typeof showWarn === 'function') showWarn('Please select a team to compare against.'); return; }
   if (!thCurrentTeam)  { if (typeof showWarn === 'function') showWarn('Please load a primary team first.'); return; }
-  const el = document.getElementById('thCompare');
-  if (el) el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Loading comparison…</div>';
+  const elCmp = document.getElementById('thCompare');
+  const elMxp = document.getElementById('thMatchup');
+  if (elCmp) elCmp.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Loading comparison…</div>';
+  if (elMxp) elMxp.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Loading matchup data…</div>';
   const [statsB] = await Promise.all([
     loadTeamStats(compareTeam, thCurrentSeason),
   ]);
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
+  // Also trigger the matchup shot chart
+  await thLoadMatchup(compareTeam);
+}
+
+// ── _thShotToSVG — transform full-court coordinates to SVG half-court ─────────
+// Full court origin: x=0–940, y=0–500. Left basket (75,250), right basket (875,250).
+// SVG half court: viewBox 0 0 400 455. Basket at (200, 415).
+function _thShotToSVG(shot, attacksLeft) {
+  const dx = attacksLeft ? (shot.x - 75) : (875 - shot.x);  // depth from basket
+  const dy = shot.y - 250;                                    // offset from lane center
+  return {
+    x: Math.round(200 + dy * 0.76),
+    y: Math.round(415 - dx * 1.025),
+  };
+}
+
+// ── _th_buildShotChartSVG — SVG court with dots for made/missed shots ─────────
+function _th_buildShotChartSVG(shots, teamName, color) {
+  // Detect which basket this team attacks (avg x of rim shots)
+  const rimShots = shots.filter(s => s.range === 'rim');
+  const avgX = rimShots.length
+    ? rimShots.reduce((s, p) => s + p.x, 0) / rimShots.length
+    : 470;
+  const attacksLeft = avgX < 470;
+
+  const W = 400, H = 455;
+  const tW = 'rgba(255,255,255,0.35)';
+  const tD = 'rgba(255,255,255,0.20)';
+  const bX = 200, bY = 415, pL = 148, pR = 252, pT = 265, ftY = 265, ftR = 52;
+  const cX1 = 50, cX2 = 350, cY = 325;
+
+  // Range colors
+  const rangeColor = { rim: 'rgba(34,197,94,0.9)', jumper: 'rgba(99,179,237,0.9)', three_pointer: 'rgba(251,146,60,0.9)' };
+  const rangeMissColor = { rim: 'rgba(34,197,94,0.4)', jumper: 'rgba(99,179,237,0.4)', three_pointer: 'rgba(251,146,60,0.4)' };
+
+  let dots = '';
+  shots.forEach(shot => {
+    if (shot.range === 'free_throw') return;
+    const { x, y } = _thShotToSVG(shot, attacksLeft);
+    if (x < 0 || x > W || y < -20 || y > H + 20) return; // outside visible area
+    const c = shot.made ? (rangeColor[shot.range] || 'rgba(200,200,200,0.8)') : (rangeMissColor[shot.range] || 'rgba(200,200,200,0.35)');
+    if (shot.made) {
+      dots += `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="rgba(0,0,0,0.4)" stroke-width="0.8"/>`;
+    } else {
+      const d = 4;
+      dots += `<line x1="${x-d}" y1="${y-d}" x2="${x+d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`;
+      dots += `<line x1="${x+d}" y1="${y-d}" x2="${x-d}" y2="${y+d}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`;
+    }
+  });
+
+  // Build zone stats for labels
+  const zoneStats = {};
+  shots.forEach(s => {
+    if (s.range === 'free_throw') return;
+    if (!zoneStats[s.range]) zoneStats[s.range] = { made: 0, att: 0 };
+    zoneStats[s.range].att++;
+    if (s.made) zoneStats[s.range].made++;
+  });
+  const totalFGA = Object.values(zoneStats).reduce((s, z) => s + z.att, 0) || 1;
+
+  const zoneLbl = (range, cx, cy) => {
+    const z = zoneStats[range];
+    if (!z || z.att === 0) return '';
+    const pct = Math.round(z.made / z.att * 100);
+    const vol = Math.round(z.att / totalFGA * 100);
+    return `<text x="${cx}" y="${cy}" text-anchor="middle" font-family="inherit" font-size="11" font-weight="700" fill="${rangeColor[range]||'#fff'}">${pct}% <tspan font-size="8.5" fill="${tD}" font-weight="400">${z.made}/${z.att} · ${vol}%</tspan></text>`;
+  };
+
+  const ftZ = zoneStats['free_throw'];
+  const ftStats = shots.filter(s => s.range === 'free_throw');
+  const ftMade = ftStats.filter(s => s.made).length;
+  const ftAtt  = ftStats.length;
+
+  return `<div class="thShotWrap">
+    <div class="thShotTitle" style="color:${color}">${teamName}</div>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:340px;display:block;margin:0 auto;border-radius:10px">
+      <rect width="${W}" height="${H}" fill="#080f1e"/>
+      <rect x="10" y="10" width="380" height="430" rx="3" fill="#0d1b32"/>
+      <rect x="10" y="10" width="380" height="430" rx="3" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <rect x="${pL}" y="${pT}" width="${pR-pL}" height="${440-pT}" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 0 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 1 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <circle cx="${bX}" cy="${bY}" r="28" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${cX1}" y1="440" x2="${cX1}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${cX2}" y1="440" x2="${cX2}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
+      <path d="M ${cX1} ${cY} A 187 187 0 0 0 ${cX2} ${cY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${bX-20}" y1="${bY-28}" x2="${bX+20}" y2="${bY-28}" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
+      <circle cx="${bX}" cy="${bY}" r="12" fill="none" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
+      ${dots}
+      ${zoneLbl('three_pointer', 200, 115)}
+      ${zoneLbl('jumper', 110, 300)}
+      ${zoneLbl('rim', 200, 395)}
+    </svg>
+    <div class="thShotStats">
+      <span class="thShotStat" style="color:rgba(34,197,94,0.9)">● Rim ${zoneStats.rim ? Math.round(zoneStats.rim.made/zoneStats.rim.att*100)+'%' : '—'}</span>
+      <span class="thShotStat" style="color:rgba(99,179,237,0.9)">● Mid ${zoneStats.jumper ? Math.round(zoneStats.jumper.made/zoneStats.jumper.att*100)+'%' : '—'}</span>
+      <span class="thShotStat" style="color:rgba(251,146,60,0.9)">● 3PT ${zoneStats.three_pointer ? Math.round(zoneStats.three_pointer.made/zoneStats.three_pointer.att*100)+'%' : '—'}</span>
+      ${ftAtt > 0 ? `<span class="thShotStat" style="color:rgba(200,180,255,0.9)">FT ${Math.round(ftMade/ftAtt*100)}%</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
+function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores) {
+  const el = document.getElementById('thMatchup');
+  if (!el) return;
+  if (!teamA || !teamB) {
+    el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Load a primary team, then select an opponent and click Compare →</div>';
+    return;
+  }
+  const shotsA = allShots.filter(s => (s.team||'').toLowerCase() === (teamA||'').toLowerCase());
+  const shotsB = allShots.filter(s => (s.team||'').toLowerCase() === (teamB||'').toLowerCase());
+
+  if (!allShots.length) {
+    el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No play-by-play data found for ${teamA} vs ${teamB} this season.</div>`;
+    return;
+  }
+
+  // Per-zone accuracy comparison
+  const zones = ['rim', 'jumper', 'three_pointer'];
+  const zoneLabel = { rim: 'At Rim', jumper: 'Mid-Range', three_pointer: '3-Pointers' };
+
+  function zoneAgg(shots, range) {
+    const z = shots.filter(s => s.range === range);
+    const made = z.filter(s => s.made).length;
+    const att  = z.length;
+    const total = shots.filter(s => s.range !== 'free_throw').length || 1;
+    return { made, att, pct: att ? Math.round(made/att*100) : null, vol: Math.round(att/total*100) };
+  }
+
+  // Box score aggregates across all matchup games
+  let bsApts = 0, bsBpts = 0, bsAg = 0;
+  (boxScores || []).forEach(g => {
+    bsApts += (g.ptsA || 0);
+    bsBpts += (g.ptsB || 0);
+    bsAg++;
+  });
+  const avgPtsA = bsAg ? (bsApts/bsAg).toFixed(1) : null;
+  const avgPtsB = bsAg ? (bsBpts/bsAg).toFixed(1) : null;
+
+  // Auto-generate matchup insights
+  const insights = [];
+  const aRim = zoneAgg(shotsA, 'rim');
+  const bRim = zoneAgg(shotsB, 'rim');
+  const a3   = zoneAgg(shotsA, 'three_pointer');
+  const b3   = zoneAgg(shotsB, 'three_pointer');
+  const aMid = zoneAgg(shotsA, 'jumper');
+  const bMid = zoneAgg(shotsB, 'jumper');
+  const aFT  = shotsA.filter(s => s.range === 'free_throw');
+  const bFT  = shotsB.filter(s => s.range === 'free_throw');
+
+  if (bRim.vol >= 40 && bRim.pct != null) {
+    if (bRim.pct >= 65) insights.push({ side: teamB, type: 'danger', text: `${teamB} attacks the rim aggressively (${bRim.vol}% of shots) and finishes well at ${bRim.pct}% — they exploit interior defense.` });
+    else if (bRim.pct <= 50) insights.push({ side: teamA, type: 'strength', text: `${teamA} holds ${teamB} to only ${bRim.pct}% at the rim despite frequent attempts (${bRim.vol}% vol) — strong interior defense in this matchup.` });
+  }
+  if (b3.vol >= 40 && b3.pct != null) {
+    if (b3.pct >= 38) insights.push({ side: teamB, type: 'danger', text: `${teamB} leans on the 3 (${b3.vol}% of FGA) and shoots it well at ${b3.pct}% in this matchup — close out early.` });
+    else if (b3.pct <= 28) insights.push({ side: teamA, type: 'strength', text: `${teamA} forces ${teamB} into a lot of 3s (${b3.vol}% vol) and limits them to ${b3.pct}% — good perimeter pressure.` });
+  }
+  if (aRim.pct != null && aRim.vol >= 30) {
+    if (aRim.pct >= 65) insights.push({ side: teamA, type: 'strength', text: `${teamA} is effective at the rim vs ${teamB} — ${aRim.pct}% on ${aRim.vol}% rim share. Attack the paint.` });
+    else if (aRim.pct <= 45) insights.push({ side: teamB, type: 'danger', text: `${teamB} shuts down ${teamA} at the rim in this matchup — only ${aRim.pct}% despite ${aRim.vol}% rim attempts. May need to adjust.` });
+  }
+  if (a3.pct != null && a3.vol >= 30) {
+    if (a3.pct >= 38) insights.push({ side: teamA, type: 'strength', text: `${teamA} shoots the 3 well vs ${teamB} — ${a3.pct}% on ${a3.vol}% three-point share. This is an exploitable matchup advantage.` });
+    else if (a3.pct <= 25) insights.push({ side: teamB, type: 'danger', text: `${teamA} struggles from 3 vs ${teamB} — only ${a3.pct}% on heavy volume (${a3.vol}%). ${teamB} limits 3PT effectiveness.` });
+  }
+  if (aMid.pct != null && bMid.pct != null) {
+    if (aMid.pct - bMid.pct >= 15) insights.push({ side: teamA, type: 'strength', text: `${teamA} shoots mid-range shots far better in this matchup (${aMid.pct}% vs ${teamB}'s ${bMid.pct}%) — a clear jump-shooting edge.` });
+    else if (bMid.pct - aMid.pct >= 15) insights.push({ side: teamB, type: 'danger', text: `${teamB} outperforms ${teamA} in the mid-range (${bMid.pct}% vs ${aMid.pct}%) — watch for pull-up jumpers.` });
+  }
+  if (avgPtsA && avgPtsB) {
+    const diff = parseFloat(avgPtsA) - parseFloat(avgPtsB);
+    if (Math.abs(diff) >= 8) {
+      if (diff > 0) insights.push({ side: teamA, type: 'strength', text: `${teamA} outscores ${teamB} by +${diff.toFixed(1)} pts/game in this head-to-head — a dominant offensive edge.` });
+      else insights.push({ side: teamB, type: 'danger', text: `${teamB} outscores ${teamA} by +${Math.abs(diff).toFixed(1)} pts/game in this matchup.` });
+    }
+  }
+
+  const insightHtml = insights.length
+    ? insights.map(i => `<div class="thInsight thInsight--${i.type==='strength'?'strength':'weakness'}">
+        <span class="thInsIcon">${i.type==='strength'?'✅':'⚠️'}</span>
+        <span>${i.text}</span>
+      </div>`).join('')
+    : '<div class="muted" style="padding:8px 0">Limited data — play more games to see deeper analysis.</div>';
+
+  // Zone table
+  const zoneRowHtml = zones.map(z => {
+    const zA = zoneAgg(shotsA, z);
+    const zB = zoneAgg(shotsB, z);
+    const fmtZ = (zs) => zs.att === 0 ? '—' : `${zs.pct}% · ${zs.made}/${zs.att} (${zs.vol}%)`;
+    const aWins = zA.pct != null && zB.pct != null && zA.pct > zB.pct;
+    const bWins = zA.pct != null && zB.pct != null && zB.pct > zA.pct;
+    return `<div class="thZoneRow">
+      <div class="thZoneVal${aWins?' thZoneWin':''}">${fmtZ(zA)}</div>
+      <div class="thZoneLbl">${zoneLabel[z]}</div>
+      <div class="thZoneVal${bWins?' thZoneWin':''}">${fmtZ(zB)}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="thMatchupHeader">
+      <div class="thMatchupTeam" style="color:var(--accent)">${teamA}</div>
+      <div class="thMatchupVs">${gamesPlayed} game${gamesPlayed!==1?'s':''} this season</div>
+      <div class="thMatchupTeam" style="color:var(--warn)">${teamB}</div>
+    </div>
+    ${avgPtsA ? `<div class="thMatchupScore"><span style="color:var(--accent)">${avgPtsA} ppg</span> <span class="muted" style="font-size:11px">avg score</span> <span style="color:var(--warn)">${avgPtsB} ppg</span></div>` : ''}
+    <div class="thShotChartsRow">
+      ${_th_buildShotChartSVG(shotsA, teamA + ' offense', 'var(--accent)')}
+      ${_th_buildShotChartSVG(shotsB, teamB + ' offense', 'var(--warn)')}
+    </div>
+    <div class="thZoneTable">
+      <div class="thZoneHead">
+        <span style="color:var(--accent)">${teamA}</span>
+        <span>Zone</span>
+        <span style="color:var(--warn)">${teamB}</span>
+      </div>
+      ${zoneRowHtml}
+      <div class="thZoneNote">pct · made/att · (% of FGA)</div>
+    </div>
+    <div class="thDNAInsights" style="margin-top:16px">
+      <div class="thDNASectionLabel">🎯 Matchup Insights</div>
+      <div class="thInsightsGrid">${insightHtml}</div>
+    </div>`;
+}
+
+// ── thLoadMatchup — find games between teams, load play-by-play, render ───────
+async function thLoadMatchup(compareTeam) {
+  const el = document.getElementById('thMatchup');
+  if (!el || !thCurrentTeam || !compareTeam) return;
+
+  // Find games between the two teams from already-loaded gamesData
+  const gamesDataCached = typeof teamGamesCache !== 'undefined'
+    ? teamGamesCache[(thCurrentTeam + ':' + thCurrentSeason).toLowerCase()]
+    : null;
+  const allGames = gamesDataCached ? (gamesDataCached.games || []) : [];
+  const matchupGames = allGames.filter(g => {
+    const hn = (g.homeTeam || '').toLowerCase(), an = (g.awayTeam || '').toLowerCase();
+    const bn = (compareTeam || '').toLowerCase();
+    return hn === bn || an === bn;
+  });
+
+  if (!matchupGames.length) {
+    el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No games found between <b>${thCurrentTeam}</b> and <b>${compareTeam}</b> this season.</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="muted" style="padding:20px;text-align:center">Loading play-by-play for ${matchupGames.length} game${matchupGames.length!==1?'s':''}…</div>`;
+
+  // Load plays for each matchup game in parallel
+  const playsArrays = await Promise.all(matchupGames.map(g => loadPlaysForGame(g.id)));
+  const allShots = playsArrays.flat();
+
+  // Build box score summary from matchupGames
+  const boxScores = matchupGames.map(g => {
+    const tn = (thCurrentTeam||'').toLowerCase();
+    const isHome = (g.homeTeam||'').toLowerCase() === tn;
+    return {
+      ptsA: isHome ? g.homePoints : g.awayPoints,
+      ptsB: isHome ? g.awayPoints : g.homePoints,
+    };
+  });
+
+  thRenderMatchup(thCurrentTeam, compareTeam, allShots, matchupGames.length, boxScores);
 }
 
 // ── thLoadOpponent — load a team's players into the opponent slot ─────────────
@@ -634,7 +900,8 @@ async function thLoadTeam(teamName, season) {
   // Show overview immediately while rest loads in parallel
   thRenderOverview(teamData, null);
   const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
-    document.getElementById('thDNA'), document.getElementById('thCompare')];
+    document.getElementById('thDNA'), document.getElementById('thCompare'),
+    document.getElementById('thMatchup')];
   loadingEls.forEach(el => { if (el) el.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>'; });
 
   // Parallel fetch: games + team stats + team shooting zones
@@ -651,6 +918,11 @@ async function thLoadTeam(teamName, season) {
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);
   thRenderDNA(teamData, statsData, shootingData);
+  // Reset compare/matchup to prompt state
+  const elCmp = document.getElementById('thCompare');
+  const elMxp = document.getElementById('thMatchup');
+  if (elCmp) elCmp.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Pick a team in the compare box above →</div>';
+  if (elMxp) elMxp.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Load a primary team, then select an opponent and click Compare →</div>';
 }
 
 // ── Populate team dropdown ────────────────────────────────────────────────────

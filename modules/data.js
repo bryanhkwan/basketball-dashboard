@@ -33,6 +33,7 @@ var teamShootingCache      = {}; // keyed "teamName:season" → array of player 
 var teamGamesCache         = {}; // keyed "teamName:season" → {games, teamStats}
 var teamStatsCache         = {}; // keyed "teamName:season" → full team season stats object
 var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shooting zone object
+var playsCache             = {}; // keyed by gameId → compact shots array
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 
@@ -1022,6 +1023,18 @@ async function loadGamesForTeam(team, year) {
   } catch (e) {
     return null;
   }
+}
+
+// ── loadPlaysForGame — compact shot-by-shot data for one game ───────────────
+async function loadPlaysForGame(gameId) {
+  if (playsCache[gameId]) return playsCache[gameId];
+  try {
+    const r = await fetch(WORKER_URL + '/api/cbdata/plays?gameId=' + gameId);
+    if (!r.ok) return [];
+    const data = await r.json();
+    playsCache[gameId] = data.plays || [];
+    return playsCache[gameId];
+  } catch (e) { return []; }
 }
 
 // ── loadRecruitingData — multi-class recruiting data ─────────────────────────
