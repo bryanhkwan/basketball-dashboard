@@ -159,7 +159,7 @@ const ROLE_DESCRIPTIONS = {
 
 const STAT_GLOSSARY = {
   'G': 'Games Played. Number of games a player appeared in during the season.',
-  'MP': 'Minutes Played (total). Total game minutes across the season. Used to derive the minutes multiplier in valuation.',
+  'MP': 'Minutes Per Game. Average minutes played per game. Used to derive the minutes multiplier in valuation — higher MP signals a larger role.',
   'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',
   'FG%': 'Field Goal Percentage. Share of all 2PT+3PT shots made. Doesn\'t account for 3PT value.',
   '3P%': 'Three-Point Percentage. Share of 3PT shots made. Indicates spacing / shooting skill.',
