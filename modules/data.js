@@ -728,6 +728,79 @@ async function loadFromGoogleSheets(url, apiKey){
   }
 }
 
+// ── loadFromCBData — College Basketball Data API (MBB only) ────────────────
+async function loadFromCBData(year) {
+  year = year || new Date().getFullYear();
+  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  var loadingOverlayEl = document.getElementById('loadingOverlay');
+  var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
+
+  function finishIfInitial() {
+    if (isInitialLoad && typeof authFinishLoading === 'function') authFinishLoading();
+  }
+
+  try {
+    if (!isInitialLoad) showWarn('Loading from College Basketball API…');
+
+    const res = await fetch(WORKER + '/api/cbdata/players?season=' + encodeURIComponent(year));
+    const data = await res.json();
+
+    if (!res.ok) {
+      showWarn(data.error || data.message || ('College Basketball API error (' + res.status + ')'));
+      finishIfInitial(); return;
+    }
+    if (!data.players || !data.players.length) {
+      showWarn('No players returned from College Basketball API (season ' + year + ').');
+      finishIfInitial(); return;
+    }
+
+    // Build a synthetic workbook that parseSheetToRows() can consume.
+    // Structure mirrors what loadFromGoogleSheets() builds:
+    //   wb.Sheets[sheetName].__aoa = [[header1, header2, …], [val1, val2, …], …]
+    var players = data.players;
+    var headers = Object.keys(players[0]).filter(function(k){ return !k.startsWith('_'); });
+    var aoa = [headers].concat(players.map(function(p){
+      return headers.map(function(h){ return p[h] !== undefined ? p[h] : ''; });
+    }));
+
+    wb = {
+      SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB],
+      Sheets: {},
+    };
+    wb.Sheets[SHEET_MAP.MBB] = { __aoa: aoa };
+    // WBB is not available from this API — placeholder keeps the tab from crashing
+    wb.Sheets[SHEET_MAP.WBB] = { __aoa: [['Player','Team','Conference','Pos']] };
+
+    clearWarn();
+    resetWeightsBtn.disabled = false;
+    recalcBtn.disabled       = false;
+    exportBtn.disabled       = false;
+
+    applyLeagueDefaults(true);
+    renderWeights();
+    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+
+    // Force MBB (API covers MBB only)
+    if (league !== 'MBB') {
+      league = 'MBB';
+      var lmbb = document.getElementById('lsLabelMBB');
+      var lwbb = document.getElementById('lsLabelWBB');
+      var lsi  = document.getElementById('leagueSwitchInput');
+      if (lmbb) lmbb.classList.add('active');
+      if (lwbb) lwbb.classList.remove('active');
+      if (lsi)  lsi.checked = false;
+      if (typeof applyLeagueTheme === 'function') applyLeagueTheme('MBB');
+    }
+
+    reloadActiveSheet();
+    finishIfInitial();
+
+  } catch (err) {
+    showWarn('College Basketball API error: ' + (err.message || err));
+    finishIfInitial();
+  }
+}
+
 function waitForXLSX(timeoutMs=5000){
   return new Promise((resolve, reject)=>{
     const start = Date.now();

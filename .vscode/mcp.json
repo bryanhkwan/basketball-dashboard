@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "college-basketball-api": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["build/index.js"],
+      "cwd": "C:\\Users\\bryan\\projects\\Swagger-MCP"
+    }
+  }
+}

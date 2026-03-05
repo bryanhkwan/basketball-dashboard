@@ -83,10 +83,29 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Data load buttons
+  // Datasource toggle: show/hide season year input + update hint
+  var dsToggleEl   = document.getElementById('dataSource');
+  var cbdSeasonEl  = document.getElementById('cbdSeason');
+  var dsHintEl     = document.getElementById('dsHint');
+  if (dsToggleEl) {
+    dsToggleEl.addEventListener('change', () => {
+      var isApi = dsToggleEl.value === 'api';
+      if (cbdSeasonEl) cbdSeasonEl.style.display = isApi ? '' : 'none';
+      if (dsHintEl)    dsHintEl.textContent = isApi
+        ? 'College Basketball Data API (MBB only · 24h cache)'
+        : 'Google Sheet (auto-loads)';
+    });
+  }
+
   if(loadGsBtn){
     loadGsBtn.addEventListener('click', async ()=>{
-      const key = gsKeyInput?.value?.trim() || DEFAULT_GS_API_KEY;
-      await loadFromGoogleSheets(DEFAULT_GS_URL, key);
+      if (dsToggleEl && dsToggleEl.value === 'api') {
+        var seasonVal = cbdSeasonEl ? (cbdSeasonEl.value || '2025') : '2025';
+        await loadFromCBData(seasonVal);
+      } else {
+        const key = gsKeyInput?.value?.trim() || DEFAULT_GS_API_KEY;
+        await loadFromGoogleSheets(DEFAULT_GS_URL, key);
+      }
     });
   }
   recalcBtn.addEventListener('click', ()=>{ if(wb) computeAll(); });
