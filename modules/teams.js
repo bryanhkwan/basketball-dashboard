@@ -579,6 +579,12 @@ function thRenderTeamScout(teamName, teamData, statsData) {
 
 // ── _thFmtDeepText — section-card markdown → HTML for deep analysis output ────
 function _thFmtDeepText(text) {
+  function stripInlineBold(t) {
+    // Remove leading **...** or **...**: prefix, return {label, rest}
+    var m = t.match(/^\*\*(.+?)\*\*[:\-]?\s*(.*)/);
+    if (m) return { label: m[1].replace(/:$/, ''), rest: m[2] };
+    return null;
+  }
   function inlineFmt(t) {
     return t
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -589,6 +595,7 @@ function _thFmtDeepText(text) {
   const sections = [];
   let current = null;
   for (const rawLine of text.split('\n')) {
+    const trimmed = rawLine.trim();
     if (/^## /.test(rawLine)) {
       if (current) sections.push(current);
       current = { head: rawLine.replace(/^## /, '').trim(), items: [] };
@@ -598,48 +605,84 @@ function _thFmtDeepText(text) {
     } else if (/^\d+[\.\)]\s/.test(rawLine.trimStart())) {
       if (!current) current = { head: '', items: [] };
       const m = rawLine.trimStart().match(/^(\d+)[\.\)]\s+(.*)/);
-      if (m) current.items.push({ type: 'numbered', num: m[1], text: m[2] });
+      if (m) {
+        // Check if the numbered item itself has a bold label
+        const lb = stripInlineBold(m[2]);
+        if (lb && lb.rest) {
+          current.items.push({ type: 'labeled', label: lb.label, rest: lb.rest });
+        } else {
+          current.items.push({ type: 'numbered', num: m[1], text: m[2] });
+        }
+      }
     } else if (/^[-•*] /.test(rawLine.trimStart())) {
       if (!current) current = { head: '', items: [] };
-      current.items.push({ type: 'bullet', text: rawLine.trimStart().replace(/^[-•*] /, '') });
-    } else if (rawLine.trim() !== '') {
+      const bt = rawLine.trimStart().replace(/^[-•*] /, '');
+      const lb = stripInlineBold(bt);
+      if (lb && lb.rest) {
+        current.items.push({ type: 'labeled', label: lb.label, rest: lb.rest });
+      } else {
+        current.items.push({ type: 'bullet', text: bt });
+      }
+    } else if (trimmed !== '') {
       if (!current) current = { head: '', items: [] };
-      current.items.push({ type: 'text', text: rawLine.trim() });
+      // Plain text line — check for bold label pattern: **Label:** description
+      const lb = stripInlineBold(trimmed);
+      if (lb && lb.rest) {
+        current.items.push({ type: 'labeled', label: lb.label, rest: lb.rest });
+      } else {
+        current.items.push({ type: 'text', text: trimmed });
+      }
     }
   }
   if (current) sections.push(current);
 
   if (!sections.length) return '<div class="thDeepLine">' + inlineFmt(text) + '</div>';
 
-  // Icon map keyed on partial heading match
+  // Icon + accent-color map keyed on partial heading match
   var ICONS = [
-    ['overall verdict', '🏆'], ['verdict', '🏆'],
-    ['strengths', '✅'], ['strength', '✅'],
-    ['weaknesses', '⚠️'], ['weakness', '⚠️'],
-    ['tendencies', '🔄'], ['tendency', '🔄'],
-    ['head-to-head', '⚔️'], ['matchup notes', '⚔️'], ['matchup', '⚔️'],
-    ['offensive keys', '🎯'], ['game plan: offensive', '🎯'],
-    ['defensive keys', '🛡️'], ['game plan: defensive', '🛡️'],
-    ['adjustment', '🔀'], ['in-game', '🔀'],
-    ['data confidence', '📊'], ['red flags', '🚩'], ['confidence', '📊'],
-    ['development', '📈'], ['game plan', '📋'],
+    ['overall verdict', '🏆', '#f5c518'],
+    ['verdict',         '🏆', '#f5c518'],
+    ['strengths',       '✅', '#22c55e'],
+    ['strength',        '✅', '#22c55e'],
+    ['weaknesses',      '⚠️', '#ef4444'],
+    ['weakness',        '⚠️', '#ef4444'],
+    ['tendencies',      '🔄', '#a78bfa'],
+    ['tendency',        '🔄', '#a78bfa'],
+    ['head-to-head',    '⚔️', '#fb923c'],
+    ['matchup',         '⚔️', '#fb923c'],
+    ['offensive keys',  '🎯', '#2563eb'],
+    ['defensive keys',  '🛡️', '#0891b2'],
+    ['game plan',       '📋', '#2563eb'],
+    ['adjustment',      '🔀', '#8b5cf6'],
+    ['in-game',         '🔀', '#8b5cf6'],
+    ['confidence',      '📊', '#64748b'],
+    ['red flags',       '🚩', '#ef4444'],
+    ['development',     '📈', '#22c55e'],
   ];
-  function iconFor(head) {
+  function iconAndColor(head) {
     var h = head.toLowerCase();
     for (var i = 0; i < ICONS.length; i++) {
-      if (h.indexOf(ICONS[i][0]) !== -1) return ICONS[i][1] + ' ';
+      if (h.indexOf(ICONS[i][0]) !== -1) return { icon: ICONS[i][1], color: ICONS[i][2] };
     }
-    return '';
+    return { icon: '▸', color: 'var(--accent)' };
   }
 
   return sections.map(function(s) {
-    var icon = iconFor(s.head);
+    var ic = iconAndColor(s.head);
     var headHtml = s.head
-      ? '<div class="thDeepSectionHead">' + icon + inlineFmt(s.head) + '</div>'
+      ? '<div class="thDeepSectionHead" style="border-left:3px solid ' + ic.color + '">'
+          + '<span class="thDeepSectionIcon">' + ic.icon + '</span>'
+          + '<span class="thDeepSectionTitle">' + inlineFmt(s.head) + '</span>'
+          + '</div>'
       : '';
     var bodyHtml = s.items.map(function(item) {
       if (item.type === 'subhead')
         return '<div class="thDeepSubHead">' + inlineFmt(item.text) + '</div>';
+      if (item.type === 'labeled')
+        return '<div class="thDeepLabelItem">'
+          + '<div class="thDeepLabelHead">' + inlineFmt(item.label) + '</div>'
+          + '<div class="thDeepLabelBody">' + inlineFmt(item.rest) + '</div>'
+          + '</div>';
       if (item.type === 'numbered')
         return '<div class="thDeepItem"><span class="thDeepNum">' + item.num + '.</span><span>' + inlineFmt(item.text) + '</span></div>';
       if (item.type === 'bullet')
