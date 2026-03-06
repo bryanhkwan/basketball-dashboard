@@ -891,12 +891,17 @@ async function loadAllData(year) {
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     reloadActiveSheet();
+    // Refresh Teams Hub team dropdown whenever data reloads
+    if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     // Populate career history in background — does not block initial render
     _careerDataReady = false;
     loadCareerSeasons().catch(() => {});
     // Populate team ratings in background — used by profiles and Team Hub
     _ratingsReady = false;
-    loadTeamRatings(year).catch(() => {});
+    loadTeamRatings(year).then(() => {
+      // Second refresh after ratings load so team search has full team list
+      if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+    }).catch(() => {});
     finishIfInitial();
 
   } catch (err) {

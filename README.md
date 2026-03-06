@@ -1,5 +1,5 @@
 # NCAA Basketball Scouting Dashboard
-A web-based scouting, valuation, and team-building tool for NCAA Men's and Women's Basketball (MBB/WBB). Built as a single-page dashboard that pulls live data from Google Sheets and runs all scoring, valuation, analysis, and AI recommendations client-side in the browser.
+A web-based scouting, valuation, and team-building tool for NCAA Men's and Women's Basketball (MBB/WBB). Built as a single-page dashboard — MBB data is pulled live from the CBD API via a Cloudflare Worker proxy; WBB data from Google Sheets. All scoring, valuation, analysis, and AI recommendations run client-side in the browser.
 
 ## Core Features
 
@@ -13,8 +13,17 @@ A web-based scouting, valuation, and team-building tool for NCAA Men's and Women
 ### Player Search & Profiles
 - **Team-Based Quick Add**: Search by team name to see all players and "Add all N" from that team at once.
 - **Full Player Profile Modal**: Click any player name to see percentile bars across all stats, archetype tags with definitions, role descriptions, valuation breakdown, and full stat line.
+- **Scout Report**: Automatically generated 5-section scouting card per player — Strengths (≥82nd percentile), Weaknesses (≤22nd percentile), Tendencies (usage/shooting/playmaking roles), Development areas (25–55th percentile), and Matchup Notes with 12+ tactical statements for both offense and defense.
+- **Interactive Shot Chart**: Visual SVG shot chart inside the player profile. Click-to-filter by All / Makes / Misses to explore shooting tendencies zone by zone.
 - **Stat Glossary**: 30+ professional stat definitions built-in. Click any stat name in the Weights table to learn its composite formula and why it matters.
 - **Pagination**: Browse 200 players at a time; filter by search term (player, team, conference).
+
+### Teams Hub
+- **Team DNA**: Adjusted offensive/defensive/net efficiency ratings, four factors, scoring profile, and insight pills summarizing team tendencies.
+- **Team Scout Report**: AI-structured 5-section scouting card for any loaded team — Offensive Weapons, Defensive Identity, Style Tendencies, Vulnerabilities, and Matchup Keys.
+- **Matchup Analysis**: Load any two teams and see dual interactive shot charts, zone-by-zone shooting comparison table, and matchup insight pills side by side.
+- **Deep Analysis**: Hit the Deep Analysis button in Matchup Insights for a structured AI breakdown rendered in-page (not in the chatbot). Sections include Overall Verdict, Offensive/Defensive Keys, Head-to-Head edges, and Adjustment Recommendations. No web search — powered purely by the loaded shot and stat data.
+- **Auto-Populate**: Team dropdowns fill automatically on page load without needing to press Refresh.
 
 ### Team Builder
 - **My Team Roster**: Drag-and-drop interface (or use search) to build a 13-man roster. Real-time budget & per-player cap enforcement.
@@ -26,13 +35,17 @@ A web-based scouting, valuation, and team-building tool for NCAA Men's and Women
 - **Quick Scout**: Opponent roster analysis highlighting strong areas (defend these!) and weak areas (exploit these!).
 
 ### Data Management
-- **Google Sheets Integration**: Auto-loads "Men Data" and "Women Data" sheets on app open. Manual refresh available.
+- **CBD API Integration (MBB)**: MBB player stats, team ratings, team game logs, and shot data are fetched via a Cloudflare Worker proxy from the CBD API.
+- **Google Sheets Integration (WBB)**: Auto-loads "Men Data" and "Women Data" sheets on app open. Manual refresh available.
 - **Conference Multipliers**: Apply league-strength adjustments (Big 12 @ 1.08x, lower conferences @ 0.90x–0.95x). Toggle on/off; customize per league.
 - **Weights Table**: Full control — set which stats matter (weight), their Min/Max normalization bounds, and direction (higher/lower is better). Save/reset to defaults instantly. Shows what's selected vs. unused.
 - **Export CSV**: Download current player rankings with all computed metrics.
 
 ### AI Assistant (Gemini-Powered)
 - **Natural Language Queries**: "Find a shooter big under $100k" → tool automatically queries the dashboard and returns top matches.
+- **Team Context Lookups**: "How good is Duke this year?" or "Compare Kentucky vs Louisville" → returns adjusted efficiency ratings (adjEM/adjO/adjD), record, conference ranking, and top contributors.
+- **Player Scouting**: Ask about a player and the AI will point you to their Scout Report and Shot Chart in the profile modal for a deeper look.
+- **Team Matchup Guidance**: Ask about a matchup and the AI will remind you about the Teams Hub Deep Analysis panel for full in-page breakdown.
 - **Role-Specific Lookups**: Find scorers, playmakers, defenders, rim protectors by natural language.
 - **Head-to-Head Summaries**: "How does my team matchup against [opponent]?" → returns category-by-category analysis.
 - **Roster Swaps**: "Swap my weakest guard for a better 3-point shooter in budget." → tool suggests & executes.
@@ -102,8 +115,9 @@ Click any stat name in the Weights sidebar to see a full explanation, the direct
 ## Tech Stack
 
 - **Pure HTML/CSS/JS** — no frameworks, no build step, no npm
-- **Google Sheets API** — auto-loads player data on demand
-- **Cloudflare Workers** — backend for login, notes, and Gemini AI proxy
+- **CBD API** — primary MBB data source (players, ratings, team stats, shot charts)
+- **Google Sheets API** — WBB player data
+- **Cloudflare Workers** — backend for login, notes, CBD proxy, and Gemini AI proxy
 - **GitHub Pages** — free hosting
 - **Single-Page Architecture** — all logic modular, no page reloads
 
@@ -116,10 +130,11 @@ app.js                        # Coordinator: DOMContentLoaded init, window._app 
 modules/
   ├── config.js              # Constants, stat glossary, fit presets, default weights
   ├── auth.js                # Login/logout/guest mode, loading orchestration
-  ├── data.js                # Scoring engine, valuation model, Google Sheets loader
+  ├── data.js                # Scoring engine, valuation model, CBD API + Google Sheets loader
   ├── players.js             # Player table rendering, pagination, search
-  ├── profile.js             # Player modals (profile, stat info, comparison)
+  ├── profile.js             # Player modals (profile + Scout Report + Shot Chart, stat info, comparison)
   ├── teambuilder.js         # Roster management, gap analysis, H2H, suggestions
+  ├── teams.js               # Teams Hub (DNA, scout reports, shot charts, matchup, Deep Analysis)
   ├── chat.js                # AI chatbot (Gemini), tool orchestration
   └── notes.js               # Note-taking (logged-in users only)
 ```

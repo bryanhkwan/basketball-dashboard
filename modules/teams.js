@@ -577,36 +577,77 @@ function thRenderTeamScout(teamName, teamData, statsData) {
   el.innerHTML = html || '<div class="muted" style="padding:18px;text-align:center">Not enough data for full team scouting report.</div>';
 }
 
-// ── _thFmtDeepText — lightweight markdown → HTML for deep analysis output ─────
+// ── _thFmtDeepText — section-card markdown → HTML for deep analysis output ────
 function _thFmtDeepText(text) {
-  // Process line by line for lists, then inline for bold/italic
-  const lines = text.split('\n');
-  const out = [];
-  for (let i = 0; i < lines.length; i++) {
-    let l = lines[i];
-    // Section headers (## or #)
-    if (/^#{1,2} /.test(l)) {
-      l = '<h4 class="thDeepHead">' + l.replace(/^#{1,2} /, '') + '</h4>';
-    } else if (/^### /.test(l)) {
-      l = '<h5 class="thDeepSubHead">' + l.replace(/^### /, '') + '</h5>';
-    } else if (/^\d+[\.\)]\s/.test(l)) {
-      // Numbered list item
-      l = '<div class="thDeepItem">' + l.replace(/^(\d+)[\.\)]\s/, '<span class="thDeepNum">$1.</span> ') + '</div>';
-    } else if (/^[-•*]\s/.test(l)) {
-      // Bullet
-      l = '<div class="thDeepBullet">' + l.replace(/^[-•*]\s/, '') + '</div>';
-    } else if (l.trim() === '') {
-      l = '<div class="thDeepSpacer"></div>';
-    } else {
-      l = '<div class="thDeepLine">' + l + '</div>';
-    }
-    // Inline bold
-    l = l.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // Inline italic
-    l = l.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    out.push(l);
+  function inlineFmt(t) {
+    return t
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>');
   }
-  return out.join('');
+
+  // Group lines into sections bounded by ## headers
+  const sections = [];
+  let current = null;
+  for (const rawLine of text.split('\n')) {
+    if (/^## /.test(rawLine)) {
+      if (current) sections.push(current);
+      current = { head: rawLine.replace(/^## /, '').trim(), items: [] };
+    } else if (/^### /.test(rawLine)) {
+      if (!current) current = { head: '', items: [] };
+      current.items.push({ type: 'subhead', text: rawLine.replace(/^### /, '').trim() });
+    } else if (/^\d+[\.\)]\s/.test(rawLine.trimStart())) {
+      if (!current) current = { head: '', items: [] };
+      const m = rawLine.trimStart().match(/^(\d+)[\.\)]\s+(.*)/);
+      if (m) current.items.push({ type: 'numbered', num: m[1], text: m[2] });
+    } else if (/^[-•*] /.test(rawLine.trimStart())) {
+      if (!current) current = { head: '', items: [] };
+      current.items.push({ type: 'bullet', text: rawLine.trimStart().replace(/^[-•*] /, '') });
+    } else if (rawLine.trim() !== '') {
+      if (!current) current = { head: '', items: [] };
+      current.items.push({ type: 'text', text: rawLine.trim() });
+    }
+  }
+  if (current) sections.push(current);
+
+  if (!sections.length) return '<div class="thDeepLine">' + inlineFmt(text) + '</div>';
+
+  // Icon map keyed on partial heading match
+  var ICONS = [
+    ['overall verdict', '🏆'], ['verdict', '🏆'],
+    ['strengths', '✅'], ['strength', '✅'],
+    ['weaknesses', '⚠️'], ['weakness', '⚠️'],
+    ['tendencies', '🔄'], ['tendency', '🔄'],
+    ['head-to-head', '⚔️'], ['matchup notes', '⚔️'], ['matchup', '⚔️'],
+    ['offensive keys', '🎯'], ['game plan: offensive', '🎯'],
+    ['defensive keys', '🛡️'], ['game plan: defensive', '🛡️'],
+    ['adjustment', '🔀'], ['in-game', '🔀'],
+    ['data confidence', '📊'], ['red flags', '🚩'], ['confidence', '📊'],
+    ['development', '📈'], ['game plan', '📋'],
+  ];
+  function iconFor(head) {
+    var h = head.toLowerCase();
+    for (var i = 0; i < ICONS.length; i++) {
+      if (h.indexOf(ICONS[i][0]) !== -1) return ICONS[i][1] + ' ';
+    }
+    return '';
+  }
+
+  return sections.map(function(s) {
+    var icon = iconFor(s.head);
+    var headHtml = s.head
+      ? '<div class="thDeepSectionHead">' + icon + inlineFmt(s.head) + '</div>'
+      : '';
+    var bodyHtml = s.items.map(function(item) {
+      if (item.type === 'subhead')
+        return '<div class="thDeepSubHead">' + inlineFmt(item.text) + '</div>';
+      if (item.type === 'numbered')
+        return '<div class="thDeepItem"><span class="thDeepNum">' + item.num + '.</span><span>' + inlineFmt(item.text) + '</span></div>';
+      if (item.type === 'bullet')
+        return '<div class="thDeepBullet">' + inlineFmt(item.text) + '</div>';
+      return '<div class="thDeepLine">' + inlineFmt(item.text) + '</div>';
+    }).join('');
+    return '<div class="thDeepSection">' + headHtml + '<div class="thDeepSectionBody">' + bodyHtml + '</div></div>';
+  }).join('');
 }
 
 // ── thRunDeepAnalysis — call Gemini directly and render results in-page ───────

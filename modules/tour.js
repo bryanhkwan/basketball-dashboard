@@ -8,19 +8,19 @@
     {
       target: '#leagueSwitch',
       title: '🏀 League Toggle',
-      body: 'Switch between <b>Men\'s Basketball (MBB)</b> and <b>Women\'s Basketball (WBB)</b>. All player data, percentiles, valuations, and team builder rosters update instantly.',
+      body: 'Switch between <b>Men\'s Basketball (MBB)</b> and <b>Women\'s Basketball (WBB)</b>. All player data, percentiles, valuations, rosters, and team scouting update instantly.',
       position: 'bottom'
     },
     {
       target: '.pageNav',
       title: '📌 Navigation Tabs',
-      body: 'Three main sections:<br>• <b>Players</b> — explore and rank all players<br>• <b>Team Builder</b> — assemble rosters and scout opponents<br>• <b>Methodology</b> — learn how scores are calculated',
+      body: 'Four main sections:<br>• <b>Players</b> — explore and rank all players<br>• <b>Team Builder</b> — assemble rosters and scout opponents<br>• <b>Teams</b> — deep-dive team scouting and matchup analysis<br>• <b>Methodology</b> — learn how scores are calculated',
       position: 'bottom'
     },
     {
       target: '#loadGs',
       title: '🔄 Refresh Data',
-      body: 'Reload the latest player data from Google Sheets. Use this any time you update your spreadsheet and want the dashboard to reflect the changes.',
+      body: 'Reload the latest player data. MBB data comes from the CBD API and WBB from Google Sheets — both refresh at once. Data also loads automatically when you first open the dashboard.',
       position: 'bottom',
       page: 'pagePlayers'
     },
@@ -47,8 +47,8 @@
     },
     {
       target: '#playersBody',
-      title: '📊 Player Table',
-      body: 'Browse all players ranked by your current scoring weights. <b>Click any row</b> to open a full profile with stat percentile bars, role tags, NIL valuation, and similar players. Click column headers to sort.',
+      title: '📊 Player Table + Profile',
+      body: 'Browse all players ranked by your scoring weights. <b>Click any row</b> to open a full player profile — percentile bars, archetype tags, NIL valuation, career history, an auto-generated <b>Scout Report</b> (Strengths, Weaknesses, Tendencies, Development, Matchup Notes), and an interactive <b>Shot Chart</b> you can filter by makes or misses.',
       position: 'top',
       page: 'pagePlayers'
     },
@@ -112,9 +112,43 @@
       pageSection: 'tbSubOpponent'
     },
     {
+      target: '.pageNavBtn[data-page="pageTeams"]',
+      title: '🏟️ Teams Hub',
+      body: 'Brand-new team scouting section. Select any team and season to see adjusted efficiency ratings, four-factor breakdowns, scoring profiles, and an auto-generated <b>Team Scout Report</b>. Click <b>Next</b> to explore.',
+      position: 'bottom'
+    },
+    {
+      target: '#thDNA',
+      title: '🧬 Team DNA',
+      body: 'See a team\'s full identity at a glance — <b>adjusted offensive/defensive efficiency (adjEM)</b>, four factors (eFG%, TO%, OR%, FT Rate), scoring distribution by zone, and insight pills summarizing their tendencies and style.',
+      position: 'right',
+      page: 'pageTeams'
+    },
+    {
+      target: '#thScout',
+      title: '📋 Team Scout Report',
+      body: 'A 5-section scouting card generated automatically for every loaded team: <b>Offensive Weapons</b>, <b>Defensive Identity</b>, <b>Style Tendencies</b>, <b>Vulnerabilities</b>, and <b>Matchup Keys</b>. No button needed — appears the moment a team loads.',
+      position: 'right',
+      page: 'pageTeams'
+    },
+    {
+      target: '#thCompare',
+      title: '📊 Team Comparison',
+      body: 'Load a second team to compare ratings and stats side by side. Adjusted efficiency, four factors, and scoring profiles appear in parallel columns so you can instantly spot which team has the edge and where.',
+      position: 'top',
+      page: 'pageTeams'
+    },
+    {
+      target: '#thMatchup',
+      title: '🎯 Matchup Analysis + Deep Analysis',
+      body: 'Load both teams to unlock <b>dual interactive shot charts</b> (click Makes or Misses to filter), a zone-by-zone shooting comparison table, and matchup insight pills.<br><br>Hit <b>Deep Analysis</b> for a full in-page AI breakdown — Overall Verdict, Offensive &amp; Defensive Keys, Head-to-Head edges, and Tactical Adjustments — rendered right here with no web search, powered entirely by the loaded data.',
+      position: 'top',
+      page: 'pageTeams'
+    },
+    {
       target: '#aiToggle',
       title: '🤖 Scout AI',
-      body: 'Ask Scout AI anything — it has direct access to your dashboard data and can search the web. Try:<br><i>"Find a shooting guard under $80K"</i><br><i>"Compare Player A vs Player B"</i><br><i>"What\'s fair NIL for a player averaging 18 PPG?"</i>',
+      body: 'Ask Scout AI anything — it has full access to your dashboard data and can search the web. Try:<br><i>"How good is Duke this season?"</i> — get team ratings + top contributors<br><i>"Find a shooter under $80K"</i><br><i>"Is Player X worth $200K?"</i><br>It\'ll also point you to Scout Reports, Shot Charts, and the Teams Hub Deep Analysis when relevant.',
       position: 'left'
     }
   ];
@@ -153,7 +187,7 @@
     if (!step.page) return;
 
     // Hide all pages, show the right one
-    ['pagePlayers', 'pageTeamBuilder', 'pageMethodology'].forEach(function (id) {
+    ['pagePlayers', 'pageTeamBuilder', 'pageTeams', 'pageMethodology'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.style.display = id === step.page ? '' : 'none';
     });

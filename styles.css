@@ -1307,13 +1307,74 @@
 }
 .thDeepClose:hover { color: var(--fg); }
 .thDeepBody {
-  padding: 14px 16px;
+  padding: 10px 12px;
   font-size: 12px;
   line-height: 1.65;
   color: var(--fg);
-  max-height: 540px;
+  max-height: 600px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
+/* Section cards */
+.thDeepSection {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255,255,255,.025);
+}
+.thDeepSectionHead {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--accent);
+  background: rgba(37,99,235,.09);
+  border-bottom: 1px solid var(--line);
+  padding: 7px 12px;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.thDeepSectionBody {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.thDeepSubHead {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warn);
+  margin: 6px 0 2px;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.thDeepItem {
+  display: flex;
+  gap: 7px;
+  padding: 2px 0;
+  line-height: 1.55;
+}
+.thDeepNum {
+  color: var(--accent);
+  font-weight: 800;
+  min-width: 18px;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.thDeepBullet {
+  padding: 2px 0 2px 14px;
+  position: relative;
+  line-height: 1.55;
+}
+.thDeepBullet::before {
+  content: '▸';
+  position: absolute;
+  left: 2px;
+  color: var(--accent);
+  font-size: 9px;
+  top: 4px;
+}
+.thDeepLine { padding: 2px 0; line-height: 1.55; }
 .thDeepLoading {
   display: flex;
   align-items: center;
@@ -1338,43 +1399,6 @@
   color: var(--bad);
   font-size: 12px;
 }
-.thDeepHead {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--accent);
-  margin: 12px 0 4px;
-  letter-spacing: .01em;
-  text-transform: uppercase;
-}
-.thDeepSubHead {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--warn);
-  margin: 8px 0 3px;
-}
-.thDeepItem {
-  display: flex;
-  gap: 6px;
-  padding: 2px 0;
-}
-.thDeepNum {
-  color: var(--accent);
-  font-weight: 700;
-  min-width: 18px;
-  flex-shrink: 0;
-}
-.thDeepBullet {
-  padding: 2px 0 2px 12px;
-  position: relative;
-}
-.thDeepBullet::before {
-  content: '•';
-  position: absolute;
-  left: 2px;
-  color: var(--muted);
-}
-.thDeepLine { padding: 1px 0; }
-.thDeepSpacer { height: 6px; }
 
 .thZoneRow:last-of-type { border-bottom: none; }
 .thZoneVal { color: var(--muted); }
