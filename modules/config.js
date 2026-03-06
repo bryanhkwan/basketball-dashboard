@@ -211,7 +211,7 @@ const DEFAULT_DIR = {
 
 const CONF_DISPLAY_ORDER = [
   'Big 12','SEC','Big Ten','ACC','Big East',
-  'American','Mountain West','Atlantic 10','WCC',
+  'American','Mountain West','Atlantic 10','WCC','Pac-12',
   'Missouri Valley','CUSA','MAC','Sun Belt',
   'CAA','Ivy League','Big West','Summit League',
   'Horizon League','America East','Southern',
@@ -222,7 +222,7 @@ const CONF_DISPLAY_ORDER = [
 
 const DEFAULT_CONF_VALUES = {
   'Big 12':1.08,'SEC':1.07,'Big Ten':1.07,'ACC':1.06,'Big East':1.06,
-  'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,
+  'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,'Pac-12':1.03,
   'Missouri Valley':1.03,'CUSA':1.03,'MAC':1.00,'Sun Belt':1.01,
   'CAA':1.00,'Ivy League':1.00,'Big West':0.99,'Summit League':0.99,
   'Horizon League':0.99,'America East':0.98,'Southern':0.98,
@@ -232,14 +232,52 @@ const DEFAULT_CONF_VALUES = {
 };
 
 const CONF_ALIASES = {
-  'Mountain We':'Mountain West','A-10':'Atlantic 10',
+  // Pac-12
+  'Pac 12':'Pac-12','Pacific-12':'Pac-12','PAC-12':'Pac-12','Pacific 12':'Pac-12',
+  // Mountain West
+  'Mountain We':'Mountain West','MWC':'Mountain West',
+  // Atlantic 10
+  'A-10':'Atlantic 10','A10':'Atlantic 10',
+  // WCC
+  'West Coast':'WCC','West Coast Conference':'WCC',
+  // AAC
+  'AAC':'American','American Athletic':'American','American Athletic Conference':'American',
+  // Missouri Valley
   'Missouri Vall':'Missouri Valley','MVC':'Missouri Valley',
+  // Conference USA
   'C-USA':'CUSA','Conference USA':'CUSA',
-  'Ivy':'Ivy League','Summit Leag':'Summit League',
-  'Horizon Leag':'Horizon League','America Eas':'America East',
-  'SoCon':'Southern','A-Sun':'ASUN',
-  'Ohio Valley':'OVC','Patriot Leag':'Patriot League','Patriot':'Patriot League',
-  'Northeast':'NEC','NE-10':'NE10','Northeast-10':'NE10'
+  // Ivy League
+  'Ivy':'Ivy League',
+  // Summit League
+  'Summit Leag':'Summit League','The Summit League':'Summit League',
+  // Horizon League
+  'Horizon Leag':'Horizon League',
+  // America East
+  'America Eas':'America East','AE':'America East',
+  // Southern / SoCon
+  'SoCon':'Southern','Southern Conference':'Southern',
+  // ASUN
+  'A-Sun':'ASUN','Atlantic Sun':'ASUN',
+  // OVC
+  'Ohio Valley':'OVC','OVC Conference':'OVC',
+  // Patriot League
+  'Patriot Leag':'Patriot League','Patriot':'Patriot League',
+  // NEC
+  'Northeast':'NEC','Northeast Conference':'NEC',
+  // NE10
+  'NE-10':'NE10','Northeast-10':'NE10',
+  // Big Sky
+  'Big Sky Conference':'Big Sky',
+  // Big South
+  'Big South Conference':'Big South',
+  // Southland
+  'Southland Conference':'Southland',
+  // CAA
+  'Colonial':'CAA','Colonial Athletic':'CAA','Colonial Athletic Association':'CAA',
+  // SEC
+  'Southeastern':'SEC','Southeastern Conference':'SEC',
+  // Big Ten
+  'Big 10':'Big Ten',
 };
 
 // Gap analysis stat categories
