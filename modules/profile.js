@@ -181,6 +181,7 @@ function openProfile(r){
         mShotChart.innerHTML =
           '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
         if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
+        enrichScoutReportWithShots(shots);
       }).catch(function() {
         mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
       });
@@ -324,6 +325,124 @@ function renderScoutReport(r) {
 
   el.innerHTML = html ||
     '<div class="muted" style="font-size:12px;padding:8px 0">Not enough stat data to generate a scout report for this player.</div>';
+}
+
+// ── Shot Chart Tendency Enrichment ───────────────────────────────────────────
+// Called after shot data loads — appends shot-derived items to the Tendencies
+// section of the already-rendered scout report.
+function enrichScoutReportWithShots(shots) {
+  const el = document.getElementById('mScoutReport');
+  if (!el || !shots) return;
+
+  // Only use field goal attempts (exclude free throws)
+  const fga = shots.filter(function(s) { return s.range !== 'free_throw'; });
+  const total = fga.length;
+  if (total < 15) return;  // not enough data
+
+  const rimShots   = fga.filter(function(s) { return s.range === 'rim'; });
+  const midShots   = fga.filter(function(s) { return s.range === 'jumper'; });
+  const threeShots = fga.filter(function(s) { return s.range === 'three_pointer'; });
+
+  const rimPct   = rimShots.length   / total;
+  const midPct   = midShots.length   / total;
+  const threePct = threeShots.length / total;
+
+  const fg = function(arr) {
+    return arr.length ? arr.filter(function(s) { return s.made; }).length / arr.length : null;
+  };
+  const rimFG   = fg(rimShots);
+  const midFG   = fg(midShots);
+  const threeFG = fg(threeShots);
+
+  // Corner 3s: |y - 250| > 165 (near sidelines in full-court 0–500 coordinate)
+  const cornerThrees     = threeShots.filter(function(s) { return Math.abs(s.y - 250) > 165; });
+  const aboveBreakThrees = threeShots.filter(function(s) { return Math.abs(s.y - 250) <= 165; });
+  const cornerPct        = threeShots.length ? cornerThrees.length / threeShots.length : 0;
+
+  // Determine which basket the player attacks (same logic as _thShotToSVG)
+  const rimAll    = shots.filter(function(s) { return s.range === 'rim'; });
+  const avgX      = rimAll.length ? rimAll.reduce(function(a, s) { return a + s.x; }, 0) / rimAll.length : 470;
+  const attacksLeft = avgX < 470;
+
+  // Left vs right side at the rim (dy = y - 250; positive = right side when attacking left)
+  const rimSided = rimShots.filter(function(s) { return Math.abs(s.y - 250) > 20; });
+  const rightRim = rimSided.filter(function(s) { return attacksLeft ? (s.y - 250) > 0 : (s.y - 250) < 0; }).length;
+  const leftRim  = rimSided.filter(function(s) { return attacksLeft ? (s.y - 250) < 0 : (s.y - 250) > 0; }).length;
+
+  var items = [];
+  var pct = function(v, d) { return Math.round(v * 100) + '%'; };
+  var fmtFG = function(v) { return v != null ? ' (' + Math.round(v * 100) + '% FG)' : ''; };
+
+  // Paint-first vs perimeter-only profile
+  if (rimPct >= 0.42) {
+    items.push('Paint-first attacker — ' + pct(rimPct) + ' of shots at the rim' + fmtFG(rimFG) + '; draws contact and forces interior rotations');
+  } else if (rimPct <= 0.18 && threePct >= 0.40) {
+    items.push('Perimeter-exclusive — only ' + pct(rimPct) + ' of shots at the rim; rarely tests the paint, lives on the arc and mid-range');
+  }
+
+  // Mid-range tendency
+  if (midPct >= 0.30 && midShots.length >= 20) {
+    var midStr = midFG != null ? ', shooting ' + Math.round(midFG * 100) + '% there' : '';
+    items.push('Mid-range dependent — ' + pct(midPct) + ' of FGA are pull-up and catch-and-shoot jumpers' + midStr + '; attackable on closeouts');
+  } else if (midPct <= 0.10 && total >= 40) {
+    items.push('Avoids mid-range — only ' + pct(midPct) + ' of shots from mid-range; strictly rim attacks or 3PT, no in-between game');
+  }
+
+  // 3PT location: corner specialist vs above-the-break
+  if (threeShots.length >= 15) {
+    if (cornerPct >= 0.35) {
+      var cFG = cornerThrees.length ? Math.round(cornerThrees.filter(function(s) { return s.made; }).length / cornerThrees.length * 100) : null;
+      items.push('Corner 3 specialist — ' + Math.round(cornerPct * 100) + '% of 3PT attempts from the corners' +
+        (cFG != null ? ' (' + cFG + '% there)' : '') +
+        '; attack with ball-screen coverage, not zone traps that open corners');
+    } else if (cornerPct <= 0.12 && threeShots.length >= 25) {
+      items.push('Above-the-break gunner — only ' + Math.round(cornerPct * 100) + '% of 3PTs from corners; prefers pull-ups and DHO 3s at wings and top of key');
+    }
+  }
+
+  // Left vs right side rim finishing
+  if ((rightRim + leftRim) >= 20) {
+    var rightPct = rightRim / (rightRim + leftRim);
+    if (rightPct >= 0.62) {
+      items.push('Right-side finisher — ' + Math.round(rightPct * 100) + '% of rim attempts from the right side; shade left to force to weak hand');
+    } else if (rightPct <= 0.38) {
+      items.push('Left-side finisher — ' + Math.round((1 - rightPct) * 100) + '% of rim attempts from the left side; shade right to force to weak hand');
+    }
+  }
+
+  // Rim finishing efficiency (when sample is big enough)
+  if (rimShots.length >= 25 && rimFG != null) {
+    if (rimFG < 0.50) {
+      items.push('Struggles to convert at the rim — ' + Math.round(rimFG * 100) + '% at the basket; shot blockers and bump-at-gather rotation disrupts rhythm');
+    } else if (rimFG >= 0.70) {
+      items.push('Elite rim finisher — ' + Math.round(rimFG * 100) + '% at the basket; uses body control and both hands, absorbs contact well');
+    }
+  }
+
+  if (!items.length) return;
+
+  // Inject into the existing Tendencies section, or append a new one
+  var sections = el.querySelectorAll('.scoutSection');
+  var tendSec = null;
+  sections.forEach(function(sec) {
+    var head = sec.querySelector('.scoutSectionHead');
+    if (head && head.textContent.indexOf('Tendencies') !== -1) tendSec = sec;
+  });
+
+  var newItems = items.map(function(t) {
+    return '<div class="scoutItem scoutItem--tendency">' + t + '</div>';
+  }).join('');
+
+  if (tendSec) {
+    var itemsEl = tendSec.querySelector('.scoutItems');
+    if (itemsEl) itemsEl.insertAdjacentHTML('beforeend', newItems);
+  } else {
+    el.insertAdjacentHTML('beforeend',
+      '<div class="scoutSection">'
+      + '<div class="scoutSectionHead">🔄 Tendencies</div>'
+      + '<div class="scoutItems">' + newItems + '</div>'
+      + '</div>');
+  }
 }
 
 // ── Career History ──────────────────────────────────────────
