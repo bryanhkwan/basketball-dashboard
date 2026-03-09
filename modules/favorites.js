@@ -183,8 +183,8 @@ function favsRenderPage() {
 
   if (!favs.length) {
     grid.innerHTML = '';
-    if (empty) empty.style.display = '';
-    document.getElementById('favsCount') && (document.getElementById('favsCount').textContent = '0 players');
+    if (empty) empty.style.display = 'block';
+    document.getElementById('favsCount') && (document.getElementById('favsCount').textContent = '');
     return;
   }
   if (empty) empty.style.display = 'none';
@@ -196,27 +196,27 @@ function favsRenderPage() {
     var ppg    = r ? ((safeNum(r.PPG)    ?? 0).toFixed(1)) : '—';
     var apg    = r ? ((safeNum(r.APG)    ?? 0).toFixed(1)) : '—';
     var rpg    = r ? ((safeNum(r.RPG)    ?? 0).toFixed(1)) : '—';
-    var score  = r ? ((safeNum(r._score) ?? 0).toFixed(0)) : '—';
-    var leagueBadge = fav.league === 'WBB'
-      ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
-      : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
-    var hasRow = !!r;
-    return [
-      '<div class="favCard" tabindex="0">',
-        '<div class="favCardTop">',
-          '<div class="favCardName">' + _favsEsc(fav.player_name) + '</div>',
-          '<button class="favHeart favHeart--rm" title="Remove favorite" data-rm-key="' + _favsEsc(fav.player_key) + '">❤️</button>',
-        '</div>',
-        '<div class="favCardMeta">' + _favsEsc(fav.team) + ' &nbsp;·&nbsp; ' + _favsEsc(fav.pos || '—') + ' &nbsp;·&nbsp; ' + leagueBadge + '</div>',
-        '<div class="favCardStats">',
-          '<div class="favStat"><span class="favStatLbl">PPG</span><span class="favStatVal">' + ppg + '</span></div>',
-          '<div class="favStat"><span class="favStatLbl">APG</span><span class="favStatVal">' + apg + '</span></div>',
-          '<div class="favStat"><span class="favStatLbl">RPG</span><span class="favStatVal">' + rpg + '</span></div>',
-          '<div class="favStat"><span class="favStatLbl">Score</span><span class="favStatVal">' + score + '</span></div>',
-        '</div>',
-        hasRow ? '<button class="favCardBtn secondary" data-profile-key="' + _favsEsc(fav.player_key) + '">View Profile →</button>' : '',
-      '</div>',
-    ].join('');
+    var score  = r ? Math.round(safeNum(r._score) ?? 0)    : '—';
+    var isWBB  = fav.league === 'WBB';
+    var badge  = '<span class="favsLeagueBadge ' + (isWBB ? 'favsLeagueBadge--wbb' : 'favsLeagueBadge--mbb') + '">' + _favsEsc(fav.league || 'MBB') + '</span>';
+    var pos    = _favsEsc(fav.pos || '—');
+    var scoreColor = (typeof r !== 'undefined' && r && r._score >= 70) ? 'color:#4ade80' : (r && r._score >= 40) ? 'color:var(--accent)' : '';
+    return '<div class="favCard" tabindex="0">' +
+      '<div class="favCardHeader">' +
+        '<div class="favCardHeaderInner">' +
+          '<div class="favCardName">' + _favsEsc(fav.player_name) + '</div>' +
+          '<div class="favCardMeta">' + _favsEsc(fav.team) + '<span class="favCardDot">·</span>' + pos + '<span class="favCardDot">·</span>' + badge + '</div>' +
+        '</div>' +
+        '<button class="favHeart favHeart--rm" title="Remove favorite" data-rm-key="' + _favsEsc(fav.player_key) + '">❤️</button>' +
+      '</div>' +
+      '<div class="favCardStats">' +
+        '<div class="favStat"><span class="favStatVal">' + ppg + '</span><span class="favStatLbl">PPG</span></div>' +
+        '<div class="favStat"><span class="favStatVal">' + apg + '</span><span class="favStatLbl">APG</span></div>' +
+        '<div class="favStat"><span class="favStatVal">' + rpg + '</span><span class="favStatLbl">RPG</span></div>' +
+        '<div class="favStat favStat--score"><span class="favStatVal" style="' + scoreColor + '">' + score + '</span><span class="favStatLbl">Score</span></div>' +
+      '</div>' +
+      (r ? '<div class="favCardFooter"><button class="favCardBtn secondary" data-profile-key="' + _favsEsc(fav.player_key) + '">View Profile →</button></div>' : '') +
+    '</div>';
   }).join('');
 
   // Wire remove buttons

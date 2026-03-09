@@ -1658,116 +1658,178 @@
 }
 
 /* ──────────── Favorites Page ──────────── */
-.favsGrid {
+.favsPageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.favsPageTitle h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.favsPageControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.favsPageControls input,
+.favsPageControls select {
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(0,15,40,.55);
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
 .favCard {
-  background: rgba(0,10,28,.6);
+  background: rgba(0,12,32,.7);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 14px 16px 12px;
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  transition: border-color .15s, transform .15s;
+  overflow: hidden;
+  transition: border-color .18s, box-shadow .18s, transform .18s;
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
 }
 .favCard:hover {
-  border-color: rgba(91,159,255,.45);
-  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb),.35);
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  transform: translateY(-2px);
 }
-.favCardTop {
+.favCardHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  padding: 14px 14px 10px;
+  background: rgba(255,210,0,.04);
+  border-bottom: 1px solid var(--line2);
+}
+.favCardHeaderInner {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
 }
 .favCardName {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 800;
   line-height: 1.2;
   color: var(--text);
-  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .favCardMeta {
-  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
   color: var(--muted);
-  margin-top: 1px;
+  flex-wrap: wrap;
+}
+.favCardDot {
+  opacity: .35;
 }
 .favsLeagueBadge {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 5px;
-  letter-spacing: .4px;
-  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: .5px;
+  line-height: 1.6;
 }
 .favsLeagueBadge--mbb {
-  background: rgba(91,159,255,.18);
+  background: rgba(91,159,255,.15);
   color: #7ab3ff;
-  border: 1px solid rgba(91,159,255,.3);
+  border: 1px solid rgba(91,159,255,.25);
 }
 .favsLeagueBadge--wbb {
-  background: rgba(255,99,162,.18);
+  background: rgba(255,99,162,.15);
   color: #ff8cbf;
-  border: 1px solid rgba(255,99,162,.3);
+  border: 1px solid rgba(255,99,162,.25);
 }
 .favCardStats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  padding: 10px 8px;
 }
 .favStat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(0,15,40,.5);
-  border-radius: 7px;
-  padding: 5px 4px;
+  padding: 6px 4px;
+  border-right: 1px solid var(--line2);
+}
+.favStat:last-child {
+  border-right: none;
+}
+.favStat--score .favStatVal {
+  font-size: 13px;
 }
 .favStatVal {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--accent);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
 }
 .favStatLbl {
-  font-size: 9.5px;
+  font-size: 9px;
   color: var(--muted);
-  letter-spacing: .3px;
+  letter-spacing: .4px;
   text-transform: uppercase;
+  margin-top: 3px;
 }
-.favCardActions {
-  display: flex;
-  gap: 6px;
-  margin-top: 2px;
+.favCardFooter {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--line2);
 }
 .favCardBtn {
-  flex: 1;
-  padding: 5px 0;
+  width: 100%;
+  padding: 7px 0;
   font-size: 11.5px;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: rgba(0,20,50,.5);
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
-  transition: background .15s, border-color .15s;
+  transition: background .15s, border-color .15s, color .15s;
+  box-shadow: none;
 }
 .favCardBtn:hover {
-  background: rgba(91,159,255,.15);
-  border-color: rgba(91,159,255,.4);
+  background: rgba(var(--accent-rgb),.1);
+  border-color: rgba(var(--accent-rgb),.35);
+  color: var(--accent);
+  transform: none;
+  box-shadow: none;
 }
 .favHeart {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
-  padding: 0;
+  font-size: 15px;
+  padding: 2px;
   line-height: 1;
-  opacity: .85;
+  flex-shrink: 0;
+  opacity: .4;
   transition: transform .15s, opacity .15s;
+  box-shadow: none;
 }
-.favHeart:hover { transform: scale(1.2); opacity: 1; }
-.favHeart--rm { opacity: .5; }
-.favHeart--rm:hover { opacity: .9; }
+.favHeart:hover { transform: scale(1.25); opacity: 1; box-shadow: none; }
+.favHeart--rm:hover { opacity: .85; }

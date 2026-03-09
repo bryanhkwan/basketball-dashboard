@@ -726,14 +726,14 @@
 <!-- Favorites Page -->
 <div id="pageFavorites" style="display:none">
 <div class="wrap">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap">
-    <div>
-      <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">❤️ Favorites</h2>
-      <p class="muted" style="font-size:13px">Players you've hearted — saved per-account, always in sync. <span id="favsCount" style="margin-left:6px;font-size:12px;color:var(--accent)"></span></p>
+  <div class="favsPageHeader">
+    <div class="favsPageTitle">
+      <h2>❤️ Favorites</h2>
+      <p class="muted" style="font-size:13px;margin-top:3px">Your personal watchlist — saved per account, synced across devices.<span id="favsCount" style="margin-left:8px;font-size:12px;font-weight:700;color:var(--accent)"></span></p>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input id="favsSearch" type="text" placeholder="Search players or teams…" style="padding:6px 12px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:rgba(0,15,40,.5);color:var(--text);outline:none;width:220px">
-      <select id="favsLeagueFilter" style="padding:6px 10px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:rgba(0,15,40,.5);color:var(--text)">
+    <div class="favsPageControls">
+      <input id="favsSearch" type="text" placeholder="Search name or team…">
+      <select id="favsLeagueFilter">
         <option value="">All Leagues</option>
         <option value="MBB">MBB</option>
         <option value="WBB">WBB</option>
@@ -741,10 +741,10 @@
     </div>
   </div>
   <div id="favsGrid" class="favsGrid"></div>
-  <div id="favsEmpty" style="text-align:center;padding:60px 20px;color:var(--muted)">
-    <div style="font-size:40px;margin-bottom:12px">🤍</div>
-    <div style="font-size:16px;font-weight:600;margin-bottom:6px">No favorites yet</div>
-    <div style="font-size:13px">Open any player profile and click <b>🤍 Favorite</b> to save them here.</div>
+  <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
+    <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤍</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
+    <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">🤍 Favorite</b> to save them here.</div>
   </div>
 </div>
 </div><!-- /pageFavorites -->
