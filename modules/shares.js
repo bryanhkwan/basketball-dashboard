@@ -14,6 +14,7 @@ var chatState = {
   users: [],
   loaded: false,
   polling: null,
+  listPolling: null,
   hasMore: {},
   replyTo: null,
   attachPlayer: null,
@@ -118,7 +119,35 @@ async function chatPollActive() {
       chatRenderMessages(convId);
       chatScrollBottom();
     }
-    await _chatRefreshConvList();
+  } catch(e){}
+}
+
+// ── Poll conversation list (5s) — sidebar + badge refresh for ALL users ──────
+async function _chatPollList() {
+  try {
+    var data=await chatFetch('/chat/conversations');
+    if (!data) return;
+    chatState.conversations=data.conversations||[];
+    chatUpdateBadge();
+    chatRenderList();
+    // If active conversation has incoming messages, fetch them
+    if (chatState.activeConvId) {
+      var conv=chatState.conversations.find(function(c){return c.id===chatState.activeConvId;});
+      if (conv&&conv.unread_count>0) {
+        var existing2=chatState.messages[chatState.activeConvId]||[];
+        var data2=await chatFetch('/chat/conversations/'+chatState.activeConvId+'/messages?limit=50');
+        if (data2&&data2.messages) {
+          var ids2=new Set(existing2.map(function(m){return m.id;}));
+          var added2=data2.messages.filter(function(m){return !ids2.has(m.id);});
+          if (added2.length){
+            chatState.messages[chatState.activeConvId]=existing2.concat(added2);
+            chatRenderMessages(chatState.activeConvId);
+            chatScrollBottom();
+          }
+          chatMarkRead(chatState.activeConvId);
+        }
+      }
+    }
   } catch(e){}
 }
 
@@ -132,8 +161,17 @@ async function _chatRefreshConvList() {
   } catch(e){}
 }
 
-function chatStartPolling(){chatStopPolling();chatState.polling=setInterval(chatPollActive,8000);}
-function chatStopPolling(){if(chatState.polling){clearInterval(chatState.polling);chatState.polling=null;}}
+function chatStartPolling(){
+  chatStopPolling();
+  // 2s: fast poll for messages in the active conversation
+  chatState.polling=setInterval(chatPollActive,2000);
+  // 5s: background list poll so sidebar/badge update even if no conv is open
+  chatState.listPolling=setInterval(_chatPollList,5000);
+}
+function chatStopPolling(){
+  if(chatState.polling){clearInterval(chatState.polling);chatState.polling=null;}
+  if(chatState.listPolling){clearInterval(chatState.listPolling);chatState.listPolling=null;}
+}
 
 // ── Open conversation ─────────────────────────────────────────────────────────
 async function chatOpenConv(convId) {
@@ -685,10 +723,18 @@ function initSharesPage(){
   var colNavBtn=document.querySelector('[data-page="pageCollaborate"]');
   if(colNavBtn){
     colNavBtn.addEventListener('click',function(){
-      chatLoad().then(function(){if(chatState.activeConvId)chatStartPolling();});
+      // Always start polling when Collaborate tab is opened
+      chatLoad().then(function(){chatStartPolling();});
     });
   }
-  document.addEventListener('visibilitychange',function(){if(document.hidden)chatStopPolling();else if(chatState.activeConvId)chatStartPolling();});
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden) chatStopPolling();
+    else {
+      // Resume polling when tab becomes visible again (regardless of active conv)
+      var collaborateVisible=document.getElementById('pageCollaborate');
+      if(collaborateVisible&&collaborateVisible.style.display!=='none') chatStartPolling();
+    }
+  });
   chatRenderList();
 }
 
