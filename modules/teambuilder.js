@@ -939,7 +939,10 @@ function initPageNav(){
       // Refresh player table when switching back (roster icons may be stale)
       if(targetId === 'pagePlayers') renderPlayersPage();
       // Re-render favorites cards every time that tab is opened
-      if(targetId === 'pageFavorites' && typeof favsRenderPage === 'function') favsRenderPage();
+      if(targetId === 'pageFavorites') {
+        if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
+        if(typeof favsRenderPage     === 'function') favsRenderPage();
+      }
     });
   });
   // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)

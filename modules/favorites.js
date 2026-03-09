@@ -106,6 +106,13 @@ function favsRenderFolderBar() {
       '<span class="favsFolderTabDel" data-del-folder="' + _favsEsc(fname) + '" title="Delete folder">&times;</span>' +
       '</button>';
   });
+  // Show newly created folder as a tab even before any players are assigned to it
+  if (active && folders.indexOf(active) === -1) {
+    html += '<button class="favsFolderTab active" data-folder="' + _favsEsc(active) + '">' +
+      '&#128193; ' + _favsEsc(active) + ' <span class="favsFolderCount">0</span>' +
+      '<span class="favsFolderTabDel" data-del-folder="' + _favsEsc(active) + '" title="Delete folder">&times;</span>' +
+      '</button>';
+  }
   html += '<button class="favsFolderTabNew" id="favsFolderNewBtn">&#xff0b; New Folder</button>';
 
   if (active) {
