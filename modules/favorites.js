@@ -193,10 +193,10 @@ function favsRenderPage() {
 
   grid.innerHTML = favs.map(function(fav) {
     var r      = _favsGetRow(fav);
-    var ppg    = r && typeof safeNum !== 'undefined' ? safeNum(r.PPG).toFixed(1)     : '—';
-    var apg    = r && typeof safeNum !== 'undefined' ? safeNum(r.APG).toFixed(1)     : '—';
-    var rpg    = r && typeof safeNum !== 'undefined' ? safeNum(r.RPG).toFixed(1)     : '—';
-    var score  = r && typeof safeNum !== 'undefined' ? safeNum(r._score).toFixed(0)  : '—';
+    var ppg    = r ? ((safeNum(r.PPG)    ?? 0).toFixed(1)) : '—';
+    var apg    = r ? ((safeNum(r.APG)    ?? 0).toFixed(1)) : '—';
+    var rpg    = r ? ((safeNum(r.RPG)    ?? 0).toFixed(1)) : '—';
+    var score  = r ? ((safeNum(r._score) ?? 0).toFixed(0)) : '—';
     var leagueBadge = fav.league === 'WBB'
       ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
       : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
