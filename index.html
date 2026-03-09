@@ -760,93 +760,172 @@
 
 <!-- Collaborate Page -->
 <div id="pageCollaborate" style="display:none">
-<div class="wrap">
-  <div class="favsPageHeader">
-    <div class="favsPageTitle">
-      <h2>🤝 Collaborate</h2>
-      <p class="muted" style="font-size:13px;margin-top:3px">Player picks shared with you by teammates. Send picks from any player profile.</p>
+<div id="chatLayout" class="chatLayout">
+  <!-- Sidebar -->
+  <div id="chatSidebar" class="chatSidebar">
+    <div class="chatSidebarHeader">
+      <span class="chatSidebarTitle">💬 Messages</span>
+      <button id="chatNewBtn" class="chatNewBtn" title="New conversation">✏️</button>
+    </div>
+    <div class="chatSearchWrap">
+      <input id="chatConvSearch" type="text" class="chatConvSearch" placeholder="Search conversations…">
+    </div>
+    <div id="chatConvList" class="chatConvList"></div>
+  </div>
+  <!-- Main -->
+  <div id="chatMain" class="chatMain">
+    <div id="chatEmpty" class="chatEmpty">
+      <div class="chatEmptyIcon">💬</div>
+      <div class="chatEmptyTitle">No conversation selected</div>
+      <div class="chatEmptyHint">Pick one from the left, or hit ✏️ to start a new one.</div>
+    </div>
+    <div id="chatHeader" class="chatHeader" style="display:none"></div>
+    <div id="chatMessages" class="chatMessages" style="display:none"></div>
+    <div id="chatComposer" class="chatComposer" style="display:none">
+      <div id="chatReplyBar" class="chatReplyBar" style="display:none"></div>
+      <div id="chatAttachBar" class="chatAttachBar" style="display:none"></div>
+      <div class="chatComposerRow">
+        <button id="chatAttachBtn" class="chatAttachBtn" title="Attach player pick">🏀</button>
+        <textarea id="chatInput" class="chatInput" placeholder="Message…" rows="1"></textarea>
+        <button id="chatSendBtn" class="chatSendBtn">Send</button>
+      </div>
     </div>
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:16px">
-    <button class="sharesSubBtn active" data-sub="sharesInboxList">📥 Received</button>
-    <button class="sharesSubBtn secondary" data-sub="sharesSentList">📤 Sent</button>
-  </div>
-  <div id="sharesInboxList" class="sharesPane sharesGrid"></div>
-  <div id="sharesSentList"  class="sharesPane sharesGrid" style="display:none"></div>
 </div>
 </div><!-- /pageCollaborate -->
 
-<!-- Share Send Modal -->
-<div id="shareModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.78);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+<!-- Send Pick Modal (new) -->
+<div id="chatSendPickBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.78);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
   <div class="shareModal">
     <div class="shareModalHeader">
       <div>
-        <div class="shareModalTitle">📤 Send Pick</div>
-        <div id="shareModalPlayerName" class="shareModalSubtitle"></div>
+        <div class="shareModalTitle">🏀 Send Player Pick</div>
+        <div id="chatSendPickName" class="shareModalSubtitle"></div>
       </div>
-      <button class="close" id="shareModalCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+      <button class="close" id="chatSendPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
     <div class="shareModalField">
       <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
-      <input id="shareModalTo" type="text" list="shareUserDatalist" placeholder="Type a username…" autocomplete="off">
-      <datalist id="shareUserDatalist"></datalist>
+      <input id="chatSendPickTo" type="text" placeholder="Type a username…" autocomplete="off">
     </div>
     <div class="shareModalField">
       <label class="shareModalLabel">Message <span style="color:var(--muted);font-weight:400">(optional)</span></label>
-      <textarea id="shareModalMsg" rows="3" placeholder="Add a scouting note or reason…"></textarea>
+      <textarea id="chatSendPickMsg" rows="3" placeholder="Add a scouting note or reason…"></textarea>
     </div>
-    <div id="shareModalErr" class="shareModalErr"></div>
+    <div id="chatSendPickErr" class="shareModalErr"></div>
     <div class="shareModalFooter">
       <button class="secondary" onclick="sharesCloseSendModal()">Cancel</button>
-      <button id="shareModalSendBtn">Send</button>
+      <button id="chatSendPickBtn">Send</button>
     </div>
   </div>
 </div>
 
-<!-- Bulk Share Modal -->
-<div id="bulkShareModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+<!-- Bulk Send Modal (new) -->
+<div id="chatBulkPickBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
   <div class="shareModal" style="max-width:520px;max-height:85vh;overflow-y:auto">
     <div class="shareModalHeader">
       <div>
-        <div class="shareModalTitle">📤 Send Folder to Collaborate</div>
-        <div id="bulkShareFolderName" class="shareModalSubtitle"></div>
+        <div class="shareModalTitle">📋 Send Player Package</div>
+        <div id="chatBulkPickTitle" class="shareModalSubtitle"></div>
       </div>
-      <button class="close" onclick="sharesCloseBulkModal()" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+      <button class="close" id="chatBulkPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
     <div class="shareModalField">
       <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
-      <input id="bulkShareTo" type="text" list="shareUserDatalist" placeholder="Type a username…" autocomplete="off">
+      <input id="chatBulkPickTo" type="text" placeholder="Type a username…" autocomplete="off">
     </div>
     <div class="shareModalField">
-      <label class="shareModalLabel">General note <span style="color:var(--muted);font-weight:400">(optional — applies to all)</span></label>
-      <textarea id="bulkShareGeneralMsg" rows="2" placeholder="Overall scouting context…"></textarea>
+      <label class="shareModalLabel">General note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea id="chatBulkPickMsg" rows="2" placeholder="Overall scouting context…"></textarea>
     </div>
     <div class="shareModalField">
       <label class="shareModalLabel">Player notes <span style="color:var(--muted);font-weight:400">(optional per player)</span></label>
-      <div id="bulkSharePlayerList" class="bulkSharePlayerList"></div>
+      <div id="chatBulkPickList" class="bulkSharePlayerList"></div>
     </div>
-    <div id="bulkShareErr" class="shareModalErr"></div>
+    <div id="chatBulkPickErr" class="shareModalErr"></div>
     <div class="shareModalFooter">
       <button class="secondary" onclick="sharesCloseBulkModal()">Cancel</button>
-      <button id="bulkShareSendBtn">Send All</button>
+      <button id="chatBulkPickBtn">Send All</button>
     </div>
   </div>
 </div>
 
-<!-- Thread Detail Modal -->
-<div id="shareThreadBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
-  <div class="shareModal" style="max-width:540px;max-height:85vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
-    <div class="shareModalHeader" style="padding:18px 20px 14px;border-bottom:1px solid var(--line);flex-shrink:0">
-      <div>
-        <div class="shareModalTitle" id="shareThreadFromLine">—</div>
-        <div id="shareThreadMetaLine" class="shareModalSubtitle" style="margin-top:3px"></div>
+<!-- New Conversation Modal -->
+<div id="chatNewModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:420px">
+    <div class="shareModalHeader">
+      <div class="shareModalTitle">💬 New Conversation</div>
+      <button class="close" id="chatNewCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Type</label>
+      <select id="chatNewType" style="width:100%;padding:8px 10px;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--text)">
+        <option value="dm">Direct Message</option>
+        <option value="group">Group Chat</option>
+      </select>
+    </div>
+    <div id="chatNewDmArea">
+      <div class="shareModalField">
+        <label class="shareModalLabel">Username</label>
+        <input id="chatNewDmUser" type="text" placeholder="Enter username…" autocomplete="off">
       </div>
-      <button class="close" id="shareThreadCloseBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
-    <div style="overflow-y:auto;flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-      <div id="shareThreadGenMsgEl" style="display:none;background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text);border:1px solid var(--line);font-style:italic"></div>
-      <div id="shareThreadPlayerList" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="chatNewGrpArea" style="display:none">
+      <div class="shareModalField">
+        <label class="shareModalLabel">Group name</label>
+        <input id="chatNewGrpName" type="text" placeholder="e.g. Recruiting Board…" autocomplete="off">
+      </div>
+      <div class="shareModalField">
+        <label class="shareModalLabel">Members <span style="color:var(--muted);font-weight:400">(comma-separated usernames)</span></label>
+        <input id="chatNewGrpMembers" type="text" placeholder="alice, bob, carol…" autocomplete="off">
+      </div>
     </div>
+    <div id="chatNewErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="chatCloseNewModal()">Cancel</button>
+      <button id="chatNewCreateBtn">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Group Modal -->
+<div id="chatManageModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:420px;max-height:80vh;overflow-y:auto">
+    <div class="shareModalHeader">
+      <div class="shareModalTitle">⚙️ Manage Group</div>
+      <button class="close" id="chatManageCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Group name</label>
+      <input id="chatManageGrpName" type="text" placeholder="Group name…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Members</label>
+      <div id="chatManageMemberList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="chatManageAddUser" type="text" placeholder="Add username…" style="flex:1" autocomplete="off">
+        <button id="chatManageAddBtn" class="secondary">Add</button>
+      </div>
+    </div>
+    <div id="chatManageErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="chatCloseManageGroup()">Cancel</button>
+      <button id="chatManageSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Player Picker Modal -->
+<div id="chatPickerBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
+    <div class="shareModalHeader" style="padding:16px 18px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <div class="shareModalTitle">🏀 Attach Player</div>
+      <button class="close" id="chatPickerClose" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <input id="chatPickerSearch" type="text" placeholder="Search by name or team…" style="width:100%;padding:8px 12px;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--text)" autocomplete="off">
+    </div>
+    <div id="chatPickerList" style="overflow-y:auto;flex:1;padding:8px 0"></div>
   </div>
 </div>
 
