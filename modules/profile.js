@@ -182,12 +182,14 @@ function openProfile(r){
           '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
         if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
         enrichScoutReportWithShots(shots);
+        if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
       }).catch(function() {
         mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
       });
     }
   }
 
+  if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
   modalBack.style.display = 'flex';
 }
 

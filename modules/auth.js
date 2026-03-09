@@ -65,6 +65,7 @@ function authStartLoading() {
 
 /* Called by data.js when data is fully loaded */
 function authFinishLoading() {
+  if (typeof favsLoad === 'function') favsLoad();  // load per-user favorites after data is ready
   const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
     _loadDataReady = true;

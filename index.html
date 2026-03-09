@@ -25,6 +25,7 @@
   <script src="modules/config.js" defer></script>
   <script src="modules/auth.js" defer></script>
   <script src="modules/notes.js" defer></script>
+  <script src="modules/favorites.js" defer></script>
   <script src="modules/data.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
@@ -100,6 +101,7 @@
   <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
+  <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
 </nav>
 
 <div id="pagePlayers">
@@ -721,6 +723,32 @@
 </div>
 </div><!-- /pageMethodology -->
 
+<!-- Favorites Page -->
+<div id="pageFavorites" style="display:none">
+<div class="wrap">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">❤️ Favorites</h2>
+      <p class="muted" style="font-size:13px">Players you've hearted — saved per-account, always in sync. <span id="favsCount" style="margin-left:6px;font-size:12px;color:var(--accent)"></span></p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="favsSearch" type="text" placeholder="Search players or teams…" style="padding:6px 12px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:rgba(0,15,40,.5);color:var(--text);outline:none;width:220px">
+      <select id="favsLeagueFilter" style="padding:6px 10px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:rgba(0,15,40,.5);color:var(--text)">
+        <option value="">All Leagues</option>
+        <option value="MBB">MBB</option>
+        <option value="WBB">WBB</option>
+      </select>
+    </div>
+  </div>
+  <div id="favsGrid" class="favsGrid"></div>
+  <div id="favsEmpty" style="text-align:center;padding:60px 20px;color:var(--muted)">
+    <div style="font-size:40px;margin-bottom:12px">🤍</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px">No favorites yet</div>
+    <div style="font-size:13px">Open any player profile and click <b>🤍 Favorite</b> to save them here.</div>
+  </div>
+</div>
+</div><!-- /pageFavorites -->
+
 <!-- Modal -->
 <div class="modalBack" id="modalBack">
   <div class="modal" role="dialog" aria-modal="true">
@@ -734,6 +762,7 @@
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
         <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📝 Notes</button>
+        <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">🤍 Favorite</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>
