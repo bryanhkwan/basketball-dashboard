@@ -1724,6 +1724,7 @@
   flex-direction: column;
   gap: 5px;
   min-width: 0;
+  flex: 1;
 }
 .favCardName {
   font-size: 13.5px;
@@ -1849,6 +1850,14 @@
 .favsFolderCreateRow input { flex: 1; max-width: 220px; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0,15,40,.5); color: var(--text); }
 .favFolderSel { flex: 1; padding: 5px 6px; font-size: 11px; border: 1px solid var(--line); border-radius: 7px; background: rgba(0,15,40,.5); color: var(--muted); cursor: pointer; max-width: 140px; box-shadow: none; }
 .favFolderSel:hover { border-color: rgba(var(--accent-rgb),.35); color: var(--text); }
+/* Bulk select bar */
+.favsBulkBar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 12px; background: rgba(var(--accent-rgb),.07); border: 1px solid rgba(var(--accent-rgb),.25); border-radius: 10px; }
+.favsBulkCount { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.favsBulkSel { padding: 5px 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 7px; background: rgba(0,15,40,.6); color: var(--text); cursor: pointer; box-shadow: none; }
+/* Card checkbox */
+.favCardCheck { display: flex; align-items: center; margin-right: 4px; flex-shrink: 0; cursor: pointer; }
+.favCardCheckbox { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.favCard--selected { border-color: rgba(var(--accent-rgb),.5) !important; background: rgba(var(--accent-rgb),.06) !important; }
 /* ──────────── Bulk share modal ──────────── */
 .bulkSharePlayerList { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
 .bulkSharePlayer { background: rgba(0,15,40,.5); border: 1px solid var(--line2); border-radius: 9px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }

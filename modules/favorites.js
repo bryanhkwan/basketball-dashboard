@@ -34,7 +34,9 @@ async function _favsFetchDev(path, opts) {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-var favsState = { favorites: [], loaded: false, activeFolder: '' };
+// pendingFolders: folder names created by user but not yet containing any players.
+// They persist across tab switches until explicitly deleted.
+var favsState = { favorites: [], loaded: false, activeFolder: '', pendingFolders: [], selectedKeys: new Set() };
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -77,6 +79,10 @@ function favsGetFolders() {
   favsState.favorites.forEach(function(f) {
     if (f.folder && !seen[f.folder]) { seen[f.folder] = true; result.push(f.folder); }
   });
+  // Include folders created via the UI that don't have any players yet
+  favsState.pendingFolders.forEach(function(fn) {
+    if (fn && !seen[fn]) { seen[fn] = true; result.push(fn); }
+  });
   return result.sort(function(a, b) { return a.localeCompare(b); });
 }
 
@@ -86,6 +92,8 @@ async function favsSetFolder(playerKey, folderName) {
     await favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: playerKey, folder: folderName }) });
     var fav = favsState.favorites.find(function(f) { return f.player_key === playerKey; });
     if (fav) fav.folder = folderName;
+    // Once a real player is assigned, the folder no longer needs to be pending
+    if (folderName) favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== folderName; });
     favsRenderFolderBar();
     favsRenderPage();
   } catch (e) { console.warn('[Favorites] setFolder error:', e); }
@@ -106,13 +114,6 @@ function favsRenderFolderBar() {
       '<span class="favsFolderTabDel" data-del-folder="' + _favsEsc(fname) + '" title="Delete folder">&times;</span>' +
       '</button>';
   });
-  // Show newly created folder as a tab even before any players are assigned to it
-  if (active && folders.indexOf(active) === -1) {
-    html += '<button class="favsFolderTab active" data-folder="' + _favsEsc(active) + '">' +
-      '&#128193; ' + _favsEsc(active) + ' <span class="favsFolderCount">0</span>' +
-      '<span class="favsFolderTabDel" data-del-folder="' + _favsEsc(active) + '" title="Delete folder">&times;</span>' +
-      '</button>';
-  }
   html += '<button class="favsFolderTabNew" id="favsFolderNewBtn">&#xff0b; New Folder</button>';
 
   if (active) {
@@ -127,6 +128,7 @@ function favsRenderFolderBar() {
     btn.addEventListener('click', function(e) {
       if (e.target.classList.contains('favsFolderTabDel')) return;
       favsState.activeFolder = btn.getAttribute('data-folder');
+      favsState.selectedKeys.clear();
       favsRenderFolderBar(); favsRenderPage();
     });
   });
@@ -142,6 +144,8 @@ function favsRenderFolderBar() {
         if (fav) fav.folder = '';
         favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: k, folder: '' }) }).catch(function() {});
       });
+      // Also remove from pending so empty folders disappear on explicit delete
+      favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== fname; });
       if (favsState.activeFolder === fname) favsState.activeFolder = '';
       favsRenderFolderBar(); favsRenderPage();
     });
@@ -267,6 +271,58 @@ function _favsEsc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Bulk action bar (appears when cards are selected) ─────────────────────────
+function _favsRenderBulkBar() {
+  var bar = document.getElementById('favsBulkBar');
+  if (!bar) return;
+  var count = favsState.selectedKeys.size;
+  if (count === 0) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+  var folders = favsGetFolders();
+  var opts = '<option value="" disabled selected>Move to folder\u2026</option>';
+  opts += '<option value="__none__">\uD83D\uDCC1 No folder (remove)</option>';
+  folders.forEach(function(fn) {
+    opts += '<option value="' + _favsEsc(fn) + '">\uD83D\uDCC1 ' + _favsEsc(fn) + '</option>';
+  });
+  opts += '<option value="__new__">&#xff0b; New folder\u2026</option>';
+
+  bar.innerHTML =
+    '<span class="favsBulkCount">' + count + ' selected</span>' +
+    '<select id="favsBulkFolderSel" class="favsBulkSel">' + opts + '</select>' +
+    '<button id="favsBulkMoveBtn">Move \u2192</button>' +
+    '<button id="favsBulkClearBtn" class="secondary">\u2715 Clear</button>';
+  bar.style.display = 'flex';
+
+  document.getElementById('favsBulkClearBtn').onclick = function() {
+    favsState.selectedKeys.clear(); _favsRenderBulkBar();
+    document.querySelectorAll('.favCardCheckbox').forEach(function(cb) { cb.checked = false; });
+  };
+
+  document.getElementById('favsBulkMoveBtn').onclick = async function() {
+    var sel = document.getElementById('favsBulkFolderSel');
+    var val = sel ? sel.value : '';
+    if (!val || val === '' ) return;  // nothing chosen yet
+    if (val === '__new__') {
+      var name = (prompt('New folder name:') || '').trim();
+      if (!name) return;
+      if (favsState.pendingFolders.indexOf(name) === -1) favsState.pendingFolders.push(name);
+      val = name;
+    }
+    var targetFolder = (val === '__none__') ? '' : val;
+    var keys = Array.from(favsState.selectedKeys);
+    keys.forEach(function(k) {
+      var fav = favsState.favorites.find(function(f) { return f.player_key === k; });
+      if (fav) fav.folder = targetFolder;
+      favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: k, folder: targetFolder }) }).catch(function() {});
+    });
+    // Folder now has real players — remove from pending
+    if (targetFolder) favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== targetFolder; });
+    favsState.selectedKeys.clear();
+    favsRenderFolderBar();
+    favsRenderPage();
+  };
+}
+
 // ── Render the full Favorites page ───────────────────────────────────────────
 function favsRenderPage() {
   var grid  = document.getElementById('favsGrid');
@@ -312,13 +368,18 @@ function favsRenderPage() {
     });
     folderOpts += '<option value="__new__">&#xff0b; New folder&hellip;</option>';
 
-    return '<div class="favCard" tabindex="0">' +
+    var isSelected = favsState.selectedKeys.has(fav.player_key);
+
+    return '<div class="favCard' + (isSelected ? ' favCard--selected' : '') + '" tabindex="0">' +
       '<div class="favCardHeader">' +
+        '<label class="favCardCheck" onclick="event.stopPropagation()">' +
+          '<input type="checkbox" class="favCardCheckbox" data-ck="' + _favsEsc(fav.player_key) + '"' + (isSelected ? ' checked' : '') + '>' +
+        '</label>' +
         '<div class="favCardHeaderInner">' +
           '<div class="favCardName">' + _favsEsc(fav.player_name) + '</div>' +
-          '<div class="favCardMeta">' + _favsEsc(fav.team) + '<span class="favCardDot">·</span>' + pos + '<span class="favCardDot">·</span>' + badge + '</div>' +
+          '<div class="favCardMeta">' + _favsEsc(fav.team) + '<span class="favCardDot">\u00b7</span>' + pos + '<span class="favCardDot">\u00b7</span>' + badge + '</div>' +
         '</div>' +
-        '<button class="favHeart favHeart--rm" title="Remove favorite" data-rm-key="' + _favsEsc(fav.player_key) + '">❤️</button>' +
+        '<button class="favHeart favHeart--rm" title="Remove favorite" data-rm-key="' + _favsEsc(fav.player_key) + '">\u2764\ufe0f</button>' +
       '</div>' +
       '<div class="favCardStats">' +
         '<div class="favStat"><span class="favStatVal">' + ppg + '</span><span class="favStatLbl">PPG</span></div>' +
@@ -328,7 +389,7 @@ function favsRenderPage() {
       '</div>' +
       '<div class="favCardFooter">' +
         '<select class="favFolderSel" data-fk="' + _favsEsc(fav.player_key) + '">' + folderOpts + '</select>' +
-        (r ? '<button class="favCardBtn" data-profile-key="' + _favsEsc(fav.player_key) + '">View →</button>' : '') +
+        (r ? '<button class="favCardBtn" data-profile-key="' + _favsEsc(fav.player_key) + '">View \u2192</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
@@ -381,6 +442,21 @@ function favsRenderPage() {
       if (r && typeof openProfile === 'function') openProfile(r);
     };
   });
+
+  // Wire selection checkboxes
+  grid.querySelectorAll('.favCardCheckbox').forEach(function(cb) {
+    cb.onchange = function() {
+      var key = cb.getAttribute('data-ck');
+      if (cb.checked) favsState.selectedKeys.add(key);
+      else            favsState.selectedKeys.delete(key);
+      // Toggle selected style on the card
+      var card = cb.closest('.favCard');
+      if (card) card.classList.toggle('favCard--selected', cb.checked);
+      _favsRenderBulkBar();
+    };
+  });
+
+  _favsRenderBulkBar();
 }
 
 // ── Init (search / filter / folder create event listeners) ───────────────────
@@ -398,6 +474,8 @@ function initFavsPage() {
   function _doCreate() {
     var name = (inp ? inp.value : '').trim();
     if (!name) return;
+    // Persist the folder name so it survives tab switches even when empty
+    if (favsState.pendingFolders.indexOf(name) === -1) favsState.pendingFolders.push(name);
     favsState.activeFolder = name;
     if (createRow) createRow.style.display = 'none';
     favsRenderFolderBar(); favsRenderPage();
