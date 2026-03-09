@@ -103,7 +103,7 @@
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
-  <button class="pageNavBtn" data-page="pageInbox">📨 Inbox <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
+  <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
 
 <div id="pagePlayers">
@@ -742,6 +742,12 @@
       </select>
     </div>
   </div>
+  <div id="favsFolderBar" class="favsFolderBar"></div>
+  <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
+    <input id="favsFolderInput" type="text" placeholder="Folder name…" maxlength="50">
+    <button id="favsFolderAddBtn">Add</button>
+    <button class="secondary" id="favsFolderCancelBtn">✕</button>
+  </div>
   <div id="favsGrid" class="favsGrid"></div>
   <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
     <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤍</div>
@@ -751,12 +757,12 @@
 </div>
 </div><!-- /pageFavorites -->
 
-<!-- Inbox Page -->
-<div id="pageInbox" style="display:none">
+<!-- Collaborate Page -->
+<div id="pageCollaborate" style="display:none">
 <div class="wrap">
   <div class="favsPageHeader">
     <div class="favsPageTitle">
-      <h2>📨 Inbox</h2>
+      <h2>🤝 Collaborate</h2>
       <p class="muted" style="font-size:13px;margin-top:3px">Player picks shared with you by teammates. Send picks from any player profile.</p>
     </div>
   </div>
@@ -767,7 +773,7 @@
   <div id="sharesInboxList" class="sharesPane sharesGrid"></div>
   <div id="sharesSentList"  class="sharesPane sharesGrid" style="display:none"></div>
 </div>
-</div><!-- /pageInbox -->
+</div><!-- /pageCollaborate -->
 
 <!-- Share Send Modal -->
 <div id="shareModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.78);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
@@ -792,6 +798,36 @@
     <div class="shareModalFooter">
       <button class="secondary" onclick="sharesCloseSendModal()">Cancel</button>
       <button id="shareModalSendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Share Modal -->
+<div id="bulkShareModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:520px;max-height:85vh;overflow-y:auto">
+    <div class="shareModalHeader">
+      <div>
+        <div class="shareModalTitle">📤 Send Folder to Collaborate</div>
+        <div id="bulkShareFolderName" class="shareModalSubtitle"></div>
+      </div>
+      <button class="close" onclick="sharesCloseBulkModal()" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
+      <input id="bulkShareTo" type="text" list="shareUserDatalist" placeholder="Type a username…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">General note <span style="color:var(--muted);font-weight:400">(optional — applies to all)</span></label>
+      <textarea id="bulkShareGeneralMsg" rows="2" placeholder="Overall scouting context…"></textarea>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Player notes <span style="color:var(--muted);font-weight:400">(optional per player)</span></label>
+      <div id="bulkSharePlayerList" class="bulkSharePlayerList"></div>
+    </div>
+    <div id="bulkShareErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="sharesCloseBulkModal()">Cancel</button>
+      <button id="bulkShareSendBtn">Send All</button>
     </div>
   </div>
 </div>

@@ -1834,6 +1834,27 @@
 .favHeart:hover { transform: scale(1.25); opacity: 1; box-shadow: none; }
 .favHeart--rm:hover { opacity: .85; }
 
+/* ──────────── Favorites folders ──────────── */
+.favsFolderBar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: center; }
+.favsFolderTab { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 20px; background: rgba(0,15,40,.5); border: 1px solid var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; white-space: nowrap; }
+.favsFolderTab.active, .favsFolderTab:hover { background: rgba(var(--accent-rgb),.12); border-color: rgba(var(--accent-rgb),.4); color: var(--accent); transform: none; box-shadow: none; }
+.favsFolderCount { font-size: 10px; font-weight: 600; background: rgba(255,255,255,.1); border-radius: 8px; padding: 1px 5px; margin-left: 3px; }
+.favsFolderTabDel { margin-left: 4px; opacity: .4; font-size: 13px; padding: 0 2px; border-radius: 50%; pointer-events: all; cursor: pointer; }
+.favsFolderTabDel:hover { opacity: 1; color: #f87171; }
+.favsFolderTabNew { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 20px; background: none; border: 1px dashed var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; }
+.favsFolderTabNew:hover { border-color: rgba(var(--accent-rgb),.4); color: var(--accent); transform: none; box-shadow: none; }
+.favsFolderSendBtn { font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; background: rgba(var(--accent-rgb),.12); border: 1px solid rgba(var(--accent-rgb),.4); color: var(--accent); cursor: pointer; box-shadow: none; margin-left: 4px; transition: all .15s; }
+.favsFolderSendBtn:hover { background: rgba(var(--accent-rgb),.22); transform: none; box-shadow: none; }
+.favsFolderCreateRow { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.favsFolderCreateRow input { flex: 1; max-width: 220px; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; background: rgba(0,15,40,.5); color: var(--text); }
+.favFolderSel { flex: 1; padding: 5px 6px; font-size: 11px; border: 1px solid var(--line); border-radius: 7px; background: rgba(0,15,40,.5); color: var(--muted); cursor: pointer; max-width: 140px; box-shadow: none; }
+.favFolderSel:hover { border-color: rgba(var(--accent-rgb),.35); color: var(--text); }
+/* ──────────── Bulk share modal ──────────── */
+.bulkSharePlayerList { display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+.bulkSharePlayer { background: rgba(0,15,40,.5); border: 1px solid var(--line2); border-radius: 9px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.bulkSharePlayerName { font-size: 13px; font-weight: 700; color: var(--text); }
+.bulkSharePlayerNote { background: rgba(0,10,28,.6); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font-size: 12px; padding: 6px 8px; resize: vertical; font-family: inherit; }
+
 /* ──────────── Inbox / Shares ──────────── */
 .sharesNavBadge {
   display: inline-flex;

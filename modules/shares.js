@@ -202,8 +202,8 @@ function sharesRenderInbox() {
 
   // Auto-mark unread as read when this pane is visible
   if (document.getElementById('sharesInboxList') &&
-      document.getElementById('pageInbox') &&
-      document.getElementById('pageInbox').style.display !== 'none') {
+      document.getElementById('pageCollaborate') &&
+      document.getElementById('pageCollaborate').style.display !== 'none') {
     sharesState.inbox.filter(function(s) { return !s.read_at; })
       .forEach(function(s) { sharesMarkRead(s.id); });
   }
@@ -368,7 +368,7 @@ function initSharesPage() {
   if (back)      back.addEventListener     ('click', function(e) { if (e.target === back) sharesCloseSendModal(); });
 
   // Mark inbox read when the page is opened
-  var inboxNavBtn = document.querySelector('[data-page="pageInbox"]');
+  var inboxNavBtn = document.querySelector('[data-page="pageCollaborate"]');
   if (inboxNavBtn) {
     inboxNavBtn.addEventListener('click', function() {
       sharesRenderInbox();
@@ -377,4 +377,86 @@ function initSharesPage() {
   }
 }
 
-window.SharesManager = { sharesLoad, sharesSend, sharesOpenSendModal, sharesCloseSendModal, sharesUpdateBadge, sharesRenderInbox, sharesRenderSent, initSharesPage };
+// ── Bulk send modal (send all players in a folder) ────────────────────────────
+var _bulkShareFolderName = '';
+var _bulkShareFavs       = [];
+
+function sharesOpenBulkModal(folderName, favs) {
+  if (typeof authIsGuest === 'function' && authIsGuest()) { alert('Please log in to send picks.'); return; }
+  _bulkShareFolderName = folderName;
+  _bulkShareFavs       = favs || [];
+  sharesLoadUsers();
+
+  var back     = document.getElementById('bulkShareModalBack');
+  var titleEl  = document.getElementById('bulkShareFolderName');
+  var toEl     = document.getElementById('bulkShareTo');
+  var genEl    = document.getElementById('bulkShareGeneralMsg');
+  var errEl    = document.getElementById('bulkShareErr');
+  var sendBtn  = document.getElementById('bulkShareSendBtn');
+  var listEl   = document.getElementById('bulkSharePlayerList');
+
+  if (!back) return;
+  if (titleEl)  titleEl.textContent = '\uD83D\uDCC1 ' + folderName + ' \u2014 ' + _bulkShareFavs.length + ' player' + (_bulkShareFavs.length !== 1 ? 's' : '');
+  if (toEl)     toEl.value     = '';
+  if (genEl)    genEl.value    = '';
+  if (errEl)    errEl.textContent = '';
+  if (sendBtn)  { sendBtn.disabled = false; sendBtn.textContent = 'Send All'; }
+  if (sendBtn)  sendBtn.onclick = _sharesDoBulkSend;
+  if (listEl) {
+    listEl.innerHTML = _bulkShareFavs.map(function(fav, i) {
+      return '<div class="bulkSharePlayer">' +
+        '<div class="bulkSharePlayerName">' + _sharesEsc(fav.player_name) +
+          '<span class="shareCardTeam"> \u00b7 ' + _sharesEsc(fav.team || '') + '</span></div>' +
+        '<textarea class="bulkSharePlayerNote" data-idx="' + i + '" placeholder="Note for this player (optional)\u2026" rows="2"></textarea>' +
+      '</div>';
+    }).join('');
+  }
+  back.style.display = 'flex';
+  setTimeout(function() { if (toEl) toEl.focus(); }, 60);
+}
+
+function sharesCloseBulkModal() {
+  var back = document.getElementById('bulkShareModalBack');
+  if (back) back.style.display = 'none';
+  _bulkShareFolderName = ''; _bulkShareFavs = [];
+}
+
+async function _sharesDoBulkSend() {
+  var toEl    = document.getElementById('bulkShareTo');
+  var genEl   = document.getElementById('bulkShareGeneralMsg');
+  var errEl   = document.getElementById('bulkShareErr');
+  var sendBtn = document.getElementById('bulkShareSendBtn');
+  var to      = (toEl ? toEl.value : '').trim();
+  if (!to) { if (errEl) errEl.textContent = 'Enter a recipient username.'; return; }
+  var generalMsg = (genEl ? genEl.value : '').trim();
+  var notes = [];
+  document.querySelectorAll('.bulkSharePlayerNote').forEach(function(ta) { notes.push(ta.value.trim()); });
+  var players = _bulkShareFavs.map(function(fav, i) {
+    return { player_key: fav.player_key, player_name: fav.player_name, team: fav.team || '', league: fav.league || 'MBB', pos: fav.pos || '', message: notes[i] || '' };
+  });
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending\u2026'; }
+  if (errEl)   errEl.textContent = '';
+  try {
+    var token   = typeof authGetToken === 'function' ? authGetToken() : null;
+    var headers = { 'Content-Type': 'application/json' };
+    if (token)  headers['Authorization'] = 'Bearer ' + token;
+    var res = await fetch(SHARES_API + '/shares/bulk', { method: 'POST', credentials: 'include', headers: headers,
+      body: JSON.stringify({ to_username: to, general_message: generalMsg, players: players }) });
+    if (!res.ok) { var e = await res.json().catch(function() { return {}; }); throw new Error(e.error || ('Error ' + res.status)); }
+    var result = await res.json();
+    sharesCloseBulkModal();
+    // Append a summary entry to outbox state
+    for (var i = 0; i < players.length; i++) {
+      sharesState.outbox.unshift({ id: 'bulk_' + Date.now() + '_' + i, to_username: to,
+        player_key: players[i].player_key, player_name: players[i].player_name,
+        team: players[i].team, league: players[i].league, pos: players[i].pos,
+        message: players[i].message || generalMsg, created_at: result.created_at || new Date().toISOString() });
+    }
+    sharesRenderSent();
+  } catch (e2) {
+    if (errEl)   errEl.textContent = e2.message || 'Send failed.';
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send All'; }
+  }
+}
+
+window.SharesManager = { sharesLoad, sharesSend, sharesOpenSendModal, sharesCloseSendModal, sharesOpenBulkModal, sharesCloseBulkModal, sharesUpdateBadge, sharesRenderInbox, sharesRenderSent, initSharesPage };
