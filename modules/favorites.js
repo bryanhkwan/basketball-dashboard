@@ -7,8 +7,32 @@ var FAVS_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/favorites';
 // ── Dev mode localStorage fallback (mirrors notes.js pattern) ────────────────
 function _devFavsStore() { try { return JSON.parse(localStorage.getItem('_devFavs') || '[]'); } catch (_) { return []; } }
 function _devFavsWrite(arr) { localStorage.setItem('_devFavs', JSON.stringify(arr)); }
+function _devFavFoldersStore() { try { return JSON.parse(localStorage.getItem('_devFavFolders') || '[]'); } catch (_) { return []; } }
+function _devFavFoldersWrite(arr) { localStorage.setItem('_devFavFolders', JSON.stringify(arr)); }
+
 async function _favsFetchDev(path, opts) {
   var method = ((opts && opts.method) || 'GET').toUpperCase();
+  // ── Folders sub-resource ──────────────────────────────────────────────────
+  if (path === '/folders' || path.startsWith('/folders/')) {
+    var folders = _devFavFoldersStore();
+    if (method === 'GET') return { folders: folders };
+    if (method === 'POST') {
+      var body = JSON.parse((opts && opts.body) || '{}');
+      var name = (body.name || '').trim();
+      if (!name) return { error: 'name required' };
+      if (folders.indexOf(name) === -1) { folders.push(name); folders.sort(); _devFavFoldersWrite(folders); }
+      return { name: name, already_exists: folders.indexOf(name) !== -1 };
+    }
+    if (method === 'DELETE') {
+      var delName = decodeURIComponent(path.replace('/folders/', '')).trim();
+      _devFavFoldersWrite(folders.filter(function(f) { return f !== delName; }));
+      var favs2 = _devFavsStore();
+      _devFavsWrite(favs2.map(function(f) { return f.folder === delName ? Object.assign({}, f, { folder: '' }) : f; }));
+      return { success: true };
+    }
+    return null;
+  }
+  // ── Favorites ─────────────────────────────────────────────────────────────
   var favs = _devFavsStore();
   if (method === 'GET') return { favorites: favs };
   if (method === 'POST') {
@@ -36,7 +60,9 @@ async function _favsFetchDev(path, opts) {
 // ── State ─────────────────────────────────────────────────────────────────────
 // pendingFolders: folder names created by user but not yet containing any players.
 // They persist across tab switches until explicitly deleted.
-var favsState = { favorites: [], loaded: false, activeFolder: '', pendingFolders: [], selectedKeys: new Set() };
+// serverFolders: persisted folder names loaded from / saved to the backend.
+// Replaces the old in-memory pendingFolders array.
+var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set() };
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -55,14 +81,18 @@ async function favsFetch(path, opts) {
   return res.json().catch(function() { return null; });
 }
 
-// ── Load favorites from server ────────────────────────────────────────────────
+// ── Load favorites + folders from server ────────────────────────────────────
 async function favsLoad() {
   if (typeof authIsGuest === 'function' && authIsGuest()) return;
   try {
-    const data = await favsFetch();
-    if (!data) return;
-    favsState.favorites = Array.isArray(data) ? data : (data.favorites || []);
-    favsState.loaded    = true;
+    const [favsData, foldersData] = await Promise.all([
+      favsFetch(),
+      favsFetch('/folders'),
+    ]);
+    if (!favsData) return;
+    favsState.favorites    = Array.isArray(favsData) ? favsData : (favsData.favorites || []);
+    favsState.serverFolders = (foldersData && Array.isArray(foldersData.folders)) ? foldersData.folders : [];
+    favsState.loaded = true;
     favsRenderFolderBar();
     favsRenderPage();
     if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer)
@@ -76,12 +106,13 @@ async function favsLoad() {
 // ── Folders ───────────────────────────────────────────────────────────────────
 function favsGetFolders() {
   var seen = {}, result = [];
+  // serverFolders is the authoritative list (persisted folders from DB)
+  favsState.serverFolders.forEach(function(fn) {
+    if (fn && !seen[fn]) { seen[fn] = true; result.push(fn); }
+  });
+  // Also include any folder names already used on favorites (legacy / data integrity)
   favsState.favorites.forEach(function(f) {
     if (f.folder && !seen[f.folder]) { seen[f.folder] = true; result.push(f.folder); }
-  });
-  // Include folders created via the UI that don't have any players yet
-  favsState.pendingFolders.forEach(function(fn) {
-    if (fn && !seen[fn]) { seen[fn] = true; result.push(fn); }
   });
   return result.sort(function(a, b) { return a.localeCompare(b); });
 }
@@ -92,8 +123,6 @@ async function favsSetFolder(playerKey, folderName) {
     await favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: playerKey, folder: folderName }) });
     var fav = favsState.favorites.find(function(f) { return f.player_key === playerKey; });
     if (fav) fav.folder = folderName;
-    // Once a real player is assigned, the folder no longer needs to be pending
-    if (folderName) favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== folderName; });
     favsRenderFolderBar();
     favsRenderPage();
   } catch (e) { console.warn('[Favorites] setFolder error:', e); }
@@ -138,14 +167,12 @@ function favsRenderFolderBar() {
       e.stopPropagation();
       var fname = x.getAttribute('data-del-folder');
       if (!confirm('Delete folder "' + fname + '"? Players will become uncategorized.')) return;
-      var keys = favsState.favorites.filter(function(f) { return f.folder === fname; }).map(function(f) { return f.player_key; });
-      keys.forEach(function(k) {
-        var fav = favsState.favorites.find(function(f) { return f.player_key === k; });
-        if (fav) fav.folder = '';
-        favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: k, folder: '' }) }).catch(function() {});
-      });
-      // Also remove from pending so empty folders disappear on explicit delete
-      favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== fname; });
+      // Clear folder locally in state
+      favsState.favorites.forEach(function(f) { if (f.folder === fname) f.folder = ''; });
+      // Delete folder from server (atomically clears folder column on all its players too)
+      favsFetch('/folders/' + encodeURIComponent(fname), { method: 'DELETE' }).catch(function() {});
+      // Remove from local serverFolders list
+      favsState.serverFolders = favsState.serverFolders.filter(function(fn) { return fn !== fname; });
       if (favsState.activeFolder === fname) favsState.activeFolder = '';
       favsRenderFolderBar(); favsRenderPage();
     });
@@ -474,11 +501,17 @@ function initFavsPage() {
   function _doCreate() {
     var name = (inp ? inp.value : '').trim();
     if (!name) return;
-    // Persist the folder name so it survives tab switches even when empty
-    if (favsState.pendingFolders.indexOf(name) === -1) favsState.pendingFolders.push(name);
+    // Optimistically add to local list immediately for instant UI feedback
+    if (favsState.serverFolders.indexOf(name) === -1) {
+      favsState.serverFolders.push(name);
+      favsState.serverFolders.sort(function(a, b) { return a.localeCompare(b); });
+    }
     favsState.activeFolder = name;
     if (createRow) createRow.style.display = 'none';
     favsRenderFolderBar(); favsRenderPage();
+    // Persist to server in the background
+    favsFetch('/folders', { method: 'POST', body: JSON.stringify({ name: name }) })
+      .catch(function(e) { console.warn('[Favorites] folder create error:', e); });
   }
   if (addBtn)    addBtn.addEventListener   ('click', _doCreate);
   if (cancelBtn) cancelBtn.addEventListener('click', function() { if (createRow) createRow.style.display = 'none'; });
