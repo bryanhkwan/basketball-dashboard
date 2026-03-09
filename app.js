@@ -133,6 +133,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initTbSubNav();
   initTeamsPage();
   initFavsPage();
+  initSharesPage();
 
   // Quick add widgets (roster + opponent)
   setupQuickAdd('tbQuickAddInput',  'tbQuickAddDropdown',  tbAddPlayer,  () => tbRoster);

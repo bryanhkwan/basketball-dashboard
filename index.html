@@ -26,6 +26,7 @@
   <script src="modules/auth.js" defer></script>
   <script src="modules/notes.js" defer></script>
   <script src="modules/favorites.js" defer></script>
+  <script src="modules/shares.js" defer></script>
   <script src="modules/data.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
@@ -102,6 +103,7 @@
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
+  <button class="pageNavBtn" data-page="pageInbox">📨 Inbox <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
 
 <div id="pagePlayers">
@@ -749,6 +751,51 @@
 </div>
 </div><!-- /pageFavorites -->
 
+<!-- Inbox Page -->
+<div id="pageInbox" style="display:none">
+<div class="wrap">
+  <div class="favsPageHeader">
+    <div class="favsPageTitle">
+      <h2>📨 Inbox</h2>
+      <p class="muted" style="font-size:13px;margin-top:3px">Player picks shared with you by teammates. Send picks from any player profile.</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="sharesSubBtn active" data-sub="sharesInboxList">📥 Received</button>
+    <button class="sharesSubBtn secondary" data-sub="sharesSentList">📤 Sent</button>
+  </div>
+  <div id="sharesInboxList" class="sharesPane sharesGrid"></div>
+  <div id="sharesSentList"  class="sharesPane sharesGrid" style="display:none"></div>
+</div>
+</div><!-- /pageInbox -->
+
+<!-- Share Send Modal -->
+<div id="shareModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.78);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal">
+    <div class="shareModalHeader">
+      <div>
+        <div class="shareModalTitle">📤 Send Pick</div>
+        <div id="shareModalPlayerName" class="shareModalSubtitle"></div>
+      </div>
+      <button class="close" id="shareModalCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
+      <input id="shareModalTo" type="text" list="shareUserDatalist" placeholder="Type a username…" autocomplete="off">
+      <datalist id="shareUserDatalist"></datalist>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Message <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea id="shareModalMsg" rows="3" placeholder="Add a scouting note or reason…"></textarea>
+    </div>
+    <div id="shareModalErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="sharesCloseSendModal()">Cancel</button>
+      <button id="shareModalSendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal -->
 <div class="modalBack" id="modalBack">
   <div class="modal" role="dialog" aria-modal="true">
@@ -763,6 +810,7 @@
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
         <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📝 Notes</button>
         <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">🤍 Favorite</button>
+        <button class="secondary" id="mShareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📤 Send</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>

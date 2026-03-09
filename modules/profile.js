@@ -190,6 +190,8 @@ function openProfile(r){
   }
 
   if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
+  var _shareBtn = document.getElementById('mShareBtn');
+  if (_shareBtn) _shareBtn.onclick = function() { if (typeof sharesOpenSendModal === 'function') sharesOpenSendModal(r); };
   modalBack.style.display = 'flex';
 }
 

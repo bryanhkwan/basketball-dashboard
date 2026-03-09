@@ -65,7 +65,8 @@ function authStartLoading() {
 
 /* Called by data.js when data is fully loaded */
 function authFinishLoading() {
-  if (typeof favsLoad === 'function') favsLoad();  // load per-user favorites after data is ready
+  if (typeof favsLoad   === 'function') favsLoad();    // load per-user favorites after data is ready
+  if (typeof sharesLoad === 'function') sharesLoad();  // load inbox + sent
   const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
     _loadDataReady = true;

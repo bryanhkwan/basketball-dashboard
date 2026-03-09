@@ -196,7 +196,7 @@ function favsRenderPage() {
     var ppg    = r ? ((safeNum(r.PPG)    ?? 0).toFixed(1)) : '—';
     var apg    = r ? ((safeNum(r.APG)    ?? 0).toFixed(1)) : '—';
     var rpg    = r ? ((safeNum(r.RPG)    ?? 0).toFixed(1)) : '—';
-    var score  = r ? Math.round(safeNum(r._score) ?? 0)    : '—';
+    var score  = r ? Math.round(safeNum(r.Score)  ?? 0)    : '—';
     var isWBB  = fav.league === 'WBB';
     var badge  = '<span class="favsLeagueBadge ' + (isWBB ? 'favsLeagueBadge--wbb' : 'favsLeagueBadge--mbb') + '">' + _favsEsc(fav.league || 'MBB') + '</span>';
     var pos    = _favsEsc(fav.pos || '—');
