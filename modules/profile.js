@@ -192,6 +192,77 @@ function openProfile(r){
   if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
   var _shareBtn = document.getElementById('mShareBtn');
   if (_shareBtn) _shareBtn.onclick = function() { if (typeof sharesOpenSendModal === 'function') sharesOpenSendModal(r); };
+
+  // ── 📝 Notes button: toggle per-player scout note drawer ─────────────────
+  var _notesBtn    = document.getElementById('mNotesBtn');
+  var _notesDrawer = document.getElementById('mNotesDrawer');
+  var _scoutNotes  = document.getElementById('mScoutNotes');
+  var _scoutStatus = document.getElementById('mScoutNoteStatus');
+  if (_notesDrawer) _notesDrawer.style.display = 'none'; // hide on every new profile open
+  if (_notesBtn && _notesDrawer) {
+    _notesBtn.onclick = function() {
+      var shown = _notesDrawer.style.display !== 'none';
+      if (shown) {
+        _notesDrawer.style.display = 'none';
+      } else {
+        _notesDrawer.style.display = 'flex';
+        // Load existing [Scout] note for this player
+        if (typeof notesState !== 'undefined') {
+          var titleKey  = '[Scout] ' + player;
+          var existing  = notesState.notes.find(function(n) { return String(n.title || '') === titleKey; });
+          if (_scoutNotes) {
+            _scoutNotes.value    = existing ? (existing.content || '') : '';
+            _scoutNotes._noteId  = existing ? String(existing.id)      : null;
+          }
+          if (_scoutStatus) _scoutStatus.textContent = '';
+        }
+      }
+    };
+  }
+  if (_scoutNotes) {
+    var _scoutTimer = null;
+    _scoutNotes.oninput = function() {
+      if (_scoutStatus) _scoutStatus.textContent = 'Unsaved\u2026';
+      clearTimeout(_scoutTimer);
+      var _savedPlayer = player;
+      _scoutTimer = setTimeout(async function() {
+        if (typeof authIsGuest === 'function' && authIsGuest()) {
+          if (_scoutStatus) _scoutStatus.textContent = 'Login to save';
+          return;
+        }
+        if (typeof notesFetch !== 'function') return;
+        var content   = _scoutNotes.value;
+        var noteTitle = '[Scout] ' + _savedPlayer;
+        try {
+          if (_scoutNotes._noteId) {
+            await notesFetch('/' + _scoutNotes._noteId, {
+              method: 'PUT',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (typeof notesState !== 'undefined') {
+              var idx = notesState.notes.findIndex(function(n) { return String(n.id) === _scoutNotes._noteId; });
+              if (idx !== -1) notesState.notes[idx] = Object.assign({}, notesState.notes[idx], { content: content });
+            }
+          } else {
+            var newNote = await notesFetch('', {
+              method: 'POST',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (newNote && newNote.id) {
+              var norm = Object.assign({}, newNote, { id: String(newNote.id) });
+              if (typeof notesState !== 'undefined') notesState.notes.unshift(norm);
+              _scoutNotes._noteId = norm.id;
+            }
+          }
+          if (_scoutStatus) _scoutStatus.textContent = 'Saved \u2713';
+          if (typeof notesRenderList === 'function') notesRenderList();
+        } catch(e2) {
+          if (_scoutStatus) _scoutStatus.textContent = 'Save failed';
+        }
+      }, 1500);
+    };
+  }
+
   modalBack.style.display = 'flex';
 }
 

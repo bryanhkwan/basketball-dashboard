@@ -1916,6 +1916,13 @@
   border-color: rgba(248,113,113,.35);
   box-shadow: 0 4px 20px rgba(248,113,113,.12);
 }
+.shareCard--thread {
+  border-color: rgba(var(--accent-rgb),.22);
+}
+.shareCard--thread.shareCard--unread {
+  border-color: rgba(248,113,113,.45);
+  box-shadow: 0 4px 22px rgba(248,113,113,.15), 0 0 0 1px rgba(var(--accent-rgb),.15);
+}
 .shareCard:hover {
   border-color: rgba(var(--accent-rgb),.35);
   box-shadow: 0 8px 28px rgba(0,0,0,.45);

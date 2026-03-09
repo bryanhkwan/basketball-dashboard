@@ -160,6 +160,196 @@ function sharesUpdateBadge() {
   badge.textContent   = unread > 9 ? '9+' : String(unread);
 }
 
+// ── Thread / bulk rendering helpers ──────────────────────────────────────────
+
+function _renderSingleInboxCard(s) {
+  var unread = !s.read_at;
+  var badge  = s.league === 'WBB'
+    ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
+    : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
+  var r = _sharesGetRow(s.player_key);
+  return (
+    '<div class="shareCard' + (unread ? ' shareCard--unread' : '') + '" data-share-id="' + s.id + '">' +
+      '<div class="shareCardHeader">' +
+        '<div class="shareCardFrom">' + badge + '<span>From <b>' + _sharesEsc(s.from_username) + '</b></span></div>' +
+        '<span class="shareCardTime">' + _sharesTimeAgo(s.created_at) + '</span>' +
+      '</div>' +
+      '<div class="shareCardPlayer">' + _sharesEsc(s.player_name) +
+        (s.team ? '<span class="shareCardTeam"> \u00b7 ' + _sharesEsc(s.team) + (s.pos ? ' \u00b7 ' + _sharesEsc(s.pos) : '') + '</span>' : '') +
+      '</div>' +
+      (s.message ? '<div class="shareCardMsg">\u201c' + _sharesEsc(s.message) + '\u201d</div>' : '') +
+      '<div class="shareCardActions">' +
+        (r ? '<button class="secondary shareCardBtn" data-action="view" data-key="' + _sharesEsc(s.player_key) + '">View Profile</button>' : '') +
+        '<button class="secondary shareCardBtn" data-action="fav" data-key="' + _sharesEsc(s.player_key) + '" data-name="' + _sharesEsc(s.player_name) + '" data-team="' + _sharesEsc(s.team) + '" data-league="' + _sharesEsc(s.league) + '" data-pos="' + _sharesEsc(s.pos||'') + '" data-sid="' + s.id + '">\u2764\ufe0f Save</button>' +
+        '<button class="secondary shareCardBtn shareCardDel" data-action="del" data-id="' + s.id + '">\u2715</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function _renderThreadCard(items, bulkId, dir) {
+  var anyUnread  = items.some(function(s) { return !s.read_at; });
+  var first      = items[0];
+  var league     = (items.find(function(s) { return s.league; }) || {}).league || 'MBB';
+  var badge      = league === 'WBB'
+    ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
+    : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
+  var nameLabel  = dir === 'inbox'
+    ? ('From <b>' + _sharesEsc(first.from_username) + '</b>')
+    : ('To <b>'   + _sharesEsc(first.to_username)   + '</b>');
+  var genMsg     = first.general_message || '';
+  var preview    = items.slice(0, 3).map(function(s) { return s.player_name; }).join(', ') +
+                   (items.length > 3 ? '\u2026' : '');
+  return (
+    '<div class="shareCard shareCard--thread' + (anyUnread ? ' shareCard--unread' : '') + '" data-bulk-id="' + _sharesEsc(bulkId) + '">' +
+      '<div class="shareCardHeader">' +
+        '<div class="shareCardFrom">' + badge + '<span>' + nameLabel + '</span></div>' +
+        '<span class="shareCardTime">' + _sharesTimeAgo(first.created_at) + '</span>' +
+      '</div>' +
+      '<div class="shareCardPlayer">\uD83D\uDCCB Player Package' +
+        '<span class="shareCardTeam"> \u00b7 ' + items.length + ' player' + (items.length !== 1 ? 's' : '') + '</span>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4">' + _sharesEsc(preview) + '</div>' +
+      (genMsg ? '<div class="shareCardMsg">\u201c' + _sharesEsc(genMsg) + '\u201d</div>' : '') +
+      '<div class="shareCardActions">' +
+        '<button class="secondary shareCardBtn" data-action="view-thread" data-bulk-id="' + _sharesEsc(bulkId) + '" data-dir="' + dir + '">Open \uD83D\uDCEC</button>' +
+        '<button class="secondary shareCardBtn shareCardDel" data-action="del-thread" data-bulk-id="' + _sharesEsc(bulkId) + '" data-dir="' + dir + '">\u2715</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function _sharesWireThreadCards(container) {
+  container.querySelectorAll('[data-action="view-thread"]').forEach(function(btn) {
+    var bulkId = btn.getAttribute('data-bulk-id');
+    var dir    = btn.getAttribute('data-dir') || 'inbox';
+    if (!bulkId) return;
+    btn.onclick = function() {
+      var items = dir === 'outbox'
+        ? sharesState.outbox.filter(function(s) { return s.bulk_id === bulkId; })
+        : sharesState.inbox.filter(function(s)  { return s.bulk_id === bulkId; });
+      sharesOpenThread(items, dir, bulkId);
+    };
+  });
+  container.querySelectorAll('[data-action="del-thread"]').forEach(function(btn) {
+    var bulkId = btn.getAttribute('data-bulk-id');
+    var dir    = btn.getAttribute('data-dir') || 'inbox';
+    btn.onclick = function() { sharesDeleteThread(bulkId, dir !== 'outbox'); };
+  });
+}
+
+function sharesOpenThread(items, dir, bulkId) {
+  if (!items || !items.length) return;
+  var first    = items[0];
+  var fromLine = document.getElementById('shareThreadFromLine');
+  var metaLine = document.getElementById('shareThreadMetaLine');
+  var genMsgEl = document.getElementById('shareThreadGenMsgEl');
+  var listEl   = document.getElementById('shareThreadPlayerList');
+  var back     = document.getElementById('shareThreadBack');
+  if (!back) return;
+
+  if (fromLine) {
+    fromLine.innerHTML = dir === 'inbox'
+      ? ('\uD83D\uDCEC From <b>' + _sharesEsc(first.from_username || '\u2014') + '</b>')
+      : ('\uD83D\uDCE4 To <b>'   + _sharesEsc(first.to_username   || '\u2014') + '</b>');
+  }
+  if (metaLine) {
+    metaLine.textContent = items.length + ' player' + (items.length !== 1 ? 's' : '') +
+      ' \u00b7 ' + _sharesTimeAgo(first.created_at);
+  }
+  var genMsg = first.general_message || '';
+  if (genMsgEl) {
+    if (genMsg) { genMsgEl.style.display = ''; genMsgEl.textContent = '\u201c' + genMsg + '\u201d'; }
+    else        { genMsgEl.style.display = 'none'; }
+  }
+
+  if (listEl) {
+    listEl.innerHTML = items.map(function(s) {
+      var r     = _sharesGetRow(s.player_key);
+      var badge = s.league === 'WBB'
+        ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
+        : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
+      var viewBtn = r
+        ? '<button class="secondary shareCardBtn" style="font-size:11px;padding:4px 10px" data-view-key="' + _sharesEsc(s.player_key) + '">View Profile</button>'
+        : '';
+      var saveBtn = dir === 'inbox'
+        ? '<button class="secondary shareCardBtn" style="font-size:11px;padding:4px 10px" data-save-key="' + _sharesEsc(s.player_key) + '" data-name="' + _sharesEsc(s.player_name) + '" data-team="' + _sharesEsc(s.team||'') + '" data-league="' + _sharesEsc(s.league||'') + '" data-pos="' + _sharesEsc(s.pos||'') + '" data-sid="' + s.id + '">\u2764\ufe0f Save</button>'
+        : '';
+      return (
+        '<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px;border:1px solid var(--line)">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+            badge +
+            '<span style="font-weight:600;font-size:14px">' + _sharesEsc(s.player_name) + '</span>' +
+            (s.team ? '<span class="shareCardTeam"> \u00b7 ' + _sharesEsc(s.team) + (s.pos ? ' \u00b7 ' + _sharesEsc(s.pos) : '') + '</span>' : '') +
+          '</div>' +
+          (s.message ? '<div class="shareCardMsg" style="margin-top:6px">\u201c' + _sharesEsc(s.message) + '\u201d</div>' : '') +
+          '<div style="display:flex;gap:6px;margin-top:8px">' + viewBtn + saveBtn + '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    listEl.querySelectorAll('[data-view-key]').forEach(function(btn) {
+      btn.onclick = function() {
+        var rr = _sharesGetRow(btn.getAttribute('data-view-key'));
+        if (rr && typeof openProfile === 'function') openProfile(rr);
+      };
+    });
+    listEl.querySelectorAll('[data-save-key]').forEach(function(btn) {
+      btn.onclick = function() {
+        var key = btn.getAttribute('data-save-key');
+        var sid = btn.getAttribute('data-sid');
+        var rr  = _sharesGetRow(key);
+        if (rr && typeof favsHeart === 'function') {
+          favsHeart(rr);
+          btn.textContent = '\u2713 Saved'; btn.disabled = true;
+        }
+        if (sid) sharesMarkRead(sid);
+      };
+    });
+  }
+
+  if (dir === 'inbox' && bulkId) sharesMarkThreadRead(bulkId);
+  back.style.display = 'flex';
+}
+
+function sharesCloseThread() {
+  var back = document.getElementById('shareThreadBack');
+  if (back) back.style.display = 'none';
+}
+
+async function sharesMarkThreadRead(bulkId) {
+  try {
+    var token   = typeof authGetToken === 'function' ? authGetToken() : null;
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    await fetch(SHARES_API + '/shares/bulk-thread/' + encodeURIComponent(bulkId) + '/read',
+      { method: 'PATCH', credentials: 'include', headers: headers, body: '{}' });
+    sharesState.inbox.forEach(function(s) {
+      if (s.bulk_id === bulkId) s.read_at = s.read_at || new Date().toISOString();
+    });
+    sharesUpdateBadge();
+    sharesRenderInbox();
+  } catch(e) { /* silent */ }
+}
+
+async function sharesDeleteThread(bulkId, fromInbox) {
+  try {
+    var token   = typeof authGetToken === 'function' ? authGetToken() : null;
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    await fetch(SHARES_API + '/shares/bulk-thread/' + encodeURIComponent(bulkId),
+      { method: 'DELETE', credentials: 'include', headers: headers });
+    if (fromInbox) {
+      sharesState.inbox = sharesState.inbox.filter(function(s) { return s.bulk_id !== bulkId; });
+      sharesUpdateBadge();
+      sharesRenderInbox();
+    } else {
+      sharesState.outbox = sharesState.outbox.filter(function(s) { return s.bulk_id !== bulkId; });
+      sharesRenderSent();
+    }
+  } catch(e) { console.warn('[Shares] delete thread error:', e); }
+}
+
 // ── Render inbox ──────────────────────────────────────────────────────────────
 function sharesRenderInbox() {
   var container = document.getElementById('sharesInboxList');
@@ -167,44 +357,38 @@ function sharesRenderInbox() {
 
   if (!sharesState.inbox.length) {
     container.innerHTML =
-      '<div class="sharesEmpty"><div class="sharesEmptyIcon">📭</div>' +
+      '<div class="sharesEmpty"><div class="sharesEmptyIcon">\uD83D\uDCED</div>' +
       '<div class="sharesEmptyTitle">No received picks</div>' +
       '<div class="sharesEmptyDesc">When a teammate sends you a player, it\'ll show up here.</div></div>';
     return;
   }
 
-  container.innerHTML = sharesState.inbox.map(function(s) {
-    var unread = !s.read_at;
-    var badge  = s.league === 'WBB'
-      ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
-      : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
-    var r = _sharesGetRow(s.player_key);
-    return (
-      '<div class="shareCard' + (unread ? ' shareCard--unread' : '') + '" data-share-id="' + s.id + '">' +
-        '<div class="shareCardHeader">' +
-          '<div class="shareCardFrom">' + badge + '<span>From <b>' + _sharesEsc(s.from_username) + '</b></span></div>' +
-          '<span class="shareCardTime">' + _sharesTimeAgo(s.created_at) + '</span>' +
-        '</div>' +
-        '<div class="shareCardPlayer">' + _sharesEsc(s.player_name) +
-          (s.team ? '<span class="shareCardTeam"> · ' + _sharesEsc(s.team) + (s.pos ? ' · ' + _sharesEsc(s.pos) : '') + '</span>' : '') +
-        '</div>' +
-        (s.message ? '<div class="shareCardMsg">\u201c' + _sharesEsc(s.message) + '\u201d</div>' : '') +
-        '<div class="shareCardActions">' +
-          (r ? '<button class="secondary shareCardBtn" data-action="view" data-key="' + _sharesEsc(s.player_key) + '">View Profile</button>' : '') +
-          '<button class="secondary shareCardBtn" data-action="fav" data-key="' + _sharesEsc(s.player_key) + '" data-name="' + _sharesEsc(s.player_name) + '" data-team="' + _sharesEsc(s.team) + '" data-league="' + _sharesEsc(s.league) + '" data-pos="' + _sharesEsc(s.pos||'') + '" data-sid="' + s.id + '">❤️ Save</button>' +
-          '<button class="secondary shareCardBtn shareCardDel" data-action="del" data-id="' + s.id + '">✕</button>' +
-        '</div>' +
-      '</div>'
-    );
+  // Separate singles (no bulk_id) from grouped threads
+  var singles   = sharesState.inbox.filter(function(s) { return !s.bulk_id; });
+  var threadMap = {};
+  sharesState.inbox.filter(function(s) { return !!s.bulk_id; }).forEach(function(s) {
+    if (!threadMap[s.bulk_id]) threadMap[s.bulk_id] = [];
+    threadMap[s.bulk_id].push(s);
+  });
+
+  var renderList = singles.map(function(s) { return { single: true, s: s, time: s.created_at || '' }; });
+  Object.keys(threadMap).forEach(function(bid) {
+    var grp = threadMap[bid].slice().sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+    renderList.push({ single: false, all: grp, bulkId: bid, time: grp[0].created_at || '' });
+  });
+  renderList.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
+
+  container.innerHTML = renderList.map(function(item) {
+    return item.single ? _renderSingleInboxCard(item.s) : _renderThreadCard(item.all, item.bulkId, 'inbox');
   }).join('');
 
   _sharesWireInbox(container);
+  _sharesWireThreadCards(container);
 
-  // Auto-mark unread as read when this pane is visible
-  if (document.getElementById('sharesInboxList') &&
-      document.getElementById('pageCollaborate') &&
+  // Auto-mark individual (non-thread) unread items as read when pane is visible
+  if (document.getElementById('pageCollaborate') &&
       document.getElementById('pageCollaborate').style.display !== 'none') {
-    sharesState.inbox.filter(function(s) { return !s.read_at; })
+    sharesState.inbox.filter(function(s) { return !s.read_at && !s.bulk_id; })
       .forEach(function(s) { sharesMarkRead(s.id); });
   }
 }
@@ -258,13 +442,30 @@ function sharesRenderSent() {
 
   if (!sharesState.outbox.length) {
     container.innerHTML =
-      '<div class="sharesEmpty"><div class="sharesEmptyIcon">📤</div>' +
+      '<div class="sharesEmpty"><div class="sharesEmptyIcon">\uD83D\uDCE4</div>' +
       '<div class="sharesEmptyTitle">Nothing sent yet</div>' +
-      '<div class="sharesEmptyDesc">Open a player profile and click <b>📤 Send</b> to share a pick.</div></div>';
+      '<div class="sharesEmptyDesc">Open a player profile and click <b>\uD83D\uDCE4 Send</b> to share a pick.</div></div>';
     return;
   }
 
-  container.innerHTML = sharesState.outbox.map(function(s) {
+  // Separate singles from thread groups
+  var singles   = sharesState.outbox.filter(function(s) { return !s.bulk_id; });
+  var threadMap = {};
+  sharesState.outbox.filter(function(s) { return !!s.bulk_id; }).forEach(function(s) {
+    if (!threadMap[s.bulk_id]) threadMap[s.bulk_id] = [];
+    threadMap[s.bulk_id].push(s);
+  });
+
+  var renderList = singles.map(function(s) { return { single: true, s: s, time: s.created_at || '' }; });
+  Object.keys(threadMap).forEach(function(bid) {
+    var grp = threadMap[bid].slice().sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+    renderList.push({ single: false, all: grp, bulkId: bid, time: grp[0].created_at || '' });
+  });
+  renderList.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
+
+  container.innerHTML = renderList.map(function(item) {
+    if (!item.single) return _renderThreadCard(item.all, item.bulkId, 'outbox');
+    var s     = item.s;
     var badge = s.league === 'WBB'
       ? '<span class="favsLeagueBadge favsLeagueBadge--wbb">WBB</span>'
       : '<span class="favsLeagueBadge favsLeagueBadge--mbb">MBB</span>';
@@ -275,11 +476,11 @@ function sharesRenderSent() {
           '<span class="shareCardTime">' + _sharesTimeAgo(s.created_at) + '</span>' +
         '</div>' +
         '<div class="shareCardPlayer">' + _sharesEsc(s.player_name) +
-          (s.team ? '<span class="shareCardTeam"> · ' + _sharesEsc(s.team) + '</span>' : '') +
+          (s.team ? '<span class="shareCardTeam"> \u00b7 ' + _sharesEsc(s.team) + '</span>' : '') +
         '</div>' +
         (s.message ? '<div class="shareCardMsg">\u201c' + _sharesEsc(s.message) + '\u201d</div>' : '') +
         '<div class="shareCardActions">' +
-          '<button class="secondary shareCardBtn shareCardDel" data-action="del-out" data-id="' + s.id + '">✕ Remove</button>' +
+          '<button class="secondary shareCardBtn shareCardDel" data-action="del-out" data-id="' + s.id + '">\u2715 Remove</button>' +
         '</div>' +
       '</div>'
     );
@@ -288,6 +489,7 @@ function sharesRenderSent() {
   container.querySelectorAll('[data-action="del-out"]').forEach(function(btn) {
     btn.onclick = function() { sharesDelete(btn.getAttribute('data-id'), false); };
   });
+  _sharesWireThreadCards(container);
 }
 
 // ── Send modal ────────────────────────────────────────────────────────────────
@@ -367,6 +569,12 @@ function initSharesPage() {
   if (cancelBtn) cancelBtn.addEventListener('click', sharesCloseSendModal);
   if (back)      back.addEventListener     ('click', function(e) { if (e.target === back) sharesCloseSendModal(); });
 
+  // Thread detail modal close
+  var threadCloseBtn = document.getElementById('shareThreadCloseBtn');
+  var threadBack     = document.getElementById('shareThreadBack');
+  if (threadCloseBtn) threadCloseBtn.addEventListener('click', sharesCloseThread);
+  if (threadBack)     threadBack.addEventListener('click', function(e) { if (e.target === threadBack) sharesCloseThread(); });
+
   // Mark inbox read when the page is opened
   var inboxNavBtn = document.querySelector('[data-page="pageCollaborate"]');
   if (inboxNavBtn) {
@@ -445,12 +653,17 @@ async function _sharesDoBulkSend() {
     if (!res.ok) { var e = await res.json().catch(function() { return {}; }); throw new Error(e.error || ('Error ' + res.status)); }
     var result = await res.json();
     sharesCloseBulkModal();
-    // Append a summary entry to outbox state
+    // Add sent entries to local outbox — grouped by bulk_id from server
+    var bid = result.bulk_id || ('local_' + Date.now());
     for (var i = 0; i < players.length; i++) {
-      sharesState.outbox.unshift({ id: 'bulk_' + Date.now() + '_' + i, to_username: to,
+      sharesState.outbox.unshift({
+        id: bid + '_' + i, to_username: to,
         player_key: players[i].player_key, player_name: players[i].player_name,
         team: players[i].team, league: players[i].league, pos: players[i].pos,
-        message: players[i].message || generalMsg, created_at: result.created_at || new Date().toISOString() });
+        message: players[i].message || '',
+        bulk_id: bid, general_message: generalMsg,
+        created_at: result.created_at || new Date().toISOString()
+      });
     }
     sharesRenderSent();
   } catch (e2) {
@@ -459,4 +672,4 @@ async function _sharesDoBulkSend() {
   }
 }
 
-window.SharesManager = { sharesLoad, sharesSend, sharesOpenSendModal, sharesCloseSendModal, sharesOpenBulkModal, sharesCloseBulkModal, sharesUpdateBadge, sharesRenderInbox, sharesRenderSent, initSharesPage };
+window.SharesManager = { sharesLoad, sharesSend, sharesOpenSendModal, sharesCloseSendModal, sharesOpenBulkModal, sharesCloseBulkModal, sharesOpenThread, sharesCloseThread, sharesUpdateBadge, sharesRenderInbox, sharesRenderSent, initSharesPage };

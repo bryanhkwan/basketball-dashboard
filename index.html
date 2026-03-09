@@ -833,6 +833,23 @@
   </div>
 </div>
 
+<!-- Thread Detail Modal -->
+<div id="shareThreadBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:540px;max-height:85vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
+    <div class="shareModalHeader" style="padding:18px 20px 14px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <div>
+        <div class="shareModalTitle" id="shareThreadFromLine">—</div>
+        <div id="shareThreadMetaLine" class="shareModalSubtitle" style="margin-top:3px"></div>
+      </div>
+      <button class="close" id="shareThreadCloseBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+      <div id="shareThreadGenMsgEl" style="display:none;background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text);border:1px solid var(--line);font-style:italic"></div>
+      <div id="shareThreadPlayerList" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal -->
 <div class="modalBack" id="modalBack">
   <div class="modal" role="dialog" aria-modal="true">
