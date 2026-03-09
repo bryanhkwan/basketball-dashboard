@@ -257,6 +257,9 @@ function initFavsPage() {
   var lgEl     = document.getElementById('favsLeagueFilter');
   if (searchEl) searchEl.addEventListener('input',  favsRenderPage);
   if (lgEl)     lgEl.addEventListener    ('change', favsRenderPage);
+  // Render anything already in state (handles the case where favsLoad() resolved
+  // before initFavsPage ran, or a race where the initial render was lost).
+  favsRenderPage();
 }
 
 window.FavoritesManager = { favsLoad, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, initFavsPage };
