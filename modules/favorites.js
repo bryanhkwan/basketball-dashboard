@@ -34,7 +34,7 @@ async function _favsFetchDev(path, opts) {
   }
   // ── Favorites ─────────────────────────────────────────────────────────────
   var favs = _devFavsStore();
-  if (method === 'GET') return { favorites: favs };
+  if (method === 'GET') return { favorites: favs, folders: _devFavFoldersStore() };
   if (method === 'POST') {
     var body = JSON.parse((opts && opts.body) || '{}');
     if (favs.find(function(f) { return f.player_key === body.player_key; }))
@@ -85,13 +85,11 @@ async function favsFetch(path, opts) {
 async function favsLoad() {
   if (typeof authIsGuest === 'function' && authIsGuest()) return;
   try {
-    const [favsData, foldersData] = await Promise.all([
-      favsFetch(),
-      favsFetch('/folders'),
-    ]);
-    if (!favsData) return;
-    favsState.favorites    = Array.isArray(favsData) ? favsData : (favsData.favorites || []);
-    favsState.serverFolders = (foldersData && Array.isArray(foldersData.folders)) ? foldersData.folders : [];
+    const data = await favsFetch();
+    if (!data) return;
+    favsState.favorites     = Array.isArray(data) ? data : (data.favorites || []);
+    // folders array is included in the same response
+    favsState.serverFolders = Array.isArray(data.folders) ? data.folders : [];
     favsState.loaded = true;
     favsRenderFolderBar();
     favsRenderPage();
