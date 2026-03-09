@@ -443,6 +443,69 @@ function enrichScoutReportWithShots(shots) {
       + '<div class="scoutItems">' + newItems + '</div>'
       + '</div>');
   }
+
+  // ── Scoring Consistency (requires game field — added to worker 2026-03) ────
+  var shotsWithGame = shots.filter(function(s) { return s.game; });
+  if (shotsWithGame.length >= 20) {
+    var gamePoints = {};
+    var pointFor = { rim: 2, jumper: 2, three_pointer: 3, free_throw: 1 };
+    shotsWithGame.forEach(function(s) {
+      if (!s.made) return;
+      if (!gamePoints[s.game]) gamePoints[s.game] = 0;
+      gamePoints[s.game] += (pointFor[s.range] || 2);
+    });
+    var gamePtsArr = Object.values(gamePoints);
+    if (gamePtsArr.length >= 8) {
+      var mean = gamePtsArr.reduce(function(a, v) { return a + v; }, 0) / gamePtsArr.length;
+      var variance = gamePtsArr.reduce(function(a, v) { return a + (v - mean) * (v - mean); }, 0) / gamePtsArr.length;
+      var stdDev = Math.sqrt(variance);
+      var cv = mean > 0 ? stdDev / mean : 0;
+      var minPts = Math.min.apply(null, gamePtsArr);
+      var maxPts = Math.max.apply(null, gamePtsArr);
+
+      // Consistency label
+      var cLabel, cClass;
+      if (cv < 0.28) {
+        cLabel = 'Iron Man — exceptionally consistent scorer every night';
+        cClass = 'scoutItem--strength';
+      } else if (cv < 0.40) {
+        cLabel = 'Reliable — steady output with limited game-to-game variance';
+        cClass = '';
+      } else if (cv < 0.55) {
+        cLabel = 'Streaky — output varies significantly; big games mixed with quiet ones';
+        cClass = '';
+      } else {
+        cLabel = 'Boom-or-bust scorer — extreme night-to-night variance';
+        cClass = 'scoutItem--weakness';
+      }
+
+      // Inject ±σ badge next to PPG value in stat bars
+      var barItems = document.querySelectorAll('#mBars .barItem');
+      barItems.forEach(function(item) {
+        var bEl = item.querySelector('.barTop b');
+        if (bEl && bEl.textContent.trim() === 'PPG') {
+          var muteEl = item.querySelector('.barTop .muted');
+          if (muteEl && !muteEl.querySelector('.sigmaTag')) {
+            var badge = document.createElement('span');
+            badge.className = 'sigmaTag';
+            badge.title = 'Std dev of per-game scoring (' + gamePtsArr.length + ' games)';
+            badge.textContent = ' ±' + stdDev.toFixed(1);
+            muteEl.appendChild(badge);
+          }
+        }
+      });
+
+      // Add Consistency scout section
+      el.insertAdjacentHTML('beforeend',
+        '<div class="scoutSection">'
+        + '<div class="scoutSectionHead">📊 Consistency</div>'
+        + '<div class="scoutItems">'
+        + '<div class="scoutItem ' + cClass + '">' + cLabel + '</div>'
+        + '<div class="scoutItem">' + mean.toFixed(1) + ' pts/game ± ' + stdDev.toFixed(1) + ' σ over ' + gamePtsArr.length + ' games · range ' + minPts + '–' + maxPts + ' pts</div>'
+        + '</div>'
+        + '</div>');
+    }
+  }
 }
 
 // ── Career History ──────────────────────────────────────────
