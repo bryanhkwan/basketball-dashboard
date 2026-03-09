@@ -62,7 +62,7 @@ async function _favsFetchDev(path, opts) {
 // They persist across tab switches until explicitly deleted.
 // serverFolders: persisted folder names loaded from / saved to the backend.
 // Replaces the old in-memory pendingFolders array.
-var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set() };
+var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [] };
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -118,6 +118,12 @@ function favsGetFolders() {
 async function favsSetFolder(playerKey, folderName) {
   folderName = (folderName || '').trim();
   try {
+    // Ensure the folder exists in fav_folders if it's a new name
+    if (folderName && favsState.serverFolders.indexOf(folderName) === -1) {
+      await favsFetch('/folders', { method: 'POST', body: JSON.stringify({ name: folderName }) }).catch(function() {});
+      favsState.serverFolders.push(folderName);
+      favsState.serverFolders.sort(function(a, b) { return a.localeCompare(b); });
+    }
     await favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: playerKey, folder: folderName }) });
     var fav = favsState.favorites.find(function(f) { return f.player_key === playerKey; });
     if (fav) fav.folder = folderName;
@@ -334,12 +340,23 @@ function _favsRenderBulkBar() {
       val = name;
     }
     var targetFolder = (val === '__none__') ? '' : val;
+    // Ensure folder exists in fav_folders before assigning players to it
+    if (targetFolder && favsState.serverFolders.indexOf(targetFolder) === -1) {
+      await favsFetch('/folders', { method: 'POST', body: JSON.stringify({ name: targetFolder }) }).catch(function() {});
+      favsState.serverFolders.push(targetFolder);
+      favsState.serverFolders.sort(function(a, b) { return a.localeCompare(b); });
+    }
     var keys = Array.from(favsState.selectedKeys);
+    // Update local state immediately for responsive UI
     keys.forEach(function(k) {
       var fav = favsState.favorites.find(function(f) { return f.player_key === k; });
       if (fav) fav.folder = targetFolder;
-      favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: k, folder: targetFolder }) }).catch(function() {});
     });
+    // Persist all folder assignments to the server
+    await Promise.all(keys.map(function(k) {
+      return favsFetch('', { method: 'PATCH', body: JSON.stringify({ player_key: k, folder: targetFolder }) })
+        .catch(function(e) { console.warn('[Favorites] bulk setFolder error for', k, e); });
+    }));
     // Folder now has real players — remove from pending
     if (targetFolder) favsState.pendingFolders = favsState.pendingFolders.filter(function(fn) { return fn !== targetFolder; });
     favsState.selectedKeys.clear();
