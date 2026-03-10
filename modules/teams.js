@@ -18,16 +18,16 @@ var _thCompareStats = null;
 var _thLastMatchupCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 
-// ── Model toggle (pill switch — mirrors MBB/WBB league toggle) ────────────────
+// ── Model toggle (exact same structure as MBB/WBB league toggle) ─────────────
 function thSetDeepModel(heavy) {
   _thDeepUseHeavyModel = !!heavy;
   localStorage.setItem('thDeepModel', _thDeepUseHeavyModel ? 'heavy' : 'lite');
   var cb = document.getElementById('thModelSwitchInput');
   if (cb) cb.checked = _thDeepUseHeavyModel;
-  var lblLite = document.getElementById('thModelLblLite');
+  var lblLite  = document.getElementById('thModelLblLite');
   var lblHeavy = document.getElementById('thModelLblHeavy');
-  if (lblLite)  lblLite.classList.toggle('active', !_thDeepUseHeavyModel);
-  if (lblHeavy) lblHeavy.classList.toggle('active',  _thDeepUseHeavyModel);
+  if (lblLite)  { lblLite.classList.toggle('active', !_thDeepUseHeavyModel); }
+  if (lblHeavy) { lblHeavy.classList.toggle('active',  _thDeepUseHeavyModel); }
 }
 
 function initTeamsDOMRefs() {
@@ -837,8 +837,8 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
     var pct = (count / maxCount * 100).toFixed(0);
     var color = margin > 0 ? 'var(--accent)' : margin < 0 ? 'var(--warn)' : 'var(--muted)';
     histHtml += '<div class="thMCBar">' +
-      '<div class="thMCBarFill" style="width:' + pct + '%;background:' + color + '"></div>' +
       '<span class="thMCBarLabel">' + (margin > 0 ? '+' : '') + margin + '</span>' +
+      '<div class="thMCBarTrack"><div class="thMCBarFill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
     '</div>';
   });
 
@@ -849,30 +849,39 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
   }
 
   return '<div class="thMCResult">' +
-    '<div class="thMCHeadline">' +
-      '<div class="thMCWinBox" style="border-color:var(--accent)">' +
-        '<div class="thMCWinPct">' + mc.aWinPct + '%</div>' +
-        '<div class="thMCWinLabel">' + aName + '</div>' +
+    // ── Win probability ──────────────────────────────────────────────
+    '<div class="thMCWinRow">' +
+      '<div class="thMCWinCard thMCWinCard--a">' +
+        '<div class="thMCWinPct" style="color:var(--accent)">' + mc.aWinPct + '%</div>' +
+        '<div class="thMCWinBar"><div class="thMCWinBarFill" style="width:' + mc.aWinPct + '%;background:var(--accent)"></div></div>' +
+        '<div class="thMCWinName">' + aName + '</div>' +
       '</div>' +
-      '<div class="thMCVs">vs</div>' +
-      '<div class="thMCWinBox" style="border-color:var(--warn)">' +
-        '<div class="thMCWinPct">' + mc.bWinPct + '%</div>' +
-        '<div class="thMCWinLabel">' + bName + '</div>' +
+      '<div class="thMCWinCardSep">' +
+        '<div class="thMCWinVs">WIN %</div>' +
+        '<div class="thMCScoreProj">' + mc.avgScoreA + ' – ' + mc.avgScoreB + '</div>' +
+        '<div class="thMCScoreLbl">proj. score</div>' +
+      '</div>' +
+      '<div class="thMCWinCard thMCWinCard--b">' +
+        '<div class="thMCWinPct" style="color:var(--warn)">' + mc.bWinPct + '%</div>' +
+        '<div class="thMCWinBar"><div class="thMCWinBarFill" style="width:' + mc.bWinPct + '%;background:var(--warn)"></div></div>' +
+        '<div class="thMCWinName">' + bName + '</div>' +
       '</div>' +
     '</div>' +
-    '<div class="thMCStats">' +
-      '<div class="thMCStat"><span class="thMCStatLabel">Avg Score</span><span class="thMCStatVal">' + mc.avgScoreA + ' \u2013 ' + mc.avgScoreB + '</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">Avg Margin</span><span class="thMCStatVal">' + marginStr(mc.avgMargin) + '</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">Median Margin</span><span class="thMCStatVal">' + marginStr(mc.medianMargin) + '</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">Std Dev</span><span class="thMCStatVal">\u00B1' + mc.stdDev + ' pts</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">80% Range</span><span class="thMCStatVal">' + marginStr(mc.p10) + ' to ' + marginStr(mc.p90) + '</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">Close Game (\u22645pt)</span><span class="thMCStatVal">' + mc.closeGamePct + '%</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">' + aName + ' Blowout (10+)</span><span class="thMCStatVal">' + mc.blowoutAPct + '%</span></div>' +
-      '<div class="thMCStat"><span class="thMCStatLabel">' + bName + ' Blowout (10+)</span><span class="thMCStatVal">' + mc.blowoutBPct + '%</span></div>' +
+    // ── Key stats ────────────────────────────────────────────────────
+    '<div class="thMCGrid">' +
+      '<div class="thMCGridItem"><div class="thMCGridVal">' + marginStr(mc.avgMargin) + '</div><div class="thMCGridLbl">Avg Margin</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal">' + marginStr(mc.medianMargin) + '</div><div class="thMCGridLbl">Median Margin</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal">±' + mc.stdDev + ' pts</div><div class="thMCGridLbl">Std Deviation</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal">' + mc.closeGamePct + '%</div><div class="thMCGridLbl">Close Game (≤5pt)</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--accent)">' + mc.blowoutAPct + '%</div><div class="thMCGridLbl">' + aName + ' Blowout</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--warn)">' + mc.blowoutBPct + '%</div><div class="thMCGridLbl">' + bName + ' Blowout</div></div>' +
     '</div>' +
-    '<div class="thMCHistTitle">Score Margin Distribution (' + mc.nSims.toLocaleString() + ' simulations)</div>' +
+    // ── 80% range banner ─────────────────────────────────────────────
+    '<div class="thMCRangeBanner">80% of simulations fall between <strong>' + marginStr(mc.p10) + '</strong> and <strong>' + marginStr(mc.p90) + '</strong></div>' +
+    // ── Histogram ────────────────────────────────────────────────────
+    '<div class="thMCHistTitle">Score Margin Distribution</div>' +
     '<div class="thMCHist">' + histHtml + '</div>' +
-    '<div class="thMCNote">' + mc.nSims.toLocaleString() + ' simulations \u00B7 Based on adjusted efficiency ratings & pace</div>' +
+    '<div class="thMCNote">' + mc.nSims.toLocaleString() + ' simulations · Adjusted efficiency ratings & pace</div>' +
   '</div>';
 }
 
@@ -1658,13 +1667,13 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
         <div class="thDeepControls">
-          <div class="thModelSwitch">
-            <span class="thModelLbl${_thDeepUseHeavyModel ? '' : ' active'}" id="thModelLblLite">⚡ 2.5 Lite</span>
-            <label class="thModelTrackWrap">
+          <div class="leagueSwitch" style="gap:6px">
+            <span class="lsLabel${_thDeepUseHeavyModel ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
+            <label class="lsTrackWrap">
               <input type="checkbox" id="thModelSwitchInput"${_thDeepUseHeavyModel ? ' checked' : ''}>
-              <span class="thModelTrack"></span>
+              <span class="lsTrack"></span>
             </label>
-            <span class="thModelLbl${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelLblHeavy">🧠 3 Flash</span>
+            <span class="lsLabel${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">🧠 Pro</span>
           </div>
           <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
