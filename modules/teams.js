@@ -18,14 +18,16 @@ var _thCompareStats = null;
 var _thLastMatchupCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 
-// ── Model toggle ──────────────────────────────────────────────────────────────
+// ── Model toggle (pill switch — mirrors MBB/WBB league toggle) ────────────────
 function thSetDeepModel(heavy) {
   _thDeepUseHeavyModel = !!heavy;
   localStorage.setItem('thDeepModel', _thDeepUseHeavyModel ? 'heavy' : 'lite');
-  var btnLite = document.getElementById('thModelBtnLite');
-  var btnHeavy = document.getElementById('thModelBtnHeavy');
-  if (btnLite)  btnLite.classList.toggle('active', !_thDeepUseHeavyModel);
-  if (btnHeavy) btnHeavy.classList.toggle('active',  _thDeepUseHeavyModel);
+  var cb = document.getElementById('thModelSwitchInput');
+  if (cb) cb.checked = _thDeepUseHeavyModel;
+  var lblLite = document.getElementById('thModelLblLite');
+  var lblHeavy = document.getElementById('thModelLblHeavy');
+  if (lblLite)  lblLite.classList.toggle('active', !_thDeepUseHeavyModel);
+  if (lblHeavy) lblHeavy.classList.toggle('active',  _thDeepUseHeavyModel);
 }
 
 function initTeamsDOMRefs() {
@@ -788,6 +790,41 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
   return result;
 }
 
+// ── thRunMonteCarloUI — standalone Monte Carlo runner (separate from Deep Analysis) ──
+function thRunMonteCarloUI() {
+  if (!thCurrentTeam || !thCurrentCompareTeam) {
+    if (typeof showWarn === 'function') showWarn('Load a team and compare opponent first.');
+    return;
+  }
+  var output = document.getElementById('thMonteCarloOutput');
+  var btn = document.getElementById('thMonteCarloBtn');
+  if (!output) return;
+
+  var aName = thCurrentTeam;
+  var bName = thCurrentCompareTeam;
+  var ratA = teamRatings[(aName || '').toLowerCase()] || null;
+  var ratB = teamRatings[(bName || '').toLowerCase()] || null;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Simulating…'; }
+  output.style.display = 'block';
+  output.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running 10,000 simulations…</div>';
+
+  // Use setTimeout to let the UI update before running CPU-heavy sim
+  setTimeout(function() {
+    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, 10000);
+    output.innerHTML =
+      '<div class="thDeepHeader" style="background:rgba(124,58,237,.15)">' +
+        '<span class="thDeepIcon">🎲</span>' +
+        '<strong>Monte Carlo Simulation — ' + aName + ' vs ' + bName + '</strong>' +
+        '<div style="margin-left:auto;display:flex;gap:6px;align-items:center">' +
+          '<button class="thDeepClose" onclick="document.getElementById(\'thMonteCarloOutput\').style.display=\'none\'">&times;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName) + '</div>';
+    if (btn) { btn.disabled = false; btn.textContent = '🎲 Run Simulation'; }
+  }, 30);
+}
+
 function _thRenderMonteCarloHTML(mc, aName, bName) {
   if (!mc) return '<div class="thMCError">Insufficient data for simulation (need adjusted efficiency ratings for both teams).</div>';
 
@@ -981,11 +1018,6 @@ async function thRunDeepAnalysis() {
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!rawText) throw new Error('Empty response from AI.');
-    if (status) status.textContent = 'Running simulation\u2026';
-
-    // Run Monte Carlo simulation
-    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, 10000);
-
     if (status) status.textContent = '';
     output.innerHTML =
       '<div class="thDeepHeader">' +
@@ -998,7 +1030,6 @@ async function thRunDeepAnalysis() {
         '</div>' +
       '</div>' +
       '<div class="thDeepBody">' +
-        '<div class="thDeepSection"><div class="thDeepSectionHead" style="border-left-color:var(--accent)"><span class="thDeepSectionIcon">\uD83C\uDFB2</span><span class="thDeepSectionTitle">Monte Carlo Simulation</span></div><div class="thDeepSectionBody">' + _thRenderMonteCarloHTML(mc, aName, bName) + '</div></div>' +
         _thFmtDeepText(rawText) +
       '</div>';
     output.dataset.lastRaw = rawText;
@@ -1006,7 +1037,6 @@ async function thRunDeepAnalysis() {
     output.dataset.bName   = bName;
     output.dataset.season  = thCurrentSeason;
     output.dataset.model   = selectedModel;
-    output.dataset.monteCarlo = mc ? JSON.stringify(mc) : '';
   } catch (e) {
     if (status) status.textContent = '';
     output.innerHTML = '<div class="thDeepError">\u26A0 Analysis failed: ' + e.message + '. Check console for details.</div>';
@@ -1025,8 +1055,7 @@ function thDownloadDeepPDF() {
   var season  = output.dataset.season || '';
   var model   = output.dataset.model  || '';
   var rawText = output.dataset.lastRaw;
-  var mc = null;
-  try { mc = output.dataset.monteCarlo ? JSON.parse(output.dataset.monteCarlo) : null; } catch(_) {}
+  var mc = _thLastMonteCarlo || null;
 
   // Grab matchup shot chart SVGs from the page
   var shotChartsHtml = '';
@@ -1629,9 +1658,13 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
         <div class="thDeepControls">
-          <div class="thModelPillGroup">
-            <button id="thModelBtnLite" class="thModelPillBtn${_thDeepUseHeavyModel ? '' : ' active'}" onclick="thSetDeepModel(false)">⚡ 2.5 Flash Lite</button>
-            <button id="thModelBtnHeavy" class="thModelPillBtn${_thDeepUseHeavyModel ? ' active' : ''}" onclick="thSetDeepModel(true)">🧠 3 Flash</button>
+          <div class="thModelSwitch">
+            <span class="thModelLbl${_thDeepUseHeavyModel ? '' : ' active'}" id="thModelLblLite">⚡ 2.5 Lite</span>
+            <label class="thModelTrackWrap">
+              <input type="checkbox" id="thModelSwitchInput"${_thDeepUseHeavyModel ? ' checked' : ''}>
+              <span class="thModelTrack"></span>
+            </label>
+            <span class="thModelLbl${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelLblHeavy">🧠 3 Flash</span>
           </div>
           <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
@@ -1639,7 +1672,17 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       </div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>
+    <div class="thMonteCarloRow">
+      <div class="thDNASectionLabel" style="margin:0">🎲 Monte Carlo Simulation</div>
+      <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+    </div>
+    <div id="thMonteCarloOutput" class="thDeepOutput" style="display:none"></div>
     <div id="thDeepOutput" class="thDeepOutput" style="display:none"></div>`;
+  // Wire up model toggle checkbox
+  setTimeout(function() {
+    var cb = document.getElementById('thModelSwitchInput');
+    if (cb) cb.addEventListener('change', function() { thSetDeepModel(cb.checked); });
+  }, 50);
   setTimeout(() => thInitShotChart('thMatchup'), 50);
 }
 
