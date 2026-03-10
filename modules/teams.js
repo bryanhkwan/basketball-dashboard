@@ -16,6 +16,17 @@ var _thCurrentStats = null;
 var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
+var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
+
+// ── Model toggle ──────────────────────────────────────────────────────────────
+function thToggleDeepModel() {
+  _thDeepUseHeavyModel = !_thDeepUseHeavyModel;
+  localStorage.setItem('thDeepModel', _thDeepUseHeavyModel ? 'heavy' : 'lite');
+  const toggle = document.getElementById('thModelToggle');
+  if (toggle) toggle.classList.toggle('active', _thDeepUseHeavyModel);
+  const label = document.getElementById('thModelActiveLabel');
+  if (label) label.textContent = _thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
+}
 
 function initTeamsDOMRefs() {
   thTeamSearch  = document.getElementById('thTeamSearch');
@@ -758,54 +769,185 @@ async function thRunDeepAnalysis() {
     parts: [{ text: 'You are an expert NCAA basketball analyst and coach. You have deep knowledge of advanced statistics, four factors, shot charting, and strategic game planning. Analyze only the structured data provided — do not reference external news or speculation. Be specific, data-driven, and actionable. Use markdown formatting with ## headers and bullet points for readability.' }]
   };
 
-  const userPrompt = `Produce a complete coach-level deep analysis for **${aName} vs ${bName}**.\n\n` +
+  // Fetch opponent game log (cached) to build "How to Beat" context
+  let oppGameNote = '';
+  try {
+    const oppGamesData = typeof loadGamesForTeam === 'function'
+      ? await loadGamesForTeam(bName, thCurrentSeason) : null;
+    const oppGames = (oppGamesData && oppGamesData.games) ? oppGamesData.games : [];
+    if (oppGames.length) {
+      let wins = 0, losses = 0, totalPF = 0, totalPA = 0;
+      const lossDetails = [], bigWins = [];
+      oppGames.forEach(g => {
+        const isHome = (g.homeTeam || '').toLowerCase() === bName.toLowerCase();
+        const teamPts = isHome ? (g.homeScore || 0) : (g.awayScore || 0);
+        const oppPts  = isHome ? (g.awayScore || 0)  : (g.homeScore || 0);
+        const against = isHome ? (g.awayTeam || '?') : (g.homeTeam || '?');
+        totalPF += teamPts; totalPA += oppPts;
+        if (teamPts > oppPts) wins++;
+        else {
+          losses++;
+          lossDetails.push({ vs: against, margin: oppPts - teamPts, score: teamPts + '-' + oppPts });
+          if (oppPts - teamPts >= 10) bigWins.push(against + ' won by ' + (oppPts - teamPts) + ' (' + teamPts + '-' + oppPts + ')');
+        }
+      });
+      const n = oppGames.length;
+      const avgMgn = +((totalPF - totalPA) / n).toFixed(1);
+      const closeL = lossDetails.filter(l => l.margin <= 5).map(l => l.vs + ' ' + l.score);
+      oppGameNote = `\n\n${bName} season game log (${wins}-${losses}, avg margin ${avgMgn > 0 ? '+' : ''}${avgMgn}):` +
+        (bigWins.length ? `\nTeams that beat them by 10+: ${bigWins.join('; ')}` : '') +
+        (lossDetails.length ? `\nAll losses: ${lossDetails.slice(0, 8).map(l => l.vs + ' ' + l.score).join('; ')}` : '') +
+        (closeL.length ? `\nClose losses (<=5pt): ${closeL.join('; ')}` : '');
+    }
+  } catch (_) {}
+
+  const selectedModel = _thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
+  const maxTokens    = _thDeepUseHeavyModel ? 6000 : 4096;
+
+  const userPrompt =
+    `Produce a complete **tournament-ready** coach-level deep analysis for **${aName} vs ${bName}**.\n\n` +
     `Structure your response with these exact sections:\n` +
     `## Overall Verdict\n` +
-    `## ${aName} — Strengths\n` +
-    `## ${aName} — Weaknesses\n` +
-    `## ${aName} — Tendencies\n` +
-    `## ${bName} — Strengths\n` +
-    `## ${bName} — Weaknesses\n` +
-    `## ${bName} — Tendencies\n` +
+    `## ${aName} \u2014 Strengths\n` +
+    `## ${aName} \u2014 Weaknesses\n` +
+    `## ${aName} \u2014 Tendencies\n` +
+    `## ${bName} \u2014 Strengths\n` +
+    `## ${bName} \u2014 Weaknesses\n` +
+    `## ${bName} \u2014 Tendencies\n` +
     `## Head-to-Head Matchup Notes\n` +
     `(How to guard each team, how each defends, mismatches to exploit)\n` +
+    `## How to Beat ${bName}\n` +
+    `(Using their season record, loss patterns, and which teams beat them \u2014 identify the exact blueprint ${aName} should follow. Be very specific and actionable for a tournament game.)\n` +
     `## Game Plan: Offensive Keys (5 items for each team)\n` +
     `## Game Plan: Defensive Keys (5 items for each team)\n` +
     `## In-Game Adjustment Triggers (3 specific situations)\n` +
     `## Data Confidence & Red Flags\n\n` +
-    `All analysis must be grounded in this structured data only:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
+    `All analysis must be grounded in this structured data only:${oppGameNote}\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
   try {
+    if (status) status.textContent = `Using ${selectedModel}\u2026`;
     const res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemini-2.5-flash-lite',
+        model: selectedModel,
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         systemInstruction,
-        generationConfig: { temperature: 0.65, maxOutputTokens: 4096 }
+        generationConfig: { temperature: 0.68, maxOutputTokens: maxTokens }
       })
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!rawText) throw new Error('Empty response from AI.');
+    if (status) status.textContent = '';
     output.innerHTML =
       '<div class="thDeepHeader">' +
-        '<span class="thDeepIcon">🧠</span>' +
-        '<strong>Deep Analysis — ' + aName + ' vs ' + bName + '</strong>' +
-        '<button class="thDeepClose" onclick="document.getElementById(\'thDeepOutput\').style.display=\'none\'">✕</button>' +
+        '<span class="thDeepIcon">\uD83E\uDDE0</span>' +
+        '<strong>Deep Analysis \u2014 ' + aName + ' vs ' + bName + '</strong>' +
+        '<span class="thDeepModelBadge">' + selectedModel + '</span>' +
+        '<div style="margin-left:auto;display:flex;gap:6px;align-items:center">' +
+          '<button class="thDeepPdfBtn" onclick="thDownloadDeepPDF()" title="Download PDF">\u2B07\uFE0F PDF</button>' +
+          '<button class="thDeepClose" onclick="document.getElementById(\'thDeepOutput\').style.display=\'none\'">&times;</button>' +
+        '</div>' +
       '</div>' +
       '<div class="thDeepBody">' + _thFmtDeepText(rawText) + '</div>';
+    output.dataset.lastRaw = rawText;
+    output.dataset.aName   = aName;
+    output.dataset.bName   = bName;
+    output.dataset.season  = thCurrentSeason;
+    output.dataset.model   = selectedModel;
   } catch (e) {
-    output.innerHTML = '<div class="thDeepError">⚠ Analysis failed: ' + e.message + '. Check console for details.</div>';
+    if (status) status.textContent = '';
+    output.innerHTML = '<div class="thDeepError">\u26A0 Analysis failed: ' + e.message + '. Check console for details.</div>';
     console.error('[thRunDeepAnalysis]', e);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🧠 Deep Analysis'; }
+    if (btn) { btn.disabled = false; btn.textContent = '\uD83E\uDDE0 Deep Analysis'; }
   }
 }
 
-// ── thRenderCompare — side-by-side team comparison ────────────────────────────
+// \u2500\u2500 thDownloadDeepPDF \u2014 open print window with professional PDF report \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function thDownloadDeepPDF() {
+  const output = document.getElementById('thDeepOutput');
+  if (!output || !output.dataset.lastRaw) return;
+  const aName   = output.dataset.aName  || 'Team A';
+  const bName   = output.dataset.bName  || 'Team B';
+  const season  = output.dataset.season || '';
+  const model   = output.dataset.model  || '';
+  const rawText = output.dataset.lastRaw;
+
+  function buildPrintHtml(text) {
+    const lines = text.split('\n');
+    let html = '', inSection = false;
+    lines.forEach(line => {
+      if (line.startsWith('## ')) {
+        if (inSection) html += '</div></div>';
+        html += '<div class="ps"><div class="ps-head">' + line.replace(/^## /, '') + '</div><div class="ps-body">';
+        inSection = true;
+      } else if (line.startsWith('### ')) {
+        html += '<div class="ps-sub">' + line.replace(/^### /, '') + '</div>';
+      } else if (/^\d+\.\s/.test(line)) {
+        html += '<div class="ps-num">' + line.replace(/^(\d+)\.\s/, '<span class="ps-n">$1.</span> ') + '</div>';
+      } else if (/^[-\u2022*]\s/.test(line)) {
+        html += '<div class="ps-bul">' + line.replace(/^[-\u2022*]\s/, '') + '</div>';
+      } else if (/^\*\*(.+?):\*\*\s*(.*)$/.test(line)) {
+        const m = line.match(/^\*\*(.+?):\*\*\s*(.*)$/);
+        html += '<div class="ps-lbl"><span class="ps-lbl-h">' + m[1] + ':</span> ' + (m[2] || '') + '</div>';
+      } else if (line.trim()) {
+        html += '<p class="ps-p">' + line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>') + '</p>';
+      }
+    });
+    if (inSection) html += '</div></div>';
+    return html;
+  }
+
+  const ts  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const win = window.open('', '_blank', 'width=920,height=780');
+  if (!win) { alert('Pop-ups blocked \u2014 please allow pop-ups to download PDF.'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Deep Analysis \u2014 ${aName} vs ${bName} (${season})</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;color:#111;background:#fff}
+.cover{background:linear-gradient(135deg,#0f2044 0%,#1a3a72 60%,#1d4faa 100%);color:#fff;padding:36px 44px 28px;page-break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.cv-badge{font-size:7.5pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.55;margin-bottom:4px}
+.cv-title{font-size:20pt;font-weight:900;line-height:1.2}
+.cv-sub{font-size:12pt;opacity:.75;margin-top:6px}
+.cv-meta{display:flex;gap:22px;margin-top:16px;font-size:8.5pt;opacity:.65;flex-wrap:wrap}
+.cv-meta span::before{content:'\u25B8  '}
+.content{padding:24px 36px 32px}
+.ps{margin-bottom:14px;border:1px solid #cdd6e3;border-radius:5px;overflow:hidden;break-inside:avoid}
+.ps-head{background:#0f2044;color:#fff;font-size:9.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ps-body{padding:0}
+.ps-sub{font-size:9pt;font-weight:700;color:#1a3a72;padding:7px 14px 3px;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #eaeff6}
+.ps-num{display:flex;gap:10px;padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
+.ps-n{color:#1a3a72;font-weight:800;min-width:18px;flex-shrink:0}
+.ps-bul{padding:5px 14px 5px 30px;position:relative;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
+.ps-bul::before{content:'\u25B8';position:absolute;left:13px;color:#1a3a72;font-size:8pt;top:6px}
+.ps-lbl{padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
+.ps-lbl-h{font-weight:800;color:#0f2044}
+.ps-p{padding:5px 14px;font-size:10.5pt;line-height:1.6;color:#222;border-bottom:1px solid #f2f5fa}
+.ps-num:last-child,.ps-bul:last-child,.ps-lbl:last-child,.ps-p:last-child{border-bottom:none}
+.footer{border-top:2px solid #0f2044;margin:0 36px;padding:10px 0;display:flex;justify-content:space-between;font-size:8pt;color:#888}
+.printbtn{text-align:center;padding:18px;background:#f8f9fb}
+.printbtn button{padding:10px 26px;font-size:11pt;background:#0f2044;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
+@media print{.printbtn{display:none}@page{margin:.45in;size:letter}}
+</style></head><body>
+<div class="cover">
+<div class="cv-badge">NCAA Scouting Dashboard \u00B7 Deep Analysis Report</div>
+<div class="cv-title">${aName}<br>vs ${bName}</div>
+<div class="cv-sub">Tournament Preparation Scouting Report</div>
+<div class="cv-meta"><span>Season ${season}</span><span>${ts}</span><span>AI: ${model}</span></div>
+</div>
+<div class="content">${buildPrintHtml(rawText)}</div>
+<div class="footer"><span>NCAA Scouting Dashboard \u2014 Confidential</span><span>${aName} vs ${bName} \u00B7 ${season}</span></div>
+<div class="printbtn"><button onclick="window.print()">\uD83D\uDDA8\uFE0F Print / Save as PDF</button></div>
+</body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 700);
+}
+
+// \u2500\u2500 thRenderCompare — side-by-side team comparison ────────────────────────────
 function thRenderCompare(teamA, ratA, statsA, teamB, ratB, statsB) {
   const el = document.getElementById('thCompare');
   if (!el) return;
@@ -1244,7 +1386,17 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     <div class="thDNAInsights" style="margin-top:16px">
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
-        <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
+        <div class="thDeepControls">
+          <label class="thModelToggleWrap" title="Toggle AI model: default is gemini-2.5-flash-lite, toggle on for gemini-3-flash-preview (heavier, better for tournament)">
+            <span class="thModelToggleLabel">2.5 Lite</span>
+            <div class="thModelToggle${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelToggle" onclick="thToggleDeepModel()">
+              <div class="thModelToggleKnob"></div>
+            </div>
+            <span class="thModelToggleLabel" id="thModelActiveLabel">${_thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite'}</span>
+          </label>
+          <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
+          <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
+        </div>
       </div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>

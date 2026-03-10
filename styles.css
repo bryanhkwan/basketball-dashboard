@@ -1307,6 +1307,49 @@
   line-height: 1;
 }
 .thDeepClose:hover { color: var(--fg); }
+/* Deep Analysis — model toggle + PDF button */
+.thDeepControls { display: flex; align-items: center; gap: 10px; }
+.thModelToggleWrap { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.thModelToggleLabel { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.thModelToggle {
+  width: 36px; height: 18px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  position: relative;
+  transition: background .2s, border-color .2s;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.thModelToggle.active { background: var(--accent); border-color: var(--accent); }
+.thModelToggleKnob {
+  position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%; background: #fff;
+  transition: transform .2s;
+  pointer-events: none;
+}
+.thModelToggle.active .thModelToggleKnob { transform: translateX(18px); }
+.thDeepModelBadge {
+  font-size: 9px; font-weight: 700;
+  background: rgba(37,99,235,.2); color: var(--accent);
+  border: 1px solid rgba(37,99,235,.3);
+  border-radius: 4px; padding: 1px 6px;
+  letter-spacing: .04em; white-space: nowrap;
+}
+.thDeepPdfBtn {
+  padding: 3px 10px; font-size: 10.5px; font-weight: 700;
+  border-radius: 6px; border: 1px solid var(--line);
+  background: rgba(255,255,255,.07); color: var(--fg);
+  cursor: pointer; white-space: nowrap; transition: background .15s;
+}
+.thDeepPdfBtn:hover { background: rgba(255,255,255,.14); }
+.thDeepAnalysisRow {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+  margin-top: 4px;
+}
 .thDeepBody {
   padding: 12px;
   font-size: 12.5px;
