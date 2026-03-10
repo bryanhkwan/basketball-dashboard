@@ -805,13 +805,16 @@ function thRunMonteCarloUI() {
   var ratA = teamRatings[(aName || '').toLowerCase()] || null;
   var ratB = teamRatings[(bName || '').toLowerCase()] || null;
 
+  var runCountEl = document.getElementById('thMCRunCount');
+  var nSims = runCountEl ? parseInt(runCountEl.value, 10) || 10000 : 10000;
+
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Simulating…'; }
   output.style.display = 'block';
-  output.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running 10,000 simulations…</div>';
+  output.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running ' + nSims.toLocaleString() + ' simulations…</div>';
 
   // Use setTimeout to let the UI update before running CPU-heavy sim
   setTimeout(function() {
-    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, 10000);
+    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, nSims);
     output.innerHTML =
       '<div class="thDeepHeader" style="background:rgba(124,58,237,.15)">' +
         '<span class="thDeepIcon">🎲</span>' +
@@ -823,6 +826,160 @@ function thRunMonteCarloUI() {
       '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName) + '</div>';
     if (btn) { btn.disabled = false; btn.textContent = '🎲 Run Simulation'; }
   }, 30);
+}
+
+// ── MC Section Builders ─────────────────────────────────────────────────────
+function _thBuildMCSummary(mc, aName, bName) {
+  var fav = mc.aWinPct >= mc.bWinPct ? aName : bName;
+  var dog = mc.aWinPct >= mc.bWinPct ? bName : aName;
+  var favPct = Math.max(mc.aWinPct, mc.bWinPct);
+  var dogPct = Math.min(mc.aWinPct, mc.bWinPct);
+  var spread = Math.abs(mc.avgMargin);
+  var verdict = '';
+  if (favPct >= 75) verdict = fav + ' is a <strong>heavy favorite</strong> — ' + dog + ' needs an exceptional game or key matchup advantage to pull the upset.';
+  else if (favPct >= 60) verdict = fav + ' is <strong>favored</strong>, but ' + dog + ' has a realistic path to the upset (' + dogPct + '% win probability).';
+  else verdict = 'This is a <strong>toss-up game</strong>. Execution, game plan, and adjustments will likely decide the outcome.';
+
+  var closeNote = '';
+  if (mc.closeGamePct >= 40) closeNote = '<br>⏱ <strong>High close-game probability (' + mc.closeGamePct + '%)</strong> — late-game execution and free-throw shooting will be critical.';
+  else if (mc.closeGamePct >= 25) closeNote = '<br>⏱ Moderate chance of a close finish (' + mc.closeGamePct + '%) — prepare end-of-game sets.';
+
+  return '<div class="thMCSummary">' +
+    '<div class="thMCSummaryIcon">📋</div>' +
+    '<div class="thMCSummaryText">' +
+      '<div class="thMCSummaryTitle">Executive Summary</div>' +
+      '<p>' + verdict + closeNote + '</p>' +
+      '<p style="margin-top:6px;font-size:10.5px;color:var(--muted)">Projected spread: <strong style="color:var(--fg)">' + (mc.avgMargin > 0 ? aName : bName) + ' by ' + spread + '</strong> · 80% of outcomes fall within a ' + Math.abs(mc.p90 - mc.p10) + '-point window.</p>' +
+    '</div>' +
+  '</div>';
+}
+
+function _thBuildMCMatchups(aName, bName) {
+  if (typeof tbGetAllPlayers !== 'function') return '';
+  var all = tbGetAllPlayers(typeof league !== 'undefined' ? league : 'MBB');
+  var aPlayers = all.filter(function(p) { return (p.Team || '').toLowerCase() === (aName || '').toLowerCase(); });
+  var bPlayers = all.filter(function(p) { return (p.Team || '').toLowerCase() === (bName || '').toLowerCase(); });
+  if (!aPlayers.length || !bPlayers.length) return '';
+
+  function topN(arr, stat, n) {
+    return arr.slice().sort(function(a, b) { return (safeNum(b[stat]) || 0) - (safeNum(a[stat]) || 0); }).slice(0, n);
+  }
+  function posLabel(r) {
+    var p = (r.Position || r.Pos || '').toString();
+    return p || (typeof tbPosGroup === 'function' && tbPosGroup(r) === 'guard' ? 'G' : 'F/C');
+  }
+  function pctlBadge(r, stat) {
+    if (typeof statPercentile !== 'function') return '';
+    var v = safeNum(r[stat]); if (v === null) return '';
+    var p = statPercentile(stat, v);
+    if (!Number.isFinite(p)) return '';
+    var pct = Math.round(p * 100);
+    var clr = pct >= 80 ? 'var(--good)' : pct >= 55 ? 'var(--accent)' : pct >= 35 ? 'var(--warn)' : 'var(--bad)';
+    return '<span class="thMCMPctl" style="color:' + clr + '">' + pct + 'th</span>';
+  }
+
+  // Top scorers, playmakers, defenders
+  var aScorers = topN(aPlayers, 'PPG', 3);
+  var bScorers = topN(bPlayers, 'PPG', 3);
+
+  function playerRow(r, side) {
+    var clr = side === 'a' ? 'var(--accent)' : 'var(--warn)';
+    var ppg = safeNum(r['PPG']); ppg = ppg != null ? ppg.toFixed(1) : '—';
+    var efg = safeNum(r['eFG%']); efg = efg != null ? (efg > 1 ? efg.toFixed(1) : (efg * 100).toFixed(1)) : '—';
+    var rpg = safeNum(r['RPG']); rpg = rpg != null ? rpg.toFixed(1) : '—';
+    var apg = safeNum(r['APG']); apg = apg != null ? apg.toFixed(1) : '—';
+    return '<div class="thMCMRow">' +
+      '<div class="thMCMName" style="color:' + clr + '">' + (r.Player || r.Name || '—') + ' <span class="thMCMPos">' + posLabel(r) + '</span></div>' +
+      '<div class="thMCMStats">' +
+        '<span>' + ppg + ' ppg ' + pctlBadge(r, 'PPG') + '</span>' +
+        '<span>' + efg + ' eFG% ' + pctlBadge(r, 'eFG%') + '</span>' +
+        '<span>' + rpg + ' rpg</span>' +
+        '<span>' + apg + ' apg</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var maxRows = Math.max(aScorers.length, bScorers.length);
+  var matchupRows = '';
+  for (var i = 0; i < maxRows; i++) {
+    matchupRows += '<div class="thMCMPair">';
+    matchupRows += (i < aScorers.length) ? playerRow(aScorers[i], 'a') : '<div class="thMCMRow"></div>';
+    matchupRows += '<div class="thMCMVs">vs</div>';
+    matchupRows += (i < bScorers.length) ? playerRow(bScorers[i], 'b') : '<div class="thMCMRow"></div>';
+    matchupRows += '</div>';
+  }
+
+  return '<div class="thMCSection">' +
+    '<div class="thMCSectionHead">👤 Key Player Matchups</div>' +
+    '<div class="thMCMHeader"><span style="color:var(--accent)">' + aName + '</span><span style="color:var(--warn)">' + bName + '</span></div>' +
+    matchupRows +
+  '</div>';
+}
+
+function _thBuildMCGamePlan(mc, aName, bName, ratA, ratB) {
+  var items = [];
+  var fav = mc.aWinPct >= mc.bWinPct ? 'a' : 'b';
+  var favName = fav === 'a' ? aName : bName;
+  var dogName = fav === 'a' ? bName : aName;
+  var favPct = Math.max(mc.aWinPct, mc.bWinPct);
+
+  // Tempo recommendation
+  var paceA = (_thCurrentStats && _thCurrentStats.pace) ? +_thCurrentStats.pace : null;
+  var paceB = (_thCompareStats && _thCompareStats.pace) ? +_thCompareStats.pace : null;
+  if (paceA && paceB) {
+    if (fav === 'a' && paceA > paceB + 3) items.push({icon:'🏃', text:'Push the pace — ' + aName + ' plays faster (' + paceA.toFixed(0) + ' vs ' + paceB.toFixed(0) + '). More possessions favor the better team.'});
+    else if (fav === 'b' && paceA < paceB - 3) items.push({icon:'🐢', text:'Slow it down — ' + aName + ' should limit possessions. ' + bName + ' wants to run (' + paceB.toFixed(0) + ' pace).'});
+    else if (fav === 'a' && paceA < paceB - 3) items.push({icon:'🏃', text:aName + ' is favored but plays slower. Consider pushing tempo to create more opportunities.'});
+    else items.push({icon:'⚖️', text:'Pace is similar (' + paceA.toFixed(0) + ' vs ' + paceB.toFixed(0) + '). Game will likely be played at a neutral tempo.'});
+  }
+
+  // Close game prep
+  if (mc.closeGamePct >= 35) {
+    items.push({icon:'⏱', text:'High close-game probability (' + mc.closeGamePct + '%). Drill late-game situations: ATO sets, intentional fouls protocol, clock management.'});
+  }
+
+  // Efficiency edges
+  if (ratA && ratB) {
+    var oEdge = (ratA.adjO - ratB.adjO).toFixed(1);
+    var dEdge = (ratB.adjD - ratA.adjD).toFixed(1);
+    if (Math.abs(+oEdge) >= 4) {
+      if (+oEdge > 0) items.push({icon:'🔥', text:aName + ' has a significant offensive efficiency edge (+' + oEdge + ' adjO). Prioritize high-value possessions and avoid live-ball turnovers.'});
+      else items.push({icon:'🛡️', text:bName + ' has the offensive edge (' + Math.abs(+oEdge) + ' adjO better). Force tough shots and contest every attempt.'});
+    }
+    if (Math.abs(+dEdge) >= 4) {
+      if (+dEdge > 0) items.push({icon:'🛡️', text:aName + ' has a defensive advantage (' + Math.abs(+dEdge) + ' pts better adjD). Attack their weaker rotations and get to the free-throw line.'});
+      else items.push({icon:'⚠️', text:bName + ' defends at an elite level. Move the ball, use screens to create open looks, and be patient on offense.'});
+    }
+  }
+
+  // Upset blueprint
+  if (favPct >= 60 && fav === 'b') {
+    items.push({icon:'🎯', text:'Upset path for ' + aName + ': ' + (mc.closeGamePct >= 30 ? 'Keep it close and execute late. ' : '') + 'Force turnovers, crash the boards, and limit transition points.'});
+  } else if (favPct >= 60 && fav === 'a') {
+    items.push({icon:'🎯', text:dogName + ' upset path: Control pace, force ' + favName + ' into half-court offense, and win the rebounding battle.'});
+  }
+
+  // Blowout risk
+  var blowA = mc.blowoutAPct, blowB = mc.blowoutBPct;
+  if (blowA >= 20 || blowB >= 20) {
+    var blower = blowA >= blowB ? aName : bName;
+    var blowPct = Math.max(blowA, blowB);
+    items.push({icon:'📊', text:blower + ' has a ' + blowPct + '% chance of winning by 10+. The underdog should keep the game within striking distance through halftime.'});
+  }
+
+  // Free throws
+  items.push({icon:'🏀', text:'In projected close games, free-throw shooting is decisive. Identify your best FT shooters for late-game possessions.'});
+
+  if (!items.length) return '';
+
+  var html = items.map(function(it) {
+    return '<div class="thMCGPItem"><span class="thMCGPIcon">' + it.icon + '</span><span>' + it.text + '</span></div>';
+  }).join('');
+
+  return '<div class="thMCSection">' +
+    '<div class="thMCSectionHead">🏆 Coaching Game Plan</div>' +
+    '<div class="thMCGPBody">' + html + '</div>' +
+  '</div>';
 }
 
 function _thRenderMonteCarloHTML(mc, aName, bName) {
@@ -882,6 +1039,12 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
     '<div class="thMCHistTitle">Score Margin Distribution</div>' +
     '<div class="thMCHist">' + histHtml + '</div>' +
     '<div class="thMCNote">' + mc.nSims.toLocaleString() + ' simulations · Adjusted efficiency ratings & pace</div>' +
+    // ── Coach-friendly sections ──
+    _thBuildMCSummary(mc, aName, bName) +
+    _thBuildMCMatchups(aName, bName) +
+    _thBuildMCGamePlan(mc, aName, bName,
+      teamRatings[(aName || '').toLowerCase()] || null,
+      teamRatings[(bName || '').toLowerCase()] || null) +
   '</div>';
 }
 
@@ -1129,6 +1292,114 @@ function thDownloadDeepPDF() {
       '<div class="mc-hist-title">Score Margin Distribution</div>' +
       '<div class="mc-hist">' + histBars + '</div>' +
     '</div></div>';
+
+    // ── Executive Summary for PDF ──
+    var fav = mc.aWinPct >= mc.bWinPct ? aName : bName;
+    var dog = mc.aWinPct >= mc.bWinPct ? bName : aName;
+    var favPct = Math.max(mc.aWinPct, mc.bWinPct);
+    var dogPct = Math.min(mc.aWinPct, mc.bWinPct);
+    var spread = Math.abs(mc.avgMargin);
+    var verdict = '';
+    if (favPct >= 75) verdict = fav + ' is a <strong>heavy favorite</strong> — ' + dog + ' needs an exceptional game or key matchup advantage to pull the upset.';
+    else if (favPct >= 60) verdict = fav + ' is <strong>favored</strong>, but ' + dog + ' has a realistic path to the upset (' + dogPct + '% win probability).';
+    else verdict = 'This is a <strong>toss-up game</strong>. Execution, game plan, and adjustments will likely decide the outcome.';
+    var closeNote = '';
+    if (mc.closeGamePct >= 40) closeNote = '<br>⏱ <strong>High close-game probability (' + mc.closeGamePct + '%)</strong> — late-game execution and free-throw shooting will be critical.';
+    else if (mc.closeGamePct >= 25) closeNote = '<br>⏱ Moderate chance of a close finish (' + mc.closeGamePct + '%) — prepare end-of-game sets.';
+    var rangeSpan = Math.abs(mc.p90 - mc.p10);
+    mcHtml += '<div class="ps" style="break-inside:avoid"><div class="ps-head">📋 Executive Summary</div><div class="ps-body">' +
+      '<p class="mc-summary-p">' + verdict + closeNote + '</p>' +
+      '<p class="mc-summary-sub">Projected spread: <strong>' + (mc.avgMargin > 0 ? aName : bName) + ' by ' + spread + '</strong> · 80% of outcomes fall within a ' + rangeSpan + '-point window.</p>' +
+    '</div></div>';
+
+    // ── Player Matchups for PDF ──
+    if (typeof tbGetAllPlayers === 'function') {
+      var mAll = tbGetAllPlayers(typeof league !== 'undefined' ? league : 'MBB');
+      var mAPlayers = mAll.filter(function(p) { return (p.Team || '').toLowerCase() === (aName || '').toLowerCase(); });
+      var mBPlayers = mAll.filter(function(p) { return (p.Team || '').toLowerCase() === (bName || '').toLowerCase(); });
+      if (mAPlayers.length && mBPlayers.length) {
+        function topN(arr, stat, n) { return arr.slice().sort(function(a, b) { return (safeNum(b[stat]) || 0) - (safeNum(a[stat]) || 0); }).slice(0, n); }
+        function posLbl(r) { var p = (r.Position || r.Pos || '').toString(); return p || (typeof tbPosGroup === 'function' && tbPosGroup(r) === 'guard' ? 'G' : 'F/C'); }
+        function pdfPctlBadge(r, stat) {
+          if (typeof statPercentile !== 'function') return '';
+          var v = safeNum(r[stat]); if (v === null) return '';
+          var p = statPercentile(stat, v);
+          if (!Number.isFinite(p)) return '';
+          var pct = Math.round(p * 100);
+          var clr = pct >= 80 ? '#16a34a' : pct >= 55 ? '#2563eb' : pct >= 35 ? '#d97706' : '#dc2626';
+          return ' <span style="color:' + clr + ';font-size:8pt;font-weight:700">' + pct + 'th</span>';
+        }
+        var aScorers = topN(mAPlayers, 'PPG', 3);
+        var bScorers = topN(mBPlayers, 'PPG', 3);
+        function pdfPlayerCell(r, color) {
+          var ppg = safeNum(r['PPG']); ppg = ppg != null ? ppg.toFixed(1) : '—';
+          var efg = safeNum(r['eFG%']); efg = efg != null ? (efg > 1 ? efg.toFixed(1) : (efg * 100).toFixed(1)) : '—';
+          var rpg = safeNum(r['RPG']); rpg = rpg != null ? rpg.toFixed(1) : '—';
+          var apg = safeNum(r['APG']); apg = apg != null ? apg.toFixed(1) : '—';
+          return '<td class="mc-mu-cell">' +
+            '<div class="mc-mu-name" style="color:' + color + '">' + (r.Player || r.Name || '—') + ' <span class="mc-mu-pos">' + posLbl(r) + '</span></div>' +
+            '<div class="mc-mu-stats">' + ppg + ' ppg' + pdfPctlBadge(r, 'PPG') + ' · ' + efg + ' eFG%' + pdfPctlBadge(r, 'eFG%') + ' · ' + rpg + ' rpg · ' + apg + ' apg</div>' +
+          '</td>';
+        }
+        var maxRows = Math.max(aScorers.length, bScorers.length);
+        var muRows = '';
+        for (var mi = 0; mi < maxRows; mi++) {
+          muRows += '<tr>' +
+            (mi < aScorers.length ? pdfPlayerCell(aScorers[mi], '#2563eb') : '<td class="mc-mu-cell"></td>') +
+            '<td class="mc-mu-vs">vs</td>' +
+            (mi < bScorers.length ? pdfPlayerCell(bScorers[mi], '#d97706') : '<td class="mc-mu-cell"></td>') +
+          '</tr>';
+        }
+        mcHtml += '<div class="ps" style="break-inside:avoid"><div class="ps-head">👤 Key Player Matchups</div><div class="ps-body">' +
+          '<div class="mc-mu-header"><span style="color:#2563eb;font-weight:800">' + aName + '</span><span style="color:#d97706;font-weight:800">' + bName + '</span></div>' +
+          '<table class="mc-mu-tbl"><tbody>' + muRows + '</tbody></table>' +
+        '</div></div>';
+      }
+    }
+
+    // ── Coaching Game Plan for PDF ──
+    var gpItems = [];
+    var gpFav = mc.aWinPct >= mc.bWinPct ? 'a' : 'b';
+    var gpFavName = gpFav === 'a' ? aName : bName;
+    var gpDogName = gpFav === 'a' ? bName : aName;
+    var paceA = (_thCurrentStats && _thCurrentStats.pace) ? +_thCurrentStats.pace : null;
+    var paceB = (_thCompareStats && _thCompareStats.pace) ? +_thCompareStats.pace : null;
+    if (paceA && paceB) {
+      if (gpFav === 'a' && paceA > paceB + 3) gpItems.push({icon:'🏃', text:'Push the pace — ' + aName + ' plays faster (' + paceA.toFixed(0) + ' vs ' + paceB.toFixed(0) + '). More possessions favor the better team.'});
+      else if (gpFav === 'b' && paceA < paceB - 3) gpItems.push({icon:'🐢', text:'Slow it down — ' + aName + ' should limit possessions. ' + bName + ' wants to run (' + paceB.toFixed(0) + ' pace).'});
+      else if (gpFav === 'a' && paceA < paceB - 3) gpItems.push({icon:'🏃', text:aName + ' is favored but plays slower. Consider pushing tempo to create more opportunities.'});
+      else gpItems.push({icon:'⚖️', text:'Pace is similar (' + paceA.toFixed(0) + ' vs ' + paceB.toFixed(0) + '). Game will likely be played at a neutral tempo.'});
+    }
+    if (mc.closeGamePct >= 35) gpItems.push({icon:'⏱', text:'High close-game probability (' + mc.closeGamePct + '%). Drill late-game situations: ATO sets, intentional fouls protocol, clock management.'});
+    var ratA = teamRatings[(aName || '').toLowerCase()] || null;
+    var ratB = teamRatings[(bName || '').toLowerCase()] || null;
+    if (ratA && ratB) {
+      var oEdge = (ratA.adjO - ratB.adjO).toFixed(1);
+      var dEdge = (ratB.adjD - ratA.adjD).toFixed(1);
+      if (Math.abs(+oEdge) >= 4) {
+        if (+oEdge > 0) gpItems.push({icon:'🔥', text:aName + ' has a significant offensive efficiency edge (+' + oEdge + ' adjO). Prioritize high-value possessions and avoid live-ball turnovers.'});
+        else gpItems.push({icon:'🛡️', text:bName + ' has the offensive edge (' + Math.abs(+oEdge) + ' adjO better). Force tough shots and contest every attempt.'});
+      }
+      if (Math.abs(+dEdge) >= 4) {
+        if (+dEdge > 0) gpItems.push({icon:'🛡️', text:aName + ' has a defensive advantage (' + Math.abs(+dEdge) + ' pts better adjD). Attack their weaker rotations and get to the free-throw line.'});
+        else gpItems.push({icon:'⚠️', text:bName + ' defends at an elite level. Move the ball, use screens to create open looks, and be patient on offense.'});
+      }
+    }
+    if (favPct >= 60 && gpFav === 'b') gpItems.push({icon:'🎯', text:'Upset path for ' + aName + ': ' + (mc.closeGamePct >= 30 ? 'Keep it close and execute late. ' : '') + 'Force turnovers, crash the boards, and limit transition points.'});
+    else if (favPct >= 60 && gpFav === 'a') gpItems.push({icon:'🎯', text:gpDogName + ' upset path: Control pace, force ' + gpFavName + ' into half-court offense, and win the rebounding battle.'});
+    var blowA = mc.blowoutAPct, blowB = mc.blowoutBPct;
+    if (blowA >= 20 || blowB >= 20) {
+      var blower = blowA >= blowB ? aName : bName;
+      var blowPct = Math.max(blowA, blowB);
+      gpItems.push({icon:'📊', text:blower + ' has a ' + blowPct + '% chance of winning by 10+. The underdog should keep the game within striking distance through halftime.'});
+    }
+    gpItems.push({icon:'🏀', text:'In projected close games, free-throw shooting is decisive. Identify your best FT shooters for late-game possessions.'});
+    if (gpItems.length) {
+      var gpHtml = gpItems.map(function(it) {
+        return '<div class="mc-gp-item"><span class="mc-gp-icon">' + it.icon + '</span><span>' + it.text + '</span></div>';
+      }).join('');
+      mcHtml += '<div class="ps" style="break-inside:avoid"><div class="ps-head">🏆 Coaching Game Plan</div><div class="ps-body">' + gpHtml + '</div></div>';
+    }
   }
 
   function buildPrintHtml(text) {
@@ -1204,6 +1475,18 @@ function thDownloadDeepPDF() {
 '.mc-bar{display:flex;align-items:center;gap:6px;margin-bottom:2px;height:14px}' +
 '.mc-fill{height:10px;border-radius:3px;min-width:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
 '.mc-lbl{font-size:7.5pt;color:#888;min-width:24px}' +
+'.mc-summary-p{padding:10px 14px 4px;font-size:10.5pt;line-height:1.6;color:#222}' +
+'.mc-summary-sub{padding:4px 14px 10px;font-size:9pt;color:#888}' +
+'.mc-mu-header{display:flex;justify-content:space-between;padding:8px 14px 4px;font-size:9pt;text-transform:uppercase;letter-spacing:.05em}' +
+'.mc-mu-tbl{width:100%;border-collapse:collapse}' +
+'.mc-mu-cell{padding:6px 14px;border-bottom:1px solid #f2f5fa;vertical-align:top}' +
+'.mc-mu-vs{text-align:center;font-size:8pt;font-weight:700;color:#aaa;padding:8px 4px;vertical-align:middle}' +
+'.mc-mu-name{font-weight:800;font-size:10pt}' +
+'.mc-mu-pos{font-size:8pt;color:#888;font-weight:400}' +
+'.mc-mu-stats{font-size:8.5pt;color:#555;margin-top:2px}' +
+'.mc-gp-item{display:flex;gap:8px;padding:7px 14px;border-bottom:1px solid #f2f5fa;font-size:10pt;line-height:1.5;align-items:flex-start}' +
+'.mc-gp-item:last-child{border-bottom:none}' +
+'.mc-gp-icon{flex-shrink:0;font-size:11pt}' +
 '.footer{border-top:2px solid #0f2044;margin:0 36px;padding:10px 0;display:flex;justify-content:space-between;font-size:8pt;color:#888}' +
 '.printbtn{text-align:center;padding:18px;background:#f8f9fb}' +
 '.printbtn button{padding:10px 26px;font-size:11pt;background:#0f2044;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}' +
@@ -1683,7 +1966,14 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     </div>
     <div class="thMonteCarloRow">
       <div class="thDNASectionLabel" style="margin:0">🎲 Monte Carlo Simulation</div>
-      <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="thMCRunCount" class="thMCSelect" title="Number of simulations">
+          <option value="10000" selected>10,000 runs</option>
+          <option value="50000">50,000 runs</option>
+          <option value="100000">100,000 runs</option>
+        </select>
+        <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+      </div>
     </div>
     <div id="thMonteCarloOutput" class="thDeepOutput" style="display:none"></div>
     <div id="thDeepOutput" class="thDeepOutput" style="display:none"></div>`;
