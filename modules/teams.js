@@ -778,10 +778,16 @@ async function thRunDeepAnalysis() {
     if (oppGames.length) {
       let wins = 0, losses = 0, totalPF = 0, totalPA = 0;
       const lossDetails = [], bigWins = [];
+      const tn = bName.toLowerCase();
       oppGames.forEach(g => {
-        const isHome = (g.homeTeam || '').toLowerCase() === bName.toLowerCase();
-        const teamPts = isHome ? (g.homeScore || 0) : (g.awayScore || 0);
-        const oppPts  = isHome ? (g.awayScore || 0)  : (g.homeScore || 0);
+        const hn = (g.homeTeam || '').toLowerCase();
+        const an = (g.awayTeam || '').toLowerCase();
+        const isHome = hn === tn;
+        const isAway = an === tn;
+        if (!isHome && !isAway) return;               // skip games that don't involve this team
+        const teamPts = isHome ? g.homePoints : g.awayPoints;
+        const oppPts  = isHome ? g.awayPoints : g.homePoints;
+        if (teamPts == null || oppPts == null) return; // skip games with missing scores
         const against = isHome ? (g.awayTeam || '?') : (g.homeTeam || '?');
         totalPF += teamPts; totalPA += oppPts;
         if (teamPts > oppPts) wins++;
@@ -1387,13 +1393,13 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
         <div class="thDeepControls">
-          <label class="thModelToggleWrap" title="Toggle AI model: default is gemini-2.5-flash-lite, toggle on for gemini-3-flash-preview (heavier, better for tournament)">
+          <div class="thModelToggleWrap" title="Toggle AI model: default is gemini-2.5-flash-lite, toggle on for gemini-3-flash-preview (heavier, better for tournament)" onclick="thToggleDeepModel()">
             <span class="thModelToggleLabel">2.5 Lite</span>
-            <div class="thModelToggle${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelToggle" onclick="thToggleDeepModel()">
+            <div class="thModelToggle${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelToggle">
               <div class="thModelToggleKnob"></div>
             </div>
             <span class="thModelToggleLabel" id="thModelActiveLabel">${_thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite'}</span>
-          </label>
+          </div>
           <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
         </div>
