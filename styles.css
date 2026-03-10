@@ -1307,29 +1307,18 @@
   line-height: 1;
 }
 .thDeepClose:hover { color: var(--fg); }
-/* Deep Analysis — model toggle + PDF button */
-.thDeepControls { display: flex; align-items: center; gap: 10px; }
-.thModelToggleWrap { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-.thModelToggleLabel { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.thModelToggle {
-  width: 36px; height: 18px;
-  background: rgba(255,255,255,.12);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  position: relative;
-  transition: background .2s, border-color .2s;
-  cursor: pointer;
-  flex-shrink: 0;
+/* Deep Analysis — model pill buttons + PDF button */
+.thDeepControls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.thModelPillGroup { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.thModelPillBtn {
+  padding: 5px 12px; font-size: 10.5px; font-weight: 700;
+  border: none; background: rgba(255,255,255,.06); color: var(--muted);
+  cursor: pointer; transition: background .15s, color .15s;
+  white-space: nowrap;
 }
-.thModelToggle.active { background: var(--accent); border-color: var(--accent); }
-.thModelToggleKnob {
-  position: absolute; top: 2px; left: 2px;
-  width: 12px; height: 12px;
-  border-radius: 50%; background: #fff;
-  transition: transform .2s;
-  pointer-events: none;
-}
-.thModelToggle.active .thModelToggleKnob { transform: translateX(18px); }
+.thModelPillBtn + .thModelPillBtn { border-left: 1px solid var(--line); }
+.thModelPillBtn.active { background: rgba(37,99,235,.22); color: var(--accent); }
+.thModelPillBtn:hover:not(.active) { background: rgba(255,255,255,.10); color: var(--fg); }
 .thDeepModelBadge {
   font-size: 9px; font-weight: 700;
   background: rgba(37,99,235,.2); color: var(--accent);
@@ -1344,18 +1333,46 @@
   cursor: pointer; white-space: nowrap; transition: background .15s;
 }
 .thDeepPdfBtn:hover { background: rgba(255,255,255,.14); }
-.thDeepAnalysisRow {
-  display: flex; align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap; gap: 8px;
-  margin-top: 4px;
+/* Monte Carlo simulation — in-page display */
+.thMCResult { padding: 4px 0; }
+.thMCError { padding: 12px; color: var(--muted); font-style: italic; font-size: 11px; }
+.thMCHeadline {
+  display: flex; justify-content: center; gap: 16px; align-items: center;
+  padding: 10px 8px 6px;
 }
+.thMCWinBox {
+  border: 2px solid; border-radius: 10px;
+  padding: 8px 18px; text-align: center; min-width: 90px;
+  background: rgba(255,255,255,.04);
+}
+.thMCWinPct { font-size: 22px; font-weight: 900; color: var(--fg); }
+.thMCWinLabel { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 2px; }
+.thMCVs { font-size: 12px; font-weight: 700; color: var(--muted); }
+.thMCStats {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; padding: 0; margin: 6px 0;
+}
+.thMCStat {
+  display: flex; justify-content: space-between; padding: 5px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06); font-size: 11px;
+}
+.thMCStatLabel { color: var(--muted); font-weight: 600; }
+.thMCStatVal { font-weight: 700; color: var(--fg); }
+.thMCHistTitle {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); padding: 8px 12px 4px;
+}
+.thMCHist { padding: 0 12px 8px; max-height: 160px; overflow-y: auto; }
+.thMCBar { display: flex; align-items: center; gap: 4px; margin-bottom: 1px; height: 12px; }
+.thMCBarFill { height: 9px; border-radius: 2px; min-width: 2px; transition: width .2s; }
+.thMCBarLabel { font-size: 8px; color: var(--muted); min-width: 22px; }
+.thMCNote { font-size: 9px; color: var(--muted); text-align: center; padding: 4px 8px 8px; opacity: .7; }
 .thDeepBody {
   padding: 12px;
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--fg);
-  max-height: 640px;
+  max-height: 800px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

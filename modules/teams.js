@@ -19,13 +19,13 @@ var _thLastMatchupCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 
 // ── Model toggle ──────────────────────────────────────────────────────────────
-function thToggleDeepModel() {
-  _thDeepUseHeavyModel = !_thDeepUseHeavyModel;
+function thSetDeepModel(heavy) {
+  _thDeepUseHeavyModel = !!heavy;
   localStorage.setItem('thDeepModel', _thDeepUseHeavyModel ? 'heavy' : 'lite');
-  const toggle = document.getElementById('thModelToggle');
-  if (toggle) toggle.classList.toggle('active', _thDeepUseHeavyModel);
-  const label = document.getElementById('thModelActiveLabel');
-  if (label) label.textContent = _thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
+  var btnLite = document.getElementById('thModelBtnLite');
+  var btnHeavy = document.getElementById('thModelBtnHeavy');
+  if (btnLite)  btnLite.classList.toggle('active', !_thDeepUseHeavyModel);
+  if (btnHeavy) btnHeavy.classList.toggle('active',  _thDeepUseHeavyModel);
 }
 
 function initTeamsDOMRefs() {
@@ -704,6 +704,141 @@ function _thFmtDeepText(text) {
   }).join('');
 }
 
+// ── Monte Carlo simulation engine ────────────────────────────────────────────
+var _thLastMonteCarlo = null;
+
+function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
+  nSims = nSims || 10000;
+  var oA = ratA ? +ratA.adjO : null;
+  var dA = ratA ? +ratA.adjD : null;
+  var oB = ratB ? +ratB.adjO : null;
+  var dB = ratB ? +ratB.adjD : null;
+  if (oA == null || dA == null || oB == null || dB == null) return null;
+
+  // Expected efficiency: blend of offense vs opposing defense
+  var eOA = (oA + dB) / 2;
+  var eOB = (oB + dA) / 2;
+
+  // Pace
+  var paceA = (statsA && statsA.pace) ? +statsA.pace : 68;
+  var paceB = (statsB && statsB.pace) ? +statsB.pace : 68;
+  var gamePace = (paceA + paceB) / 2;
+
+  // NCAA game-to-game scoring standard deviation ~11 pts
+  var SD = 11;
+
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
+  var aWins = 0, bWins = 0, ties = 0, totalMarginA = 0;
+  var margins = [], scoresA = [], scoresB = [];
+  var buckets = {};
+
+  for (var i = 0; i < nSims; i++) {
+    var ptsA = (eOA / 100) * gamePace + randn() * SD;
+    var ptsB = (eOB / 100) * gamePace + randn() * SD;
+    var rA = Math.round(ptsA), rB = Math.round(ptsB);
+    scoresA.push(rA); scoresB.push(rB);
+    var margin = rA - rB;
+    margins.push(margin);
+    totalMarginA += margin;
+    if (rA > rB) aWins++; else if (rB > rA) bWins++; else ties++;
+    var bk = Math.round(margin / 3) * 3;
+    buckets[bk] = (buckets[bk] || 0) + 1;
+  }
+
+  margins.sort(function(a, b) { return a - b; });
+  var mean = totalMarginA / nSims;
+  var variance = margins.reduce(function(s, m) { return s + (m - mean) * (m - mean); }, 0) / nSims;
+  var sd = Math.sqrt(variance);
+  var median = margins[Math.floor(nSims / 2)];
+  var p10 = margins[Math.floor(nSims * 0.10)];
+  var p90 = margins[Math.floor(nSims * 0.90)];
+
+  scoresA.sort(function(a, b) { return a - b; });
+  scoresB.sort(function(a, b) { return a - b; });
+  var avgA = +(scoresA.reduce(function(s, v) { return s + v; }, 0) / nSims).toFixed(1);
+  var avgB = +(scoresB.reduce(function(s, v) { return s + v; }, 0) / nSims).toFixed(1);
+
+  var blowoutA = margins.filter(function(m) { return m >= 10; }).length;
+  var blowoutB = margins.filter(function(m) { return m <= -10; }).length;
+  var closeGames = margins.filter(function(m) { return Math.abs(m) <= 5; }).length;
+
+  var result = {
+    nSims: nSims,
+    aWinPct: +(aWins / nSims * 100).toFixed(1),
+    bWinPct: +(bWins / nSims * 100).toFixed(1),
+    tiePct: +(ties / nSims * 100).toFixed(1),
+    aWins: aWins, bWins: bWins, ties: ties,
+    avgMargin: +mean.toFixed(1),
+    medianMargin: median,
+    stdDev: +sd.toFixed(1),
+    p10: p10, p90: p90,
+    avgScoreA: avgA, avgScoreB: avgB,
+    blowoutAPct: +(blowoutA / nSims * 100).toFixed(1),
+    blowoutBPct: +(blowoutB / nSims * 100).toFixed(1),
+    closeGamePct: +(closeGames / nSims * 100).toFixed(1),
+    buckets: buckets,
+  };
+  _thLastMonteCarlo = result;
+  return result;
+}
+
+function _thRenderMonteCarloHTML(mc, aName, bName) {
+  if (!mc) return '<div class="thMCError">Insufficient data for simulation (need adjusted efficiency ratings for both teams).</div>';
+
+  // Build histogram bars
+  var entries = Object.keys(mc.buckets).map(function(k) { return [+k, mc.buckets[k]]; }).sort(function(a, b) { return a[0] - b[0]; });
+  var maxCount = Math.max.apply(null, entries.map(function(e) { return e[1]; }));
+  var histHtml = '';
+  entries.forEach(function(pair) {
+    var margin = pair[0], count = pair[1];
+    var pct = (count / maxCount * 100).toFixed(0);
+    var color = margin > 0 ? 'var(--accent)' : margin < 0 ? 'var(--warn)' : 'var(--muted)';
+    histHtml += '<div class="thMCBar">' +
+      '<div class="thMCBarFill" style="width:' + pct + '%;background:' + color + '"></div>' +
+      '<span class="thMCBarLabel">' + (margin > 0 ? '+' : '') + margin + '</span>' +
+    '</div>';
+  });
+
+  function marginStr(m) {
+    if (m > 0) return aName + ' +' + m;
+    if (m < 0) return bName + ' +' + Math.abs(m);
+    return 'Even';
+  }
+
+  return '<div class="thMCResult">' +
+    '<div class="thMCHeadline">' +
+      '<div class="thMCWinBox" style="border-color:var(--accent)">' +
+        '<div class="thMCWinPct">' + mc.aWinPct + '%</div>' +
+        '<div class="thMCWinLabel">' + aName + '</div>' +
+      '</div>' +
+      '<div class="thMCVs">vs</div>' +
+      '<div class="thMCWinBox" style="border-color:var(--warn)">' +
+        '<div class="thMCWinPct">' + mc.bWinPct + '%</div>' +
+        '<div class="thMCWinLabel">' + bName + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="thMCStats">' +
+      '<div class="thMCStat"><span class="thMCStatLabel">Avg Score</span><span class="thMCStatVal">' + mc.avgScoreA + ' \u2013 ' + mc.avgScoreB + '</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">Avg Margin</span><span class="thMCStatVal">' + marginStr(mc.avgMargin) + '</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">Median Margin</span><span class="thMCStatVal">' + marginStr(mc.medianMargin) + '</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">Std Dev</span><span class="thMCStatVal">\u00B1' + mc.stdDev + ' pts</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">80% Range</span><span class="thMCStatVal">' + marginStr(mc.p10) + ' to ' + marginStr(mc.p90) + '</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">Close Game (\u22645pt)</span><span class="thMCStatVal">' + mc.closeGamePct + '%</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">' + aName + ' Blowout (10+)</span><span class="thMCStatVal">' + mc.blowoutAPct + '%</span></div>' +
+      '<div class="thMCStat"><span class="thMCStatLabel">' + bName + ' Blowout (10+)</span><span class="thMCStatVal">' + mc.blowoutBPct + '%</span></div>' +
+    '</div>' +
+    '<div class="thMCHistTitle">Score Margin Distribution (' + mc.nSims.toLocaleString() + ' simulations)</div>' +
+    '<div class="thMCHist">' + histHtml + '</div>' +
+    '<div class="thMCNote">' + mc.nSims.toLocaleString() + ' simulations \u00B7 Based on adjusted efficiency ratings & pace</div>' +
+  '</div>';
+}
+
 // ── thRunDeepAnalysis — call Gemini directly and render results in-page ───────
 async function thRunDeepAnalysis() {
   if (!thCurrentTeam || !thCurrentCompareTeam) {
@@ -846,6 +981,11 @@ async function thRunDeepAnalysis() {
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!rawText) throw new Error('Empty response from AI.');
+    if (status) status.textContent = 'Running simulation\u2026';
+
+    // Run Monte Carlo simulation
+    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, 10000);
+
     if (status) status.textContent = '';
     output.innerHTML =
       '<div class="thDeepHeader">' +
@@ -857,12 +997,16 @@ async function thRunDeepAnalysis() {
           '<button class="thDeepClose" onclick="document.getElementById(\'thDeepOutput\').style.display=\'none\'">&times;</button>' +
         '</div>' +
       '</div>' +
-      '<div class="thDeepBody">' + _thFmtDeepText(rawText) + '</div>';
+      '<div class="thDeepBody">' +
+        '<div class="thDeepSection"><div class="thDeepSectionHead" style="border-left-color:var(--accent)"><span class="thDeepSectionIcon">\uD83C\uDFB2</span><span class="thDeepSectionTitle">Monte Carlo Simulation</span></div><div class="thDeepSectionBody">' + _thRenderMonteCarloHTML(mc, aName, bName) + '</div></div>' +
+        _thFmtDeepText(rawText) +
+      '</div>';
     output.dataset.lastRaw = rawText;
     output.dataset.aName   = aName;
     output.dataset.bName   = bName;
     output.dataset.season  = thCurrentSeason;
     output.dataset.model   = selectedModel;
+    output.dataset.monteCarlo = mc ? JSON.stringify(mc) : '';
   } catch (e) {
     if (status) status.textContent = '';
     output.innerHTML = '<div class="thDeepError">\u26A0 Analysis failed: ' + e.message + '. Check console for details.</div>';
@@ -874,30 +1018,97 @@ async function thRunDeepAnalysis() {
 
 // \u2500\u2500 thDownloadDeepPDF \u2014 open print window with professional PDF report \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function thDownloadDeepPDF() {
-  const output = document.getElementById('thDeepOutput');
+  var output = document.getElementById('thDeepOutput');
   if (!output || !output.dataset.lastRaw) return;
-  const aName   = output.dataset.aName  || 'Team A';
-  const bName   = output.dataset.bName  || 'Team B';
-  const season  = output.dataset.season || '';
-  const model   = output.dataset.model  || '';
-  const rawText = output.dataset.lastRaw;
+  var aName   = output.dataset.aName  || 'Team A';
+  var bName   = output.dataset.bName  || 'Team B';
+  var season  = output.dataset.season || '';
+  var model   = output.dataset.model  || '';
+  var rawText = output.dataset.lastRaw;
+  var mc = null;
+  try { mc = output.dataset.monteCarlo ? JSON.parse(output.dataset.monteCarlo) : null; } catch(_) {}
+
+  // Grab matchup shot chart SVGs from the page
+  var shotChartsHtml = '';
+  var matchupEl = document.getElementById('thMatchup');
+  if (matchupEl) {
+    var svgs = matchupEl.querySelectorAll('.shot-chart-svg');
+    var titles = matchupEl.querySelectorAll('.thShotTitle');
+    var statsEls = matchupEl.querySelectorAll('.thShotStats');
+    svgs.forEach(function(svg, i) {
+      var titleText = (titles[i] ? titles[i].textContent : '');
+      var statsText = (statsEls[i] ? statsEls[i].textContent : '');
+      // Clone SVG, strip interactive attrs, set print-friendly styling
+      var clone = svg.cloneNode(true);
+      clone.removeAttribute('data-filter');
+      clone.setAttribute('style', 'width:100%;max-width:300px;display:block;margin:0 auto');
+      shotChartsHtml += '<div class="sc-col">' +
+        '<div class="sc-title">' + titleText + '</div>' +
+        '<div>' + clone.outerHTML + '</div>' +
+        '<div class="sc-stats">' + statsText + '</div>' +
+      '</div>';
+    });
+    if (shotChartsHtml) {
+      shotChartsHtml = '<div class="sc-row">' + shotChartsHtml + '</div>';
+    }
+  }
+
+  // Build Monte Carlo section for PDF
+  var mcHtml = '';
+  if (mc) {
+    function marginStr(m) {
+      if (m > 0) return aName + ' +' + m;
+      if (m < 0) return bName + ' +' + Math.abs(m);
+      return 'Even';
+    }
+    // Histogram bars
+    var entries = Object.keys(mc.buckets).map(function(k) { return [+k, mc.buckets[k]]; }).sort(function(a, b) { return a[0] - b[0]; });
+    var maxCount = Math.max.apply(null, entries.map(function(e) { return e[1]; }));
+    var histBars = '';
+    entries.forEach(function(pair) {
+      var margin = pair[0], count = pair[1];
+      var pct = (count / maxCount * 100).toFixed(0);
+      var color = margin > 0 ? '#2563eb' : margin < 0 ? '#f59e0b' : '#888';
+      histBars += '<div class="mc-bar"><div class="mc-fill" style="width:' + pct + '%;background:' + color + '"></div><span class="mc-lbl">' + (margin > 0 ? '+' : '') + margin + '</span></div>';
+    });
+
+    mcHtml = '<div class="ps" style="break-inside:avoid"><div class="ps-head">\uD83C\uDFB2 Monte Carlo Simulation (' + mc.nSims.toLocaleString() + ' runs)</div><div class="ps-body">' +
+      '<div class="mc-headline">' +
+        '<div class="mc-win" style="border-color:#2563eb"><div class="mc-pct">' + mc.aWinPct + '%</div><div class="mc-name">' + aName + '</div></div>' +
+        '<div class="mc-vs">vs</div>' +
+        '<div class="mc-win" style="border-color:#f59e0b"><div class="mc-pct">' + mc.bWinPct + '%</div><div class="mc-name">' + bName + '</div></div>' +
+      '</div>' +
+      '<table class="mc-tbl"><tbody>' +
+        '<tr><td>Avg Score</td><td>' + mc.avgScoreA + ' \u2013 ' + mc.avgScoreB + '</td></tr>' +
+        '<tr><td>Avg Margin</td><td>' + marginStr(mc.avgMargin) + '</td></tr>' +
+        '<tr><td>Median Margin</td><td>' + marginStr(mc.medianMargin) + '</td></tr>' +
+        '<tr><td>Std Dev</td><td>\u00B1' + mc.stdDev + ' pts</td></tr>' +
+        '<tr><td>80% Range</td><td>' + marginStr(mc.p10) + ' to ' + marginStr(mc.p90) + '</td></tr>' +
+        '<tr><td>Close Game (\u22645pt)</td><td>' + mc.closeGamePct + '%</td></tr>' +
+        '<tr><td>' + aName + ' Blowout (10+)</td><td>' + mc.blowoutAPct + '%</td></tr>' +
+        '<tr><td>' + bName + ' Blowout (10+)</td><td>' + mc.blowoutBPct + '%</td></tr>' +
+      '</tbody></table>' +
+      '<div class="mc-hist-title">Score Margin Distribution</div>' +
+      '<div class="mc-hist">' + histBars + '</div>' +
+    '</div></div>';
+  }
 
   function buildPrintHtml(text) {
-    const lines = text.split('\n');
-    let html = '', inSection = false;
-    lines.forEach(line => {
-      if (line.startsWith('## ')) {
+    var lines = text.split('\n');
+    var html = '', inSection = false;
+    lines.forEach(function(line) {
+      if (line.indexOf('## ') === 0) {
         if (inSection) html += '</div></div>';
         html += '<div class="ps"><div class="ps-head">' + line.replace(/^## /, '') + '</div><div class="ps-body">';
         inSection = true;
-      } else if (line.startsWith('### ')) {
+      } else if (line.indexOf('### ') === 0) {
         html += '<div class="ps-sub">' + line.replace(/^### /, '') + '</div>';
       } else if (/^\d+\.\s/.test(line)) {
         html += '<div class="ps-num">' + line.replace(/^(\d+)\.\s/, '<span class="ps-n">$1.</span> ') + '</div>';
       } else if (/^[-\u2022*]\s/.test(line)) {
         html += '<div class="ps-bul">' + line.replace(/^[-\u2022*]\s/, '') + '</div>';
       } else if (/^\*\*(.+?):\*\*\s*(.*)$/.test(line)) {
-        const m = line.match(/^\*\*(.+?):\*\*\s*(.*)$/);
+        var m = line.match(/^\*\*(.+?):\*\*\s*(.*)$/);
         html += '<div class="ps-lbl"><span class="ps-lbl-h">' + m[1] + ':</span> ' + (m[2] || '') + '</div>';
       } else if (line.trim()) {
         html += '<p class="ps-p">' + line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>') + '</p>';
@@ -907,50 +1118,75 @@ function thDownloadDeepPDF() {
     return html;
   }
 
-  const ts  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const win = window.open('', '_blank', 'width=920,height=780');
+  var ts  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  var win = window.open('', '_blank', 'width=920,height=780');
   if (!win) { alert('Pop-ups blocked \u2014 please allow pop-ups to download PDF.'); return; }
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Deep Analysis \u2014 ${aName} vs ${bName} (${season})</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Arial,sans-serif;font-size:11pt;color:#111;background:#fff}
-.cover{background:linear-gradient(135deg,#0f2044 0%,#1a3a72 60%,#1d4faa 100%);color:#fff;padding:36px 44px 28px;page-break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.cv-badge{font-size:7.5pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.55;margin-bottom:4px}
-.cv-title{font-size:20pt;font-weight:900;line-height:1.2}
-.cv-sub{font-size:12pt;opacity:.75;margin-top:6px}
-.cv-meta{display:flex;gap:22px;margin-top:16px;font-size:8.5pt;opacity:.65;flex-wrap:wrap}
-.cv-meta span::before{content:'\u25B8  '}
-.content{padding:24px 36px 32px}
-.ps{margin-bottom:14px;border:1px solid #cdd6e3;border-radius:5px;overflow:hidden;break-inside:avoid}
-.ps-head{background:#0f2044;color:#fff;font-size:9.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.ps-body{padding:0}
-.ps-sub{font-size:9pt;font-weight:700;color:#1a3a72;padding:7px 14px 3px;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #eaeff6}
-.ps-num{display:flex;gap:10px;padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
-.ps-n{color:#1a3a72;font-weight:800;min-width:18px;flex-shrink:0}
-.ps-bul{padding:5px 14px 5px 30px;position:relative;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
-.ps-bul::before{content:'\u25B8';position:absolute;left:13px;color:#1a3a72;font-size:8pt;top:6px}
-.ps-lbl{padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}
-.ps-lbl-h{font-weight:800;color:#0f2044}
-.ps-p{padding:5px 14px;font-size:10.5pt;line-height:1.6;color:#222;border-bottom:1px solid #f2f5fa}
-.ps-num:last-child,.ps-bul:last-child,.ps-lbl:last-child,.ps-p:last-child{border-bottom:none}
-.footer{border-top:2px solid #0f2044;margin:0 36px;padding:10px 0;display:flex;justify-content:space-between;font-size:8pt;color:#888}
-.printbtn{text-align:center;padding:18px;background:#f8f9fb}
-.printbtn button{padding:10px 26px;font-size:11pt;background:#0f2044;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}
-@media print{.printbtn{display:none}@page{margin:.45in;size:letter}}
-</style></head><body>
-<div class="cover">
-<div class="cv-badge">NCAA Scouting Dashboard \u00B7 Deep Analysis Report</div>
-<div class="cv-title">${aName}<br>vs ${bName}</div>
-<div class="cv-sub">Tournament Preparation Scouting Report</div>
-<div class="cv-meta"><span>Season ${season}</span><span>${ts}</span><span>AI: ${model}</span></div>
-</div>
-<div class="content">${buildPrintHtml(rawText)}</div>
-<div class="footer"><span>NCAA Scouting Dashboard \u2014 Confidential</span><span>${aName} vs ${bName} \u00B7 ${season}</span></div>
-<div class="printbtn"><button onclick="window.print()">\uD83D\uDDA8\uFE0F Print / Save as PDF</button></div>
-</body></html>`);
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+'<title>Deep Analysis \u2014 ' + aName + ' vs ' + bName + ' (' + season + ')</title>' +
+'<style>' +
+'*{margin:0;padding:0;box-sizing:border-box}' +
+'body{font-family:"Segoe UI",Arial,sans-serif;font-size:11pt;color:#111;background:#fff}' +
+'.cover{background:linear-gradient(135deg,#0f2044 0%,#1a3a72 60%,#1d4faa 100%);color:#fff;padding:36px 44px 28px;page-break-after:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+'.cv-badge{font-size:7.5pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.55;margin-bottom:4px}' +
+'.cv-title{font-size:20pt;font-weight:900;line-height:1.2}' +
+'.cv-sub{font-size:12pt;opacity:.75;margin-top:6px}' +
+'.cv-meta{display:flex;gap:22px;margin-top:16px;font-size:8.5pt;opacity:.65;flex-wrap:wrap}' +
+'.cv-meta span::before{content:"\u25B8  "}' +
+'.content{padding:24px 36px 32px}' +
+'.ps{margin-bottom:14px;border:1px solid #cdd6e3;border-radius:5px;overflow:hidden;break-inside:avoid}' +
+'.ps-head{background:#0f2044;color:#fff;font-size:9.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+'.ps-body{padding:0}' +
+'.ps-sub{font-size:9pt;font-weight:700;color:#1a3a72;padding:7px 14px 3px;text-transform:uppercase;letter-spacing:.04em;border-top:1px solid #eaeff6}' +
+'.ps-num{display:flex;gap:10px;padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}' +
+'.ps-n{color:#1a3a72;font-weight:800;min-width:18px;flex-shrink:0}' +
+'.ps-bul{padding:5px 14px 5px 30px;position:relative;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}' +
+'.ps-bul::before{content:"\u25B8";position:absolute;left:13px;color:#1a3a72;font-size:8pt;top:6px}' +
+'.ps-lbl{padding:5px 14px;border-bottom:1px solid #f2f5fa;font-size:10.5pt;line-height:1.5}' +
+'.ps-lbl-h{font-weight:800;color:#0f2044}' +
+'.ps-p{padding:5px 14px;font-size:10.5pt;line-height:1.6;color:#222;border-bottom:1px solid #f2f5fa}' +
+'.ps-num:last-child,.ps-bul:last-child,.ps-lbl:last-child,.ps-p:last-child{border-bottom:none}' +
+/* Shot chart print styles */
+'.sc-row{display:flex;gap:16px;justify-content:center;margin-bottom:20px;flex-wrap:wrap;break-inside:avoid}' +
+'.sc-col{flex:1;min-width:260px;max-width:340px;text-align:center}' +
+'.sc-title{font-size:10pt;font-weight:800;color:#0f2044;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}' +
+'.sc-stats{font-size:8.5pt;color:#555;margin-top:4px}' +
+'.sc-row svg rect[fill="#080f1e"]{fill:#eef1f6 !important}' +
+'.sc-row svg rect[fill="#0d1b32"]{fill:#f5f7fb !important}' +
+/* Monte Carlo print styles */
+'.mc-headline{display:flex;justify-content:center;gap:24px;align-items:center;padding:14px 14px 8px}' +
+'.mc-win{border:2px solid;border-radius:8px;padding:8px 18px;text-align:center;min-width:100px}' +
+'.mc-pct{font-size:18pt;font-weight:900}' +
+'.mc-name{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#555;margin-top:2px}' +
+'.mc-vs{font-size:10pt;font-weight:700;color:#999}' +
+'.mc-tbl{width:100%;border-collapse:collapse;font-size:10pt;margin:0}' +
+'.mc-tbl td{padding:5px 14px;border-bottom:1px solid #f2f5fa}' +
+'.mc-tbl td:first-child{font-weight:700;color:#0f2044;width:40%}' +
+'.mc-hist-title{font-size:8.5pt;font-weight:700;color:#0f2044;text-transform:uppercase;letter-spacing:.04em;padding:10px 14px 4px}' +
+'.mc-hist{padding:0 14px 10px}' +
+'.mc-bar{display:flex;align-items:center;gap:6px;margin-bottom:2px;height:14px}' +
+'.mc-fill{height:10px;border-radius:3px;min-width:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+'.mc-lbl{font-size:7.5pt;color:#888;min-width:24px}' +
+'.footer{border-top:2px solid #0f2044;margin:0 36px;padding:10px 0;display:flex;justify-content:space-between;font-size:8pt;color:#888}' +
+'.printbtn{text-align:center;padding:18px;background:#f8f9fb}' +
+'.printbtn button{padding:10px 26px;font-size:11pt;background:#0f2044;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700}' +
+'@media print{.printbtn{display:none}@page{margin:.45in;size:letter}}' +
+'</style></head><body>' +
+'<div class="cover">' +
+'<div class="cv-badge">NCAA Scouting Dashboard \u00B7 Deep Analysis Report</div>' +
+'<div class="cv-title">' + aName + '<br>vs ' + bName + '</div>' +
+'<div class="cv-sub">Tournament Preparation Scouting Report</div>' +
+'<div class="cv-meta"><span>Season ' + season + '</span><span>' + ts + '</span><span>AI: ' + model + '</span></div>' +
+'</div>' +
+'<div class="content">' +
+  (shotChartsHtml ? '<div class="ps" style="break-inside:avoid"><div class="ps-head">\uD83C\uDFAF Shot Charts</div><div class="ps-body" style="padding:12px">' + shotChartsHtml + '</div></div>' : '') +
+  mcHtml +
+  buildPrintHtml(rawText) +
+'</div>' +
+'<div class="footer"><span>NCAA Scouting Dashboard \u2014 Confidential</span><span>' + aName + ' vs ' + bName + ' \u00B7 ' + season + '</span></div>' +
+'<div class="printbtn"><button onclick="window.print()">\uD83D\uDDA8\uFE0F Print / Save as PDF</button></div>' +
+'</body></html>');
   win.document.close();
-  setTimeout(() => win.print(), 700);
+  setTimeout(function() { win.print(); }, 700);
 }
 
 // \u2500\u2500 thRenderCompare — side-by-side team comparison ────────────────────────────
@@ -1393,12 +1629,9 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
         <div class="thDeepControls">
-          <div class="thModelToggleWrap" title="Toggle AI model: default is gemini-2.5-flash-lite, toggle on for gemini-3-flash-preview (heavier, better for tournament)" onclick="thToggleDeepModel()">
-            <span class="thModelToggleLabel">2.5 Lite</span>
-            <div class="thModelToggle${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelToggle">
-              <div class="thModelToggleKnob"></div>
-            </div>
-            <span class="thModelToggleLabel" id="thModelActiveLabel">${_thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite'}</span>
+          <div class="thModelPillGroup">
+            <button id="thModelBtnLite" class="thModelPillBtn${_thDeepUseHeavyModel ? '' : ' active'}" onclick="thSetDeepModel(false)">⚡ 2.5 Flash Lite</button>
+            <button id="thModelBtnHeavy" class="thModelPillBtn${_thDeepUseHeavyModel ? ' active' : ''}" onclick="thSetDeepModel(true)">🧠 3 Flash</button>
           </div>
           <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
