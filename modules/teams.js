@@ -17,9 +17,30 @@ var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
+var _TH_GUEST_DA_LIMIT = 3;
+var _TH_GUEST_DA_KEY = 'thGuestDACount';
+
+function _thGuestDACount() {
+  return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
+}
+function _thGuestDAIncrement() {
+  var c = _thGuestDACount() + 1;
+  localStorage.setItem(_TH_GUEST_DA_KEY, String(c));
+  return c;
+}
+function _thIsGuest() {
+  return typeof authIsGuest === 'function' && authIsGuest();
+}
 
 // ── Model toggle (exact same structure as MBB/WBB league toggle) ─────────────
 function thSetDeepModel(heavy) {
+  // Guests cannot use the Pro model
+  if (heavy && _thIsGuest()) {
+    if (typeof showWarn === 'function') showWarn('🔒 Pro model requires login. Guest users can only use 2.5 Lite.');
+    var cb2 = document.getElementById('thModelSwitchInput');
+    if (cb2) cb2.checked = false;
+    return;
+  }
   _thDeepUseHeavyModel = !!heavy;
   localStorage.setItem('thDeepModel', _thDeepUseHeavyModel ? 'heavy' : 'lite');
   var cb = document.getElementById('thModelSwitchInput');
@@ -1054,6 +1075,27 @@ async function thRunDeepAnalysis() {
     if (typeof showWarn === 'function') showWarn('Load a team and compare opponent first.');
     return;
   }
+
+  // ── Guest limit check ──
+  if (_thIsGuest()) {
+    // Force lite model for guests
+    if (_thDeepUseHeavyModel) thSetDeepModel(false);
+    var usedCount = _thGuestDACount();
+    if (usedCount >= _TH_GUEST_DA_LIMIT) {
+      if (typeof showWarn === 'function') showWarn('🔒 Guest limit reached (' + _TH_GUEST_DA_LIMIT + '/' + _TH_GUEST_DA_LIMIT + ' Deep Analysis runs used). Log in for unlimited access.');
+      var lockedOutput = document.getElementById('thDeepOutput');
+      if (lockedOutput) {
+        lockedOutput.style.display = 'block';
+        lockedOutput.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--muted)">' +
+          '<div style="font-size:32px;margin-bottom:8px">🔒</div>' +
+          '<div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px">Guest Limit Reached</div>' +
+          '<div style="font-size:12px">You\'ve used all ' + _TH_GUEST_DA_LIMIT + ' free Deep Analysis runs.<br>Log in for unlimited access and the Pro model.</div>' +
+        '</div>';
+      }
+      return;
+    }
+  }
+
   const btn = document.querySelector('.thDeepBtn');
   const status = document.getElementById('thDeepAnalysisStatus');
   const output = document.getElementById('thDeepOutput');
@@ -1151,8 +1193,23 @@ async function thRunDeepAnalysis() {
     }
   } catch (_) {}
 
-  const selectedModel = _thDeepUseHeavyModel ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
-  const maxTokens    = _thDeepUseHeavyModel ? 6000 : 4096;
+  // Guests always use lite model (double-check)
+  const useHeavy = _thDeepUseHeavyModel && !_thIsGuest();
+  const selectedModel = useHeavy ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
+  const maxTokens    = useHeavy ? 6000 : 4096;
+
+  // Increment guest usage counter
+  if (_thIsGuest()) {
+    var newCount = _thGuestDAIncrement();
+    // Update the button label with remaining count
+    var daBtn = document.querySelector('.thDeepBtn');
+    if (daBtn) {
+      var remaining = _TH_GUEST_DA_LIMIT - newCount;
+      if (remaining > 0) {
+        daBtn.setAttribute('data-guest-remaining', remaining + ' left');
+      }
+    }
+  }
 
   const userPrompt =
     `Produce a complete **tournament-ready** coach-level deep analysis for **${aName} vs ${bName}**.\n\n` +
@@ -1214,7 +1271,21 @@ async function thRunDeepAnalysis() {
     output.innerHTML = '<div class="thDeepError">\u26A0 Analysis failed: ' + e.message + '. Check console for details.</div>';
     console.error('[thRunDeepAnalysis]', e);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '\uD83E\uDDE0 Deep Analysis'; }
+    if (btn) {
+      if (_thIsGuest()) {
+        var rem = _TH_GUEST_DA_LIMIT - _thGuestDACount();
+        if (rem <= 0) {
+          btn.disabled = true;
+          btn.textContent = '\ud83d\udd12 Limit Reached';
+        } else {
+          btn.disabled = false;
+          btn.textContent = '\ud83e\udde0 Deep Analysis (' + rem + '/' + _TH_GUEST_DA_LIMIT + ')';
+        }
+      } else {
+        btn.disabled = false;
+        btn.textContent = '\ud83e\udde0 Deep Analysis';
+      }
+    }
   }
 }
 
@@ -1950,15 +2021,15 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thDeepAnalysisRow">
         <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
         <div class="thDeepControls">
-          <div class="leagueSwitch" style="gap:6px">
-            <span class="lsLabel${_thDeepUseHeavyModel ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
+          <div class="leagueSwitch" style="gap:6px${_thIsGuest() ? ';opacity:.45;pointer-events:none' : ''}">
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
             <label class="lsTrackWrap">
-              <input type="checkbox" id="thModelSwitchInput"${_thDeepUseHeavyModel ? ' checked' : ''}>
+              <input type="checkbox" id="thModelSwitchInput"${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' checked' : ''}${_thIsGuest() ? ' disabled' : ''}>
               <span class="lsTrack"></span>
             </label>
-            <span class="lsLabel${_thDeepUseHeavyModel ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">🧠 Pro</span>
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">🧠 Pro${_thIsGuest() ? ' 🔒' : ''}</span>
           </div>
-          <button class="thDeepBtn" onclick="thRunDeepAnalysis()">🧠 Deep Analysis</button>
+          <button class="thDeepBtn" onclick="thRunDeepAnalysis()"${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? ' disabled' : ''}>${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? '🔒 Limit Reached' : '🧠 Deep Analysis' + (_thIsGuest() ? ' (' + (_TH_GUEST_DA_LIMIT - _thGuestDACount()) + '/' + _TH_GUEST_DA_LIMIT + ')' : '')}</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
         </div>
       </div>
