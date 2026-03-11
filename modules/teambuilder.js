@@ -930,7 +930,7 @@ function initPageNav(){
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.page;
       document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology').forEach(el => {
+      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageFavorites, #pageCollaborate').forEach(el => {
         el.style.display = 'none';
       });
       const target = document.getElementById(targetId);
@@ -938,6 +938,11 @@ function initPageNav(){
       btn.classList.add('active');
       // Refresh player table when switching back (roster icons may be stale)
       if(targetId === 'pagePlayers') renderPlayersPage();
+      // Re-render favorites cards every time that tab is opened
+      if(targetId === 'pageFavorites') {
+        if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
+        if(typeof favsRenderPage     === 'function') favsRenderPage();
+      }
     });
   });
   // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)

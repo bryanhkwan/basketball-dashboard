@@ -55,14 +55,18 @@ function authStartLoading() {
     _loadVideoEnded = true;
   }
 
-  // Trigger data load in parallel
-  if (typeof loadFromGoogleSheets === 'function') {
+  // Trigger data load in parallel — MBB from CBD API, WBB from Google Sheets
+  if (typeof loadAllData === 'function') {
+    setTimeout(() => loadAllData(2026), 50);
+  } else if (typeof loadFromGoogleSheets === 'function') {
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 50);
   }
 }
 
 /* Called by data.js when data is fully loaded */
 function authFinishLoading() {
+  if (typeof favsLoad   === 'function') favsLoad();    // load per-user favorites after data is ready
+  if (typeof sharesLoad === 'function') sharesLoad();  // load inbox + sent
   const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
     _loadDataReady = true;
@@ -108,6 +112,8 @@ function _authSetupHeader() {
   const logoutBtn   = document.getElementById('logoutBtn');
   const guestLoginBtn = document.getElementById('guestLoginBtn');
   const notesToggle = document.getElementById('notesToggle');
+  // Update API usage badge whenever auth state changes
+  if (typeof window._apiUsageUpdateBadge === 'function') window._apiUsageUpdateBadge();
   if (authIsGuest()) {
     if (userEl)       userEl.textContent = 'Guest';
     if (logoutBtn)    logoutBtn.style.display = 'none';

@@ -22,6 +22,7 @@ const LIST_COLS = [
   {key:'ActualValuation_calc', label:'Model $'},
   {key:'ActualValuation', label:'Actual $'},
   {key:'ValueDelta_calc', label:'Δ$'},
+  {key:'_sched_diff', label:'SoS'},
 ];
 
 // --- Sort ---
@@ -56,6 +57,7 @@ function renderPlayers(){
 function renderPlayersPage(){
   const colsToShow = LIST_COLS.filter(c => {
     if(c.key === '_opp_add') return typeof oppAddPlayer !== 'undefined';
+    if(c.key === '_sched_diff') return typeof league !== 'undefined' && league === 'MBB';
     return true;
   });
 
@@ -131,8 +133,20 @@ function renderPlayersPage(){
       }else if(c.key === 'FitScore_calc'){
         td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
       }else if(c.key === 'ActualValuation_calc'){
-        td.textContent = fmtMoney(r.ActualValuation_calc);
-      }else{
+        td.textContent = fmtMoney(r.ActualValuation_calc);      }else if(c.key === '_sched_diff'){
+        const tRat = (typeof teamRatings !== 'undefined') ? teamRatings[(r.Team||'').toLowerCase()] : null;
+        if(!tRat){
+          td.textContent = '—';
+          td.style.color = 'var(--muted)';
+        } else {
+          const sos = tRat.sos;
+          td.textContent = Number.isFinite(sos) ? (sos >= 0 ? '+' : '') + sos.toFixed(1) : '—';
+          if(Number.isFinite(sos)){
+            td.style.fontWeight = '600';
+            td.style.color = sos >= 2 ? 'var(--bad)' : sos >= 0 ? 'var(--warn)' : sos >= -2 ? 'var(--muted)' : 'var(--good)';
+            td.title = `Schedule difficulty (SoS): ${sos >= 2 ? 'Very Hard' : sos >= 0 ? 'Hard' : sos >= -2 ? 'Average' : 'Easy'}`;
+          }
+        }      }else{
         td.textContent = (v ?? '').toString();
       }
       tr.appendChild(td);

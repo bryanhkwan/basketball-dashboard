@@ -158,10 +158,782 @@ function openProfile(r){
     }
   };
 
+  renderCareerHistory(r);
+  renderTeamContext(r);
+  renderShootingZones(r);
+  renderRecruitingBadge(r);
+  renderScoutReport(r);
+
+  // Player shot chart (uses play-by-play data via worker)
+  const mShotChart = document.getElementById('mShotChart');
+  if (mShotChart) {
+    const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
+    mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data…</div>';
+    if (typeof loadPlayerShots === 'function') {
+      loadPlayerShots(team, yr, player).then(function(shots) {
+        if (!shots || !shots.length) {
+          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
+          return;
+        }
+        const svgHtml = typeof _th_buildShotChartSVG === 'function'
+          ? _th_buildShotChartSVG(shots, player, 'var(--accent)')
+          : '';
+        mShotChart.innerHTML =
+          '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
+        if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
+        enrichScoutReportWithShots(shots);
+        if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
+      }).catch(function() {
+        mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
+      });
+    }
+  }
+
+  if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
+  var _shareBtn = document.getElementById('mShareBtn');
+  if (_shareBtn) _shareBtn.onclick = function() { if (typeof sharesOpenSendModal === 'function') sharesOpenSendModal(r); };
+
+  // ── 📝 Notes button: toggle per-player scout note drawer ─────────────────
+  var _notesBtn    = document.getElementById('mNotesBtn');
+  var _notesDrawer = document.getElementById('mNotesDrawer');
+  var _scoutNotes  = document.getElementById('mScoutNotes');
+  var _scoutStatus = document.getElementById('mScoutNoteStatus');
+  if (_notesDrawer) _notesDrawer.style.display = 'none'; // hide on every new profile open
+  if (_notesBtn && _notesDrawer) {
+    _notesBtn.onclick = function() {
+      var shown = _notesDrawer.style.display !== 'none';
+      if (shown) {
+        _notesDrawer.style.display = 'none';
+      } else {
+        _notesDrawer.style.display = 'flex';
+        // Load existing [Scout] note for this player
+        if (typeof notesState !== 'undefined') {
+          var titleKey  = '[Scout] ' + player;
+          var existing  = notesState.notes.find(function(n) { return String(n.title || '') === titleKey; });
+          if (_scoutNotes) {
+            _scoutNotes.value    = existing ? (existing.content || '') : '';
+            _scoutNotes._noteId  = existing ? String(existing.id)      : null;
+          }
+          if (_scoutStatus) _scoutStatus.textContent = '';
+        }
+      }
+    };
+  }
+  if (_scoutNotes) {
+    var _scoutTimer = null;
+    _scoutNotes.oninput = function() {
+      if (_scoutStatus) _scoutStatus.textContent = 'Unsaved\u2026';
+      clearTimeout(_scoutTimer);
+      var _savedPlayer = player;
+      _scoutTimer = setTimeout(async function() {
+        if (typeof authIsGuest === 'function' && authIsGuest()) {
+          if (_scoutStatus) _scoutStatus.textContent = 'Login to save';
+          return;
+        }
+        if (typeof notesFetch !== 'function') return;
+        var content   = _scoutNotes.value;
+        var noteTitle = '[Scout] ' + _savedPlayer;
+        try {
+          if (_scoutNotes._noteId) {
+            await notesFetch('/' + _scoutNotes._noteId, {
+              method: 'PUT',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (typeof notesState !== 'undefined') {
+              var idx = notesState.notes.findIndex(function(n) { return String(n.id) === _scoutNotes._noteId; });
+              if (idx !== -1) notesState.notes[idx] = Object.assign({}, notesState.notes[idx], { content: content });
+            }
+          } else {
+            var newNote = await notesFetch('', {
+              method: 'POST',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (newNote && newNote.id) {
+              var norm = Object.assign({}, newNote, { id: String(newNote.id) });
+              if (typeof notesState !== 'undefined') notesState.notes.unshift(norm);
+              _scoutNotes._noteId = norm.id;
+            }
+          }
+          if (_scoutStatus) _scoutStatus.textContent = 'Saved \u2713';
+          if (typeof notesRenderList === 'function') notesRenderList();
+        } catch(e2) {
+          if (_scoutStatus) _scoutStatus.textContent = 'Save failed';
+        }
+      }, 1500);
+    };
+  }
+
   modalBack.style.display = 'flex';
 }
 
 function closeProfile(){ modalBack.style.display = 'none'; }
+
+// ── Scout Report ─────────────────────────────────────────────────────────────
+function renderScoutReport(r) {
+  const el = document.getElementById('mScoutReport');
+  if (!el) return;
+
+  const posGroup = bucketPosition(r.Pos || r.Position || '');
+  function pct(stat) {
+    const v = safeNum(r[stat]);
+    if (!Number.isFinite(v)) return null;
+    const p = statPercentile(stat, v);
+    return Number.isFinite(p) ? p : null;
+  }
+
+  // raw values
+  const ppg   = safeNum(r['PPG']),    efg   = safeNum(r['eFG%']),
+        p3pct = safeNum(r['3P%']),    ft    = safeNum(r['FT%']),
+        apg   = safeNum(r['APG']),    ato   = safeNum(r['A/TO']),
+        topg  = safeNum(r['TOPG']),   spg   = safeNum(r['SPG']),
+        bpg   = safeNum(r['BPG']),    rpg   = safeNum(r['RPG']),
+        orPct = safeNum(r['OR%']),    usg   = safeNum(r['USG%']),
+        bpm   = safeNum(r['BPM']),    drtg  = safeNum(r['DRtg']),
+        ws40  = safeNum(r['WS/40']),  p3paG = safeNum(r['3PA/G']);
+
+  // percentiles
+  const ppgP  = pct('PPG'),   efgP  = pct('eFG%'), p3P   = pct('3P%'),
+        ftP   = pct('FT%'),   apgP  = pct('APG'),  atoP  = pct('A/TO'),
+        topgP = pct('TOPG'),  spgP  = pct('SPG'),  bpgP  = pct('BPG'),
+        rpgP  = pct('RPG'),   orP   = pct('OR%'),  usgP  = pct('USG%'),
+        bpmP  = pct('BPM'),   drtgP = pct('DRtg'), ws40P = pct('WS/40'),
+        drP   = pct('DR%');
+
+  const fPct = v => Number.isFinite(v) ? (v * 100).toFixed(1) + '%' : '—';
+  const fN   = (v, d=1) => Number.isFinite(v) ? v.toFixed(d) : '—';
+  const top  = p => p != null ? Math.round((1 - p) * 100) : null;
+
+  const strengths = [], weaknesses = [], tendencies = [], development = [], matchup = [];
+
+  // ── STRENGTHS ──────────────────────────────────────────────────────────────
+  if (ppgP  >= 0.82) strengths.push(`Elite scorer — ${fN(ppg)} PPG (top ${top(ppgP)}% of position group)`);
+  if (efgP  >= 0.82) strengths.push(`Highly efficient shooter — ${fPct(efg)} eFG%, creates quality looks and finishes`);
+  if (p3P   >= 0.82 && p3paG >= 1.5) strengths.push(`Dangerous 3PT threat — ${fPct(p3pct)} on ${fN(p3paG)}/g volume; must be contested off screens and DHOs`);
+  if (ftP   >= 0.82) strengths.push(`Reliable FT shooter — ${fPct(ft)} from the line; punishes defenders for reaching`);
+  if (apgP  >= 0.82) strengths.push(`High-level playmaker — ${fN(apg)} APG, reads defenses and creates consistently for teammates`);
+  if (atoP  >= 0.82) strengths.push(`Excellent decision-maker — ${fN(ato,2)} A/TO, protects possessions and limits live-ball turnovers`);
+  if (spgP  >= 0.82) strengths.push(`Elite ball-hawk — ${fN(spg)} SPG, disrupts passing lanes and generates transition chances`);
+  if (bpgP  >= 0.82) strengths.push(`Rim protector — ${fN(bpg)} BPG, deters drives and shifts opponent shot selection away from the paint`);
+  if (rpgP  >= 0.82) strengths.push(`High-volume rebounder — ${fN(rpg)} RPG, controls both glass ends and limits second-chance points`);
+  if (bpmP  >= 0.82) strengths.push(`Strong two-way impact — BPM places them among the most impactful players at this position`);
+  if (drtgP >= 0.82) strengths.push(`Excellent individual defender — ${fN(drtg,0)} DRtg; opponents score inefficiently in these matchups`);
+  if (ws40P >= 0.82) strengths.push(`Wins producer — elite WS/40 confirms genuine per-minute impact on team results`);
+  if (orP   >= 0.82) strengths.push(`Elite offensive rebounder — OR% in the top tier; crashes the glass relentlessly for extra possessions`);
+  if (drP   >= 0.82) strengths.push(`Elite defensive rebounder — stingy on the glass, routinely ends possessions`);
+  if (usgP  >= 0.80 && ppgP != null && ppgP >= 0.55) strengths.push(`Handles heavy load — ${fN(usg,0)}% usage while staying efficient; trusted primary option`);
+
+  // ── WEAKNESSES ─────────────────────────────────────────────────────────────
+  if (ppgP  != null && ppgP  <= 0.22) weaknesses.push(`Limited scoring output — ${fN(ppg)} PPG; offense runs through others`);
+  if (efgP  != null && efgP  <= 0.22) weaknesses.push(`Poor shooting efficiency — ${fPct(efg)} eFG%; misses erode possession quality`);
+  if (p3P   != null && p3P   <= 0.22 && p3paG >= 1.5) weaknesses.push(`Unreliable 3PT shooter on volume — ${fPct(p3pct)} on ${fN(p3paG)}/g; defenders can sag off and clog the paint`);
+  if (ftP   != null && ftP   <= 0.22) weaknesses.push(`Free throw liability — ${fPct(ft)} FT%; hack-a strategy is valid in crunch time`);
+  if (atoP  != null && atoP  <= 0.22) weaknesses.push(`Decision-making concerns — ${fN(ato,2)} A/TO; passing-game issues limit playmaking ceiling`);
+  if (topgP != null && topgP <= 0.22) weaknesses.push(`Ball security issues — ${fN(topg)} TOPG; careless with live ball, gifts transition chances`);
+  if (spgP  != null && bpgP  != null && spgP <= 0.22 && bpgP <= 0.22) weaknesses.push(`Passive defender — low steal and block numbers; rarely creates defensive events`);
+  if (drtgP != null && drtgP <= 0.22) weaknesses.push(`Below-average defender — ${fN(drtg,0)} DRtg; opponents score efficiently when they are the primary assignment`);
+  if (rpgP  != null && rpgP  <= 0.22) weaknesses.push(`Soft on the glass — ${fN(rpg)} RPG; gives up extra possessions and second-chance opportunities`);
+  if (apgP  != null && apgP  <= 0.22 && posGroup === 'Guards') weaknesses.push(`Limited playmaking — ${fN(apg)} APG; off-ball only, not a primary creator or initiator`);
+
+  // ── TENDENCIES ─────────────────────────────────────────────────────────────
+  if      (Number.isFinite(usg) && usg >= 26) tendencies.push(`Primary option (${fN(usg,0)}% USG) — initiates possessions, demands double-team attention in half-court sets`);
+  else if (Number.isFinite(usg) && usg >= 18) tendencies.push(`Secondary option (${fN(usg,0)}% USG) — operates within the offense, accepts touches without demanding the ball`);
+  else if (Number.isFinite(usg) && usg > 0)   tendencies.push(`Role player (${fN(usg,0)}% USG) — low-decision contributor, executes within structure`);
+
+  if      (Number.isFinite(p3paG) && p3paG >= 5)   tendencies.push(`Volume 3PT gunner — ${fN(p3paG)}/g; attacks pull-ups and spot-ups relentlessly, spaces the floor wide`);
+  else if (Number.isFinite(p3paG) && p3paG >= 2.5)  tendencies.push(`Perimeter-oriented — ${fN(p3paG)} 3PA/g; comfortable catch-and-shoot and off-dribble from beyond the arc`);
+  else if (Number.isFinite(p3paG) && p3paG < 1 && posGroup === 'Guards') tendencies.push(`Drive-first guard — rarely attempts 3s (${fN(p3paG)}/g); attacks closeouts going to the basket and FT line`);
+
+  if      (Number.isFinite(apg) && apg >= 5)   tendencies.push(`Floor general — runs every action; master of pick-and-roll, drive-and-kick, and secondary reads`);
+  else if (Number.isFinite(apg) && apg >= 3)   tendencies.push(`Secondary ball-handler — comfortable in PnR as pull-up or pass-first on second-side actions`);
+
+  if (Number.isFinite(orPct) && orPct >= 8)    tendencies.push(`Offensive glass crasher — OR% ${fN(orPct,1)}%; must be tracked and blocked out on every shot`);
+  if (Number.isFinite(spg)  && spg   >= 1.5)   tendencies.push(`Active-hands gambler — digs in passing lanes; skip passes and DHOs can exploit this tendency`);
+  if (Number.isFinite(bpg)  && bpg   >= 1.5)   tendencies.push(`Paint deterrent — active shot-blocker; use shot fakes to take them off their feet before attacking`);
+  if (Number.isFinite(ft)   && ft    >= 0.80 && Number.isFinite(usg) && usg >= 18) tendencies.push(`Draws fouls intentionally — gets to the line and converts; defenders must stay disciplined`);
+
+  // ── DEVELOPMENT AREAS ──────────────────────────────────────────────────────
+  const devCandidates = [];
+  function devCheck(stat, label, msg) {
+    const p = pct(stat); if (p == null) return;
+    if (p >= 0.25 && p < 0.56) devCandidates.push({ p, msg: msg + ` (~${Math.round(p*100)}th pct)` });
+  }
+  devCheck('3P%',  '', `3PT shooting — mechanics and shot-selection improvements could unlock genuine perimeter threat status`);
+  devCheck('FT%',  '', `Free throw reliability — consistent FT% removes hack-a options and adds clutch-game production`);
+  devCheck('APG',  '', `Playmaking volume — adding consistent passing reads would shift them from scorer to dual-threat initiator`);
+  devCheck('A/TO', '', `Decision-making — cleaning up live-ball turnovers is the clearest efficiency floor-raiser`);
+  devCheck('DRtg', '', `Defensive engagement — improved positioning and floor awareness would raise overall two-way value`);
+  devCheck('BPG',  '', `Rim-deterrence — better shot-contest timing and verticality could develop them into a paint anchor`);
+  devCheck('RPG',  '', `Rebounding discipline — box-out fundamentals improvement has a direct impact on team rebound rate`);
+  devCheck('eFG%', '', `Shot quality — higher shot selectivity or finishing improvement pushes eFG% to league-average range`);
+  devCandidates.sort((a, b) => b.p - a.p);
+  development.push(...devCandidates.slice(0, 3).map(d => d.msg));
+
+  // ── MATCHUP NOTES ──────────────────────────────────────────────────────────
+  if (p3P   != null && p3P   >= 0.72 && p3paG >= 2) matchup.push(`🛡️ Guarding offense: Hard close-out — ${fPct(p3pct)} 3PT on volume. Force baseline, funnel to weak hand, stay attached through hand-offs and screens.`);
+  if (usg   >= 26 && apgP   != null  && apgP  >= 0.60) matchup.push(`🛡️ Deny initiation: Primary creator (${fN(usg,0)}% USG) with passing vision — pressure the catch, fight over screens; remove the ball from their hands early in the shot clock.`);
+  if (ftP   != null && ftP   <= 0.58 && usg >= 18) matchup.push(`📌 Hack consideration: ${fPct(ft)} FT% at ${fN(usg,0)}% usage — late-game intentional fouling is a legitimate tactical option.`);
+  if (atoP  != null && atoP  <= 0.30) matchup.push(`⚡ Force live-ball situations: High turnover rate — PnR traps, full-court pressure, and deflection rotations will produce extra possessions.`);
+  if (drtgP != null && drtgP <= 0.30) matchup.push(`🎯 Attack this matchup: Below-average defender (${fN(drtg,0)} DRtg) — target in isolation or PnR; especially attack away from their strong side.`);
+  if (orPct >= 10) matchup.push(`💥 Hard box-outs critical: ${fN(orPct,1)}% OR rate — alert every shooter; nobody leaves the glass early.`);
+  if (spg   >= 1.5) matchup.push(`🖐️ Protect the ball: Active in passing lanes — cut with purpose, avoid cross-court skips when they are in lane position.`);
+  if (bpg   >= 1.5) matchup.push(`🚧 Avoid uncontested drives: ${fN(bpg)} BPG help presence — kick out or shot-fake to take them off their feet before attacking the rim.`);
+  if (drtgP != null && drtgP >= 0.75) matchup.push(`ℹ️ Solid defender: Good DRtg indicates they hold their own — don't overcommit to a mismatch; respect help-side rotation.`);
+  if (efgP  != null && efgP  >= 0.78) matchup.push(`🔥 Efficient scorer: ${fPct(efg)} eFG% — minimal wasted shots; contest every catch, avoid foul situations, don't let them set their feet.`);
+  if (bpgP  != null && bpgP  >= 0.78) matchup.push(`🎯 Their defense — blocks at rim: Anchors weak side with aggressive rotations — skip passes and pop/pocket passes are the answer.`);
+  if (spgP  != null && spgP  >= 0.78) matchup.push(`🎯 Their defense — pressure defense: Active lane presence — set screens early, keep ball moving before they can commit to the gamble.`);
+
+  // ── RENDER ─────────────────────────────────────────────────────────────────
+  function scoutSection(title, icon, items, cls) {
+    if (!items.length) return '';
+    return `<div class="scoutSection">
+      <div class="scoutSectionHead">${icon} ${title}</div>
+      <div class="scoutItems">${items.map(t => `<div class="scoutItem ${cls}">${t}</div>`).join('')}</div>
+    </div>`;
+  }
+
+  const html =
+    scoutSection('Strengths',        '✅', strengths,   'scoutItem--strength') +
+    scoutSection('Weaknesses',       '⚠️', weaknesses,  'scoutItem--weakness') +
+    scoutSection('Tendencies',       '🔄', tendencies,  'scoutItem--tendency') +
+    scoutSection('Development Areas','📈', development, 'scoutItem--dev')      +
+    scoutSection('Matchup Notes',    '🎯', matchup,     'scoutItem--matchup');
+
+  el.innerHTML = html ||
+    '<div class="muted" style="font-size:12px;padding:8px 0">Not enough stat data to generate a scout report for this player.</div>';
+}
+
+// ── Shot Chart Tendency Enrichment ───────────────────────────────────────────
+// Called after shot data loads — appends shot-derived items to the Tendencies
+// section of the already-rendered scout report.
+function enrichScoutReportWithShots(shots) {
+  const el = document.getElementById('mScoutReport');
+  if (!el || !shots) return;
+
+  // Only use field goal attempts (exclude free throws)
+  const fga = shots.filter(function(s) { return s.range !== 'free_throw'; });
+  const total = fga.length;
+  if (total < 15) return;  // not enough data
+
+  const rimShots   = fga.filter(function(s) { return s.range === 'rim'; });
+  const midShots   = fga.filter(function(s) { return s.range === 'jumper'; });
+  const threeShots = fga.filter(function(s) { return s.range === 'three_pointer'; });
+
+  const rimPct   = rimShots.length   / total;
+  const midPct   = midShots.length   / total;
+  const threePct = threeShots.length / total;
+
+  const fg = function(arr) {
+    return arr.length ? arr.filter(function(s) { return s.made; }).length / arr.length : null;
+  };
+  const rimFG   = fg(rimShots);
+  const midFG   = fg(midShots);
+  const threeFG = fg(threeShots);
+
+  // Corner 3s: |y - 250| > 165 (near sidelines in full-court 0–500 coordinate)
+  const cornerThrees     = threeShots.filter(function(s) { return Math.abs(s.y - 250) > 165; });
+  const aboveBreakThrees = threeShots.filter(function(s) { return Math.abs(s.y - 250) <= 165; });
+  const cornerPct        = threeShots.length ? cornerThrees.length / threeShots.length : 0;
+
+  // Determine which basket the player attacks (same logic as _thShotToSVG)
+  const rimAll    = shots.filter(function(s) { return s.range === 'rim'; });
+  const avgX      = rimAll.length ? rimAll.reduce(function(a, s) { return a + s.x; }, 0) / rimAll.length : 470;
+  const attacksLeft = avgX < 470;
+
+  // Left vs right side at the rim (dy = y - 250; positive = right side when attacking left)
+  const rimSided = rimShots.filter(function(s) { return Math.abs(s.y - 250) > 20; });
+  const rightRim = rimSided.filter(function(s) { return attacksLeft ? (s.y - 250) > 0 : (s.y - 250) < 0; }).length;
+  const leftRim  = rimSided.filter(function(s) { return attacksLeft ? (s.y - 250) < 0 : (s.y - 250) > 0; }).length;
+
+  var items = [];
+  var pct = function(v, d) { return Math.round(v * 100) + '%'; };
+  var fmtFG = function(v) { return v != null ? ' (' + Math.round(v * 100) + '% FG)' : ''; };
+
+  // Paint-first vs perimeter-only profile
+  if (rimPct >= 0.42) {
+    items.push('Paint-first attacker — ' + pct(rimPct) + ' of shots at the rim' + fmtFG(rimFG) + '; draws contact and forces interior rotations');
+  } else if (rimPct <= 0.18 && threePct >= 0.40) {
+    items.push('Perimeter-exclusive — only ' + pct(rimPct) + ' of shots at the rim; rarely tests the paint, lives on the arc and mid-range');
+  }
+
+  // Mid-range tendency
+  if (midPct >= 0.30 && midShots.length >= 20) {
+    var midStr = midFG != null ? ', shooting ' + Math.round(midFG * 100) + '% there' : '';
+    items.push('Mid-range dependent — ' + pct(midPct) + ' of FGA are pull-up and catch-and-shoot jumpers' + midStr + '; attackable on closeouts');
+  } else if (midPct <= 0.10 && total >= 40) {
+    items.push('Avoids mid-range — only ' + pct(midPct) + ' of shots from mid-range; strictly rim attacks or 3PT, no in-between game');
+  }
+
+  // 3PT location: corner specialist vs above-the-break
+  if (threeShots.length >= 15) {
+    if (cornerPct >= 0.35) {
+      var cFG = cornerThrees.length ? Math.round(cornerThrees.filter(function(s) { return s.made; }).length / cornerThrees.length * 100) : null;
+      items.push('Corner 3 specialist — ' + Math.round(cornerPct * 100) + '% of 3PT attempts from the corners' +
+        (cFG != null ? ' (' + cFG + '% there)' : '') +
+        '; attack with ball-screen coverage, not zone traps that open corners');
+    } else if (cornerPct <= 0.12 && threeShots.length >= 25) {
+      items.push('Above-the-break gunner — only ' + Math.round(cornerPct * 100) + '% of 3PTs from corners; prefers pull-ups and DHO 3s at wings and top of key');
+    }
+  }
+
+  // Left vs right side rim finishing
+  if ((rightRim + leftRim) >= 20) {
+    var rightPct = rightRim / (rightRim + leftRim);
+    if (rightPct >= 0.62) {
+      items.push('Right-side finisher — ' + Math.round(rightPct * 100) + '% of rim attempts from the right side; shade left to force to weak hand');
+    } else if (rightPct <= 0.38) {
+      items.push('Left-side finisher — ' + Math.round((1 - rightPct) * 100) + '% of rim attempts from the left side; shade right to force to weak hand');
+    }
+  }
+
+  // Rim finishing efficiency (when sample is big enough)
+  if (rimShots.length >= 25 && rimFG != null) {
+    if (rimFG < 0.50) {
+      items.push('Struggles to convert at the rim — ' + Math.round(rimFG * 100) + '% at the basket; shot blockers and bump-at-gather rotation disrupts rhythm');
+    } else if (rimFG >= 0.70) {
+      items.push('Elite rim finisher — ' + Math.round(rimFG * 100) + '% at the basket; uses body control and both hands, absorbs contact well');
+    }
+  }
+
+  if (!items.length) return;
+
+  // Inject into the existing Tendencies section, or append a new one
+  var sections = el.querySelectorAll('.scoutSection');
+  var tendSec = null;
+  sections.forEach(function(sec) {
+    var head = sec.querySelector('.scoutSectionHead');
+    if (head && head.textContent.indexOf('Tendencies') !== -1) tendSec = sec;
+  });
+
+  var newItems = items.map(function(t) {
+    return '<div class="scoutItem scoutItem--tendency">' + t + '</div>';
+  }).join('');
+
+  if (tendSec) {
+    var itemsEl = tendSec.querySelector('.scoutItems');
+    if (itemsEl) itemsEl.insertAdjacentHTML('beforeend', newItems);
+  } else {
+    el.insertAdjacentHTML('beforeend',
+      '<div class="scoutSection">'
+      + '<div class="scoutSectionHead">🔄 Tendencies</div>'
+      + '<div class="scoutItems">' + newItems + '</div>'
+      + '</div>');
+  }
+
+  // ── Scoring Consistency (requires game field — added to worker 2026-03) ────
+  var shotsWithGame = shots.filter(function(s) { return s.game; });
+  if (shotsWithGame.length >= 20) {
+    var gamePoints = {};
+    var pointFor = { rim: 2, jumper: 2, three_pointer: 3, free_throw: 1 };
+    shotsWithGame.forEach(function(s) {
+      if (!s.made) return;
+      if (!gamePoints[s.game]) gamePoints[s.game] = 0;
+      gamePoints[s.game] += (pointFor[s.range] || 2);
+    });
+    var gamePtsArr = Object.values(gamePoints);
+    if (gamePtsArr.length >= 8) {
+      var mean = gamePtsArr.reduce(function(a, v) { return a + v; }, 0) / gamePtsArr.length;
+      var variance = gamePtsArr.reduce(function(a, v) { return a + (v - mean) * (v - mean); }, 0) / gamePtsArr.length;
+      var stdDev = Math.sqrt(variance);
+      var cv = mean > 0 ? stdDev / mean : 0;
+      var minPts = Math.min.apply(null, gamePtsArr);
+      var maxPts = Math.max.apply(null, gamePtsArr);
+
+      // Consistency label
+      var cLabel, cClass;
+      if (cv < 0.28) {
+        cLabel = 'Iron Man — exceptionally consistent scorer every night';
+        cClass = 'scoutItem--strength';
+      } else if (cv < 0.40) {
+        cLabel = 'Reliable — steady output with limited game-to-game variance';
+        cClass = '';
+      } else if (cv < 0.55) {
+        cLabel = 'Streaky — output varies significantly; big games mixed with quiet ones';
+        cClass = '';
+      } else {
+        cLabel = 'Boom-or-bust scorer — extreme night-to-night variance';
+        cClass = 'scoutItem--weakness';
+      }
+
+      // Inject ±σ badge next to PPG value in stat bars
+      var barItems = document.querySelectorAll('#mBars .barItem');
+      barItems.forEach(function(item) {
+        var bEl = item.querySelector('.barTop b');
+        if (bEl && bEl.textContent.trim() === 'PPG') {
+          var muteEl = item.querySelector('.barTop .muted');
+          if (muteEl && !muteEl.querySelector('.sigmaTag')) {
+            var badge = document.createElement('span');
+            badge.className = 'sigmaTag';
+            badge.title = 'Std dev of per-game scoring (' + gamePtsArr.length + ' games)';
+            badge.textContent = ' ±' + stdDev.toFixed(1);
+            muteEl.appendChild(badge);
+          }
+        }
+      });
+
+      // Add Consistency scout section
+      el.insertAdjacentHTML('beforeend',
+        '<div class="scoutSection">'
+        + '<div class="scoutSectionHead">📊 Consistency</div>'
+        + '<div class="scoutItems">'
+        + '<div class="scoutItem ' + cClass + '">' + cLabel + '</div>'
+        + '<div class="scoutItem">' + mean.toFixed(1) + ' pts/game ± ' + stdDev.toFixed(1) + ' σ over ' + gamePtsArr.length + ' games · range ' + minPts + '–' + maxPts + ' pts</div>'
+        + '</div>'
+        + '</div>');
+    }
+  }
+}
+
+// ── Career History ──────────────────────────────────────────
+var CAREER_COLS = [
+  { key: 'G',     label: 'G',     pct: false, dec: 0 },
+  { key: 'PPG',   label: 'PPG',   pct: false, dec: 1 },
+  { key: 'RPG',   label: 'RPG',   pct: false, dec: 1 },
+  { key: 'APG',   label: 'APG',   pct: false, dec: 1 },
+  { key: 'SPG',   label: 'SPG',   pct: false, dec: 1 },
+  { key: 'BPG',   label: 'BPG',   pct: false, dec: 1 },
+  { key: 'eFG%',  label: 'eFG%',  pct: true,  dec: 1 },
+  { key: 'TS%',   label: 'TS%',   pct: true,  dec: 1 },
+  { key: 'BPM',   label: 'BPM',   pct: false, dec: 2 },
+  { key: 'WS/40', label: 'WS/40', pct: false, dec: 3 },
+];
+
+function _fmtC(col, val) {
+  if (!Number.isFinite(val)) return '—';
+  if (col.pct) return (val * 100).toFixed(col.dec) + '%';
+  if (col.dec === 0) return Math.round(val);
+  return val.toFixed(col.dec);
+}
+
+function renderCareerHistory(r) {
+  const el = document.getElementById('mCareer');
+  if (!el) return;
+
+  const key = (r.Player || '').toLowerCase().trim();
+
+  if (!_careerDataReady) {
+    el.innerHTML = '<div class="muted" style="padding:14px 16px;font-size:12px">Loading career history…</div>';
+    window._onCareerDataReady = () => renderCareerHistory(_currentProfilePlayer);
+    return;
+  }
+
+  const history = careerData[key];
+  if (!history || !history.length) {
+    el.innerHTML = '<div class="muted" style="padding:14px 16px;font-size:12px">No multi-season data found.</div>';
+    return;
+  }
+
+  // If only one season exists, note it is the first recorded year
+  const currentYear = 2026;
+
+  let html = '<div class="careerTable"><table><thead><tr>' +
+    '<th>Season</th><th>Team</th><th>Pos</th>' +
+    CAREER_COLS.map(c => '<th>' + c.label + '</th>').join('') +
+    '</tr></thead><tbody>';
+
+  history.forEach((row, i) => {
+    const isCurrent = row._season === currentYear;
+    const prev = i > 0 ? history[i - 1] : null;
+    const isTransfer = prev && (row.Team || '') !== (prev.Team || '');
+
+    html += '<tr' + (isCurrent ? ' class="career-current"' : '') + '>';
+    html += '<td><b>' + row._season + '</b>' + (isCurrent ? ' ★' : '') + '</td>';
+    html += '<td>' + (row.Team || '—') + (isTransfer ? ' <span class="career-transfer">↗ transfer</span>' : '') + '</td>';
+    html += '<td>' + (row.Pos || '—') + '</td>';
+
+    CAREER_COLS.forEach(col => {
+      const val  = safeNum(row[col.key]);
+      const pval = prev ? safeNum(prev[col.key]) : NaN;
+      const diff = (Number.isFinite(val) && Number.isFinite(pval)) ? val - pval : NaN;
+      const inv  = typeof getInvertForStat === 'function' ? getInvertForStat(col.key) : false;
+      const improved = Number.isFinite(diff) && (inv ? diff < -0.005 : diff > 0.005);
+      const declined = Number.isFinite(diff) && (inv ? diff > 0.005 : diff < -0.005);
+      const arrow = improved ? ' <span class="career-up">▲</span>'
+                  : declined ? ' <span class="career-down">▼</span>' : '';
+      html += '<td>' + _fmtC(col, val) + arrow + '</td>';
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+
+  // Footer — current vs most recent prior season
+  const curr = history.find(h => h._season === currentYear);
+  const prev = [...history].reverse().find(h => h._season !== currentYear);
+  if (curr && prev) {
+    const summaryCols = CAREER_COLS.filter(c => ['PPG','RPG','APG','eFG%','BPM'].includes(c.key));
+    const parts = summaryCols.map(col => {
+      const c = safeNum(curr[col.key]);
+      const p = safeNum(prev[col.key]);
+      if (!Number.isFinite(c) || !Number.isFinite(p)) return null;
+      const diff = c - p;
+      if (Math.abs(diff) < 0.005) return null;
+      const sign = diff > 0 ? '+' : '';
+      const color = diff > 0 ? 'var(--good)' : 'var(--bad)';
+      const fmtDiff = col.pct ? (diff * 100).toFixed(1) + '%' : diff.toFixed(col.dec);
+      return '<span style="color:' + color + '">' + sign + fmtDiff + ' ' + col.label + '</span>';
+    }).filter(Boolean);
+
+    if (parts.length) {
+      html += '<div class="career-footer">Compared to ' + prev._season +
+        ' (' + (prev.Team || '—') + '): ' + parts.join(' · ') + '</div>';
+    }
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── renderTeamContext — AdjO/AdjD/AdjEM/Rank card inside player profile ─────
+function renderTeamContext(r) {
+  const el = document.getElementById('mTeamContext');
+  if (!el) return;
+  if (typeof league !== 'undefined' && league !== 'MBB') {
+    const panel = document.getElementById('mTeamContextPanel');
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  const panel = document.getElementById('mTeamContextPanel');
+  if (panel) panel.style.display = '';
+
+  if (!_ratingsReady) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading team ratings…</div>';
+    window._onRatingsReady = () => { if (_currentProfilePlayer) renderTeamContext(_currentProfilePlayer); };
+    return;
+  }
+  const t = teamRatings[(r.Team || '').toLowerCase()];
+  if (!t) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">No ratings found for ' + (r.Team || 'this team') + '.</div>';
+    return;
+  }
+  const pctOf = (arr, v) => !arr.length || !Number.isFinite(v) ? null : Math.round(arr.filter(x => x <= v).length / arr.length * 100);
+  const adjOs = allRatingsData.map(x => x.adjO).filter(Number.isFinite).sort((a,b)=>a-b);
+  const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
+  const oPct  = pctOf(adjOs, t.adjO);
+  const dPct  = t.adjD != null ? (100 - pctOf(adjDs, t.adjD)) : null;
+  const fmt   = (v, d=1) => Number.isFinite(+v) ? (+v).toFixed(d) : '—';
+  const gc    = p => !Number.isFinite(p) ? 'var(--muted)' : p >= 80 ? 'var(--good)' : p >= 55 ? 'var(--accent)' : p >= 35 ? 'var(--warn)' : 'var(--bad)';
+  const emSign = Number.isFinite(t.adjEM) && t.adjEM >= 0 ? '+' : '';
+  const rankStr  = t.rank ? '#' + t.rank : '—';
+  const rankColor = t.rank <= 10 ? 'var(--good)' : t.rank <= 25 ? 'var(--accent)' : t.rank <= 50 ? 'var(--warn)' : 'var(--muted)';
+  el.innerHTML = `
+    <div class="teamContextGrid">
+      <div class="tcStat" title="Adjusted Offensive Efficiency — points scored per 100 possessions, adjusted for opponent difficulty. National avg ~105. Higher is better.">
+        <div class="tcVal" style="color:${gc(oPct)}">${fmt(t.adjO)}</div>
+        <div class="tcLabel">Adj O</div>
+        <div class="tcPct">${oPct != null ? oPct+'th %ile' : '—'}</div>
+        <div class="tcTip">pts/100 poss (adj)</div>
+      </div>
+      <div class="tcStat" title="Adjusted Defensive Efficiency — points allowed per 100 possessions, adjusted for opponent difficulty. National avg ~105. Lower is better.">
+        <div class="tcVal" style="color:${gc(dPct)}">${fmt(t.adjD)}</div>
+        <div class="tcLabel">Adj D</div>
+        <div class="tcPct">${dPct != null ? dPct+'th %ile' : '—'}</div>
+        <div class="tcTip">pts allowed/100 (adj)</div>
+      </div>
+      <div class="tcStat" title="Net Efficiency = Adj Offense − Adj Defense. The team's efficiency margin per 100 possessions. Positive means they outscore opponents per possession.">
+        <div class="tcVal" style="color:${Number.isFinite(t.adjEM)&&t.adjEM>=0?'var(--good)':'var(--bad)'}">${emSign}${fmt(t.adjEM)}</div>
+        <div class="tcLabel">Net Eff</div>
+        <div class="tcPct">AdjO − AdjD</div>
+        <div class="tcTip">efficiency margin</div>
+      </div>
+      <div class="tcStat" title="National ranking by Net Efficiency. #1 = most efficient team in the country.">
+        <div class="tcVal" style="color:${rankColor};font-size:18px">${rankStr}</div>
+        <div class="tcLabel">Natl Rank</div>
+        <div class="tcPct">${Number.isFinite(t.srs) ? 'SRS '+fmt(t.srs) : '—'}</div>
+        <div class="tcTip">by net efficiency</div>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:6px;font-size:11px">${t.conference || '—'}</div>`;
+}
+
+// ── _buildCourtHeatmap — SVG half-court zone heatmap ──────────────────────────
+function _buildCourtHeatmap(p) {
+  const dunks  = p.dunks             || {};
+  const layups = p.layups            || {};
+  const tipIns = p.tipIns            || {};
+  const mid    = p.twoPointJumpers   || {};
+  const three  = p.threePointJumpers || {};
+  const ft     = p.freeThrows        || {};
+  const bd     = p.attemptsBreakdown || {};
+
+  // Restricted area = dunks + tip-ins combined (at-rim)
+  const raAtt  = (dunks.attempted||0) + (tipIns.attempted||0);
+  const raMade = (dunks.made||0) + (tipIns.made||0);
+  const raPct  = raAtt > 0 ? Math.round(raMade / raAtt * 100) : null;
+  const raVol  = Math.round(((bd.dunks||0) + (bd.tipIns||0)) * 10) / 10;
+
+  const layupPct = layups.pct != null ? Math.round(+layups.pct) : null;
+  const layupVol = Math.round((bd.layups||0) * 10) / 10;
+  const midPct   = mid.pct   != null ? Math.round(+mid.pct)    : null;
+  const midVol   = Math.round((bd.twoPointJumpers||0) * 10) / 10;
+  const threePct = three.pct != null ? Math.round(+three.pct)  : null;
+  const threeVol = Math.round((bd.threePointJumpers||0) * 10) / 10;
+  const ftPct    = ft.pct    != null ? Math.round(+ft.pct)     : null;
+
+  const NONE = '#080f1e';
+  function zc(pct, vol) {
+    if (pct == null || !vol) return NONE;
+    if (pct >= 65) return 'rgba(21,128,61,0.78)';
+    if (pct >= 55) return 'rgba(101,163,13,0.78)';
+    if (pct >= 45) return 'rgba(161,98,7,0.78)';
+    if (pct >= 35) return 'rgba(194,65,12,0.78)';
+    return 'rgba(185,28,28,0.78)';
+  }
+
+  const W=400, H=455;
+  const bX=200, bY=415;
+  const pL=148, pR=252, pT=265;
+  const ftY=265, ftR=52;
+  const cX1=50, cX2=350, cY=325;
+  // 3PT arc: M 50 325 A 187 187 0 0 0 350 325 (sweep=0 → arcs UP over top of key)
+
+  const c3   = zc(threePct, threeVol);
+  const cMid = zc(midPct, midVol);
+  const cLay = zc(layupPct, layupVol);
+  const cRA  = zc(raPct, raVol);
+  const tW   = 'rgba(255,255,255,0.38)';
+  const tD   = 'rgba(255,255,255,0.22)';
+
+  function lbl(pct, made, att, vol, cx, cy, fs=12) {
+    const has = pct != null && !!vol;
+    const c1  = has ? 'rgba(255,255,255,0.95)' : tD;
+    const c2  = 'rgba(255,255,255,0.5)';
+    const pStr = pct != null ? pct + '%' : '—';
+    const sub  = att ? made+'/'+att+' · '+vol+'%' : '';
+    return '<text x="'+cx+'" y="'+cy+'" text-anchor="middle" font-family="inherit" font-size="'+fs+'" font-weight="700" fill="'+c1+'">'+pStr+'</text>'
+         + (sub ? '<text x="'+cx+'" y="'+(cy+13)+'" text-anchor="middle" font-family="inherit" font-size="9" fill="'+c2+'">'+sub+'</text>' : '');
+  }
+
+  const ftColor = ftPct == null ? 'var(--muted)' : ftPct >= 75 ? 'var(--good)' : ftPct >= 60 ? 'var(--accent)' : ftPct >= 45 ? 'var(--warn)' : 'var(--bad)';
+
+  return '<div class="courtHeatmapWrap">'
+  + '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'"'
+  + ' style="width:100%;max-width:420px;display:block;margin:0 auto;border-radius:10px;overflow:hidden">'
+  + '<defs><clipPath id="courtClip"><rect x="10" y="10" width="380" height="430"/></clipPath></defs>'
+  // Court base
+  + '<rect width="'+W+'" height="'+H+'" fill="#080f1e"/>'
+  + '<rect x="10" y="10" width="380" height="430" rx="3" fill="#0d1b32"/>'
+  // 3PT zone (fills entire court — inner zones will paint over it)
+  + '<rect x="10" y="10" width="380" height="430" fill="'+c3+'" clip-path="url(#courtClip)"/>'
+  // Mid-range zone (inside 3PT arc from baseline to arc)
+  + '<path d="M '+cX1+' 440 L '+cX1+' '+cY+' A 187 187 0 0 0 '+cX2+' '+cY+' L '+cX2+' 440 Z" fill="'+cMid+'" clip-path="url(#courtClip)"/>'
+  // FT circle upper half (mid-range above FT line, inside lane)
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 0 '+pR+' '+ftY+' Z" fill="'+cMid+'"  clip-path="url(#courtClip)"/>'
+  // Paint (layups region)
+  + '<rect x="'+pL+'" y="'+pT+'" width="'+(pR-pL)+'" height="'+(440-pT)+'" fill="'+cLay+'"/>'
+  // Restricted area (at-rim)
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="28" fill="'+cRA+'"/>'
+  // ── Court lines ──
+  + '<rect x="10" y="10" width="380" height="430" rx="3" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<rect x="'+pL+'" y="'+pT+'" width="'+(pR-pL)+'" height="'+(440-pT)+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 0 '+pR+' '+ftY+'" fill="none" stroke="'+tW+'" stroke-width="1.5" stroke-dasharray="4 4"/>'
+  + '<path d="M '+pL+' '+ftY+' A '+ftR+' '+ftR+' 0 0 1 '+pR+' '+ftY+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="28" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<line x1="'+cX1+'" y1="440" x2="'+cX1+'" y2="'+cY+'" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<line x1="'+cX2+'" y1="440" x2="'+cX2+'" y2="'+cY+'" stroke="'+tW+'" stroke-width="1.5"/>'
+  + '<path d="M '+cX1+' '+cY+' A 187 187 0 0 0 '+cX2+' '+cY+'" fill="none" stroke="'+tW+'" stroke-width="1.5"/>'
+  // Backboard + basket
+  + '<line x1="'+(bX-20)+'" y1="'+(bY-28)+'" x2="'+(bX+20)+'" y2="'+(bY-28)+'" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>'
+  + '<circle cx="'+bX+'" cy="'+bY+'" r="12" fill="none" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>'
+  // ── Zone labels ──
+  // 3PT zone label
+  + '<text x="200" y="112" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">3-POINTERS · '+threeVol+'% of shots</text>'
+  + lbl(threePct, three.made||0, three.attempted||0, threeVol, 200, 130, 14)
+  // Mid-range labels (left & right)
+  + '<text x="95" y="289" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">MID-RANGE</text>'
+  + lbl(midPct, mid.made||0, mid.attempted||0, midVol, 95, 305, 12)
+  + '<text x="305" y="289" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">MID-RANGE</text>'
+  + (midPct != null ? '<text x="305" y="305" text-anchor="middle" font-family="inherit" font-size="12" font-weight="700" fill="rgba(255,255,255,0.92)">'+midPct+'%</text>' : '')
+  // Layup label
+  + '<text x="200" y="337" text-anchor="middle" font-family="inherit" font-size="8" fill="'+tD+'">LAYUPS</text>'
+  + lbl(layupPct, layups.made||0, layups.attempted||0, layupVol, 200, 353, 13)
+  // Restricted area label
+  + '<text x="'+bX+'" y="'+(bY+5)+'" text-anchor="middle" font-family="inherit" font-size="10" font-weight="700" fill="rgba(255,255,255,0.9)">'
+  + (raPct != null ? raPct+'%' : '—') + '</text>'
+  + '<text x="'+bX+'" y="'+(bY+16)+'" text-anchor="middle" font-family="inherit" font-size="7" fill="'+tD+'">AT RIM</text>'
+  + '</svg>'
+  // Footer summary row
+  + '<div class="courtFooter">'
+  + '<div class="cfStat"><div class="cfVal" style="color:'+ftColor+'">'+( ftPct != null ? ftPct+'%' : '—')+'</div><div class="cfLabel">Free Throw</div><div class="cfSub">'+(ft.made||0)+'/'+(ft.attempted||0)+' made</div></div>'
+  + '<div class="cfStat"><div class="cfVal">'+(p.trackedShots||0)+'</div><div class="cfLabel">Tracked Shots</div><div class="cfSub">'+(p.assistedPct||0)+'% ast · FTR '+(p.freeThrowRate||0)+'%</div></div>'
+  + '</div>'
+  // Heat legend
+  + '<div class="courtLegend">'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(21,128,61,0.85)"></span>65%+</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(101,163,13,0.85)"></span>55–64%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(161,98,7,0.85)"></span>45–54%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(194,65,12,0.85)"></span>35–44%</div>'
+  + '<div class="clItem"><span class="clDot" style="background:rgba(185,28,28,0.85)"></span>&lt;35%</div>'
+  + '<div class="clItem"><span class="clDot nz"></span>No data</div>'
+  + '</div>'
+  + '</div>';
+}
+
+// ── renderShootingZones — SVG court heatmap ───────────────────────────────────
+async function renderShootingZones(r) {
+  const el = document.getElementById('mShootingZones');
+  if (!el) return;
+  const panel = document.getElementById('mShootingPanel');
+  if (typeof league !== 'undefined' && league !== 'MBB') {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  if (panel) panel.style.display = '';
+  el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading shot data…</div>';
+
+  const team = r.Team || '';
+  const seasonEl = document.getElementById('cbdSeason');
+  const season = seasonEl ? (seasonEl.value || '2026') : '2026';
+  const playerName = (r.Player || '').toLowerCase().trim();
+
+  const players = await loadShootingForTeam(team, season);
+  if (!players || !players.length) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">No shooting data available.</div>';
+    return;
+  }
+  const norm = s => (s || '').toLowerCase().trim();
+  const p = players.find(x => norm(x.athleteName) === playerName)
+         || players.find(x => {
+           const n = norm(x.athleteName);
+           const parts = playerName.split(' ');
+           return parts.length > 1 && n.includes(parts[0]) && n.includes(parts[parts.length-1]);
+         });
+  if (!p) {
+    el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Shot data not available for this player.</div>';
+    return;
+  }
+  el.innerHTML = _buildCourtHeatmap(p);
+}
+
+// ── renderRecruitingBadge — star-rating badge in profile header ───────────────
+async function renderRecruitingBadge(r) {
+  const el = document.getElementById('mRecruitBadge');
+  if (!el) return;
+  if (typeof league !== 'undefined' && league !== 'MBB') { el.style.display = 'none'; return; }
+
+  const pName = (r.Player || '').toLowerCase().trim();
+  const recruits = await loadRecruitingData();
+  if (!recruits.length) { el.style.display = 'none'; return; }
+
+  const norm = s => (s || '').toLowerCase().trim();
+  const parts = pName.split(' ');
+  const match = recruits.find(p => norm(p.name) === pName)
+             || recruits.find(p => {
+               const n = norm(p.name);
+               return parts.length > 1 && n.includes(parts[0]) && n.includes(parts[parts.length-1]) && parts[parts.length-1].length > 2;
+             });
+
+  if (!match || !match.stars) { el.style.display = 'none'; return; }
+
+  const stars   = Math.min(5, Math.max(0, match.stars));
+  const filled  = '★'.repeat(stars);
+  const empty   = '☆'.repeat(5 - stars);
+  const rankStr = match.ranking ? ` · #${match.ranking}` : '';
+  const classStr = match.classYear ? ` · Class of ${match.classYear}` : '';
+
+  el.style.display = 'inline-flex';
+  el.innerHTML = `<span class="recruitStars">${filled}<span style="opacity:.3">${empty}</span></span>
+    <span class="recruitLabel">${stars}★ recruit${rankStr}${classStr}</span>`;
+}
 
 function openStatInfo(stat){
   const statBack = document.getElementById('statBack');

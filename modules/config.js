@@ -128,7 +128,7 @@ const BIG_DEFAULTS = [
   {stat:'FT%', w:5, min:0.55, max:0.85, dir:'higher'},
   {stat:'BPG', w:9, min:0.2, max:2.5, dir:'higher'},
   {stat:'RPG', w:10, min:2, max:12, dir:'higher'},
-  {stat:'OR%', w:7, min:3, max:15, dir:'higher'},
+  {stat:'OR%', w:7, min:8, max:30, dir:'higher'},
   {stat:'DR%', w:7, min:10, max:25, dir:'higher'},
   {stat:'DRtg', w:8, min:115, max:90, dir:'lower'},
   {stat:'BPM', w:10, min:-3, max:8, dir:'higher'},
@@ -158,43 +158,45 @@ const ROLE_DESCRIPTIONS = {
 };
 
 const STAT_GLOSSARY = {
+  'G': 'Games Played. Number of games a player appeared in during the season.',
+  'MP': 'Minutes Per Game. Average minutes played per game. Used to derive the minutes multiplier in valuation — higher MP signals a larger role.',
   'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',
   'FG%': 'Field Goal Percentage. Share of all 2PT+3PT shots made. Doesn\'t account for 3PT value.',
   '3P%': 'Three-Point Percentage. Share of 3PT shots made. Indicates spacing / shooting skill.',
+  '3PA/G': 'Three-Point Attempts per game. Volume of 3PT shots; higher indicates more perimeter usage.',
+  '2P%': 'Two-Point Percentage. Share of 2PT shots made. Complements 3P% for overall field goal efficiency.',
   'FT%': 'Free Throw Percentage. Share of free throws made. Proxy for touch/shooting.',
   'APG': 'Assists per game. Passing/playmaking volume (role dependent).',
   'TOPG': 'Turnovers per game. Ball security; lower is better.',
   'A/TO': 'Assist-to-turnover ratio. Passing efficiency & decision-making; higher is better.',
+  'RPG': 'Rebounds per game. Combines offensive and defensive rebounding volume; higher is better.',
   'ORB/G': 'Offensive rebounds per game. Extra possessions created; higher is better.',
   'DRB/G': 'Defensive rebounds per game. Ends opponent possessions; higher is better.',
   'BPG': 'Blocks per game. Rim protection / deterrence; higher is better.',
   'SPG': 'Steals per game. Disruption / forcing turnovers; higher is better.',
-  'eFG%': 'Effective FG%. Adjusts FG% by giving 3PT extra value: (FGM + 0.5x3PM)/FGA.',
-  'OR%': 'Offensive Rebound %. Percent of available offensive rebounds a player gets while on court.',
-  'DR%': 'Defensive Rebound %. Percent of available defensive rebounds a player gets while on court.',
-  'WS': 'Win Shares. Estimated wins contributed (context/team dependent).',
-  'WS/40': 'Win Shares per 40 minutes. Per-minute adjusted win contributions; accounts for playing time differences.',
-  'Ortg': 'Offensive Rating. Points produced per 100 possessions (higher is better).',
-  'DRtg': 'Defensive Rating. Points allowed per 100 possessions while on court; lower is better.',
-  'BPM': 'Box Plus/Minus. Overall impact per 100 possessions vs average player (higher is better).',
-  'PER': 'Player Efficiency Rating. Box-score efficiency measure (higher is better).',
-  'RPG': 'Rebounds per game. Combines offensive and defensive rebounding volume; higher is better.',
+  'eFG%': 'Effective FG%. Adjusts FG% by giving 3PT extra value: (FGM + 0.5×3PM) / FGA. Values stored as decimals (e.g. 0.52 = 52%).',
+  'TS%': 'True Shooting Percentage. Most complete shooting efficiency measure: Points / (2 × (FGA + 0.44×FTA)). Higher is better. Stored as a decimal (e.g. 0.57 = 57%).',
+  'OR%': 'Offensive Rebound %. Percent of available offensive rebounds a player secures while on court. Stored as a whole-number percent (e.g. 8.2 = 8.2%). Scale: ~3 (average) to 15 (elite).',
+  'DR%': 'Defensive Rebound %. Percent of available defensive rebounds a player secures while on court. Stored as a whole-number percent (e.g. 18 = 18%). Scale: ~10 (average) to 25 (elite). Note: not available from the MBB API — populated from Google Sheets (WBB) or left blank.',
   'TRB%': 'Total Rebound Percentage. Percent of available rebounds (offensive + defensive) a player gets while on court.',
-  'USG%': 'Usage Percentage. Percent of team possessions a player uses (via FGA, FTA, or TOV); higher usage means more touches.',
-  'TS%': 'True Shooting Percentage. Adjusted scoring efficiency: Points / (2 × (FGA + 0.44×FTA)). Higher is more efficient than FG%.',
+  'WS': 'Win Shares. Estimated wins contributed (context/team dependent).',
+  'WS/40': 'Win Shares per 40 minutes. Per-minute win contributions; accounts for playing time. Scale: 0.05 (average) to 0.25+ (elite). Higher is better.',
+  'OWS': 'Offensive Win Shares. Estimated wins contributed on the offensive end.',
+  'DWS': 'Defensive Win Shares. Estimated wins contributed on the defensive end.',
+  'ORtg': 'Offensive Rating. Points produced per 100 possessions on offense (higher is better). Typical range: 90–130.',
+  'DRtg': 'Defensive Rating. Points allowed per 100 possessions while on court; lower is better. Typical range: 90–115.',
+  'BPM': 'Box Plus/Minus (proxy). In this dashboard, BPM is populated from PORPAG via the College Basketball Data API. See PORPAG for full definition. Scale: −3 (below average) to 8+ (elite). Higher is better.',
+  'PORPAG': 'Points Over Replacement Per Adjusted Game. Proprietary metric from the College Basketball Data API. Measures per-game impact relative to a replacement-level player — conceptually similar to Box Plus/Minus. Used as the BPM proxy in this dashboard. Scale: ~ −3 to 8+; higher is better.',
+  'PER': 'Player Efficiency Rating. Box-score efficiency measure (higher is better).',
+  'USG%': 'Usage Percentage. Percent of team possessions a player uses (via FGA, FTA, or TOV) while on court. Stored as a whole-number percent (e.g. 22.5 = 22.5%). Scale: 12 (role player) to 32 (primary option).',
   'AST%': 'Assist Percentage. Percent of teammate FGs a player assisted on while on court; higher is more playmaking.',
   'STL%': 'Steal Percentage. Percent of opponent possessions that end in a steal when player is on court; higher is more disruptive.',
   'BLK%': 'Block Percentage. Percent of opponent 2PT attempts blocked when player is on court; higher is more rim protection.',
-  'TOV%': 'Turnover Percentage. Percent of possessions that end in a turnover; lower is better for possession efficiency.',
+  'TOV%': 'Turnover Percentage. Percent of possessions that end in a turnover; lower is better.',
   'MPG': 'Minutes per game. Average playing time; higher means more opportunity and impact potential.',
-  'OWS': 'Offensive Win Shares. Estimated wins contributed on the offensive end (context/team dependent).',
-  'DWS': 'Defensive Win Shares. Estimated wins contributed on the defensive end (context/team dependent).',
-  'ORtg': 'Offensive Rating. Points produced per 100 possessions on offense (higher is better).',
   'OBPM': 'Offensive Box Plus/Minus. Per-100-possession offensive impact vs average player (higher is better).',
-  'DBPM': 'Defensive Box Plus/Minus. Per-100-possession defensive impact vs average player (higher is better; lower allowed is good).',
-  '3PT_Rating': 'Three-Point Rating. Composite 3PT metric: (3P% × vol_factor × games_factor). Vol_factor caps 3PA/G volume (need 2+ attempts/game). Games_factor scales by games played (need 10+ games). Prevents high % on low volume or few games.',
-  '3PA/G': 'Three-Point Attempts per game. Volume of 3PT shots; higher indicates more perimeter usage.',
-  '2P%': 'Two-Point Percentage. Share of 2PT shots made. Complements 3P% for overall field goal efficiency.'
+  'DBPM': 'Defensive Box Plus/Minus. Per-100-possession defensive impact vs average player (higher is better).',
+  '3PT_Rating': 'Three-Point Rating. Composite 3PT value: (3P% × vol_factor × games_factor). vol_factor = min(1, 3PA/G ÷ 2) — rewards players attempting 2+ per game. games_factor = min(1, G ÷ 10) — requires at least 10 games of evidence. Prevents inflated ratings from small samples or low volume.',
 };
 
 const DEFAULT_DIR = {
@@ -209,7 +211,7 @@ const DEFAULT_DIR = {
 
 const CONF_DISPLAY_ORDER = [
   'Big 12','SEC','Big Ten','ACC','Big East',
-  'American','Mountain West','Atlantic 10','WCC',
+  'American','Mountain West','Atlantic 10','WCC','Pac-12',
   'Missouri Valley','CUSA','MAC','Sun Belt',
   'CAA','Ivy League','Big West','Summit League',
   'Horizon League','America East','Southern',
@@ -220,7 +222,7 @@ const CONF_DISPLAY_ORDER = [
 
 const DEFAULT_CONF_VALUES = {
   'Big 12':1.08,'SEC':1.07,'Big Ten':1.07,'ACC':1.06,'Big East':1.06,
-  'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,
+  'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,'Pac-12':1.03,
   'Missouri Valley':1.03,'CUSA':1.03,'MAC':1.00,'Sun Belt':1.01,
   'CAA':1.00,'Ivy League':1.00,'Big West':0.99,'Summit League':0.99,
   'Horizon League':0.99,'America East':0.98,'Southern':0.98,
@@ -230,14 +232,52 @@ const DEFAULT_CONF_VALUES = {
 };
 
 const CONF_ALIASES = {
-  'Mountain We':'Mountain West','A-10':'Atlantic 10',
+  // Pac-12
+  'Pac 12':'Pac-12','Pacific-12':'Pac-12','PAC-12':'Pac-12','Pacific 12':'Pac-12',
+  // Mountain West
+  'Mountain We':'Mountain West','MWC':'Mountain West',
+  // Atlantic 10
+  'A-10':'Atlantic 10','A10':'Atlantic 10',
+  // WCC
+  'West Coast':'WCC','West Coast Conference':'WCC',
+  // AAC
+  'AAC':'American','American Athletic':'American','American Athletic Conference':'American',
+  // Missouri Valley
   'Missouri Vall':'Missouri Valley','MVC':'Missouri Valley',
+  // Conference USA
   'C-USA':'CUSA','Conference USA':'CUSA',
-  'Ivy':'Ivy League','Summit Leag':'Summit League',
-  'Horizon Leag':'Horizon League','America Eas':'America East',
-  'SoCon':'Southern','A-Sun':'ASUN',
-  'Ohio Valley':'OVC','Patriot Leag':'Patriot League','Patriot':'Patriot League',
-  'Northeast':'NEC','NE-10':'NE10','Northeast-10':'NE10'
+  // Ivy League
+  'Ivy':'Ivy League',
+  // Summit League
+  'Summit Leag':'Summit League','The Summit League':'Summit League',
+  // Horizon League
+  'Horizon Leag':'Horizon League',
+  // America East
+  'America Eas':'America East','AE':'America East',
+  // Southern / SoCon
+  'SoCon':'Southern','Southern Conference':'Southern',
+  // ASUN
+  'A-Sun':'ASUN','Atlantic Sun':'ASUN',
+  // OVC
+  'Ohio Valley':'OVC','OVC Conference':'OVC',
+  // Patriot League
+  'Patriot Leag':'Patriot League','Patriot':'Patriot League',
+  // NEC
+  'Northeast':'NEC','Northeast Conference':'NEC',
+  // NE10
+  'NE-10':'NE10','Northeast-10':'NE10',
+  // Big Sky
+  'Big Sky Conference':'Big Sky',
+  // Big South
+  'Big South Conference':'Big South',
+  // Southland
+  'Southland Conference':'Southland',
+  // CAA
+  'Colonial':'CAA','Colonial Athletic':'CAA','Colonial Athletic Association':'CAA',
+  // SEC
+  'Southeastern':'SEC','Southeastern Conference':'SEC',
+  // Big Ten
+  'Big 10':'Big Ten',
 };
 
 // Gap analysis stat categories

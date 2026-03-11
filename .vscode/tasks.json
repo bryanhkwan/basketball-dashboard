@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Deploy Worker",
+			"type": "shell",
+			"command": "cd backend/dashboard-api/hidden-salad-773b && wrangler deploy",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Deploy Worker PS",
+			"type": "shell",
+			"command": "Set-Location backend/dashboard-api/hidden-salad-773b; wrangler deploy",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "npm deploy worker",
+			"type": "shell",
+			"command": "Set-Location backend/dashboard-api/hidden-salad-773b; npm run deploy",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "wrangler deploy bypass",
+			"type": "shell",
+			"command": "powershell -ExecutionPolicy Bypass -Command \"Set-Location backend/dashboard-api/hidden-salad-773b; wrangler deploy\"",
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

@@ -25,10 +25,13 @@
   <script src="modules/config.js" defer></script>
   <script src="modules/auth.js" defer></script>
   <script src="modules/notes.js" defer></script>
+  <script src="modules/favorites.js" defer></script>
+  <script src="modules/shares.js" defer></script>
   <script src="modules/data.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/teams.js" defer></script>
   <script src="modules/chat.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="app.js" defer></script>
@@ -82,6 +85,7 @@
       <span class="lsLabel" id="lsLabelWBB">WBB</span>
     </div>
     <span id="authUser" style="font-size:12px;color:var(--muted);font-weight:600"></span>
+    <span id="apiUsageBadge" class="apiBadge" style="display:none"></span>
     <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
     <button type="button" id="tourBtn" title="Take a guided tour" aria-label="Start guided tour">?</button>
@@ -97,14 +101,25 @@
 <nav class="pageNav">
   <button class="pageNavBtn active" data-page="pagePlayers">🏀 Players</button>
   <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
+  <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
+  <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
+  <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
 
 <div id="pagePlayers">
 <div class="wrap">
   <div class="topbar">
     <div class="row">
-      <div><label>Data source</label><div class="hint">Google Sheet (auto-loads)</div></div>
+      <div>
+        <label>Season</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+          <input id="cbdSeason" type="number" value="2026" min="2010" max="2035"
+            style="width:74px;padding:4px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(0,8,20,.5);color:#e2e8f0;text-align:center"
+            title="MBB season year">
+        </div>
+        <div class="hint">MBB: Live API &middot; WBB: Google Sheets</div>
+      </div>
       <div>
         <label>API key</label><br/>
         <input id="gsKey" style="display:none" value="AIzaSyAfcKSySow-TBS1uZNHrQX4oc_uiUWwvq8">
@@ -147,7 +162,7 @@
     </div>
 
     <div class="row">
-      <button id="recalc" disabled>Recalculate</button>
+      <button id="recalc" class="primary" disabled>Recalculate</button>
       <button id="export" class="secondary" disabled>Export CSV</button>
     </div>
   </div>
@@ -517,6 +532,111 @@
 </div><!-- /tbSection wrap -->
 </div><!-- /pageTeamBuilder -->
 
+<!-- Teams Hub Page -->
+<div id="pageTeams" style="display:none">
+<div class="wrap">
+  <div class="thPage">
+    <div class="thHeader">
+      <h2 class="thTitle">🏟️ Team Hub</h2>
+      <p class="muted" style="font-size:13px">Program analysis, conference threats, game log, and head-to-head records.</p>
+    </div>
+
+    <div class="card thSearchCard">
+      <div class="thSearchRow">
+        <div class="thSearchGroup">
+          <label class="thLabel">Team</label>
+          <select id="thTeamSearch" class="thTeamSelect"><option value="">— Select a team —</option></select>
+        </div>
+        <div class="thSearchGroup">
+          <label class="thLabel">Season</label>
+          <input id="thSeason" type="number" value="2026" min="2020" max="2030" class="thSeasonInput">
+        </div>
+        <button id="thLoadBtn" class="thLoadBtn">Load Team →</button>
+      </div>
+      <div id="thLoading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0"></div>
+    </div>
+
+    <!-- Program Overview -->
+    <div class="thSection">
+      <div class="thSectionHead">📊 Program Overview</div>
+      <div id="thOverview" class="card thOverviewCard">
+        <div class="muted" style="padding:32px;text-align:center">Select a team above to load program analysis.</div>
+      </div>
+    </div>
+
+    <!-- Conference Threats -->
+    <div class="thSection">
+      <div class="thSectionHead">⚠️ Conference Threats</div>
+      <div class="thSectionSub">Conference teams ranked by net efficiency. Click ⚔ to load a team as your opponent in Team Builder.</div>
+      <div id="thThreats" class="card thThreatsCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see conference standings.</div>
+      </div>
+    </div>
+
+    <!-- Game Log -->
+    <div class="thSection">
+      <div class="thSectionHead">📅 Season Game Log</div>
+      <div id="thGameLog" class="card thGameLogCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see game results.</div>
+      </div>
+    </div>
+
+    <!-- H2H Records -->
+    <div class="thSection">
+      <div class="thSectionHead">🆚 Head-to-Head Records</div>
+      <div id="thH2H" class="card thH2HCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see head-to-head breakdowns.</div>
+      </div>
+    </div>
+
+    <!-- Team DNA -->
+    <div class="thSection">
+      <div class="thSectionHead">🧬 Team DNA</div>
+      <div class="thSectionSub">Shooting zones heatmap, scoring profile, four factors (offense vs what opponents do defensively), and auto-generated strengths &amp; weaknesses.</div>
+      <div id="thDNA" class="card thDNACard">
+        <div class="muted" style="padding:32px;text-align:center">Load a team to see their DNA.</div>
+      </div>
+    </div>
+
+    <!-- Team Scout Report -->
+    <div class="thSection">
+      <div class="thSectionHead">🧾 Team Scout Report</div>
+      <div class="thSectionSub">Auto-generated team Strengths, Weaknesses, Tendencies, Development Areas, and Matchup Notes from ratings + four factors + scoring profile.</div>
+      <div id="thScout" class="card thScoutCard">
+        <div class="muted" style="padding:32px;text-align:center">Load a team to generate team scouting analysis.</div>
+      </div>
+    </div>
+
+    <!-- Compare Teams -->
+    <div class="thSection">
+      <div class="thSectionHead">⚡ Compare vs Another Team</div>
+      <div class="thSectionSub">Side-by-side efficiency ratings, four factors, scoring profile, and auto-generated edge analysis. Load a primary team first.</div>
+      <div class="card thCompareSearchCard">
+        <div class="thSearchRow">
+          <div class="thSearchGroup">
+            <label class="thLabel">Compare against</label>
+            <select id="thCompareTeam" class="thTeamSelect"><option value="">— Select opponent team —</option></select>
+          </div>
+          <button id="thCompareBtn" class="thLoadBtn">Compare →</button>
+        </div>
+      </div>
+      <div id="thCompare" class="card thCompareCard" style="margin-top:12px">
+        <div class="muted" style="padding:24px;text-align:center">Load a primary team above, then pick a team to compare.</div>
+      </div>
+    </div>
+
+    <!-- Matchup Breakdown -->
+    <div class="thSection">
+      <div class="thSectionHead">🎯 Matchup Breakdown</div>
+      <div class="thSectionSub">Shot-by-shot breakdown from actual games played between these two teams. Uses play-by-play data with exact court coordinates. Select an opponent above and click Compare →</div>
+      <div id="thMatchup" class="card thMatchupCard">
+        <div class="muted" style="padding:32px;text-align:center">Load a primary team, then select an opponent and click Compare →</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /pageTeams -->
+
 <!-- Methodology Page -->
 <div id="pageMethodology" style="display:none">
 <div class="wrap">
@@ -606,6 +726,210 @@
 </div>
 </div><!-- /pageMethodology -->
 
+<!-- Favorites Page -->
+<div id="pageFavorites" style="display:none">
+<div class="wrap">
+  <div class="favsPageHeader">
+    <div class="favsPageTitle">
+      <h2>❤️ Favorites</h2>
+      <p class="muted" style="font-size:13px;margin-top:3px">Your personal watchlist — saved per account, synced across devices.<span id="favsCount" style="margin-left:8px;font-size:12px;font-weight:700;color:var(--accent)"></span></p>
+    </div>
+    <div class="favsPageControls">
+      <input id="favsSearch" type="text" placeholder="Search name or team…">
+      <select id="favsLeagueFilter">
+        <option value="">All Leagues</option>
+        <option value="MBB">MBB</option>
+        <option value="WBB">WBB</option>
+      </select>
+    </div>
+  </div>
+  <div id="favsFolderBar" class="favsFolderBar"></div>
+  <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
+    <input id="favsFolderInput" type="text" placeholder="Folder name…" maxlength="50">
+    <button id="favsFolderAddBtn" class="primary">Add</button>
+    <button class="secondary" id="favsFolderCancelBtn">✕</button>
+  </div>
+  <div id="favsBulkBar" class="favsBulkBar" style="display:none"></div>
+  <div id="favsGrid" class="favsGrid"></div>
+  <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
+    <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤍</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
+    <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">🤍 Favorite</b> to save them here.</div>
+  </div>
+</div>
+</div><!-- /pageFavorites -->
+
+<!-- Collaborate Page -->
+<div id="pageCollaborate" style="display:none">
+<div id="chatLayout" class="chatLayout">
+  <!-- Sidebar -->
+  <div id="chatSidebar" class="chatSidebar">
+    <div class="chatSidebarHeader">
+      <span class="chatSidebarTitle">💬 Messages</span>
+      <button id="chatNewBtn" class="chatNewBtn" title="New conversation">✏️</button>
+    </div>
+    <div class="chatSearchWrap">
+      <input id="chatConvSearch" type="text" class="chatConvSearch" placeholder="Search conversations…">
+    </div>
+    <div id="chatConvList" class="chatConvList"></div>
+  </div>
+  <!-- Main -->
+  <div id="chatMain" class="chatMain">
+    <div id="chatEmpty" class="chatEmpty">
+      <div class="chatEmptyIcon">💬</div>
+      <div class="chatEmptyTitle">No conversation selected</div>
+      <div class="chatEmptyHint">Pick one from the left, or hit ✏️ to start a new one.</div>
+    </div>
+    <div id="chatHeader" class="chatHeader" style="display:none"></div>
+    <div id="chatMessages" class="chatMessages" style="display:none"></div>
+    <div id="chatComposer" class="chatComposer" style="display:none">
+      <div id="chatReplyBar" class="chatReplyBar" style="display:none"></div>
+      <div id="chatAttachBar" class="chatAttachBar" style="display:none"></div>
+      <div class="chatComposerRow">
+        <button id="chatAttachBtn" class="chatAttachBtn" title="Attach player pick">🏀</button>
+        <textarea id="chatInput" class="chatInput" placeholder="Message…" rows="1"></textarea>
+        <button id="chatSendBtn" class="chatSendBtn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /pageCollaborate -->
+
+<!-- Send Pick Modal (new) -->
+<div id="chatSendPickBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.78);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal">
+    <div class="shareModalHeader">
+      <div>
+        <div class="shareModalTitle">🏀 Send Player Pick</div>
+        <div id="chatSendPickName" class="shareModalSubtitle"></div>
+      </div>
+      <button class="close" id="chatSendPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
+      <input id="chatSendPickTo" type="text" placeholder="Type a username…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Message <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea id="chatSendPickMsg" rows="3" placeholder="Add a scouting note or reason…"></textarea>
+    </div>
+    <div id="chatSendPickErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="sharesCloseSendModal()">Cancel</button>
+      <button id="chatSendPickBtn" class="primary">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Send Modal (new) -->
+<div id="chatBulkPickBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:520px;max-height:85vh;overflow-y:auto">
+    <div class="shareModalHeader">
+      <div>
+        <div class="shareModalTitle">📋 Send Player Package</div>
+        <div id="chatBulkPickTitle" class="shareModalSubtitle"></div>
+      </div>
+      <button class="close" id="chatBulkPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
+      <input id="chatBulkPickTo" type="text" placeholder="Type a username…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">General note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <textarea id="chatBulkPickMsg" rows="2" placeholder="Overall scouting context…"></textarea>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Player notes <span style="color:var(--muted);font-weight:400">(optional per player)</span></label>
+      <div id="chatBulkPickList" class="bulkSharePlayerList"></div>
+    </div>
+    <div id="chatBulkPickErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="sharesCloseBulkModal()">Cancel</button>
+      <button id="chatBulkPickBtn" class="primary">Send All</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Conversation Modal -->
+<div id="chatNewModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:420px">
+    <div class="shareModalHeader">
+      <div class="shareModalTitle">💬 New Conversation</div>
+      <button class="close" id="chatNewCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Type</label>
+      <select id="chatNewType" style="width:100%;padding:8px 10px;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--text)">
+        <option value="dm">Direct Message</option>
+        <option value="group">Group Chat</option>
+      </select>
+    </div>
+    <div id="chatNewDmArea">
+      <div class="shareModalField">
+        <label class="shareModalLabel">Username</label>
+        <input id="chatNewDmUser" type="text" placeholder="Enter username…" autocomplete="off">
+      </div>
+    </div>
+    <div id="chatNewGrpArea" style="display:none">
+      <div class="shareModalField">
+        <label class="shareModalLabel">Group name</label>
+        <input id="chatNewGrpName" type="text" placeholder="e.g. Recruiting Board…" autocomplete="off">
+      </div>
+      <div class="shareModalField">
+        <label class="shareModalLabel">Members <span style="color:var(--muted);font-weight:400">(comma-separated usernames)</span></label>
+        <input id="chatNewGrpMembers" type="text" placeholder="alice, bob, carol…" autocomplete="off">
+      </div>
+    </div>
+    <div id="chatNewErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="chatCloseNewModal()">Cancel</button>
+      <button id="chatNewCreateBtn">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Group Modal -->
+<div id="chatManageModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:420px;max-height:80vh;overflow-y:auto">
+    <div class="shareModalHeader">
+      <div class="shareModalTitle">⚙️ Manage Group</div>
+      <button class="close" id="chatManageCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Group name</label>
+      <input id="chatManageGrpName" type="text" placeholder="Group name…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Members</label>
+      <div id="chatManageMemberList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="chatManageAddUser" type="text" placeholder="Add username…" style="flex:1" autocomplete="off">
+        <button id="chatManageAddBtn" class="secondary">Add</button>
+      </div>
+    </div>
+    <div id="chatManageErr" class="shareModalErr"></div>
+    <div class="shareModalFooter">
+      <button class="secondary" onclick="chatCloseManageGroup()">Cancel</button>
+      <button id="chatManageSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Player Picker Modal -->
+<div id="chatPickerBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
+  <div class="shareModal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
+    <div class="shareModalHeader" style="padding:16px 18px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <div class="shareModalTitle">🏀 Attach Player</div>
+      <button class="close" id="chatPickerClose" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <input id="chatPickerSearch" type="text" placeholder="Search by name or team…" style="width:100%;padding:8px 12px;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--text)" autocomplete="off">
+    </div>
+    <div id="chatPickerList" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+  </div>
+</div>
+
 <!-- Modal -->
 <div class="modalBack" id="modalBack">
   <div class="modal" role="dialog" aria-modal="true">
@@ -614,10 +938,13 @@
         <div class="modalTitle" id="mTitle">Player</div>
         <div class="modalSub" id="mSub">—</div>
         <div class="chipRow" id="mTags"></div>
+        <div id="mRecruitBadge" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:12px"></div>
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
         <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📝 Notes</button>
+        <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">🤍 Favorite</button>
+        <button class="secondary" id="mShareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📤 Send</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>
@@ -692,6 +1019,39 @@
       </div>
 
       <div style="margin-top:12px" class="panel">
+        <div class="panelHead">📅 Career History</div>
+        <div id="mCareer" style="padding:0;overflow-x:auto"></div>
+      </div>
+
+      <div id="mTeamContextPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🏫 Team Context</div>
+        <div class="panelBody" id="mTeamContext" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <div id="mShootingPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🎯 Shooting Zones</div>
+        <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <div id="mScoutPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🔍 Scout Report</div>
+        <div class="panelBody" id="mScoutReport" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Open a player to view their scout report.</div>
+        </div>
+      </div>
+
+      <div id="mShotChartPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">📍 Shot Chart</div>
+        <div class="panelBody" id="mShotChart" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Open a player to load their shot chart.</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="panel">
         <div class="panelHead">Similar Players</div>
         <div class="panelBody" id="mSimilar" style="font-size:12px"></div>
       </div>
@@ -711,6 +1071,9 @@
 </div>
 
 </div>
+
+<!-- Shot hover tooltip -->
+<div id="pShotTooltip"></div>
 
 <!-- Comparison Modal -->
 <div class="modalBack" id="compareBack" style="z-index:55">

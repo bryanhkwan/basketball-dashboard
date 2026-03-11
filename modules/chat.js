@@ -297,6 +297,44 @@
     };
   }
 
+  function getTeamContext(teamName) {
+    const a = app();
+    const allRat = a.allRatingsData || (typeof allRatingsData !== 'undefined' ? allRatingsData : []);
+    const ratMap  = a.teamRatings   || (typeof teamRatings   !== 'undefined' ? teamRatings   : {});
+
+    // Resolve team from the ratings data
+    let rat = null;
+    if (teamName) {
+      const tl = teamName.toLowerCase();
+      rat = ratMap[tl] || allRat.find(t => (t.team||'').toLowerCase().includes(tl)) || null;
+    }
+
+    // Pull players for this team (for roster depth / top contributors)
+    const players = allPlayers().filter(r => teamName && (r.Team||'').toLowerCase().includes(teamName.toLowerCase()));
+    const topPlayers = players.slice().sort((a,b)=>(b.Score||0)-(a.Score||0)).slice(0,5).map(statLine);
+
+    // Current Team Hub state
+    const loadedTeam    = typeof thCurrentTeam    !== 'undefined' ? thCurrentTeam    : '';
+    const compareTeam   = typeof thCurrentCompareTeam !== 'undefined' ? thCurrentCompareTeam : '';
+    const season        = typeof thCurrentSeason  !== 'undefined' ? thCurrentSeason  : '2026';
+
+    return {
+      requestedTeam: teamName || null,
+      resolved: rat ? rat.team || teamName : null,
+      season,
+      teamHubLoaded: loadedTeam || null,
+      teamHubCompare: compareTeam || null,
+      ratings: rat ? {
+        adjO: rat.adjO, adjD: rat.adjD, adjEM: rat.adjEM,
+        rank: rat.rank, srs: rat.srs, confRank: rat.confRank,
+        wins: rat.wins, losses: rat.losses, conference: rat.conference,
+      } : null,
+      topContributors: topPlayers,
+      playerCount: players.length,
+      note: !rat ? 'Team Hub ratings not yet loaded for this team — ratings will be null.' : null,
+    };
+  }
+
   function addPlayersToRoster(names, team, conference, limit){
     const a=app(); if(!a.tbRoster) return {error:'Team builder not loaded.'};
     const all=allPlayers();
@@ -490,6 +528,8 @@
       parameters:{type:'OBJECT',properties:{playerNames:{type:'ARRAY',items:{type:'STRING'}},team:{type:'STRING'},conference:{type:'STRING'},limit:{type:'NUMBER'}}}},
     {name:'get_head_to_head',description:'Get per-category stat comparison between my roster and opponent roster. ALWAYS call this when the user asks for head-to-head, matchup analysis, or to compare teams. After getting results, provide a thorough strategic analysis: which team leads each category, key advantages to exploit, key vulnerabilities to defend, and an overall matchup verdict.',
       parameters:{type:'OBJECT',properties:{}}},
+    {name:'get_team_context',description:'Get team-level data: adjusted efficiency ratings (adjO/adjD/adjEM), win/loss record, conference ranking, and top contributors for a specific NCAA team. Use this when the user asks about a team\'s overall strength, ranking, season performance, how a team compares to others, or any team-level scouting question. Also returns current Team Hub loaded state.',
+      parameters:{type:'OBJECT',properties:{teamName:{type:'STRING',description:'The NCAA team name to look up (e.g. "Duke", "Kansas", "Connecticut")'}},required:['teamName']}},
     {name:'web_search',description:'Search Google for external information about a player or topic (injury news, transfer portal, scouting reports, recruiting rankings, role/minutes updates, team news, recaps). IMPORTANT: always look up dashboard data first (get_dashboard_context + get_player_profile/search_players/get_top_players/compare_players). Only call web_search AFTER the dashboard pass when the question depends on current external context.',
       parameters:{type:'OBJECT',properties:{query:{type:'STRING',description:'Google search query'}},required:['query']}},
   ]}
@@ -530,6 +570,7 @@
       case 'add_players_to_opponent': return addPlayersToOpponent(a.playerNames||[], a.team, a.conference, a.limit);
       case 'replace_opponent_roster': return replaceOpponentRoster(a.toAdd||[]);
       case 'get_head_to_head': return getHeadToHead();
+      case 'get_team_context': return getTeamContext(a.teamName||'');
       case 'web_search': return doWebSearch(a.query||'');
       default: return {error:'Unknown: '+c.name};
     }
@@ -538,25 +579,39 @@
   // ---- System prompt ----
   function sysPrompt(){
     const ctx=getDashboardContext();
-    return {parts:[{text:`You are Scout AI, an expert basketball analytics and scouting assistant for the UToledo NCAA Basketball Dashboard. You are opinionated, knowledgeable, and proactive -- like a real assistant coach.
+    const a=app();
+    const loadedTeam   = typeof thCurrentTeam          !== 'undefined' ? thCurrentTeam          : (a.teamHubTeam || '');
+    const compareTeam  = typeof thCurrentCompareTeam   !== 'undefined' ? thCurrentCompareTeam   : '';
+    const teamHubLine  = loadedTeam ? `TEAM HUB: ${loadedTeam}${compareTeam ? ' vs ' + compareTeam : ' (no opponent loaded)'}` : 'TEAM HUB: no team loaded';
+    return {parts:[{text:`You are Scout AI, an expert basketball analytics and scouting assistant for the UToledo NCAA Basketball Dashboard. You are opinionated, knowledgeable, and proactive — like a real assistant coach.
 
 STATE: ${ctx.league}, ${ctx.position} tab, ${ctx.totalPlayers} players loaded
 ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetBigs}B
 ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+r.team+', '+r.pos+', Perf:'+r.perf+', Val:'+r.value+')').join('\n'):'ROSTER: empty'}
+${teamHubLine}
 
- RULES (strict):
- 1) TOOL ORDER: Use dashboard tools first. Get constraints via get_dashboard_context when needed, then use search_players/get_top_players/get_player_profile/compare_players. Only use web_search AFTER the dashboard pass for anything the dashboard cannot know or that may have changed recently.
- 2) COMPARE: For player vs player, ALWAYS call compare_players (do not hand-compare raw stats).
- 3) FINDING PLAYERS: Use get_top_players with sortBy. For shooters ALWAYS sort by 3PT_Rating (never raw 3P%). For defenders use DRtg; for rim protection use BPG; scorers PPG; playmakers APG. Apply minPerf and maxValue when relevant. CRITICAL: NEVER recommend a player by name unless you have seen that player in a dashboard tool result (get_top_players, search_players, or get_player_profile) in this conversation. Do NOT use your training knowledge to invent player names.
- 4) ROSTER ACTIONS: For swap requests, you MUST call get_top_players first to find real candidates from the dashboard, then pick your recommendation from those results. Give your recommendation with reasoning, then IMMEDIATELY call swap_roster_player in the same response — the system shows Yes/No buttons automatically. Do NOT ask "Want me to do this?" and wait.
-  5) WEB_SEARCH REQUIRED: If the user says "latest/most recent/today/this week/yesterday/tomorrow", asks about injuries/suspensions/availability/transfer portal/role/minutes changes/NIL/coaching news, OR asks any valuation question (worth $, fair, overpay, steal, invest), you MUST call web_search after dashboard lookup.
- 6) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality (MBB/WBB separation). Web = current context/status. If web context changes your recommendation, say so and reduce confidence.
- 7) WEB REPORTING: When you use web_search, include concrete dates (not relative phrasing). If sources conflict, state the conflict and be conservative.
- 8) OUTPUT FORMAT: (1) Recommendation: steal/fair/overpay/avoid (2) Dashboard evidence (3) Web evidence w/ dates (if used) (4) Risks/assumptions (5) Next action.
- 9) EFFICIENCY: Minimize tool calls. Do at most 1 web_search unless the top option has a red-flag or the user explicitly asks for broader verification.
- 10) LEAGUE SEPARATION: MBB and WBB cannot be mixed. Current league: ${ctx.league}. If the user switches leagues, treat all previous roster context as cleared.
- 11) HEAD-TO-HEAD: When the user asks for head-to-head, matchup analysis, or to scout an opponent, ALWAYS call get_head_to_head first. Then give a thorough analysis: (a) overall verdict — which team is stronger, (b) categories where MY team has the edge, (c) categories where the OPPONENT has the edge, (d) top 2-3 strategic recommendations. The H2H tab will auto-open.
- 12) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000 (not 125000). Give a clear opinion; do not hedge unnecessarily.`}]};
+DASHBOARD CAPABILITIES (know these):
+- Player Profiles: click a player name → shows percentile bars, archetype tags, Scout Report (Strengths / Weaknesses / Tendencies / Development Areas / Matchup Notes), Shot Chart (click makes/misses to filter), similar players, valuation.
+- Team Hub: load any team by name → Team DNA (ratings, four factors, scoring profile), Scout Report for the whole team, shot chart with zone breakdown. Load an opponent to get a side-by-side comparison and Matchup Insights. Press "🧠 Deep Analysis" for a full AI coach report rendered in-page.
+- Team Builder: build a roster, run gap analysis vs opponent, head-to-head category breakdown, AI-assisted swaps.
+- get_team_context: use this to look up adjusted efficiency (adjO/adjD/adjEM), wins/losses, conference rank, and top players for any team. Use it whenever the user asks about a team's overall performance or asks to compare two programs.
+
+RULES (strict):
+ 1) TOOL ORDER: Dashboard tools first. get_dashboard_context → search_players/get_top_players/get_player_profile/compare_players/get_team_context. Only web_search AFTER the dashboard pass for anything live/external.
+ 2) COMPARE PLAYERS: For player vs player, ALWAYS call compare_players (never hand-compare raw stats).
+ 3) TEAM QUESTIONS: For questions about a team's strength, ranking, season record, or efficiency → call get_team_context. Use adjEM as the primary quality signal (higher = better offense-defense margin). Use adjO vs adjD to diagnose style.
+ 4) FINDING PLAYERS: get_top_players with sortBy. For shooters ALWAYS sort by 3PT_Rating (never raw 3P%). Defenders → DRtg. Rim protection → BPG. Scorers → PPG. Playmakers → APG. Apply minPerf and maxValue when relevant. CRITICAL: NEVER recommend a player by name unless confirmed in a dashboard tool result in this conversation. Do NOT invent names from training data.
+ 5) ROSTER ACTIONS: For swap requests, call get_top_players first to find real candidates, then pick from those results. Give reasoning, then IMMEDIATELY call swap_roster_player — Yes/No buttons appear automatically. Do NOT ask permission first.
+ 6) WEB_SEARCH REQUIRED: If the user mentions latest/recent/today/this week/injuries/suspensions/transfer portal/role changes/NIL/coaching news, OR asks valuation (worth $, fair, overpay, steal, invest) → call web_search AFTER dashboard lookup.
+ 7) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality. Web = current status/news. If web changes your recommendation, say so and reduce confidence.
+ 8) WEB REPORTING: Always include concrete dates from search results. If sources conflict, state the conflict and be conservative.
+ 9) OUTPUT FORMAT: (1) Verdict (2) Dashboard evidence (3) Web evidence w/ dates if used (4) Risks/assumptions (5) Suggested next action.
+ 10) EFFICIENCY: ≤1 web_search per turn unless user explicitly asks for more verification.
+ 11) LEAGUE SEPARATION: MBB and WBB cannot be mixed on rosters. Current league: ${ctx.league}. League switches clear all roster context.
+ 12) HEAD-TO-HEAD: For matchup/H2H requests → call get_head_to_head first. Then: (a) overall verdict, (b) MY team edges, (c) OPPONENT edges, (d) top 2-3 strategic recommendations. H2H tab auto-opens.
+ 13) SCOUT REPORT: When discussing a player's scouting profile, remind the user they can click the player's name to see their full Scout Report (Strengths / Weaknesses / Tendencies / Development Areas / Matchup Notes) and interactive Shot Chart in their profile modal.
+ 14) TEAM DEEP ANALYSIS: When discussing a specific team matchup, remind the user they can load both teams in the Team Hub and press "🧠 Deep Analysis" for a full data-driven AI breakdown rendered directly in the Matchup Insights panel — no chatbot needed.
+ 15) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000. Give a clear opinion; don't hedge unnecessarily.`}]};
   }
 
   // ---- API call ----
