@@ -38,7 +38,7 @@
     button:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25),0 0 0 1px rgba(var(--accent-rgb),.15)}
     button:active{transform:translateY(0);box-shadow:0 1px 4px rgba(0,0,0,.15)}
     button.secondary{background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--muted);box-shadow:none}
-    button.secondary:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);transform:translateY(-1px)}
+    button.secondary:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);transform:none;box-shadow:none}
     button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#080e18;box-shadow:0 2px 8px rgba(0,0,0,.15),0 0 0 1px rgba(var(--accent-rgb),.1)}
     button.primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25),0 0 0 1px rgba(var(--accent-rgb),.15);filter:brightness(1.05)}
     button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
@@ -1949,20 +1949,22 @@
   opacity: .4;
   transition: transform .15s, opacity .15s;
   box-shadow: none;
+  overflow: visible;
+  color: inherit;
 }
 .favHeart:hover { transform: scale(1.25); opacity: 1; box-shadow: none; }
 .favHeart--rm:hover { opacity: .85; }
 
 /* ──────────── Favorites folders ──────────── */
 .favsFolderBar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: center; }
-.favsFolderTab { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 8px; background: rgba(6,12,26,.5); border: 1px solid var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; white-space: nowrap; }
+.favsFolderTab { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 8px; background: rgba(6,12,26,.5); border: 1px solid var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; white-space: nowrap; overflow: visible; }
 .favsFolderTab.active, .favsFolderTab:hover { background: rgba(var(--accent-rgb),.12); border-color: rgba(var(--accent-rgb),.4); color: var(--accent); transform: none; box-shadow: none; }
 .favsFolderCount { font-size: 10px; font-weight: 600; background: rgba(255,255,255,.1); border-radius: 8px; padding: 1px 5px; margin-left: 3px; }
 .favsFolderTabDel { margin-left: 4px; opacity: .4; font-size: 13px; padding: 0 2px; border-radius: 50%; pointer-events: all; cursor: pointer; }
 .favsFolderTabDel:hover { opacity: 1; color: #f87171; }
-.favsFolderTabNew { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 8px; background: none; border: 1px dashed var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; }
+.favsFolderTabNew { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 8px; background: none; border: 1px dashed var(--line); color: var(--muted); cursor: pointer; box-shadow: none; transition: all .15s; overflow: visible; }
 .favsFolderTabNew:hover { border-color: rgba(var(--accent-rgb),.4); color: var(--accent); transform: none; box-shadow: none; }
-.favsFolderSendBtn { font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 8px; background: rgba(var(--accent-rgb),.12); border: 1px solid rgba(var(--accent-rgb),.4); color: var(--accent); cursor: pointer; box-shadow: none; margin-left: 4px; transition: all .15s; }
+.favsFolderSendBtn { font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 8px; background: rgba(var(--accent-rgb),.12); border: 1px solid rgba(var(--accent-rgb),.4); color: var(--accent); cursor: pointer; box-shadow: none; margin-left: 4px; transition: all .15s; overflow: visible; }
 .favsFolderSendBtn:hover { background: rgba(var(--accent-rgb),.22); transform: none; box-shadow: none; }
 .favsFolderCreateRow { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .favsFolderCreateRow input { flex: 1; max-width: 220px; padding: 7px 10px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; background: rgba(6,12,26,.5); color: var(--text); }
@@ -2185,7 +2187,7 @@
 ═══════════════════════════════════════════════════ */
 .chatLayout {
   display: flex;
-  height: calc(100vh - 63px);
+  height: calc(100vh - 130px);
   overflow: hidden;
   background: var(--bg);
 }
@@ -2221,8 +2223,11 @@
   cursor: pointer;
   line-height: 1;
   transition: opacity .15s;
+  box-shadow: none;
+  overflow: visible;
+  color: #080e18;
 }
-.chatNewBtn:hover { opacity: .8; }
+.chatNewBtn:hover { opacity: .8; transform: none; box-shadow: none; }
 .chatSearchWrap {
   padding: 8px 10px;
   border-bottom: 1px solid var(--line);
@@ -2338,7 +2343,8 @@
 .chatHeaderName { font-size: 15px; font-weight: 700; color: var(--text); }
 .chatHeaderSub { font-size: 11.5px; color: var(--muted); }
 .chatHeaderActions { display: flex; gap: 8px; }
-.chatHeaderBtn { font-size: 12px; padding: 5px 12px; }
+.chatHeaderBtn { font-size: 12px; padding: 5px 12px; box-shadow: none; overflow: visible; }
+.chatHeaderBtn:hover { transform: none; box-shadow: none; }
 .chatHeaderLeaveBtn { color: #f87171 !important; border-color: #f87171 !important; }
 
 /* ── Messages ──────────────────────────────────── */
@@ -2357,6 +2363,8 @@
   padding: 32px 0;
 }
 .chatLoadMore { text-align: center; padding: 8px 0 4px; }
+.chatLoadMore button { box-shadow: none; }
+.chatLoadMore button:hover { transform: none; box-shadow: none; }
 .chatDateDivider {
   display: flex; align-items: center; gap: 10px;
   margin: 10px 0 6px;
@@ -2429,8 +2437,10 @@
   padding: 3px 8px; font-size: 12px;
   cursor: pointer; color: var(--muted);
   transition: background .12s;
+  box-shadow: none;
+  overflow: visible;
 }
-.chatMsgActionBtn:hover { background: rgba(255,255,255,.15); color: var(--text); }
+.chatMsgActionBtn:hover { background: rgba(255,255,255,.15); color: var(--text); transform: none; box-shadow: none; }
 .chatReplyQuote {
   background: rgba(255,255,255,.08);
   border-left: 3px solid var(--accent);
@@ -2463,7 +2473,8 @@
   margin-bottom: 8px;
 }
 .chatPickBtns { display: flex; gap: 6px; flex-wrap: wrap; }
-.chatPickBtn { font-size: 11.5px !important; padding: 4px 10px !important; }
+.chatPickBtn { font-size: 11.5px !important; padding: 4px 10px !important; box-shadow: none !important; overflow: visible; }
+.chatPickBtn:hover { transform: none !important; box-shadow: none !important; }
 .chatPicksCard {
   background: rgba(6,10,26,.5);
   border: 1px solid var(--line);
@@ -2502,7 +2513,9 @@
   background: none; border: none;
   color: var(--muted); cursor: pointer;
   font-size: 14px; padding: 0 2px;
+  box-shadow: none; overflow: visible;
 }
+.chatReplyBarClose:hover { transform: none; box-shadow: none; color: var(--text); }
 .chatComposerRow {
   display: flex; align-items: flex-end; gap: 8px;
 }
@@ -2513,8 +2526,11 @@
   padding: 6px 10px; font-size: 16px;
   cursor: pointer; flex-shrink: 0;
   transition: background .12s;
+  color: var(--muted);
+  box-shadow: none;
+  overflow: visible;
 }
-.chatAttachBtn:hover { background: rgba(255,255,255,.13); }
+.chatAttachBtn:hover { background: rgba(255,255,255,.13); transform: none; box-shadow: none; }
 .chatInput {
   flex: 1;
   background: rgba(255,255,255,.07);
@@ -2532,7 +2548,9 @@
 .chatSendBtn {
   padding: 8px 16px; font-size: 13.5px;
   border-radius: 12px; flex-shrink: 0;
+  box-shadow: none;
 }
+.chatSendBtn:hover { transform: none; box-shadow: none; filter: brightness(1.08); }
 
 /* ── Player Picker rows ────────────────────────── */
 .chatPickerHint {
