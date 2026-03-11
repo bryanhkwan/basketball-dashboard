@@ -112,6 +112,8 @@ function _authSetupHeader() {
   const logoutBtn   = document.getElementById('logoutBtn');
   const guestLoginBtn = document.getElementById('guestLoginBtn');
   const notesToggle = document.getElementById('notesToggle');
+  // Update API usage badge whenever auth state changes
+  if (typeof window._apiUsageUpdateBadge === 'function') window._apiUsageUpdateBadge();
   if (authIsGuest()) {
     if (userEl)       userEl.textContent = 'Guest';
     if (logoutBtn)    logoutBtn.style.display = 'none';

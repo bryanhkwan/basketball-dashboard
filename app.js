@@ -2,6 +2,60 @@
 // All business logic lives in modules/*.js
 // This file: DOMContentLoaded init, event listeners, window._app bridge
 
+// ── CBD API request counter (real users only, tracks upstream MISSes) ────────
+;(function () {
+  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  function _monthKey() { return 'cbd_api_miss_' + new Date().toISOString().slice(0, 7); }
+
+  function _isRealUser() {
+    return (
+      typeof authIsGuest  === 'function' && !authIsGuest() &&
+      typeof authGetToken === 'function' &&  authGetToken()
+    );
+  }
+
+  function _updateApiUsageBadge(count) {
+    if (count === undefined) count = parseInt(localStorage.getItem(_monthKey()) || '0', 10);
+    var badge = document.getElementById('apiUsageBadge');
+    if (!badge) return;
+    if (!_isRealUser()) { badge.style.display = 'none'; return; }
+    var cls = count > 800 ? 'apiBadge--danger' : count > 500 ? 'apiBadge--warn' : 'apiBadge--ok';
+    badge.className = 'apiBadge ' + cls;
+    badge.title = 'CBD upstream API calls this month (HITs are cached & free, only MISSes counted). Limit: 1000/mo';
+    badge.textContent = count + '/1k CBD';
+    badge.style.display = '';
+  }
+
+  // Patch window.fetch to intercept worker CBD calls — only count real upstream MISSes
+  var _origFetch = window.fetch;
+  window.fetch = function (input) {
+    var url = typeof input === 'string' ? input
+            : (input instanceof Request)  ? input.url
+            : String(input);
+    var isCBD = url.startsWith(WORKER) &&
+                (url.includes('/api/cbdata/') || url.includes('/api/proxy/'));
+    if (!isCBD) return _origFetch.apply(this, arguments);
+
+    var p = _origFetch.apply(this, arguments);
+    // Side-effect only — do NOT chain so the caller always gets the original Response
+    p.then(function (resp) {
+      var hit = resp.headers.get('X-Cache') === 'HIT';
+      if (!hit && _isRealUser()) {
+        var key = _monthKey();
+        var n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+        localStorage.setItem(key, String(n));
+        _updateApiUsageBadge(n);
+      }
+    }).catch(function () {});
+    return p;
+  };
+
+  // Expose helpers for debugging in console
+  window._apiUsageUpdateBadge = _updateApiUsageBadge;
+  window._apiUsageCount       = function () { return parseInt(localStorage.getItem(_monthKey()) || '0', 10); };
+  window._apiUsageReset       = function () { localStorage.setItem(_monthKey(), '0'); _updateApiUsageBadge(0); };
+})();
+
 // Surface runtime errors in the UI
 window.addEventListener('error', (e) => {
   const box = document.getElementById('warn');
@@ -141,6 +195,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Auto-populate API key (data load is triggered by auth flow via authStartLoading)
   if(gsKeyInput) gsKeyInput.value = DEFAULT_GS_API_KEY;
+
+  // Render API usage badge if already logged in when page loads (covers page refreshes)
+  if (typeof window._apiUsageUpdateBadge === 'function') window._apiUsageUpdateBadge();
 });
 
 // ============ window._app BRIDGE ============
