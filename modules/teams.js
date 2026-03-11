@@ -730,8 +730,9 @@ function _thFmtDeepText(text) {
 // ── Monte Carlo simulation engine ────────────────────────────────────────────
 var _thLastMonteCarlo = null;
 
-function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
+function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   nSims = nSims || 10000;
+  opts = opts || {};
   var oA = ratA ? +ratA.adjO : null;
   var dA = ratA ? +ratA.adjD : null;
   var oB = ratB ? +ratB.adjO : null;
@@ -747,8 +748,11 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
   var paceB = (statsB && statsB.pace) ? +statsB.pace : 68;
   var gamePace = (paceA + paceB) / 2;
 
-  // NCAA game-to-game scoring standard deviation ~11 pts
-  var SD = 11;
+  // Per-team game-to-game scoring SD (default ~11 pts)
+  var sdA = opts.sdA != null ? +opts.sdA : 11;
+  var sdB = opts.sdB != null ? +opts.sdB : 11;
+  // Correlation between team scoring deviations (0 = independent, 0..1)
+  var rho = opts.rho != null ? Math.max(0, Math.min(1, +opts.rho)) : 0;
 
   function randn() {
     var u = 0, v = 0;
@@ -761,9 +765,16 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
   var margins = [], scoresA = [], scoresB = [];
   var buckets = {};
 
+  // Cholesky decomposition for correlated normals:
+  // zA = u; zB = rho*u + sqrt(1-rho^2)*v
+  var rhoFactor = Math.sqrt(Math.max(0, 1 - rho * rho));
+
   for (var i = 0; i < nSims; i++) {
-    var ptsA = (eOA / 100) * gamePace + randn() * SD;
-    var ptsB = (eOB / 100) * gamePace + randn() * SD;
+    var u = randn(), v = randn();
+    var noiseA = u * sdA;
+    var noiseB = (rho * u + rhoFactor * v) * sdB;
+    var ptsA = (eOA / 100) * gamePace + noiseA;
+    var ptsB = (eOB / 100) * gamePace + noiseB;
     var rA = Math.round(ptsA), rB = Math.round(ptsB);
     scoresA.push(rA); scoresB.push(rB);
     var margin = rA - rB;
@@ -782,10 +793,19 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
   var p10 = margins[Math.floor(nSims * 0.10)];
   var p90 = margins[Math.floor(nSims * 0.90)];
 
+  // Per-team score SDs
+  var sumA = 0, sumB = 0;
+  for (var j = 0; j < nSims; j++) { sumA += scoresA[j]; sumB += scoresB[j]; }
+  var meanA = sumA / nSims, meanB = sumB / nSims;
+  var varA = 0, varB = 0;
+  for (var j2 = 0; j2 < nSims; j2++) { varA += (scoresA[j2] - meanA) * (scoresA[j2] - meanA); varB += (scoresB[j2] - meanB) * (scoresB[j2] - meanB); }
+  var teamSdA = Math.sqrt(varA / nSims);
+  var teamSdB = Math.sqrt(varB / nSims);
+
   scoresA.sort(function(a, b) { return a - b; });
   scoresB.sort(function(a, b) { return a - b; });
-  var avgA = +(scoresA.reduce(function(s, v) { return s + v; }, 0) / nSims).toFixed(1);
-  var avgB = +(scoresB.reduce(function(s, v) { return s + v; }, 0) / nSims).toFixed(1);
+  var avgA = +meanA.toFixed(1);
+  var avgB = +meanB.toFixed(1);
 
   var blowoutA = margins.filter(function(m) { return m >= 10; }).length;
   var blowoutB = margins.filter(function(m) { return m <= -10; }).length;
@@ -800,15 +820,44 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims) {
     avgMargin: +mean.toFixed(1),
     medianMargin: median,
     stdDev: +sd.toFixed(1),
+    teamSdA: +teamSdA.toFixed(1),
+    teamSdB: +teamSdB.toFixed(1),
     p10: p10, p90: p90,
     avgScoreA: avgA, avgScoreB: avgB,
     blowoutAPct: +(blowoutA / nSims * 100).toFixed(1),
     blowoutBPct: +(blowoutB / nSims * 100).toFixed(1),
     closeGamePct: +(closeGames / nSims * 100).toFixed(1),
     buckets: buckets,
+    // Store params used
+    _sdA: sdA, _sdB: sdB, _rho: rho, _pace: gamePace,
   };
   _thLastMonteCarlo = result;
   return result;
+}
+
+// ── MC Sensitivity Analysis — how win% shifts with parameter tweaks ──────────
+function _thRunMCSensitivity(ratA, ratB, statsA, statsB, baseOpts) {
+  var quickN = 5000; // fewer sims for sensitivity (speed)
+  var savedMC = _thLastMonteCarlo; // preserve main result
+  var base = thRunMonteCarlo(ratA, ratB, statsA, statsB, quickN, baseOpts);
+  if (!base) { _thLastMonteCarlo = savedMC; return null; }
+  var rows = [];
+  // SD +/- 3
+  var sdUp = thRunMonteCarlo(ratA, ratB, statsA, statsB, quickN, {sdA: (baseOpts.sdA||11)+3, sdB: (baseOpts.sdB||11)+3, rho: baseOpts.rho||0});
+  var sdDn = thRunMonteCarlo(ratA, ratB, statsA, statsB, quickN, {sdA: Math.max(5,(baseOpts.sdA||11)-3), sdB: Math.max(5,(baseOpts.sdB||11)-3), rho: baseOpts.rho||0});
+  if (sdUp) rows.push({label:'Volatility +3', aWin: sdUp.aWinPct, bWin: sdUp.bWinPct, margin: sdUp.avgMargin, close: sdUp.closeGamePct});
+  if (sdDn) rows.push({label:'Volatility −3', aWin: sdDn.aWinPct, bWin: sdDn.bWinPct, margin: sdDn.avgMargin, close: sdDn.closeGamePct});
+  // Correlation tweak
+  var rhoUp = thRunMonteCarlo(ratA, ratB, statsA, statsB, quickN, {sdA: baseOpts.sdA||11, sdB: baseOpts.sdB||11, rho: Math.min(1,(baseOpts.rho||0)+0.3)});
+  if (rhoUp) rows.push({label:'Corr +0.3', aWin: rhoUp.aWinPct, bWin: rhoUp.bWinPct, margin: rhoUp.avgMargin, close: rhoUp.closeGamePct});
+  // Pace tweak - we adjust via fake stats objects
+  var fastStats = function(s, delta) { return s ? Object.assign({}, s, {pace: (+s.pace||68) + delta}) : {pace: 68+delta}; };
+  var fast = thRunMonteCarlo(ratA, ratB, fastStats(statsA,4), fastStats(statsB,4), quickN, baseOpts);
+  var slow = thRunMonteCarlo(ratA, ratB, fastStats(statsA,-4), fastStats(statsB,-4), quickN, baseOpts);
+  if (fast) rows.push({label:'Pace +4', aWin: fast.aWinPct, bWin: fast.bWinPct, margin: fast.avgMargin, close: fast.closeGamePct});
+  if (slow) rows.push({label:'Pace −4', aWin: slow.aWinPct, bWin: slow.bWinPct, margin: slow.avgMargin, close: slow.closeGamePct});
+  _thLastMonteCarlo = savedMC; // restore main result
+  return {base: base, rows: rows};
 }
 
 // ── thRunMonteCarloUI — standalone Monte Carlo runner (separate from Deep Analysis) ──
@@ -829,13 +878,25 @@ function thRunMonteCarloUI() {
   var runCountEl = document.getElementById('thMCRunCount');
   var nSims = runCountEl ? parseInt(runCountEl.value, 10) || 10000 : 10000;
 
+  // Read advanced MC parameters from UI controls
+  var sdAEl = document.getElementById('thMCSdA');
+  var sdBEl = document.getElementById('thMCSdB');
+  var rhoEl = document.getElementById('thMCRho');
+  var mcOpts = {
+    sdA: sdAEl ? parseFloat(sdAEl.value) || 11 : 11,
+    sdB: sdBEl ? parseFloat(sdBEl.value) || 11 : 11,
+    rho: rhoEl ? parseFloat(rhoEl.value) || 0 : 0,
+  };
+
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Simulating…'; }
   output.style.display = 'block';
   output.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running ' + nSims.toLocaleString() + ' simulations…</div>';
 
   // Use setTimeout to let the UI update before running CPU-heavy sim
   setTimeout(function() {
-    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, nSims);
+    var mc = thRunMonteCarlo(ratA, ratB, _thCurrentStats, _thCompareStats, nSims, mcOpts);
+    // Run sensitivity analysis
+    var sens = _thRunMCSensitivity(ratA, ratB, _thCurrentStats, _thCompareStats, mcOpts);
     output.innerHTML =
       '<div class="thDeepHeader" style="background:rgba(124,58,237,.15)">' +
         '<span class="thDeepIcon">🎲</span>' +
@@ -844,7 +905,7 @@ function thRunMonteCarloUI() {
           '<button class="thDeepClose" onclick="document.getElementById(\'thMonteCarloOutput\').style.display=\'none\'">&times;</button>' +
         '</div>' +
       '</div>' +
-      '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName) + '</div>';
+      '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName, sens) + '</div>';
     if (btn) { btn.disabled = false; btn.textContent = '🎲 Run Simulation'; }
   }, 30);
 }
@@ -1003,7 +1064,36 @@ function _thBuildMCGamePlan(mc, aName, bName, ratA, ratB) {
   '</div>';
 }
 
-function _thRenderMonteCarloHTML(mc, aName, bName) {
+function _thBuildMCSensitivity(mc, aName, bName, sens) {
+  if (!sens || !sens.rows || !sens.rows.length) return '';
+  function marginStr(m) {
+    if (m > 0) return aName + ' +' + m;
+    if (m < 0) return bName + ' +' + Math.abs(m);
+    return 'Even';
+  }
+  var baseWin = mc.aWinPct;
+  var thead = '<tr><th>Scenario</th><th>' + aName + ' Win%</th><th>' + bName + ' Win%</th><th>Margin</th><th>Close%</th><th>Δ Win%</th></tr>';
+  var tbody = sens.rows.map(function(r) {
+    var delta = +(r.aWin - baseWin).toFixed(1);
+    var deltaClr = delta > 0 ? 'var(--good)' : delta < 0 ? 'var(--bad)' : 'var(--muted)';
+    var deltaStr = (delta > 0 ? '+' : '') + delta + '%';
+    return '<tr>' +
+      '<td class="mc-sens-label">' + r.label + '</td>' +
+      '<td>' + r.aWin + '%</td>' +
+      '<td>' + r.bWin + '%</td>' +
+      '<td>' + marginStr(r.margin) + '</td>' +
+      '<td>' + r.close + '%</td>' +
+      '<td style="color:' + deltaClr + ';font-weight:700">' + deltaStr + '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="thMCSection">' +
+    '<div class="thMCSectionHead">🔬 Sensitivity Analysis</div>' +
+    '<div style="padding:4px 12px 6px;font-size:10px;color:var(--muted)">How results shift when key parameters change</div>' +
+    '<table class="thMCSensTable"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>' +
+  '</div>';
+}
+
+function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
   if (!mc) return '<div class="thMCError">Insufficient data for simulation (need adjusted efficiency ratings for both teams).</div>';
 
   // Build histogram bars
@@ -1026,6 +1116,11 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
     return 'Even';
   }
 
+  // Parameters used note
+  var paramsNote = mc.nSims.toLocaleString() + ' sims · SD: ' + mc._sdA + '/' + mc._sdB + ' pts';
+  if (mc._rho > 0) paramsNote += ' · ρ=' + mc._rho.toFixed(2);
+  paramsNote += ' · Pace: ' + mc._pace.toFixed(0);
+
   return '<div class="thMCResult">' +
     // ── Win probability ──────────────────────────────────────────────
     '<div class="thMCWinRow">' +
@@ -1045,12 +1140,14 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
         '<div class="thMCWinName">' + bName + '</div>' +
       '</div>' +
     '</div>' +
-    // ── Key stats ────────────────────────────────────────────────────
-    '<div class="thMCGrid">' +
+    // ── Key stats (expanded to 4x2) ──────────────────────────────────
+    '<div class="thMCGrid thMCGrid--4col">' +
       '<div class="thMCGridItem"><div class="thMCGridVal">' + marginStr(mc.avgMargin) + '</div><div class="thMCGridLbl">Avg Margin</div></div>' +
       '<div class="thMCGridItem"><div class="thMCGridVal">' + marginStr(mc.medianMargin) + '</div><div class="thMCGridLbl">Median Margin</div></div>' +
-      '<div class="thMCGridItem"><div class="thMCGridVal">±' + mc.stdDev + ' pts</div><div class="thMCGridLbl">Std Deviation</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal">±' + mc.stdDev + ' pts</div><div class="thMCGridLbl">Margin Std Dev</div></div>' +
       '<div class="thMCGridItem"><div class="thMCGridVal">' + mc.closeGamePct + '%</div><div class="thMCGridLbl">Close Game (≤5pt)</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--accent)">±' + mc.teamSdA + '</div><div class="thMCGridLbl">' + aName + ' Score SD</div></div>' +
+      '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--warn)">±' + mc.teamSdB + '</div><div class="thMCGridLbl">' + bName + ' Score SD</div></div>' +
       '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--accent)">' + mc.blowoutAPct + '%</div><div class="thMCGridLbl">' + aName + ' Blowout</div></div>' +
       '<div class="thMCGridItem"><div class="thMCGridVal" style="color:var(--warn)">' + mc.blowoutBPct + '%</div><div class="thMCGridLbl">' + bName + ' Blowout</div></div>' +
     '</div>' +
@@ -1059,13 +1156,15 @@ function _thRenderMonteCarloHTML(mc, aName, bName) {
     // ── Histogram ────────────────────────────────────────────────────
     '<div class="thMCHistTitle">Score Margin Distribution</div>' +
     '<div class="thMCHist">' + histHtml + '</div>' +
-    '<div class="thMCNote">' + mc.nSims.toLocaleString() + ' simulations · Adjusted efficiency ratings & pace</div>' +
+    '<div class="thMCNote">' + paramsNote + '</div>' +
     // ── Coach-friendly sections ──
     _thBuildMCSummary(mc, aName, bName) +
     _thBuildMCMatchups(aName, bName) +
     _thBuildMCGamePlan(mc, aName, bName,
       teamRatings[(aName || '').toLowerCase()] || null,
       teamRatings[(bName || '').toLowerCase()] || null) +
+    // ── Sensitivity analysis ──
+    _thBuildMCSensitivity(mc, aName, bName, sens) +
   '</div>';
 }
 
@@ -1354,12 +1453,17 @@ function thDownloadDeepPDF() {
         '<tr><td>Avg Score</td><td>' + mc.avgScoreA + ' \u2013 ' + mc.avgScoreB + '</td></tr>' +
         '<tr><td>Avg Margin</td><td>' + marginStr(mc.avgMargin) + '</td></tr>' +
         '<tr><td>Median Margin</td><td>' + marginStr(mc.medianMargin) + '</td></tr>' +
-        '<tr><td>Std Dev</td><td>\u00B1' + mc.stdDev + ' pts</td></tr>' +
+        '<tr><td>Margin Std Dev</td><td>\u00B1' + mc.stdDev + ' pts</td></tr>' +
+        '<tr><td>' + aName + ' Score SD</td><td>\u00B1' + mc.teamSdA + ' pts</td></tr>' +
+        '<tr><td>' + bName + ' Score SD</td><td>\u00B1' + mc.teamSdB + ' pts</td></tr>' +
         '<tr><td>80% Range</td><td>' + marginStr(mc.p10) + ' to ' + marginStr(mc.p90) + '</td></tr>' +
         '<tr><td>Close Game (\u22645pt)</td><td>' + mc.closeGamePct + '%</td></tr>' +
         '<tr><td>' + aName + ' Blowout (10+)</td><td>' + mc.blowoutAPct + '%</td></tr>' +
         '<tr><td>' + bName + ' Blowout (10+)</td><td>' + mc.blowoutBPct + '%</td></tr>' +
       '</tbody></table>' +
+      '<div style="font-size:7.5pt;color:#888;text-align:center;padding:4px 14px">' +
+        'SD: ' + (mc._sdA||11) + '/' + (mc._sdB||11) + ' pts' + (mc._rho > 0 ? ' · \u03c1=' + mc._rho.toFixed(2) : '') + ' · Pace: ' + (mc._pace||68).toFixed(0) +
+      '</div>' +
       '<div class="mc-hist-title">Score Margin Distribution</div>' +
       '<div class="mc-hist">' + histBars + '</div>' +
     '</div></div>';
@@ -2037,13 +2141,33 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     </div>
     <div class="thMonteCarloRow">
       <div class="thDNASectionLabel" style="margin:0">🎲 Monte Carlo Simulation</div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="thMCRunCount" class="thMCSelect" title="Number of simulations">
           <option value="10000" selected>10,000 runs</option>
           <option value="50000">50,000 runs</option>
           <option value="100000">100,000 runs</option>
         </select>
         <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+      </div>
+    </div>
+    <div class="thMCAdvancedRow">
+      <button class="thMCAdvToggle" onclick="this.parentElement.classList.toggle('open');this.textContent=this.parentElement.classList.contains('open')?'▾ Advanced':'▸ Advanced'">▸ Advanced</button>
+      <div class="thMCAdvPanel">
+        <div class="thMCAdvGroup">
+          <label class="thMCAdvLabel" title="Game-to-game scoring volatility for ${teamA}. Higher = more unpredictable.">${teamA} Volatility (SD)
+            <input type="range" id="thMCSdA" min="5" max="20" step="0.5" value="11" oninput="document.getElementById('thMCSdAVal').textContent=this.value">
+            <span id="thMCSdAVal" class="thMCAdvVal">11</span>
+          </label>
+          <label class="thMCAdvLabel" title="Game-to-game scoring volatility for ${teamB}. Higher = more unpredictable.">${teamB} Volatility (SD)
+            <input type="range" id="thMCSdB" min="5" max="20" step="0.5" value="11" oninput="document.getElementById('thMCSdBVal').textContent=this.value">
+            <span id="thMCSdBVal" class="thMCAdvVal">11</span>
+          </label>
+          <label class="thMCAdvLabel" title="How much the two teams' scoring is linked. 0 = independent, 1 = fully correlated (both go up/down together).">Score Correlation (ρ)
+            <input type="range" id="thMCRho" min="0" max="0.8" step="0.05" value="0" oninput="document.getElementById('thMCRhoVal').textContent=(+this.value).toFixed(2)">
+            <span id="thMCRhoVal" class="thMCAdvVal">0.00</span>
+          </label>
+        </div>
+        <div class="thMCAdvHint">Volatility = how many pts a team's score varies game-to-game (default 11). Correlation = shared game factors (tempo, refs) that push both scores up/down together.</div>
       </div>
     </div>
     <div id="thMonteCarloOutput" class="thDeepOutput" style="display:none"></div>

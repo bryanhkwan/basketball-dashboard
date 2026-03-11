@@ -1359,9 +1359,32 @@
 .thMCBarTrack { flex: 1; height: 10px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
 .thMCBarFill { height: 100%; border-radius: 3px; }
 .thMCNote { font-size: 9px; color: var(--muted); text-align: center; padding: 4px 8px 10px; opacity: .65; }
+/* 4-column grid variant */
+.thMCGrid--4col { grid-template-columns: repeat(4, 1fr); }
+.thMCGrid--4col .thMCGridItem:nth-child(3n) { border-right: 1px solid rgba(255,255,255,.05); }
+.thMCGrid--4col .thMCGridItem:nth-child(4n) { border-right: none; }
+.thMCGrid--4col .thMCGridItem:nth-last-child(-n+3) { border-bottom: 1px solid rgba(255,255,255,.05); }
+.thMCGrid--4col .thMCGridItem:nth-last-child(-n+4) { border-bottom: none; }
 /* Run-count selector */
 .thMCSelect { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--fg); font-size: 10.5px; font-weight: 600; cursor: pointer; outline: none; }
 .thMCSelect:focus { border-color: var(--accent); }
+/* Advanced MC controls */
+.thMCAdvancedRow { padding: 0 16px 6px; }
+.thMCAdvToggle { background: none; border: none; color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer; padding: 4px 0; letter-spacing: .04em; }
+.thMCAdvToggle:hover { color: var(--fg); }
+.thMCAdvPanel { display: none; padding: 8px 0 4px; }
+.thMCAdvancedRow.open .thMCAdvPanel { display: block; }
+.thMCAdvGroup { display: flex; gap: 16px; flex-wrap: wrap; }
+.thMCAdvLabel { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); font-weight: 600; cursor: help; white-space: nowrap; }
+.thMCAdvLabel input[type=range] { width: 80px; accent-color: var(--accent); cursor: pointer; }
+.thMCAdvVal { font-size: 10px; font-weight: 800; color: var(--fg); min-width: 26px; text-align: center; }
+.thMCAdvHint { font-size: 9px; color: var(--muted); opacity: .6; margin-top: 6px; line-height: 1.4; }
+/* Sensitivity table */
+.thMCSensTable { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--fg); }
+.thMCSensTable th { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); text-align: left; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.thMCSensTable td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.thMCSensTable tr:last-child td { border-bottom: none; }
+.mc-sens-label { font-weight: 700; color: var(--muted); white-space: nowrap; }
 /* Executive Summary */
 .thMCSummary { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-top: 1px solid rgba(255,255,255,.07); background: rgba(37,99,235,.05); }
 .thMCSummaryIcon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
