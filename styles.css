@@ -34,14 +34,14 @@
     select:focus,input:focus{border-color:rgba(var(--accent-rgb),.35);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.06)}
     input[type="number"]{width:90px}
     .search{flex:1;min-width:0;width:100%}
-    button{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:8px;padding:10px 20px;cursor:pointer;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#080e18;box-shadow:0 2px 8px rgba(0,0,0,.15),0 0 0 1px rgba(var(--accent-rgb),.1);transition:transform .15s,box-shadow .15s,filter .15s}
-    button:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25),0 0 0 1px rgba(var(--accent-rgb),.15)}
-    button:active{transform:translateY(0);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+    button{font-family:inherit;font-size:13px;font-weight:700;border:1px solid rgba(var(--accent-rgb),.2);border-radius:8px;padding:9px 18px;cursor:pointer;background:rgba(var(--accent-rgb),.07);color:var(--text);transition:background .15s,border-color .15s,color .15s;box-shadow:none}
+    button:hover{background:rgba(var(--accent-rgb),.13);border-color:rgba(var(--accent-rgb),.35);color:var(--accent)}
+    button:active{opacity:.85}
     button.secondary{background:rgba(255,255,255,.03);border:1px solid var(--line);color:var(--muted);box-shadow:none}
-    button.secondary:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);transform:none;box-shadow:none}
-    button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#080e18;box-shadow:0 2px 8px rgba(0,0,0,.15),0 0 0 1px rgba(var(--accent-rgb),.1)}
-    button.primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25),0 0 0 1px rgba(var(--accent-rgb),.15);filter:brightness(1.05)}
-    button:disabled{opacity:.4;cursor:not-allowed;transform:none!important;filter:none!important}
+    button.secondary:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);box-shadow:none}
+    button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#080e18;border:none;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+    button.primary:hover{filter:brightness(1.06);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    button:disabled{opacity:.4;cursor:not-allowed}
     .grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-top:16px}
     .grid>*{min-width:0}
     @media(max-width:1020px){.grid{grid-template-columns:1fr}}
@@ -1264,6 +1264,7 @@
   border-bottom: 1px solid rgba(255,255,255,.12);
   font-size: 12px;
   align-items: center;
+}
 
 .thScoutCard { padding: 16px; }
 
@@ -1917,10 +1918,13 @@
 .favCardFooter {
   padding: 8px 10px 10px;
   border-top: 1px solid var(--line2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .favCardBtn {
-  width: 100%;
-  padding: 7px 0;
+  flex-shrink: 0;
+  padding: 6px 12px;
   font-size: 11.5px;
   font-weight: 600;
   border-radius: 8px;
@@ -2546,11 +2550,15 @@
 }
 .chatInput:focus { border-color: var(--accent); }
 .chatSendBtn {
-  padding: 8px 16px; font-size: 13.5px;
-  border-radius: 12px; flex-shrink: 0;
-  box-shadow: none;
+  padding: 8px 20px; font-size: 13.5px;
+  border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #080e18;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  font-weight: 800;
 }
-.chatSendBtn:hover { transform: none; box-shadow: none; filter: brightness(1.08); }
+.chatSendBtn:hover { filter: brightness(1.07); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
 
 /* ── Player Picker rows ────────────────────────── */
 .chatPickerHint {
