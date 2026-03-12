@@ -1,0 +1,186 @@
+﻿≡ƒôè Loaded 2391 players
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 1: CORRELATION MATRIX
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+             PPG     BPM   WS/40    eFG%    USG%     APG     SPG     BPG     RPG
+PPG        1.00    0.71*   0.44    0.17    0.87*   0.09    0.11    0.03    0.16 
+BPM        0.71*   1.00    0.80*   0.58    0.40    0.07    0.02    0.11    0.17 
+WS/40      0.44    0.80*   1.00    0.59    0.23    0.04    0.12    0.33    0.36 
+eFG%       0.17    0.58    0.59    1.00   -0.14   -0.25   -0.15    0.30    0.22 
+USG%       0.87*   0.40    0.23   -0.14    1.00    0.16    0.13    0.02    0.12 
+APG        0.09    0.07    0.04   -0.25    0.16    1.00    0.41   -0.27   -0.24 
+SPG        0.11    0.02    0.12   -0.15    0.13    0.41    1.00   -0.08   -0.03 
+BPG        0.03    0.11    0.33    0.30    0.02   -0.27   -0.08    1.00    0.61 
+RPG        0.16    0.17    0.36    0.22    0.12   -0.24   -0.03    0.61    1.00 
+
+ΓÜá∩╕Å  Pairs with |r| ΓëÑ 0.7:
+   PPG Γåö BPM : r = 0.711
+   PPG Γåö USG% : r = 0.869
+   BPM Γåö WS/40 : r = 0.802
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 2: VARIANCE INFLATION FACTOR (VIF)
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+   PPG      VIF = 14.43 ΓÜá∩╕Å  HIGH
+   BPM      VIF = 7.89 ΓÜá∩╕Å  HIGH
+   WS/40    VIF = 4.08 ΓÜí moderate
+   eFG%     VIF = 2.44
+   USG%     VIF = 6.98 ΓÜá∩╕Å  HIGH
+   APG      VIF = 1.44
+   SPG      VIF = 1.30
+   BPG      VIF = 1.82
+   RPG      VIF = 1.74
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 3: FEATURE SELECTION + INTERACTIONS
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+Candidate interactions:
+   PPG├ùeFG%       ΓÇö Efficient scoring
+   PPG├ùUSG%       ΓÇö Volume scoring
+   BPM├ùClass      ΓÇö Impact + youth
+   APG├ùSPG        ΓÇö Two-way playmaking
+   RPG├ùBPG        ΓÇö Interior presence
+   WS40├ùConf      ΓÇö Production quality
+
+≡ƒöó Full feature matrix: 2391 ├ù 18
+   Features: PPG, BPM, WS/40, eFG%, USG%, APG, SPG, BPG, RPG, Class, Conference, StarterMPG, PPG├ùeFG%, PPG├ùUSG%, BPM├ùClass, APG├ùSPG, RPG├ùBPG, WS40├ùConf
+   Drafted: 326  Undrafted: 2065
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 4: ELASTIC-NET LOGISTIC REGRESSION + 5-FOLD CV
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+Model A: All 9 stats, no interactions, sign-constrained
+   CV Accuracy:  90.5%
+   CV Precision: 85.1%
+   CV Recall:    36.1%
+   CV F1:        50.4%
+   CV Loss:      0.2199
+
+Model B: All 9 stats + interactions, sign-constrained
+   CV Accuracy:  91.2%
+   CV Precision: 85.8%
+   CV Recall:    42.4%
+   CV F1:        56.2%
+   CV Loss:      0.2093
+
+Model C: Reduced 7 stats (no BPM, no USG%), no interactions, sign-constrained
+   CV Accuracy:  90.5%
+   CV Precision: 85.1%
+   CV Recall:    36.1%
+   CV F1:        50.4%
+   CV Loss:      0.2199
+
+CV F1 ranking:
+   1. B (interactions): 56.2%
+   2. A (full base): 50.4%
+   3. C (reduced): 50.4%
+
+   Γ₧£ Using Model C (reduced features, no interactions) for robustness
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 5: FINAL MODEL (all data, best config)
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+Final model (10 features):
+   Accuracy:  90.6%
+   Precision: 86.9%
+   Recall:    36.5%
+   F1:        51.4%
+   TP=119 FP=18 FN=207 TN=2047
+
+Feature weights:
+   PPG            +0.0000  
+   WS/40          +0.6574  +++
+   eFG%           +0.1917  +
+   APG            +0.0000  
+   SPG            +0.0000  
+   BPG            +0.3901  ++
+   RPG            +0.0891  
+   Class          +0.4882  ++
+   Conference     +1.0111  +++++
+   StarterMPG     -0.1031  -
+   intercept      -2.9078
+
+Feature importance (|weight ├ù feature_std|):
+   Conference     imp=0.8283  w=+1.0111
+   WS/40          imp=0.6574  w=+0.6574
+   Class          imp=0.5003  w=+0.4882
+   BPG            imp=0.3901  w=+0.3901
+   eFG%           imp=0.1917  w=+0.1917
+   RPG            imp=0.0891  w=+0.0891
+   StarterMPG     imp=0.0134  w=-0.1031
+   PPG            imp=0.0000  w=+0.0000
+   APG            imp=0.0000  w=+0.0000
+   SPG            imp=0.0000  w=+0.0000
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  STEP 6: SAMPLE PREDICTIONS
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+Top 15:
+   Γ£à James Wiseman          99.7%  DRAFTED
+   Γ£à Walker Kessler         98.9%  DRAFTED
+   Γ£à Chet Holmgren          98.1%  DRAFTED
+   Γ£à Zion Williamson        98.0%  DRAFTED
+   Γ£à Brandon Clarke         98.0%  DRAFTED
+   Γ£à Bol Bol                97.5%  DRAFTED
+   Γ£à Mark Williams          97.3%  DRAFTED
+   Γ£à Donovan Clingan        97.0%  DRAFTED
+   Γ£à Evan Mobley            96.6%  DRAFTED
+   Γ£à Onyeka Okongwu         96.3%  DRAFTED
+   Γ£à Jaxson Hayes           95.4%  DRAFTED
+   Γ£à Keegan Murray          95.0%  DRAFTED
+   Γ£à Vernon Carey Jr.       94.2%  DRAFTED
+   Γ£à Udoka Azubuike         94.1%  DRAFTED
+   Γ£à Zach Edey              93.8%  DRAFTED
+
+Bottom 10:
+   Γ£à Johquin Wiley          0.2%  UNDRAFTED
+   Γ£à Donovan Sanders        0.2%  UNDRAFTED
+   Γ£à Tyler Hooker           0.2%  UNDRAFTED
+   Γ£à Caleb Hunter           0.1%  UNDRAFTED
+   Γ£à Tyler Hooker           0.1%  UNDRAFTED
+   Γ£à Terry Collins          0.1%  UNDRAFTED
+   Γ£à Rob Shaw               0.1%  UNDRAFTED
+   Γ£à Johquin Wiley          0.1%  UNDRAFTED
+   Γ£à Caleb Hunter           0.0%  UNDRAFTED
+   Γ¥î Tyler Smith            0.0%  DRAFTED
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  OUTPUT: DRAFT_MODEL for modules/draft.js
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+var DRAFT_MODEL = {
+  intercept: -2.907795,
+  features: [
+    { stat: 'PPG', mean: 14.8492, std: 3.5366, weight: 0.000000 },
+    { stat: 'WS/40', mean: 0.1264, std: 0.0561, weight: 0.657439 },
+    { stat: 'eFG%', mean: 0.5123, std: 0.0525, weight: 0.191660 },
+    { stat: 'APG', mean: 2.9989, std: 1.4421, weight: 0.000000 },
+    { stat: 'SPG', mean: 1.1974, std: 0.4645, weight: 0.000000 },
+    { stat: 'BPG', mean: 0.3772, std: 0.4600, weight: 0.390056 },
+    { stat: 'RPG', mean: 4.8190, std: 1.9396, weight: 0.089111 }
+  ],
+  classWeight: 0.488174,
+  confWeight: 1.011143,
+  minutesWeight: -0.103084,
+  classMap: { 'Fr': 3, 'So': 2, 'Jr': 1, 'Sr': 0, 'Grad': 0, 'RS-Fr': 2.5, 'RS-So': 1.5, 'RS-Jr': 0.5, 'RS-Sr': 0 }
+};
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  SUMMARY
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+
+  Dataset:        2391 players (326 drafted, 2065 undrafted)
+  Stats used:     PPG, WS/40, eFG%, APG, SPG, BPG, RPG
+  Features:       10 (7 stats + 3 categorical)
+  Regularization: Elastic net (L1=0.005, L2=0.03), sign-constrained
+  5-fold CV F1:   A=50.4%  B=56.2%  C=50.4%
+  Final F1:       51.4%
+  Model used:     C (reduced, no interactions)
+  Key VIF flags:  PPG=14.4, BPM=7.9, WS/40=4.1, USG%=7.0

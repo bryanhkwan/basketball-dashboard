@@ -24,6 +24,10 @@ var leagueRosters = {MBB:{tb:[],opp:[]}, WBB:{tb:[],opp:[]}};
 var careerData = {};
 var _careerDataReady = false;
 
+// Class inference — inferred from multi-season career appearances
+var _inferredClassMap = {};   // {playerNameLower: 'Fr'|'So'|'Jr'|'Sr'}
+var _currentDataSeason = 2026;
+
 // ── Team intelligence caches (loaded in background after player data) ────────
 var teamRatings    = {};  // keyed by lowercase team name → {team, adjO, adjD, adjEM, adjT, srs, sos, conference}
 var allRatingsData = [];  // full array for cross-team comparisons / threats board
@@ -648,6 +652,10 @@ function computeAll(){
   tbAllComputed[league + '_' + pos] = computed.slice();
   _cachedAllPlayers = null; // invalidate player pool cache
 
+  // Apply inferred class from career data (if available)
+  _applyInferredClassToPool(computed);
+  _applyInferredClassToPool(rows);
+
   renderPlayers();
 }
 
@@ -822,6 +830,7 @@ async function loadFromCBData(year) {
 // ── loadAllData — MBB from CBD API, WBB from Google Sheets (parallel) ────────
 async function loadAllData(year) {
   year = year || 2026;
+  _currentDataSeason = year;
   var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
   var loadingOverlayEl = document.getElementById('loadingOverlay');
   var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
@@ -938,10 +947,56 @@ async function loadCareerSeasons() {
   });
 
   _careerDataReady = true;
+
+  // Infer class from career history and apply to all player pools
+  _inferClassFromCareerData();
+  _applyInferredClassAll();
+  if (typeof renderPlayers === 'function') renderPlayers();
+
   if (typeof window._onCareerDataReady === 'function') {
     window._onCareerDataReady();
     window._onCareerDataReady = null;
   }
+}
+
+// ── Class inference from multi-season career data ────────────────────────────
+// Same logic as tools/build-draft-dataset.js inferClass()
+function _inferClassFromCareerData() {
+  _inferredClassMap = {};
+  var keys = Object.keys(careerData);
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var entries = careerData[key];
+    if (!entries || !entries.length) continue;
+    var firstSeason = entries[0]._season; // sorted oldest → newest
+    var years = _currentDataSeason - firstSeason;
+    if (years <= 0)      _inferredClassMap[key] = 'Fr';
+    else if (years === 1) _inferredClassMap[key] = 'So';
+    else if (years === 2) _inferredClassMap[key] = 'Jr';
+    else                  _inferredClassMap[key] = 'Sr';
+  }
+}
+
+function _applyInferredClassToPool(pool) {
+  if (!pool || !pool.length || !Object.keys(_inferredClassMap).length) return;
+  for (var i = 0; i < pool.length; i++) {
+    var r = pool[i];
+    if (r.Class) continue; // already has class from API
+    var key = (r.Player || '').toLowerCase().trim();
+    if (_inferredClassMap[key]) {
+      r.Class = _inferredClassMap[key];
+    }
+  }
+}
+
+function _applyInferredClassAll() {
+  _applyInferredClassToPool(computed);
+  _applyInferredClassToPool(rows);
+  var keys = Object.keys(tbAllComputed);
+  for (var i = 0; i < keys.length; i++) {
+    _applyInferredClassToPool(tbAllComputed[keys[i]]);
+  }
+  _cachedAllPlayers = null; // invalidate cache so AI chat sees updated class
 }
 
 // ── Shared worker URL ──────────────────────────────────────────────────────

@@ -163,6 +163,7 @@ function openProfile(r){
   renderShootingZones(r);
   renderRecruitingBadge(r);
   renderScoutReport(r);
+  if (typeof renderDraftRadar === 'function') renderDraftRadar(r);
 
   // Player shot chart (uses play-by-play data via worker)
   const mShotChart = document.getElementById('mShotChart');

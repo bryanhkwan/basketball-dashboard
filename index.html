@@ -28,6 +28,7 @@
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
   <script src="modules/data.js" defer></script>
+  <script src="modules/draft.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
@@ -722,6 +723,72 @@
         <p style="margin-top:10px">For valuation and current-event questions, AI runs a dual-source pipeline: dashboard data first, then web search for real-world market context. All roster-modifying actions require your explicit approval.</p>
       </div>
     </div>
+
+    <div class="methodSection">
+      <div class="methodHead">🏀 Draft Radar</div>
+      <div class="methodBody">
+        <p>The Draft Radar predicts NBA draft probability from college stats using a sign-constrained elastic-net logistic regression model with <b>balanced class weights</b>, trained on <b>2,391 NCAA players</b> from the 2019–2025 drafts (326 drafted, 2,065 undrafted), sourced from the College Basketball Data API.</p>
+
+        <p style="margin-top:12px"><b>Model Architecture</b></p>
+        <p style="margin-top:6px">Elastic-net logistic regression with 10 features: 7 statistical z-scores + 3 categorical variables. Regularization uses both L1 (λ=0.005) and L2 (λ=0.03) penalties. All stat weights constrained ≥ 0 via projected gradient descent. Balanced class weights in the loss function (drafted samples weighted 3.67×) correct the 6:1 class imbalance and produce well-calibrated probabilities.</p>
+
+        <p style="margin-top:12px"><b>Statistical Features (z-scored against dataset means)</b></p>
+        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li><b>PPG</b> — Points per game (μ=14.8, σ=3.5) — regularized to ~0: scoring volume doesn't discriminate drafted vs. undrafted</li>
+          <li><b>WS/40</b> — Win Shares per 40 min (μ=0.13, σ=0.06) — strongest stat predictor</li>
+          <li><b>eFG%</b> — Effective FG% (μ=51.2%, σ=5.3%)</li>
+          <li><b>BPG</b> — Blocks per game (μ=0.38, σ=0.46) — rim protection highly valued</li>
+          <li><b>RPG</b> — Rebounds per game (μ=4.8, σ=1.9)</li>
+          <li><b>APG, SPG</b> — Assists and steals per game (regularized near zero)</li>
+        </ul>
+        <p style="margin-top:8px;font-size:12px;color:var(--muted)">BPM and USG% were dropped to eliminate multicollinearity (BPM↔WS/40 r=0.80, PPG↔USG% r=0.87, VIF up to 14.4). Their signals are captured by the remaining features.</p>
+
+        <p style="margin-top:12px"><b>Categorical Features</b></p>
+        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li><b>Conference tier</b> — Power=1, Mid-major=0, Low-major=−1 (highest importance, weight=1.29)</li>
+          <li><b>Class</b> — Youth premium: Fr=3, So=2, Jr=1, Sr/Grad=0 (weight=0.52). Inferred at runtime from multi-season CBD API data (2022–2026): a player's first appearance determines their class year. CBD API does not provide class directly.</li>
+          <li><b>Starter flag</b> — 1 if MPG &gt; 25, else 0 (weight=−0.22)</li>
+        </ul>
+
+        <p style="margin-top:12px"><b>Why No Interaction Terms?</b></p>
+        <p style="margin-top:4px">Earlier model versions used 6 interaction terms (PPG×USG%, BPM×Class, etc.). These caused suppressor variable artifacts: multiplying two negative z-scores produced false positives (bench players rated A+). The interaction model's 6% CV F1 advantage did not offset the catastrophic out-of-distribution failures. Removing interactions trades in-sample fit for robust generalization.</p>
+
+        <p style="margin-top:12px"><b>Validation</b></p>
+        <p style="margin-top:4px">5-fold cross-validation: 86.7% accuracy, 50.9% precision, 90.5% recall, 64.7% F1. Final model on all data: 86.8% accuracy, 50.9% precision, 90.2% recall, 65.0% F1, TP=294 FP=284 FN=32 TN=1781. The balanced-weight approach prioritizes recall (catching actual draft picks) over raw precision. 90% of drafted players are correctly identified.</p>
+
+        <p style="margin-top:12px"><b>Feature Importance (|weight × std|)</b></p>
+        <p style="margin-top:4px">Ranked: Conference (1.06) &gt; WS/40 (0.77) &gt; Class (0.53) &gt; BPG (0.43) &gt; RPG (0.16) &gt; eFG% (0.14)</p>
+
+        <p style="margin-top:12px"><b>Additional Features</b></p>
+        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li><b>Quantified Development Path</b> — Identifies stats below drafted-player averages with actionable advice. Each recommendation shows the exact probability impact of reaching the target: e.g., "Improving eFG% from 45.0% → 51.2% shifts draft probability by +X%"</li>
+          <li><b>Draft Comparables</b> — Finds the 3 most statistically similar drafted players (from a 119-player pool of lottery + notable picks) using weighted Euclidean distance on z-scored features.</li>
+          <li><b>Scouting Insights</b> — Readable takeaways about scoring efficiency, defensive impact, youth premium, and competition level</li>
+        </ul>
+
+        <p style="margin-top:12px"><b>Data Pipeline</b></p>
+        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li><b>Source</b> — College Basketball Data API via Cloudflare Worker proxy</li>
+          <li><b>Seasons</b> — Player stats for 2018–2025; draft picks for 2019–2025</li>
+          <li><b>Class inference</b> — Multi-season appearance tracking (first appearance = Fr, +1 year per subsequent season). Used both in training (<code>build-draft-dataset.js</code>) and at runtime (<code>data.js loadCareerSeasons</code>) since the CBD API does not provide class/eligibility data.</li>
+          <li><b>Undrafted pool</b> — Players with PPG ≥ 5, MPG ≥ 20, G ≥ 15 who were not drafted, selected by total minutes played (~6:1 undrafted:drafted ratio)</li>
+          <li><b>Build script</b> — <code>tools/build-draft-dataset.js</code> fetches all data and outputs <code>data/draft-history.json</code></li>
+        </ul>
+
+        <p style="margin-top:12px"><b>Limitations</b></p>
+        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+          <li>No physical measurables (height, wingspan, athletic testing)</li>
+          <li>No combine/workout performance data</li>
+          <li>No team need or draft class depth context</li>
+          <li>International prospects not modeled (different stat context)</li>
+          <li>Class inferred from multi-season appearances — may be off for transfers or redshirts</li>
+          <li>MBB only — WBB draft dynamics differ significantly</li>
+          <li>PPG regularized to zero weight — scoring volume doesn't differentiate drafted vs. undrafted in training data</li>
+          <li>Eligibility gate: players with PPG &lt; 5, MPG &lt; 15, or G &lt; 10 receive no draft grade (shown as —). These players fall outside the training distribution and predictions would be unreliable extrapolations</li>
+        </ul>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">Training: <code>tools/train-draft-model-v2.js</code> · Dataset: <code>tools/build-draft-dataset.js</code> → <code>data/draft-history.json</code> · Rebuild: run build script, then retrain.</p>
+      </div>
+    </div>
   </div>
 </div>
 </div><!-- /pageMethodology -->
@@ -1034,6 +1101,13 @@
         <div class="panelHead">🎯 Shooting Zones</div>
         <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <div id="mDraftPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">🏀 Draft Radar</div>
+        <div class="panelBody" id="mDraftRadar" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Open a player to view draft projection.</div>
         </div>
       </div>
 

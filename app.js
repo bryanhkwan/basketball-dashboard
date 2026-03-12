@@ -239,4 +239,12 @@ window._app = {
   loadGamesForTeam,
   loadShootingForTeam,
   thLoadOpponent,
+  // Draft model
+  draftProbability:    typeof draftProbability === 'function' ? draftProbability : function(){ return null; },
+  draftGrade:          typeof draftGrade === 'function' ? draftGrade : function(){ return '—'; },
+  draftRangeLabel:     typeof draftRangeLabel === 'function' ? draftRangeLabel : function(){ return '—'; },
+  draftFactors:        typeof draftFactors === 'function' ? draftFactors : function(){ return []; },
+  draftDevelopmentRecs:typeof draftDevelopmentRecs === 'function' ? draftDevelopmentRecs : function(){ return []; },
+  draftComparables:    typeof draftComparables === 'function' ? draftComparables : function(){ return []; },
+  draftInsights:       typeof draftInsights === 'function' ? draftInsights : function(){ return []; },
 };

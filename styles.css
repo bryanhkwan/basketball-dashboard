@@ -2604,3 +2604,240 @@
   .chatMain { min-height: 60vh; }
   .chatMsgRow { max-width: 92%; }
 }
+
+/* ============ Draft Radar ============ */
+.draftRadarGrid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 520px) {
+  .draftRadarGrid { grid-template-columns: 1fr; }
+}
+.draftGauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.draftRingSvg {
+  width: 120px;
+  height: 120px;
+}
+.draftGradeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.draftGradeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: 2px solid;
+  border-radius: 8px;
+  font-weight: 900;
+  font-size: 14px;
+  background: rgba(255,255,255,.04);
+}
+.draftRangeLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.draftFactors {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.draftFactorsHead {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.draftFactorRow {
+  display: grid;
+  grid-template-columns: 64px 48px 1fr 18px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.draftFactorLabel {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.draftFactorValue {
+  color: var(--muted);
+  text-align: right;
+  font-size: 11px;
+}
+.draftFactorBar {
+  height: 5px;
+  background: rgba(255,255,255,.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.draftFactorFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .5s ease;
+}
+.draftFactorArrow {
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+}
+.draftDisclaimer {
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.7;
+  line-height: 1.4;
+}
+/* Mini badge for player table */
+.draftMiniBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 1px 5px;
+  border: 1.5px solid;
+  border-radius: 5px;
+  font-weight: 800;
+  font-size: 10px;
+  background: rgba(255,255,255,.03);
+  letter-spacing: 0.2px;
+}
+
+/* Interaction insight pills */
+.draftInsightsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.draftInsight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(255,255,255,.03);
+  line-height: 1.4;
+}
+
+/* Development path section */
+.draftDevSection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.draftDevHead {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.draftDevItem {
+  padding: 6px 8px;
+  margin-bottom: 5px;
+  background: rgba(255,255,255,.03);
+  border-radius: 6px;
+  border-left: 3px solid rgba(251,191,36,.5);
+}
+.draftDevItemHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.draftDevArea {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.draftDevNums {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+.draftDevTip {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.draftDevImpact {
+  font-size: 10.5px;
+  line-height: 1.4;
+  margin: 2px 0 1px;
+  letter-spacing: 0.01em;
+}
+.draftDevImpact strong {
+  font-weight: 700;
+}
+
+/* Draft comparables section */
+.draftCompSection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.draftCompHead {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.draftCompItem {
+  padding: 6px 8px;
+  margin-bottom: 5px;
+  background: rgba(255,255,255,.03);
+  border-radius: 6px;
+  border-left: 3px solid rgba(96,165,250,.5);
+}
+.draftCompMain {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.draftCompName {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.draftCompMeta {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #60a5fa;
+  white-space: nowrap;
+}
+.draftCompDetails {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.draftCompArch {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.draftCompMatch {
+  font-size: 10px;
+  color: var(--muted);
+}

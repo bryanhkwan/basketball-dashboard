@@ -23,6 +23,7 @@ const LIST_COLS = [
   {key:'ActualValuation', label:'Actual $'},
   {key:'ValueDelta_calc', label:'Δ$'},
   {key:'_sched_diff', label:'SoS'},
+  {key:'_draft_prob', label:'Draft'},
 ];
 
 // --- Sort ---
@@ -58,6 +59,7 @@ function renderPlayersPage(){
   const colsToShow = LIST_COLS.filter(c => {
     if(c.key === '_opp_add') return typeof oppAddPlayer !== 'undefined';
     if(c.key === '_sched_diff') return typeof league !== 'undefined' && league === 'MBB';
+    if(c.key === '_draft_prob') return typeof league !== 'undefined' && league === 'MBB' && typeof draftBadgeHtml === 'function';
     return true;
   });
 
@@ -146,7 +148,14 @@ function renderPlayersPage(){
             td.style.color = sos >= 2 ? 'var(--bad)' : sos >= 0 ? 'var(--warn)' : sos >= -2 ? 'var(--muted)' : 'var(--good)';
             td.title = `Schedule difficulty (SoS): ${sos >= 2 ? 'Very Hard' : sos >= 0 ? 'Hard' : sos >= -2 ? 'Average' : 'Easy'}`;
           }
-        }      }else{
+        }      }else if(c.key === '_draft_prob'){
+        if(typeof draftBadgeHtml === 'function'){
+          td.innerHTML = draftBadgeHtml(r);
+          td.style.textAlign = 'center';
+        } else {
+          td.textContent = '—';
+        }
+      }else{
         td.textContent = (v ?? '').toString();
       }
       tr.appendChild(td);

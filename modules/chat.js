@@ -267,6 +267,21 @@
     m = m || all.find(r=>(r.Player||'').toLowerCase().includes(pn));
     if(!m) return null;
     const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
+    // Draft probability (MBB only)
+    if(typeof draftProbability==='function'){
+      const dp=draftProbability(m);
+      if(dp!=null){
+        out._draftProbability=dp; out._draftGrade=draftGrade(dp); out._draftRange=draftRangeLabel(dp);
+        if(typeof draftComparables==='function'){
+          const comps=draftComparables(m);
+          if(comps.length) out._draftComparables=comps.map(function(c){ return c.name+' ('+c.year+' #'+c.pick+', '+c.archetype+')'; });
+        }
+        if(typeof draftDevelopmentRecs==='function'){
+          const devs=draftDevelopmentRecs(m);
+          if(devs.length) out._draftDevAreas=devs.map(function(d){ return d.area+': '+d.tip; });
+        }
+      }
+    }
     return out;
   }
 
