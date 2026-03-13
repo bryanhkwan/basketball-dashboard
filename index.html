@@ -725,6 +725,20 @@
     </div>
 
     <div class="methodSection">
+      <div class="methodHead">🎲 Monte Carlo Match Simulation</div>
+      <div class="methodBody">
+        <p>The Teams Hub Monte Carlo sim projects game outcomes by running thousands of score simulations from each team's adjusted efficiency ratings and pace.</p>
+        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li><b>Regulation model</b> — Expected scoring is computed from offense-vs-defense blends (AdjO/AdjD) and average pace; each team gets game-to-game scoring noise (SD controls) with optional score correlation (ρ).</li>
+          <li><b>OT-aware logic</b> — Regulation ties now trigger overtime simulation instead of ending as ties. OT uses a 5-minute pace-scaled scoring model with lower OT volatility and repeats until a winner (capped periods + rare fallback tiebreak).</li>
+          <li><b>Core outputs</b> — Win%, projected score, average/median margin, close-game rate, blowout rates, and margin distribution histogram.</li>
+          <li><b>OT outputs</b> — Overtime rate, regulation-tie rate, and overtime winner split by team for late-game prep context.</li>
+          <li><b>Scope</b> — This is a probabilistic scenario engine (not a possession-level play-caller). Use with shot chart, matchup, and scouting context for full prep.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="methodSection">
       <div class="methodHead">🏀 Draft Radar</div>
       <div class="methodBody">
         <p>The Draft Radar predicts NBA draft probability from college stats using a sign-constrained elastic-net logistic regression model with <b>balanced class weights</b>, trained on <b>2,391 NCAA players</b> from the 2019–2025 drafts (326 drafted, 2,065 undrafted), sourced from the College Basketball Data API.</p>

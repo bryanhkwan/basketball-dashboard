@@ -754,6 +754,9 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   var sdB = opts.sdB != null ? +opts.sdB : 11;
   // Correlation between team scoring deviations (0 = independent, 0..1)
   var rho = opts.rho != null ? Math.max(0, Math.min(1, +opts.rho)) : 0;
+  // Overtime modeling
+  var enableOT = opts.enableOT !== false;
+  var maxOTPeriods = opts.maxOTPeriods != null ? Math.max(1, Math.min(6, +opts.maxOTPeriods)) : 3;
 
   function randn() {
     var u = 0, v = 0;
@@ -763,12 +766,43 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   }
 
   var aWins = 0, bWins = 0, ties = 0, totalMarginA = 0;
+  var regTies = 0, otGames = 0, otAWins = 0, otBWins = 0;
   var margins = [], scoresA = [], scoresB = [];
   var buckets = {};
 
   // Cholesky decomposition for correlated normals:
   // zA = u; zB = rho*u + sqrt(1-rho^2)*v
   var rhoFactor = Math.sqrt(Math.max(0, 1 - rho * rho));
+
+  // OT setup (5-minute period approximation)
+  var otPace = Math.max(5, Math.min(12, gamePace * 0.125));
+  var otExpA = (eOA / 100) * otPace;
+  var otExpB = (eOB / 100) * otPace;
+  var otSdA = opts.otSdA != null ? +opts.otSdA : Math.max(2.5, Math.min(6.5, sdA * Math.sqrt(5 / 40)));
+  var otSdB = opts.otSdB != null ? +opts.otSdB : Math.max(2.5, Math.min(6.5, sdB * Math.sqrt(5 / 40)));
+
+  function resolveOvertime(rA0, rB0) {
+    var rA = rA0, rB = rB0;
+    var periods = 0;
+    while (rA === rB && periods < maxOTPeriods) {
+      var ou = randn(), ov = randn();
+      var otNoiseA = ou * otSdA;
+      var otNoiseB = (rho * ou + rhoFactor * ov) * otSdB;
+      var addA = Math.max(0, Math.round(otExpA + otNoiseA));
+      var addB = Math.max(0, Math.round(otExpB + otNoiseB));
+      rA += addA;
+      rB += addB;
+      periods++;
+    }
+    if (rA === rB) {
+      // Very rare fallback to avoid unresolved ties in simulation output
+      var edge = (otExpA - otExpB) / 1.5;
+      var pA = 1 / (1 + Math.exp(-edge));
+      if (Math.random() < pA) rA += 1;
+      else rB += 1;
+    }
+    return { rA: rA, rB: rB, periods: periods };
+  }
 
   for (var i = 0; i < nSims; i++) {
     var u = randn(), v = randn();
@@ -777,6 +811,17 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     var ptsA = (eOA / 100) * gamePace + noiseA;
     var ptsB = (eOB / 100) * gamePace + noiseB;
     var rA = Math.round(ptsA), rB = Math.round(ptsB);
+
+    if (enableOT && rA === rB) {
+      regTies++;
+      otGames++;
+      var ot = resolveOvertime(rA, rB);
+      rA = ot.rA;
+      rB = ot.rB;
+      if (rA > rB) otAWins++;
+      else if (rB > rA) otBWins++;
+    }
+
     scoresA.push(rA); scoresB.push(rB);
     var margin = rA - rB;
     margins.push(margin);
@@ -817,7 +862,12 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     aWinPct: +(aWins / nSims * 100).toFixed(1),
     bWinPct: +(bWins / nSims * 100).toFixed(1),
     tiePct: +(ties / nSims * 100).toFixed(1),
+    regulationTiePct: +(regTies / nSims * 100).toFixed(1),
+    otRate: +(otGames / nSims * 100).toFixed(1),
+    aWinInOTPct: +(otGames ? (otAWins / otGames * 100) : 0).toFixed(1),
+    bWinInOTPct: +(otGames ? (otBWins / otGames * 100) : 0).toFixed(1),
     aWins: aWins, bWins: bWins, ties: ties,
+    regulationTies: regTies, otGames: otGames,
     avgMargin: +mean.toFixed(1),
     medianMargin: median,
     stdDev: +sd.toFixed(1),
@@ -831,6 +881,7 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     buckets: buckets,
     // Store params used
     _sdA: sdA, _sdB: sdB, _rho: rho, _pace: gamePace,
+    _enableOT: enableOT, _otPace: otPace, _otSdA: otSdA, _otSdB: otSdB, _maxOTPeriods: maxOTPeriods,
   };
   _thLastMonteCarlo = result;
   return result;
@@ -926,6 +977,7 @@ function _thBuildMCSummary(mc, aName, bName) {
   var closeNote = '';
   if (mc.closeGamePct >= 40) closeNote = '<br>⏱ <strong>High close-game probability (' + mc.closeGamePct + '%)</strong> — late-game execution and free-throw shooting will be critical.';
   else if (mc.closeGamePct >= 25) closeNote = '<br>⏱ Moderate chance of a close finish (' + mc.closeGamePct + '%) — prepare end-of-game sets.';
+  if (mc.otRate >= 3) closeNote += '<br>🕐 <strong>Overtime probability: ' + mc.otRate + '%</strong> — prep late-game foul/ATO packages and OT rotation plans.';
 
   return '<div class="thMCSummary">' +
     '<div class="thMCSummaryIcon">📋</div>' +
@@ -1156,6 +1208,7 @@ function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
   var paramsNote = mc.nSims.toLocaleString() + ' sims · SD: ' + mc._sdA + '/' + mc._sdB + ' pts';
   if (mc._rho > 0) paramsNote += ' · ρ=' + mc._rho.toFixed(2);
   paramsNote += ' · Pace: ' + mc._pace.toFixed(0);
+  if (mc._enableOT) paramsNote += ' · OT: ' + mc.otRate + '% (OT SD ' + mc._otSdA.toFixed(1) + '/' + mc._otSdB.toFixed(1) + ', max ' + mc._maxOTPeriods + ')';
 
   return '<div class="thMCResult">' +
     // ── Win probability ──────────────────────────────────────────────
