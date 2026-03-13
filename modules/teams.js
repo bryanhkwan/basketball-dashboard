@@ -16,6 +16,7 @@ var _thCurrentStats = null;
 var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
+var _thRecentTournamentCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
@@ -1093,6 +1094,41 @@ function _thBuildMCSensitivity(mc, aName, bName, sens) {
   '</div>';
 }
 
+function _thBuildMCRecentPBP(aName, bName) {
+  const ctx = _thRecentTournamentCtx;
+  if (!ctx) return '';
+
+  function teamCard(name, color) {
+    const d = ctx[name];
+    if (!d) return '';
+    const sp = d.shotProfile || {};
+    const dt = d.date ? String(d.date).slice(0, 10) : '—';
+    const scoreTxt = (d.score && d.score.for != null && d.score.against != null)
+      ? (d.score.for + '–' + d.score.against)
+      : '—';
+    const rimTxt = sp.rim && sp.rim.att ? (sp.rim.pct + '% (' + sp.rim.made + '/' + sp.rim.att + ')') : '—';
+    const midTxt = sp.jumper && sp.jumper.att ? (sp.jumper.pct + '% (' + sp.jumper.made + '/' + sp.jumper.att + ')') : '—';
+    const threeTxt = sp.three_pointer && sp.three_pointer.att ? (sp.three_pointer.pct + '% (' + sp.three_pointer.made + '/' + sp.three_pointer.att + ')') : '—';
+    return '<div class="thMCRecentCard">' +
+      '<div class="thMCRecentTeam" style="color:' + color + '">' + name + '</div>' +
+      '<div class="thMCRecentMeta">Latest tournament game: ' + dt + ' vs ' + (d.opponent || '—') + '</div>' +
+      '<div class="thMCRecentMeta">Score: ' + scoreTxt + (d.gameNotes ? ' · ' + d.gameNotes : '') + '</div>' +
+      '<div class="thMCRecentMeta">FG: ' + (sp.fgPct != null ? (sp.fgPct + '%') : '—') + ' · FGA: ' + (sp.fga != null ? sp.fga : '—') + ' · FTA shots: ' + (sp.fta != null ? sp.fta : '—') + '</div>' +
+      '<div class="thMCRecentMeta">Rim: ' + rimTxt + ' · Mid: ' + midTxt + ' · 3PT: ' + threeTxt + '</div>' +
+    '</div>';
+  }
+
+  const aCard = teamCard(aName, 'var(--accent)');
+  const bCard = teamCard(bName, 'var(--warn)');
+  if (!aCard && !bCard) return '';
+
+  return '<div class="thMCSection">' +
+    '<div class="thMCSectionHead">📼 Latest Tournament PBP Snapshot</div>' +
+    '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Used alongside season baselines for prep context.</div>' +
+    '<div class="thMCRecentWrap">' + aCard + bCard + '</div>' +
+  '</div>';
+}
+
 function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
   if (!mc) return '<div class="thMCError">Insufficient data for simulation (need adjusted efficiency ratings for both teams).</div>';
 
@@ -1157,6 +1193,7 @@ function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
     '<div class="thMCHistTitle">Score Margin Distribution</div>' +
     '<div class="thMCHist">' + histHtml + '</div>' +
     '<div class="thMCNote">' + paramsNote + '</div>' +
+    _thBuildMCRecentPBP(aName, bName) +
     // ── Coach-friendly sections ──
     _thBuildMCSummary(mc, aName, bName) +
     _thBuildMCMatchups(aName, bName) +
@@ -1248,6 +1285,7 @@ async function thRunDeepAnalysis() {
     teamA: teamSnapshot(aName, ratA, _thCurrentStats),
     teamB: teamSnapshot(bName, ratB, _thCompareStats),
     matchupShots: _thLastMatchupCtx,
+    recentTournamentShots: _thRecentTournamentCtx,
   };
 
   const systemInstruction = {
@@ -1328,6 +1366,7 @@ async function thRunDeepAnalysis() {
     `## Game Plan: Defensive Keys (5 items for each team)\n` +
     `## In-Game Adjustment Triggers (3 specific situations)\n` +
     `## Data Confidence & Red Flags\n\n` +
+    `Use both season-long metrics and any recent tournament play-by-play snapshot provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines.\n\n` +
     `All analysis must be grounded in this structured data only:${oppGameNote}\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
   try {
@@ -1805,6 +1844,7 @@ async function thLoadCompare() {
   ]);
   thCurrentCompareTeam = compareTeam;
   _thCompareStats = statsB || null;
+  _thRecentTournamentCtx = await _thLoadRecentTournamentCtx(thCurrentTeam, compareTeam, thCurrentSeason);
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
@@ -1973,6 +2013,90 @@ function thInitShotFilter(containerId) {
 function thInitShotChart(containerId) {
   thInitShotTooltips(containerId);
   thInitShotFilter(containerId);
+}
+
+// ── Recent tournament context — latest game PBP snapshot per team ───────────
+async function _thLoadRecentTournamentTeamCtx(teamName, season) {
+  if (!teamName) return null;
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const candidates = games
+    .filter(g => {
+      const hn = (g.homeTeam || '').toLowerCase();
+      const an = (g.awayTeam || '').toLowerCase();
+      const involvesTeam = hn === tn || an === tn;
+      if (!involvesTeam) return false;
+      const isFinal = (g.status || '').toLowerCase() === 'final';
+      const isTournament = g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || ''));
+      return isFinal && isTournament;
+    })
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+  if (!candidates.length) return null;
+
+  const selected = candidates.find(g => String(g.startDate || '').slice(0, 10) === todayIso) || candidates[0];
+  if (!selected || !selected.id) return null;
+
+  const allShots = typeof loadPlaysForGame === 'function'
+    ? await loadPlaysForGame(selected.id)
+    : [];
+  const shots = (allShots || []).filter(s => (s.team || '').toLowerCase() === tn);
+  const fgaShots = shots.filter(s => s.range !== 'free_throw');
+  const madeFga = fgaShots.filter(s => !!s.made).length;
+
+  function zoneAgg(range) {
+    const z = fgaShots.filter(s => s.range === range);
+    const made = z.filter(s => !!s.made).length;
+    const att = z.length;
+    return { made, att, pct: att ? Math.round(made / att * 100) : null };
+  }
+
+  const isHome = (selected.homeTeam || '').toLowerCase() === tn;
+  const ptsFor = isHome ? selected.homePoints : selected.awayPoints;
+  const ptsAgainst = isHome ? selected.awayPoints : selected.homePoints;
+  const opp = isHome ? (selected.awayTeam || '') : (selected.homeTeam || '');
+
+  return {
+    team: teamName,
+    gameId: selected.id,
+    date: selected.startDate || null,
+    opponent: opp,
+    gameType: selected.gameType || null,
+    tournament: selected.tournament || null,
+    gameNotes: selected.gameNotes || null,
+    score: {
+      for: ptsFor != null ? +ptsFor : null,
+      against: ptsAgainst != null ? +ptsAgainst : null,
+    },
+    shotProfile: {
+      fga: fgaShots.length,
+      fgm: madeFga,
+      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
+      fta: shots.filter(s => s.range === 'free_throw').length,
+      rim: zoneAgg('rim'),
+      jumper: zoneAgg('jumper'),
+      three_pointer: zoneAgg('three_pointer'),
+    },
+  };
+}
+
+async function _thLoadRecentTournamentCtx(teamA, teamB, season) {
+  const [ctxA, ctxB] = await Promise.all([
+    _thLoadRecentTournamentTeamCtx(teamA, season).catch(() => null),
+    _thLoadRecentTournamentTeamCtx(teamB, season).catch(() => null),
+  ]);
+  return {
+    asOf: new Date().toISOString(),
+    [teamA]: ctxA,
+    [teamB]: ctxB,
+  };
 }
 
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
@@ -2282,6 +2406,7 @@ async function thLoadTeam(teamName, season) {
   thCurrentCompareTeam = '';
   _thCompareStats = null;
   _thLastMatchupCtx = null;
+  _thRecentTournamentCtx = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
