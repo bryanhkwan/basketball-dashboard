@@ -16,9 +16,11 @@ var _thCurrentStats = null;
 var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
+var _thLastMatchupShots = null;
 var _thRecentTournamentCtx = null;
 var _thTournamentIntelCtx = null;
 var _thTeamIntelCache = {};
+var _thDeepShotIntelCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
@@ -1461,6 +1463,7 @@ async function thRunDeepAnalysis() {
     const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!rawText) throw new Error('Empty response from AI.');
     if (status) status.textContent = '';
+    var deepChartsHtml = _thBuildDeepShotReportHTML(aName, bName);
     output.innerHTML =
       '<div class="thDeepHeader">' +
         '<span class="thDeepIcon">\uD83E\uDDE0</span>' +
@@ -1472,8 +1475,10 @@ async function thRunDeepAnalysis() {
         '</div>' +
       '</div>' +
       '<div class="thDeepBody">' +
+        deepChartsHtml +
         _thFmtDeepText(rawText) +
       '</div>';
+    thInitShotChart('thDeepOutput');
     output.dataset.lastRaw = rawText;
     output.dataset.aName   = aName;
     output.dataset.bName   = bName;
@@ -1921,6 +1926,7 @@ async function thLoadCompare() {
   _thCompareStats = statsB || null;
   _thRecentTournamentCtx = await _thLoadRecentTournamentCtx(thCurrentTeam, compareTeam, thCurrentSeason);
   _thTournamentIntelCtx = await _thLoadTournamentIntelCtx(thCurrentTeam, compareTeam, thCurrentSeason);
+  _thDeepShotIntelCtx = await _thLoadDeepShotIntelForTeam(compareTeam, thCurrentSeason);
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
@@ -2381,6 +2387,97 @@ async function _thLoadTournamentIntelCtx(teamA, teamB, season) {
   };
 }
 
+async function _thLoadDeepShotIntelForTeam(teamName, season) {
+  if (!teamName) return null;
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const finalGames = games.filter(g => {
+    const hn = (g.homeTeam || '').toLowerCase();
+    const an = (g.awayTeam || '').toLowerCase();
+    return (hn === tn || an === tn) && (g.status || '').toLowerCase() === 'final';
+  });
+
+  const macTournamentGames = finalGames.filter(g =>
+    g.gameType === 'TRNMNT' && /MAC Championship/i.test(String(g.gameNotes || ''))
+  );
+
+  const postSeasonGames = macTournamentGames.length
+    ? macTournamentGames
+    : finalGames.filter(g => g.gameType === 'TRNMNT');
+
+  async function collectShots(gameList) {
+    const bundles = await Promise.all(gameList.map(async g => {
+      const plays = (typeof loadPlaysForGame === 'function'
+        ? await loadPlaysForGame(g.id).catch(() => [])
+        : []);
+      return (plays || []).filter(p => (p.team || '').toLowerCase() === tn);
+    }));
+    return bundles.flat();
+  }
+
+  const seasonShots = await collectShots(finalGames);
+  const postSeasonShots = await collectShots(postSeasonGames);
+
+  return {
+    team: teamName,
+    season: season,
+    seasonGames: finalGames.length,
+    postSeasonGames: postSeasonGames.length,
+    seasonShots: seasonShots,
+    postSeasonShots: postSeasonShots,
+  };
+}
+
+function _thBuildDeepShotReportHTML(aName, bName) {
+  var parts = [];
+
+  if (_thLastMatchupShots &&
+      (_thLastMatchupShots.teamA || '').toLowerCase() === (aName || '').toLowerCase() &&
+      (_thLastMatchupShots.teamB || '').toLowerCase() === (bName || '').toLowerCase()) {
+    parts.push(
+      '<div class="thMCSection">' +
+        '<div class="thMCSectionHead">🎯 ' + aName + ' vs ' + bName + ' Shot Chart (Head-to-Head)</div>' +
+        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Hit/miss locations from direct matchups loaded in Team Hub.</div>' +
+        '<div class="thShotChartsRow">' +
+          _th_buildShotChartSVG(_thLastMatchupShots.shotsA || [], aName + ' offense vs ' + bName, 'var(--accent)') +
+          _th_buildShotChartSVG(_thLastMatchupShots.shotsB || [], bName + ' offense vs ' + aName, 'var(--warn)') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  var shotIntel = _thDeepShotIntelCtx;
+  if (shotIntel && (shotIntel.team || '').toLowerCase() === (bName || '').toLowerCase()) {
+    parts.push(
+      '<div class="thMCSection">' +
+        '<div class="thMCSectionHead">📈 ' + bName + ' Shot Chart — Regular Season</div>' +
+        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Aggregated from ' + (shotIntel.seasonGames || 0) + ' final games.</div>' +
+        '<div class="thShotChartsRow">' +
+          _th_buildShotChartSVG(shotIntel.seasonShots || [], bName + ' regular season', 'var(--warn)') +
+        '</div>' +
+      '</div>'
+    );
+
+    parts.push(
+      '<div class="thMCSection">' +
+        '<div class="thMCSectionHead">🏆 ' + bName + ' Shot Chart — Tournament</div>' +
+        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Aggregated from ' + (shotIntel.postSeasonGames || 0) + ' tournament games.</div>' +
+        '<div class="thShotChartsRow">' +
+          _th_buildShotChartSVG(shotIntel.postSeasonShots || [], bName + ' tournament', 'var(--warn)') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if (!parts.length) return '';
+  return '<div class="thDeepCharts">' + parts.join('') + '</div>';
+}
+
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
 function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
   mode = mode || 'season';
@@ -2395,9 +2492,19 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
 
   if (!allShots.length) {
     _thLastMatchupCtx = null;
+    _thLastMatchupShots = null;
     el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No play-by-play data found for ${teamA} vs ${teamB} this season.</div>`;
     return;
   }
+
+  _thLastMatchupShots = {
+    teamA: teamA,
+    teamB: teamB,
+    mode: mode,
+    gamesPlayed: gamesPlayed,
+    shotsA: shotsA,
+    shotsB: shotsB,
+  };
 
   // Per-zone accuracy comparison
   const zones = ['rim', 'jumper', 'three_pointer'];
@@ -2688,9 +2795,11 @@ async function thLoadTeam(teamName, season) {
   thCurrentCompareTeam = '';
   _thCompareStats = null;
   _thLastMatchupCtx = null;
+  _thLastMatchupShots = null;
   _thRecentTournamentCtx = null;
   _thTournamentIntelCtx = null;
   _thTeamIntelCache = {};
+  _thDeepShotIntelCtx = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
