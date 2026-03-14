@@ -17,6 +17,7 @@ var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
 var _thRecentTournamentCtx = null;
+var _thTournamentIntelCtx = null;
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
@@ -1102,6 +1103,17 @@ function _thBuildMCGamePlan(mc, aName, bName, ratA, ratB) {
     items.push({icon:'📊', text:blower + ' has a ' + blowPct + '% chance of winning by 10+. The underdog should keep the game within striking distance through halftime.'});
   }
 
+  // Tournament timing / timeout guidance (if available)
+  var intel = _thTournamentIntelCtx && _thTournamentIntelCtx[bName];
+  if (intel && intel.timeoutGuidance) {
+    var tw = (intel.timeoutGuidance.recommendedWhen || [])[0];
+    if (tw) {
+      items.push({icon:'⏸️', text:'Timeout timing vs ' + bName + ': watch ' + tw.phase + ' (avg segment edge +' + tw.avgEdge + '). ' + tw.note});
+    } else if (intel.timeoutGuidance.baselineRule) {
+      items.push({icon:'⏸️', text:'Timeout timing vs ' + bName + ': ' + intel.timeoutGuidance.baselineRule});
+    }
+  }
+
   // Free throws
   items.push({icon:'🏀', text:'In projected close games, free-throw shooting is decisive. Identify your best FT shooters for late-game possessions.'});
 
@@ -1339,6 +1351,7 @@ async function thRunDeepAnalysis() {
     teamB: teamSnapshot(bName, ratB, _thCompareStats),
     matchupShots: _thLastMatchupCtx,
     recentTournamentShots: _thRecentTournamentCtx,
+    tournamentIntel: _thTournamentIntelCtx,
   };
 
   const systemInstruction = {
@@ -1417,9 +1430,11 @@ async function thRunDeepAnalysis() {
     `(Using their season record, loss patterns, and which teams beat them \u2014 identify the exact blueprint ${aName} should follow. Be very specific and actionable for a tournament game.)\n` +
     `## Game Plan: Offensive Keys (5 items for each team)\n` +
     `## Game Plan: Defensive Keys (5 items for each team)\n` +
+    `## Timeout Strategy vs ${bName}\n` +
+    `(Recommend exact timeout trigger moments using tournament trends, period/phase patterns, and momentum-risk windows.)\n` +
     `## In-Game Adjustment Triggers (3 specific situations)\n` +
     `## Data Confidence & Red Flags\n\n` +
-    `Use both season-long metrics and any recent tournament play-by-play snapshot provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines.\n\n` +
+    `Use both season-long metrics and tournament play-by-play context provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines.\n\n` +
     `All analysis must be grounded in this structured data only:${oppGameNote}\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
   try {
@@ -1898,6 +1913,7 @@ async function thLoadCompare() {
   thCurrentCompareTeam = compareTeam;
   _thCompareStats = statsB || null;
   _thRecentTournamentCtx = await _thLoadRecentTournamentCtx(thCurrentTeam, compareTeam, thCurrentSeason);
+  _thTournamentIntelCtx = await _thLoadTournamentIntelCtx(thCurrentTeam, compareTeam, thCurrentSeason);
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
@@ -2144,6 +2160,160 @@ async function _thLoadRecentTournamentCtx(teamA, teamB, season) {
   const [ctxA, ctxB] = await Promise.all([
     _thLoadRecentTournamentTeamCtx(teamA, season).catch(() => null),
     _thLoadRecentTournamentTeamCtx(teamB, season).catch(() => null),
+  ]);
+  return {
+    asOf: new Date().toISOString(),
+    [teamA]: ctxA,
+    [teamB]: ctxB,
+  };
+}
+
+async function _thLoadTournamentIntelTeamCtx(teamName, season) {
+  if (!teamName) return null;
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const trnGames = games
+    .filter(g => {
+      const hn = (g.homeTeam || '').toLowerCase();
+      const an = (g.awayTeam || '').toLowerCase();
+      const involvesTeam = hn === tn || an === tn;
+      const isFinal = (g.status || '').toLowerCase() === 'final';
+      const isTournament = g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || ''));
+      return involvesTeam && isFinal && isTournament;
+    })
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0))
+    .slice(0, 8);
+
+  if (!trnGames.length) return null;
+
+  const playsArrays = await Promise.all(trnGames.map(g =>
+    (typeof loadPlaysForGame === 'function' ? loadPlaysForGame(g.id) : Promise.resolve([])).catch(() => [])
+  ));
+
+  const allPlays = playsArrays.flat();
+  const teamPlays = allPlays.filter(p => (p.team || '').toLowerCase() === tn);
+  const oppPlays = allPlays.filter(p => (p.team || '').toLowerCase() !== tn);
+
+  function zoneAgg(shots, range) {
+    const z = shots.filter(s => s.range === range);
+    const made = z.filter(s => !!s.made).length;
+    const att = z.length;
+    return { made, att, pct: att ? Math.round(made / att * 100) : null };
+  }
+
+  const fgaShots = teamPlays.filter(s => s.range !== 'free_throw');
+  const madeFga = fgaShots.filter(s => !!s.made).length;
+
+  function estPts(play) {
+    if (!play || !play.made) return 0;
+    if (play.range === 'free_throw') return 1;
+    if (play.range === 'three_pointer') return 3;
+    return 2;
+  }
+  function clockPhase(period, clock) {
+    const p = parseInt(period, 10) || 0;
+    if (p >= 3) return 'OT';
+    const parts = String(clock || '').split(':');
+    const mm = parseInt(parts[0], 10);
+    const rem = Number.isFinite(mm) ? mm : 0;
+    if (p === 1) {
+      if (rem > 12) return 'H1-Start';
+      if (rem > 8) return 'H1-Mid';
+      if (rem > 4) return 'H1-Late';
+      return 'H1-Close';
+    }
+    if (p === 2) {
+      if (rem > 12) return 'H2-Start';
+      if (rem > 8) return 'H2-Mid';
+      if (rem > 4) return 'H2-Late';
+      return 'H2-Close';
+    }
+    return 'Other';
+  }
+
+  const phaseAgg = {};
+  function addPhase(phase, side, pts) {
+    if (!phaseAgg[phase]) phaseAgg[phase] = { teamPts: 0, oppPts: 0, teamEvents: 0, oppEvents: 0 };
+    if (side === 'team') {
+      phaseAgg[phase].teamPts += pts;
+      phaseAgg[phase].teamEvents += 1;
+    } else {
+      phaseAgg[phase].oppPts += pts;
+      phaseAgg[phase].oppEvents += 1;
+    }
+  }
+  teamPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'team', estPts(p)));
+  oppPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'opp', estPts(p)));
+
+  const phaseRows = Object.keys(phaseAgg).map(k => {
+    const a = phaseAgg[k];
+    return {
+      phase: k,
+      teamPts: +a.teamPts.toFixed(1),
+      oppPts: +a.oppPts.toFixed(1),
+      diff: +(a.teamPts - a.oppPts).toFixed(1),
+      teamEvents: a.teamEvents,
+      oppEvents: a.oppEvents,
+    };
+  });
+
+  const timeoutWindows = phaseRows
+    .filter(r => /^H2-/.test(r.phase) && r.diff >= 3)
+    .sort((a, b) => b.diff - a.diff)
+    .slice(0, 2)
+    .map(r => ({
+      phase: r.phase,
+      avgEdge: r.diff,
+      note: 'Akron tends to swing this segment. If they string together 2+ made shots or a quick 6-0 burst here, call timeout to disrupt pace.',
+    }));
+
+  const scoreRows = trnGames.map(g => {
+    const isHome = (g.homeTeam || '').toLowerCase() === tn;
+    return {
+      id: g.id,
+      date: g.startDate || null,
+      opponent: isHome ? (g.awayTeam || '') : (g.homeTeam || ''),
+      for: isHome ? g.homePoints : g.awayPoints,
+      against: isHome ? g.awayPoints : g.homePoints,
+      note: g.gameNotes || null,
+    };
+  });
+
+  const wins = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for > r.against).length;
+  const losses = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for < r.against).length;
+
+  return {
+    team: teamName,
+    season: season,
+    tournamentGames: trnGames.length,
+    record: { wins, losses },
+    gameResults: scoreRows,
+    shotProfile: {
+      fga: fgaShots.length,
+      fgm: madeFga,
+      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
+      fta: teamPlays.filter(s => s.range === 'free_throw').length,
+      rim: zoneAgg(fgaShots, 'rim'),
+      jumper: zoneAgg(fgaShots, 'jumper'),
+      three_pointer: zoneAgg(fgaShots, 'three_pointer'),
+    },
+    phaseTrends: phaseRows,
+    timeoutGuidance: {
+      recommendedWhen: timeoutWindows,
+      baselineRule: 'Use early timeout if Akron creates a 6-0 run or 3 made scoring events in ~2 minutes, especially in H2-Late/H2-Close.',
+    },
+  };
+}
+
+async function _thLoadTournamentIntelCtx(teamA, teamB, season) {
+  const [ctxA, ctxB] = await Promise.all([
+    _thLoadTournamentIntelTeamCtx(teamA, season).catch(() => null),
+    _thLoadTournamentIntelTeamCtx(teamB, season).catch(() => null),
   ]);
   return {
     asOf: new Date().toISOString(),
@@ -2460,6 +2630,7 @@ async function thLoadTeam(teamName, season) {
   _thCompareStats = null;
   _thLastMatchupCtx = null;
   _thRecentTournamentCtx = null;
+  _thTournamentIntelCtx = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
