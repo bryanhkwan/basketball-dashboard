@@ -2436,21 +2436,6 @@ async function _thLoadDeepShotIntelForTeam(teamName, season) {
 function _thBuildDeepShotReportHTML(aName, bName) {
   var parts = [];
 
-  if (_thLastMatchupShots &&
-      (_thLastMatchupShots.teamA || '').toLowerCase() === (aName || '').toLowerCase() &&
-      (_thLastMatchupShots.teamB || '').toLowerCase() === (bName || '').toLowerCase()) {
-    parts.push(
-      '<div class="thMCSection">' +
-        '<div class="thMCSectionHead">🎯 ' + aName + ' vs ' + bName + ' Shot Chart (Head-to-Head)</div>' +
-        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Hit/miss locations from direct matchups loaded in Team Hub.</div>' +
-        '<div class="thShotChartsRow">' +
-          _th_buildShotChartSVG(_thLastMatchupShots.shotsA || [], aName + ' offense vs ' + bName, 'var(--accent)') +
-          _th_buildShotChartSVG(_thLastMatchupShots.shotsB || [], bName + ' offense vs ' + aName, 'var(--warn)') +
-        '</div>' +
-      '</div>'
-    );
-  }
-
   var shotIntel = _thDeepShotIntelCtx;
   if (shotIntel && (shotIntel.team || '').toLowerCase() === (bName || '').toLowerCase()) {
     parts.push(
