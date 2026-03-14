@@ -18,6 +18,7 @@ var _thCompareStats = null;
 var _thLastMatchupCtx = null;
 var _thRecentTournamentCtx = null;
 var _thTournamentIntelCtx = null;
+var _thTeamIntelCache = {};
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
@@ -1424,6 +1425,12 @@ async function thRunDeepAnalysis() {
     `## ${bName} \u2014 Strengths\n` +
     `## ${bName} \u2014 Weaknesses\n` +
     `## ${bName} \u2014 Tendencies\n` +
+    `## Shot Chart Intel \u2014 ${bName} Season Profile\n` +
+    `(Use full-season play-by-play-derived shot chart trends and where their misses cluster.)\n` +
+    `## Shot Chart Intel \u2014 ${bName} Recent MAC Tournament (Quarterfinal + Semifinal)\n` +
+    `(Show how their recent tournament shot profile differs from season baseline.)\n` +
+    `## Where ${bName} Misses Most (Exploit Map)\n` +
+    `(Name the miss-heavy zones and exactly how ${aName} should force those looks.)\n` +
     `## Head-to-Head Matchup Notes\n` +
     `(How to guard each team, how each defends, mismatches to exploit)\n` +
     `## How to Beat ${bName}\n` +
@@ -1434,7 +1441,7 @@ async function thRunDeepAnalysis() {
     `(Recommend exact timeout trigger moments using tournament trends, period/phase patterns, and momentum-risk windows.)\n` +
     `## In-Game Adjustment Triggers (3 specific situations)\n` +
     `## Data Confidence & Red Flags\n\n` +
-    `Use both season-long metrics and tournament play-by-play context provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines.\n\n` +
+    `Use both season-long metrics and tournament play-by-play context provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines. For ${bName}, explicitly use full-season PBP-derived trends, season shot chart profile, and recent MAC tournament shot chart profile.\n\n` +
     `All analysis must be grounded in this structured data only:${oppGameNote}\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
   try {
@@ -2170,6 +2177,9 @@ async function _thLoadRecentTournamentCtx(teamA, teamB, season) {
 
 async function _thLoadTournamentIntelTeamCtx(teamName, season) {
   if (!teamName) return null;
+  const cacheKey = (teamName + ':' + season).toLowerCase();
+  if (_thTeamIntelCache[cacheKey]) return _thTeamIntelCache[cacheKey];
+
   const gamesData = typeof loadGamesForTeam === 'function'
     ? await loadGamesForTeam(teamName, season)
     : null;
@@ -2177,37 +2187,71 @@ async function _thLoadTournamentIntelTeamCtx(teamName, season) {
   if (!games.length) return null;
 
   const tn = (teamName || '').toLowerCase();
-  const trnGames = games
+  const seasonGames = games
     .filter(g => {
       const hn = (g.homeTeam || '').toLowerCase();
       const an = (g.awayTeam || '').toLowerCase();
-      const involvesTeam = hn === tn || an === tn;
-      const isFinal = (g.status || '').toLowerCase() === 'final';
-      const isTournament = g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || ''));
-      return involvesTeam && isFinal && isTournament;
+      return (hn === tn || an === tn) && (g.status || '').toLowerCase() === 'final';
     })
-    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0))
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+  if (!seasonGames.length) return null;
+
+  const trnGames = seasonGames
+    .filter(g => g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || '')))
     .slice(0, 8);
 
-  if (!trnGames.length) return null;
+  const macRecentGames = seasonGames
+    .filter(g => g.gameType === 'TRNMNT' && /MAC Championship/i.test(String(g.gameNotes || '')) && /Quarterfinal|Semifinal/i.test(String(g.gameNotes || '')))
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
 
-  const playsArrays = await Promise.all(trnGames.map(g =>
-    (typeof loadPlaysForGame === 'function' ? loadPlaysForGame(g.id) : Promise.resolve([])).catch(() => [])
-  ));
+  const playsBundles = await Promise.all(seasonGames.map(async g => {
+    const plays = (typeof loadPlaysForGame === 'function' ? await loadPlaysForGame(g.id).catch(() => []) : []);
+    const teamPlays = (plays || []).filter(p => (p.team || '').toLowerCase() === tn);
+    const oppPlays = (plays || []).filter(p => (p.team || '').toLowerCase() !== tn);
+    return { game: g, plays: plays || [], teamPlays, oppPlays };
+  }));
 
-  const allPlays = playsArrays.flat();
-  const teamPlays = allPlays.filter(p => (p.team || '').toLowerCase() === tn);
-  const oppPlays = allPlays.filter(p => (p.team || '').toLowerCase() !== tn);
+  const seasonTeamPlays = playsBundles.flatMap(b => b.teamPlays || []);
+  const seasonOppPlays = playsBundles.flatMap(b => b.oppPlays || []);
+  const macRecentBundles = playsBundles.filter(b => macRecentGames.some(g => g.id === b.game.id));
+  const macRecentTeamPlays = macRecentBundles.flatMap(b => b.teamPlays || []);
 
   function zoneAgg(shots, range) {
     const z = shots.filter(s => s.range === range);
     const made = z.filter(s => !!s.made).length;
     const att = z.length;
-    return { made, att, pct: att ? Math.round(made / att * 100) : null };
+    const miss = att - made;
+    return { made, att, miss, pct: att ? Math.round(made / att * 100) : null, missPct: att ? Math.round(miss / att * 100) : null };
   }
 
-  const fgaShots = teamPlays.filter(s => s.range !== 'free_throw');
-  const madeFga = fgaShots.filter(s => !!s.made).length;
+  function summarizeShotSet(teamShots) {
+    const fgaShots = (teamShots || []).filter(s => s.range !== 'free_throw');
+    const madeFga = fgaShots.filter(s => !!s.made).length;
+    const total = fgaShots.length || 1;
+    const rim = zoneAgg(fgaShots, 'rim');
+    const jumper = zoneAgg(fgaShots, 'jumper');
+    const three = zoneAgg(fgaShots, 'three_pointer');
+    const zones = [
+      { zone: 'rim', label: 'At Rim', ...rim, missShare: rim.miss ? Math.round(rim.miss / total * 100) : 0 },
+      { zone: 'jumper', label: 'Mid-Range', ...jumper, missShare: jumper.miss ? Math.round(jumper.miss / total * 100) : 0 },
+      { zone: 'three_pointer', label: '3PT', ...three, missShare: three.miss ? Math.round(three.miss / total * 100) : 0 },
+    ];
+    const byMissVolume = zones.slice().sort((a, b) => (b.miss || 0) - (a.miss || 0));
+    const byMissRate = zones.slice().filter(z => (z.att || 0) >= 8).sort((a, b) => (b.missPct || 0) - (a.missPct || 0));
+    return {
+      fga: fgaShots.length,
+      fgm: madeFga,
+      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
+      fta: (teamShots || []).filter(s => s.range === 'free_throw').length,
+      zones: { rim, jumper, three_pointer: three },
+      missHotspots: {
+        byVolume: byMissVolume,
+        byRate: byMissRate,
+        primaryMissZone: byMissVolume[0] || null,
+      },
+    };
+  }
 
   function estPts(play) {
     if (!play || !play.made) return 0;
@@ -2215,6 +2259,7 @@ async function _thLoadTournamentIntelTeamCtx(teamName, season) {
     if (play.range === 'three_pointer') return 3;
     return 2;
   }
+
   function clockPhase(period, clock) {
     const p = parseInt(period, 10) || 0;
     if (p >= 3) return 'OT';
@@ -2247,8 +2292,8 @@ async function _thLoadTournamentIntelTeamCtx(teamName, season) {
       phaseAgg[phase].oppEvents += 1;
     }
   }
-  teamPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'team', estPts(p)));
-  oppPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'opp', estPts(p)));
+  seasonTeamPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'team', estPts(p)));
+  seasonOppPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'opp', estPts(p)));
 
   const phaseRows = Object.keys(phaseAgg).map(k => {
     const a = phaseAgg[k];
@@ -2269,45 +2314,59 @@ async function _thLoadTournamentIntelTeamCtx(teamName, season) {
     .map(r => ({
       phase: r.phase,
       avgEdge: r.diff,
-      note: 'Akron tends to swing this segment. If they string together 2+ made shots or a quick 6-0 burst here, call timeout to disrupt pace.',
+      note: teamName + ' tends to swing this segment. If they string together 2+ made shots or a quick 6-0 burst here, call timeout to disrupt pace.',
     }));
 
-  const scoreRows = trnGames.map(g => {
+  const scoreRows = seasonGames.map(g => {
     const isHome = (g.homeTeam || '').toLowerCase() === tn;
+    const bundle = playsBundles.find(b => b.game.id === g.id);
+    const playCount = bundle ? (bundle.plays || []).length : 0;
+    const teamPts = isHome ? g.homePoints : g.awayPoints;
+    const oppPts = isHome ? g.awayPoints : g.homePoints;
     return {
       id: g.id,
       date: g.startDate || null,
       opponent: isHome ? (g.awayTeam || '') : (g.homeTeam || ''),
-      for: isHome ? g.homePoints : g.awayPoints,
-      against: isHome ? g.awayPoints : g.homePoints,
+      for: teamPts,
+      against: oppPts,
       note: g.gameNotes || null,
+      gameType: g.gameType || null,
+      result: teamPts > oppPts ? 'W' : 'L',
+      playCount: playCount,
     };
   });
 
   const wins = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for > r.against).length;
   const losses = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for < r.against).length;
 
-  return {
+  const intel = {
     team: teamName,
     season: season,
+    seasonGames: seasonGames.length,
+    seasonRecord: { wins, losses },
     tournamentGames: trnGames.length,
-    record: { wins, losses },
+    recentMacTournamentGames: macRecentGames.map(g => ({
+      id: g.id,
+      date: g.startDate || null,
+      note: g.gameNotes || null,
+      opponent: ((g.homeTeam || '').toLowerCase() === tn) ? (g.awayTeam || '') : (g.homeTeam || ''),
+    })),
     gameResults: scoreRows,
-    shotProfile: {
-      fga: fgaShots.length,
-      fgm: madeFga,
-      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
-      fta: teamPlays.filter(s => s.range === 'free_throw').length,
-      rim: zoneAgg(fgaShots, 'rim'),
-      jumper: zoneAgg(fgaShots, 'jumper'),
-      three_pointer: zoneAgg(fgaShots, 'three_pointer'),
-    },
+    seasonShotChartProfile: summarizeShotSet(seasonTeamPlays),
+    recentTournamentShotChartProfile: summarizeShotSet(macRecentTeamPlays),
     phaseTrends: phaseRows,
     timeoutGuidance: {
       recommendedWhen: timeoutWindows,
-      baselineRule: 'Use early timeout if Akron creates a 6-0 run or 3 made scoring events in ~2 minutes, especially in H2-Late/H2-Close.',
+      baselineRule: 'Use early timeout if ' + teamName + ' creates a 6-0 run or 3 made scoring events in ~2 minutes, especially in H2-Late/H2-Close.',
+    },
+    pbpCoverage: {
+      withPlays: playsBundles.filter(b => (b.plays || []).length > 0).length,
+      totalGames: playsBundles.length,
     },
   };
+
+  _thTeamIntelCache[cacheKey] = intel;
+  return intel;
 }
 
 async function _thLoadTournamentIntelCtx(teamA, teamB, season) {
@@ -2631,6 +2690,7 @@ async function thLoadTeam(teamName, season) {
   _thLastMatchupCtx = null;
   _thRecentTournamentCtx = null;
   _thTournamentIntelCtx = null;
+  _thTeamIntelCache = {};
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
