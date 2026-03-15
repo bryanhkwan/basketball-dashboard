@@ -18,7 +18,8 @@ function openProfile(r){
   const position = (r['Pos'] ?? r['Position'] ?? pos).toString();
 
   mTitle.textContent = player;
-  const height = (r['Height'] || '').toString().trim();
+  const _hin = Number(r['Height']);
+  const height = (Number.isFinite(_hin) && _hin > 0) ? Math.floor(_hin/12) + "'" + (_hin%12) + '"' : (r['Height'] || '').toString().trim();
   mSub.textContent = [team, conf, position, height].filter(Boolean).join(' • ');
   document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
   mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';

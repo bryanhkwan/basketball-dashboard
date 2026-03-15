@@ -15,7 +15,7 @@ const LIST_COLS = [
   {key:'Player', label:'Player'},
   {key:'Team', label:'Team'},
   {key:'Conference', label:'Conf'},
-  {key:'Height', label:'Ht', wbbOnly:true},
+  {key:'Height', label:'Ht'},
   {key:'ConfMult_calc', label:'CM'},
   {key:'MP', label:'MP'},
   {key:'Score', label:'Perf'},
@@ -132,6 +132,11 @@ function renderPlayersPage(){
         } else {
           td.textContent = Number.isFinite(cm) ? cm.toFixed(2) : '—';
         }
+      }else if(c.key === 'Height'){
+        const h = Number(r.Height);
+        if(Number.isFinite(h) && h > 0) td.textContent = Math.floor(h/12) + "'" + (h%12) + '"';
+        else td.textContent = r.Height || '—';
+        td.style.color = 'var(--muted)';
       }else if(c.key === 'Score' && Number.isFinite(Number(r.Score))){
         td.textContent = Number(r.Score).toFixed(2);
       }else if(c.key === 'FitScore_calc'){

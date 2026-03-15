@@ -208,7 +208,7 @@ function isLikelyNumericColumn(key){
   const k = (key||'').toString().trim();
   if(!k) return false;
   const bad = new Set([
-    'Player','Name','Team','School','Conference','Conf','Position','Pos','Class','Yr','Year','ID','URL','Link',
+    'Player','Name','Team','School','Conference','Conf','Position','Pos','Class','Yr','Year','ID','URL','Link','Height','Hometown',
     'Rank','Score','PerfScore','PerfScore_calc','FitScore','FitScore_calc','PredictedValue','PredictedValue_calc',
     'ActualValuation','ActualValuation_calc','MinMultiplier','MinMultiplier_calc','MP_num'
   ]);
@@ -1419,7 +1419,7 @@ async function _wbbEnrichPlayersBackground(players) {
       (rd.athletes || []).forEach(a => {
         if (!a.id) return;
         bioMap[String(a.id)] = {
-          height:   fmtHeight(a.height),
+          height:   Number(a.height) || 0,
           classYr:  fmtClass(a.experience),
           hometown: fmtHometown(a.birthPlace),
         };
@@ -1432,7 +1432,7 @@ async function _wbbEnrichPlayersBackground(players) {
   players.forEach(p => {
     const bio = p.EspnId ? bioMap[String(p.EspnId)] : null;
     if (!bio) return;
-    if (bio.height   && !p.Height)   { p.Height   = bio.height;   updated++; }
+    if (bio.height   && !p.Height)   { p.Height   = bio.height;   updated++; }  // stored as inches integer
     if (bio.classYr  && !p.Class)    { p.Class    = bio.classYr;  updated++; }
     if (bio.hometown && !p.Hometown) { p.Hometown = bio.hometown; updated++; }
   });
@@ -1450,10 +1450,9 @@ var _wbbLoadHeightsBackground = _wbbEnrichPlayersBackground;
 // This intentionally runs after CBD data is loaded so it cannot affect CBD API logic.
 async function _mbbEnrichPlayersBackground(players, season) {
   season = season || _currentDataSeason || 2026;
-  if (!players || !players.length) { console.log('[Height] no players, abort'); return; }
-  if (_mbbHeightsBySeason[String(season)]) { console.log('[Height] already ran for', season); return; }
+  if (!players || !players.length) return;
+  if (_mbbHeightsBySeason[String(season)]) return;
   _mbbHeightsBySeason[String(season)] = true;
-  console.log('[Height] starting enrichment for', players.length, 'players, season', season);
 
   const norm = s => String(s || '')
     .toLowerCase()
@@ -1469,7 +1468,6 @@ async function _mbbEnrichPlayersBackground(players, season) {
       const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams?limit=500');
       const data = await r.json();
       const teams = ((((data.sports || [])[0] || {}).leagues || [])[0] || {}).teams || [];
-      console.log('[Height] ESPN teams fetched:', teams.length);
       teams.forEach(e => {
         const t = e && e.team;
         if (!t || !t.id) return;
@@ -1477,7 +1475,7 @@ async function _mbbEnrichPlayersBackground(players, season) {
           .filter(Boolean)
           .forEach(n => { _mbbTeamIdCache[norm(n)] = String(t.id); });
       });
-    } catch (err) { console.log('[Height] teams fetch error:', err); }
+    } catch (_) { }
     _mbbTeamIdCache._loaded = true;
   }
 
@@ -1490,7 +1488,6 @@ async function _mbbEnrichPlayersBackground(players, season) {
     seenTeamIds[id] = true;
     teamIds.push(id);
   });
-  console.log('[Height] matched', teamIds.length, 'unique team IDs from ESPN');
   if (!teamIds.length) return;
 
   // teamId|normName → displayHeight string (e.g. "6' 8\"")
@@ -1508,27 +1505,24 @@ async function _mbbEnrichPlayersBackground(players, season) {
       if (!rd) return;
       const tid = batch[idx];
       (rd.athletes || []).forEach(a => {
-        const h = (a && a.displayHeight) || '';
+        const h = a && Number(a.height);
         const n = norm(a && a.displayName);
         if (!h || !n) return;
         bioMap[tid + '|' + n] = h;
       });
     });
   }
-  console.log('[Height] bioMap entries:', Object.keys(bioMap).length);
-
   // Update player objects in-place and refresh workbook if we enriched anything.
   let updated = 0;
   players.forEach(p => {
     if (!p || p.Height) return;
     const tid = _mbbTeamIdCache[norm(p.Team)] || '';
     if (!tid) return;
-    const h = bioMap[tid + '|' + norm(p.Player)] || '';
+    const h = bioMap[tid + '|' + norm(p.Player)] || 0;
     if (!h) return;
     p.Height = h;
     updated++;
   });
-  console.log('[Height] updated', updated, 'players with height');
 
   if (updated > 0 && wb && wb.Sheets) {
     const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
