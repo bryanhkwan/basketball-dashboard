@@ -7,7 +7,7 @@
 ## L1 — What Is This? (5 lines)
 
 NCAA basketball scouting dashboard for MBB/WBB. Single HTML page + CSS + JS split into modules.
-MBB data comes from the CBD API (via Cloudflare Worker). WBB data comes from Google Sheets. Hosted on GitHub Pages.
+MBB data comes from the CBD API (via Cloudflare Worker). WBB data comes directly from ESPN's public byathlete API (fetched in-browser, CORS-friendly). Hosted on GitHub Pages.
 **Key constraint: pure HTML/CSS/JS — no build step, no npm, no bundler.**
 All functions and vars that need cross-module access are declared with `var` (not `let`/`const`) so they remain global.
 AI chat (Gemini) is backed by a Cloudflare Worker proxy at `white-pine-7669.bryanhkwan.workers.dev`. Backend (login, notes, CBD proxy) lives at `hidden-salad-773b.bryanhkwan.workers.dev`.
@@ -24,7 +24,7 @@ AI chat (Gemini) is backed by a Cloudflare Worker proxy at `white-pine-7669.brya
 | `styles.css` | All CSS |
 | `modules/config.js` | Utility functions + all constants (no deps) |
 | `modules/auth.js` | Login/logout/guest mode, loading coordination, `authStartLoading` |
-| `modules/data.js` | State vars, DOM refs, scoring engine, CBD API + Google Sheets loader, team data loaders |
+| `modules/data.js` | State vars, DOM refs, scoring engine, CBD API (MBB) + ESPN byathlete API (WBB) loader, team data loaders |
 | `modules/players.js` | Player table rendering, pagination, search |
 | `modules/profile.js` | Player profile modal (Scout Report, Shot Chart, career history), stat info, compare modal |
 | `modules/teambuilder.js` | tbRoster/oppRoster, gap analysis, H2H, page nav |
@@ -43,8 +43,9 @@ config.js → auth.js → data.js → players.js → profile.js → teambuilder.
 ```
 Auth (login / guest) → authStartLoading()
   → loadAllData(season) [data.js]
-    → CBD API /api/cbdata/players  → MBB player data
-    → Google Sheets API            → WBB player data
+    → CBD API /api/cbdata/players           → MBB player data
+    → ESPN byathlete API (direct, in-browser) → WBB player data
+    → /api/wbb/teams (Worker)               → WBB team names + conference mapping
     → wb workbook object [data.js global]
     → reloadActiveSheet() → parseSheetToRows() → rows[]
     → computeAll() → computed[] + tbAllComputed{}
@@ -118,7 +119,7 @@ window._app bridge [app.js]
 
 ### modules/data.js — DataManager
 
-**Responsibility**: All state variables, DOM refs, scoring/valuation engine, CBD API + Google Sheets loader, team-level data loaders.
+**Responsibility**: All state variables, DOM refs, scoring/valuation engine, CBD API (MBB) + ESPN byathlete API (WBB) loader, team-level data loaders.
 
 **Key globals (state)**:
 - `wb` — loaded workbook (null until data loads)
@@ -139,7 +140,7 @@ window._app bridge [app.js]
 - `playerShotsCache` — `{"team:season:playerName": shots[]}` — shot chart cache
 
 **Key functions**:
-- `loadAllData(year)` — parallel CBD API (MBB) + Google Sheets (WBB) load; calls `thRefreshTeamList` after `reloadActiveSheet` and again after `loadTeamRatings`
+- `loadAllData(year)` — parallel CBD API (MBB) + ESPN byathlete (WBB) load; calls `thRefreshTeamList` after `reloadActiveSheet` and again after `loadTeamRatings`
 - `loadTeamRatings(year)` — fetches adjusted efficiency ratings; calls `thRefreshTeamList` on completion
 - `loadTeamStats(team, year)` — fetches full team season stats (four factors, points breakdown)
 - `loadTeamShootingZones(team, year)` — team shooting zone data
@@ -463,7 +464,7 @@ KV namespace: `PLAYER_CACHE`
 | `index.html` | Shell HTML — imports all scripts via `<script defer>` |
 | `styles.css` | All CSS |
 | `modules/config.js` | Utility functions + all constants (no deps) |
-| `modules/data.js` | State vars, DOM refs, scoring engine, Google Sheets loader |
+| `modules/data.js` | State vars, DOM refs, scoring engine, CBD API (MBB) + ESPN byathlete (WBB) loader |
 | `modules/players.js` | Player table rendering, pagination, search |
 | `modules/profile.js` | Player profile modal, stat info modal, compare modal |
 | `modules/teambuilder.js` | tbRoster/oppRoster, gap analysis, H2H, page nav |
@@ -477,9 +478,9 @@ config.js → data.js → players.js → profile.js → teambuilder.js → chat.
 
 ### Data flow
 ```
-Google Sheets API
-  → loadFromGoogleSheets() [data.js]
-  → wb (workbook object) [data.js global]
+CBD API (MBB) + ESPN byathlete API (WBB, direct browser fetch)
+  → loadAllData(season) [data.js]
+  → wb (synthetic workbook object) [data.js global]
   → reloadActiveSheet() → parseSheetToRows() → rows[]
   → computeAll() → computed[] + tbAllComputed{}
   → renderPlayers() [players.js]
@@ -521,10 +522,10 @@ window._app bridge [app.js]
 
 ### modules/data.js — DataManager
 
-**Responsibility**: All state variables, DOM refs, scoring/valuation engine, Google Sheets load, weights UI.
+**Responsibility**: All state variables, DOM refs, scoring/valuation engine, CBD API (MBB) + ESPN byathlete (WBB) load, weights UI.
 
 **Key globals (state)**:
-- `wb` — loaded workbook (null until Google Sheets loads)
+- `wb` — loaded workbook (null until data loads)
 - `league` — `'MBB'` or `'WBB'`
 - `pos` — `'Guards'` or `'Bigs'`
 - `rows` — raw rows for current league+pos

@@ -646,6 +646,17 @@
     <p class="muted" style="font-size:13px;margin-bottom:24px">How the NCAA Scouting Dashboard calculates player value, fit scores, and team analysis.</p>
 
     <div class="methodSection">
+      <div class="methodHead">📡 Data Sources</div>
+      <div class="methodBody">
+        <p><b>MBB</b> — Stats come from the <b>College Basketball Data (CBD) API</b> via a Cloudflare Worker proxy. Includes advanced metrics: BPM, WS/40, DRtg, ORtg, USG%, eFG%, TS%, A/TO, OR%. Player class is inferred from multi-season career history (2022–2026). Draft probability is available for MBB only.</p>
+        <p style="margin-top:10px"><b>WBB</b> — Stats come directly from the <b>ESPN WBB byathlete API</b> (CORS-friendly, fetched in-browser). Conference mapping is sourced from the ESPN groups endpoint. Player height is enriched in the background from ESPN team rosters (~10s after page load).</p>
+        <p style="margin-top:10px"><b>WBB available stats:</b> PPG, RPG, APG, SPG, BPG, FG%, 3P%, FT%, TOPG, eFG%*, TS%*, A/TO*, USG%†</p>
+        <p style="margin-top:6px"><b>WBB removed stats (not in ESPN API):</b> BPM, WS/40, DRtg, ORtg, OR%, DR% — these are dropped from WBB scoring weights entirely rather than fabricated.</p>
+        <p style="margin-top:6px;font-size:12px;color:var(--muted)">* eFG%, TS%, A/TO are derived from raw counting stats. † USG% is approximated as (FGA + 0.44×FTA + TOV) / 80.7 × 100, where 80.7 is the estimated average possession-actions per game in NCAA WBB.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
       <div class="methodHead">🎯 PerfScore</div>
       <div class="methodBody">
         <p>PerfScore is a weighted composite of key statistical percentiles. Each stat is normalized to a 0–1 scale between your configured Min and Max, then multiplied by its weight. Higher-is-better stats (like PPG, APG) produce higher percentiles at the top; lower-is-better stats (like DRtg, TOPG) are automatically inverted.</p>
@@ -721,6 +732,16 @@
           <li><b>web_search</b> — Search the web for NIL values, injury news, transfer portal updates</li>
         </ul>
         <p style="margin-top:10px">For valuation and current-event questions, AI runs a dual-source pipeline: dashboard data first, then web search for real-world market context. All roster-modifying actions require your explicit approval.</p>
+      </div>
+    </div>
+
+    <div class="methodSection">
+      <div class="methodHead">🏀 WBB Scoring Defaults</div>
+      <div class="methodBody">
+        <p>WBB uses separate default scoring weights calibrated to WBB stat distributions (which differ significantly from MBB — e.g. WBB average PPG ~12 vs MBB ~14, fewer 3-point attempts, higher turnover rates).</p>
+        <p style="margin-top:10px"><b>Guards (default weights):</b> PPG 14 · eFG% 13 · A/TO 11 · SPG 11 · TOPG 11 · APG 13 · 3P% 9 · FT% 6 · RPG 6 · USG% 6</p>
+        <p style="margin-top:6px"><b>Bigs (default weights):</b> RPG 20 · BPG 16 · eFG% 14 · PPG 12 · SPG 8 · A/TO 8 · TOPG 8 · USG% 8 · FT% 6</p>
+        <p style="margin-top:10px">Min/max ranges for each stat are also calibrated to WBB distributions (e.g. PPG Guard max is 25, not 30 as in MBB). Conference multipliers use the same MAC=1.00 baseline but map to WBB conferences. Draft Radar grades are <b>MBB only</b> — WBB draft dynamics differ significantly and no WBB draft model is included.</p>
       </div>
     </div>
 
@@ -1102,6 +1123,13 @@
       <div style="margin-top:12px" class="panel">
         <div class="panelHead">📅 Career History</div>
         <div id="mCareer" style="padding:0;overflow-x:auto"></div>
+      </div>
+
+      <div id="mGameLogPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">📋 Game Log</div>
+        <div class="panelBody" id="mGameLog" style="padding-bottom:8px;overflow-x:auto">
+          <div class="muted" style="font-size:12px">Open a player to view their game log.</div>
+        </div>
       </div>
 
       <div id="mTeamContextPanel" style="margin-top:12px" class="panel">

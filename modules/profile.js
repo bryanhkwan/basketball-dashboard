@@ -161,6 +161,7 @@ function openProfile(r){
   };
 
   renderCareerHistory(r);
+  renderGameLog(r);
   renderTeamContext(r);
   renderShootingZones(r);
   renderRecruitingBadge(r);
@@ -573,9 +574,9 @@ function enrichScoutReportWithShots(shots) {
         }
       });
 
-      // Add Consistency scout section
+      // Add Consistency scout section (game log data will replace this if available)
       el.insertAdjacentHTML('beforeend',
-        '<div class="scoutSection">'
+        '<div class="scoutSection scoutConsistency">'
         + '<div class="scoutSectionHead">📊 Consistency</div>'
         + '<div class="scoutItems">'
         + '<div class="scoutItem ' + cClass + '">' + cLabel + '</div>'
@@ -1091,3 +1092,198 @@ class ProfileManager {
 }
 
 window.ProfileManager = new ProfileManager();
+
+// ── Game Log ─────────────────────────────────────────────────────────────────
+async function renderGameLog(r) {
+  const el = document.getElementById('mGameLog');
+  if (!el) return;
+  el.innerHTML = '<div class="muted" style="font-size:12px">Loading game log…</div>';
+
+  const yr     = (typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : null) || '2026';
+  const player = (r.Player || '').toString();
+  const team   = (r.Team   || '').toString();
+  const isWbb  = (typeof league !== 'undefined') && league === 'WBB';
+
+  try {
+    let games = [];
+    if (isWbb) {
+      games = await _fetchWbbGameLog(r, yr);
+    } else {
+      const url = WORKER_URL + '/api/cbdata/playergamelog?team=' + encodeURIComponent(team)
+                + '&season=' + encodeURIComponent(yr)
+                + '&playerName=' + encodeURIComponent(player);
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      games = data.games || [];
+    }
+
+    if (!games.length) {
+      el.innerHTML = '<div class="muted" style="font-size:12px">No game log available.</div>';
+      return;
+    }
+
+    const rows = games.map(function(g) {
+      const isPost  = g.isTournament === true || g.seasonType === 'postseason';
+      const neutral = g.neutralSite;
+      const loc     = g.homeAway === 'A' ? '@ ' : neutral ? 'vs ' : 'vs ';
+      const opp     = (g.opponent || g.opponentTeam || '?');
+      const dateStr = (g.date || '').slice(0, 10).replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2/$3');
+      const res     = (g.result || '—');
+      const won     = res.startsWith('W');
+      const lost    = res.startsWith('L');
+      const postBadge = isPost
+        ? '<span class="pill" style="font-size:9px;padding:1px 4px;margin-left:5px;border-color:rgba(251,191,36,.5);color:var(--warn)">POST</span>'
+        : '';
+      const mins    = g.minutes !== null && g.minutes !== undefined ? g.minutes : '—';
+      const fgStr   = (g.fga > 0) ? g.fgm + '/' + g.fga : '—';
+      const rowBg    = isPost ? 'background:rgba(251,191,36,.04)' : '';
+      const hasStats = g.statsAvailable !== false;
+      const dash     = '<span style="color:var(--muted)">—</span>';
+      const pts  = hasStats ? (g.points   !== null ? g.points   : '—') : dash;
+      const reb  = hasStats ? (g.rebounds !== null ? g.rebounds : '—') : dash;
+      const ast  = hasStats ? (g.assists  !== null ? g.assists  : '—') : dash;
+      const stl  = hasStats ? (g.steals   !== null ? g.steals   : '—') : dash;
+      const blk  = hasStats ? (g.blocks   !== null ? g.blocks   : '—') : dash;
+      const fg   = hasStats && g.fga > 0 ? g.fgm + '/' + g.fga : dash;
+      const mn   = hasStats && g.minutes !== null ? g.minutes : dash;
+      return '<tr style="' + rowBg + '">'
+        + '<td style="white-space:nowrap;color:var(--muted);padding:4px 8px 4px 0">' + dateStr + postBadge + '</td>'
+        + '<td style="white-space:nowrap;padding:4px 8px">' + loc + opp + '</td>'
+        + '<td style="font-weight:600;padding:4px 8px;color:' + (won ? 'var(--good)' : lost ? 'var(--bad)' : 'var(--muted)') + '">' + res + '</td>'
+        + '<td style="font-weight:700;text-align:right;padding:4px 8px">' + pts + '</td>'
+        + '<td style="text-align:right;padding:4px 8px">' + reb + '</td>'
+        + '<td style="text-align:right;padding:4px 8px">' + ast + '</td>'
+        + '<td style="text-align:right;padding:4px 8px;color:var(--muted)">' + stl + '</td>'
+        + '<td style="text-align:right;padding:4px 8px;color:var(--muted)">' + blk + '</td>'
+        + '<td style="text-align:right;padding:4px 8px;color:var(--muted)">' + fg + '</td>'
+        + '<td style="text-align:right;padding:4px 8px;color:var(--muted)">' + mn + '</td>'
+        + '</tr>';
+    }).join('');
+
+    const postCount = games.filter(function(g) { return g.isTournament || g.seasonType === 'postseason'; }).length;
+    const postNote  = postCount > 0 ? ' · <span style="color:var(--warn)">' + postCount + ' postseason</span>' : '';
+
+    el.innerHTML =
+      '<div style="overflow-x:auto">'
+      + '<table style="width:100%;font-size:11.5px;border-collapse:collapse">'
+      + '<thead><tr style="color:var(--muted);font-size:10.5px;border-bottom:1px solid var(--line)">'
+      + '<th style="text-align:left;padding:4px 8px 4px 0">Date</th>'
+      + '<th style="text-align:left;padding:4px 8px">Opponent</th>'
+      + '<th style="text-align:left;padding:4px 8px">Result</th>'
+      + '<th style="text-align:right;padding:4px 8px">PTS</th>'
+      + '<th style="text-align:right;padding:4px 8px">REB</th>'
+      + '<th style="text-align:right;padding:4px 8px">AST</th>'
+      + '<th style="text-align:right;padding:4px 8px">STL</th>'
+      + '<th style="text-align:right;padding:4px 8px">BLK</th>'
+      + '<th style="text-align:right;padding:4px 8px">FG</th>'
+      + '<th style="text-align:right;padding:4px 8px">MIN</th>'
+      + '</tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table></div>'
+      + '<div style="font-size:10.5px;color:var(--muted);margin-top:6px">'
+      + games.length + ' games · ' + yr + ' season' + postNote
+      + '</div>';
+
+    // Re-run scout report consistency section using live game log data
+    var gamePts = games.map(function(g) { return Number(g.points) || 0; }).filter(function(v) { return v > 0; });
+    if (gamePts.length >= 5) {
+      enrichScoutReportWithGameLog(gamePts);
+    }
+  } catch(_) {
+    el.innerHTML = '<div class="muted" style="font-size:12px">Game log unavailable.</div>';
+  }
+}
+
+async function _fetchWbbGameLog(r, season) {
+  var espnId = r.EspnId;
+  if (!espnId) return [];
+  var url = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/womens-college-basketball/athletes/'
+          + espnId + '/gamelog?season=' + encodeURIComponent(season);
+  var resp = await fetch(url);
+  if (!resp.ok) return [];
+  var data = await resp.json();
+
+  var games   = [];
+  var events  = data.events || {};
+  var stypes  = data.seasonTypes || [];
+
+  stypes.forEach(function(st) {
+    var isPost = (st.type === 3 || Number(st.id) === 3 || (st.displayName || '').toLowerCase().includes('post'));
+    (st.categories || []).forEach(function(cat) {
+      var labels = cat.labels || data.labels || [];
+      (cat.events || []).forEach(function(ev) {
+        var stats   = ev.stats || [];
+        var statMap = {};
+        labels.forEach(function(lbl, i) { statMap[lbl] = stats[i]; });
+
+        var evInfo  = events[String(ev.eventId)] || {};
+        var opp     = (evInfo.opponent || {});
+        var dateStr = ((evInfo.gameDate || evInfo.date || '').slice(0, 10));
+        var homeAway = (evInfo.homeAway || 'home').toLowerCase() === 'home' ? 'H' : 'A';
+        // Score: evInfo.score = "74-68" or homeTeamScore / awayTeamScore
+        var score   = (evInfo.score || '').split('-').map(Number);
+        var result  = '—';
+        if (score.length === 2 && !isNaN(score[0]) && !isNaN(score[1])) {
+          var myS  = homeAway === 'H' ? score[0] : score[1];
+          var oppS = homeAway === 'H' ? score[1] : score[0];
+          var res  = evInfo.gameResult || (myS > oppS ? 'W' : 'L');
+          result   = res + ' ' + myS + '-' + oppS;
+        }
+        var pts = parseInt(statMap['PTS'] || 0) || 0;
+        var reb = parseInt(statMap['REB'] || 0) || 0;
+        var ast = parseInt(statMap['AST'] || 0) || 0;
+        var stl = parseInt(statMap['STL'] || 0) || 0;
+        var blk = parseInt(statMap['BLK'] || 0) || 0;
+        var min = statMap['MIN'] || null;
+        var fgRaw = (statMap['FGM-FGA'] || statMap['FG'] || '').split('-');
+        var fgm = parseInt(fgRaw[0]) || 0;
+        var fga = parseInt(fgRaw[1]) || 0;
+        games.push({
+          date:        dateStr,
+          opponent:    opp.displayName || opp.abbreviation || '',
+          homeAway:    homeAway,
+          neutralSite: false,
+          result:      result,
+          seasonType:  isPost ? 'postseason' : 'regular',
+          points:      pts,
+          rebounds:    reb,
+          assists:     ast,
+          steals:      stl,
+          blocks:      blk,
+          minutes:     min,
+          fgm:         fgm,
+          fga:         fga,
+        });
+      });
+    });
+  });
+
+  return games.sort(function(a, b) { return a.date.localeCompare(b.date); });
+}
+
+function enrichScoutReportWithGameLog(gamePts) {
+  var el = document.getElementById('mScoutReport');
+  if (!el) return;
+  // Remove prior consistency section if re-running
+  var existing = el.querySelector('.scoutConsistency');
+  if (existing) existing.remove();
+  var n    = gamePts.length;
+  var mean = gamePts.reduce(function(s, v) { return s + v; }, 0) / n;
+  var variance = gamePts.reduce(function(s, v) { return s + (v - mean) * (v - mean); }, 0) / n;
+  var stdDev   = Math.sqrt(variance);
+  var cv       = mean > 0 ? stdDev / mean : 0;
+  var cLabel, cClass;
+  if      (cv < 0.28) { cLabel = 'Iron Man — exceptionally consistent scorer every night'; cClass = 'scoutItem--strength'; }
+  else if (cv < 0.40) { cLabel = 'Reliable — steady output with limited game-to-game variance'; cClass = ''; }
+  else if (cv < 0.55) { cLabel = 'Streaky — output varies significantly; big games mixed with quiet ones'; cClass = ''; }
+  else                { cLabel = 'Boom-or-bust scorer — extreme night-to-night variance'; cClass = 'scoutItem--weakness'; }
+  var minP = Math.min.apply(null, gamePts), maxP = Math.max.apply(null, gamePts);
+  el.insertAdjacentHTML('beforeend',
+    '<div class="scoutSection scoutConsistency">'
+    + '<div class="scoutSectionHead">📊 Consistency</div>'
+    + '<div class="scoutItems">'
+    + '<div class="scoutItem ' + cClass + '">' + cLabel + '</div>'
+    + '<div class="scoutItem">' + mean.toFixed(1) + ' pts/game ± ' + stdDev.toFixed(1) + ' σ over ' + n + ' games · range ' + minP + '–' + maxP + ' pts</div>'
+    + '</div></div>');
+}
