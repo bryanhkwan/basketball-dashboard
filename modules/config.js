@@ -138,6 +138,41 @@ const BIG_DEFAULTS = [
   {stat:'TOPG', w:5, min:3.5, max:0.5, dir:'lower'},
 ];
 
+// WBB-specific scoring defaults — same structure as MBB but:
+// • OR%/DR% removed (not available from ESPN byathlete endpoint)
+// • BPM uses ESPN PER as substitute (stored as 'BPM' via _calcWbbDerivedStats)
+// • WS/40 is estimated from PER ((PER-15)*0.025)
+// • Bigs: redistributed OR%/DR% weight to RPG and BPG
+const WBB_GUARD_DEFAULTS = [
+  {stat:'PPG',   w:10, min:0,    max:30,   dir:'higher'},
+  {stat:'eFG%',  w:10, min:0.35, max:0.60, dir:'higher'},
+  {stat:'3P%',   w:8,  min:0.25, max:0.42, dir:'higher'},
+  {stat:'FT%',   w:5,  min:0.60, max:0.90, dir:'higher'},
+  {stat:'APG',   w:10, min:0.5,  max:7,    dir:'higher'},
+  {stat:'A/TO',  w:8,  min:0.5,  max:2.5,  dir:'higher'},
+  {stat:'SPG',   w:7,  min:0.3,  max:2.0,  dir:'higher'},
+  {stat:'BPM',   w:10, min:-3,   max:8,    dir:'higher'},  // PER as substitute
+  {stat:'WS/40', w:8,  min:0.05, max:0.25, dir:'higher'},
+  {stat:'DRtg',  w:7,  min:115,  max:90,   dir:'lower'},
+  {stat:'USG%',  w:5,  min:12,   max:32,   dir:'higher'},
+  {stat:'RPG',   w:5,  min:1,    max:7,    dir:'higher'},
+  {stat:'TOPG',  w:7,  min:3.5,  max:0.5,  dir:'lower'},
+];
+
+const WBB_BIG_DEFAULTS = [
+  {stat:'PPG',   w:10, min:0,    max:25,   dir:'higher'},
+  {stat:'eFG%',  w:10, min:0.40, max:0.65, dir:'higher'},
+  {stat:'FT%',   w:5,  min:0.55, max:0.85, dir:'higher'},
+  {stat:'BPG',   w:11, min:0.2,  max:2.5,  dir:'higher'},  // boosted (+2 from DR%)
+  {stat:'RPG',   w:13, min:2,    max:12,   dir:'higher'},  // boosted (+3 from OR%)
+  {stat:'DRtg',  w:8,  min:115,  max:90,   dir:'lower'},
+  {stat:'BPM',   w:10, min:-3,   max:8,    dir:'higher'},  // PER as substitute
+  {stat:'WS/40', w:8,  min:0.05, max:0.25, dir:'higher'},
+  {stat:'A/TO',  w:6,  min:0.3,  max:2.0,  dir:'higher'},
+  {stat:'USG%',  w:5,  min:12,   max:32,   dir:'higher'},
+  {stat:'TOPG',  w:5,  min:3.5,  max:0.5,  dir:'lower'},
+];
+
 const ROLE_DESCRIPTIONS = {
   "Shooter": "Elite perimeter threat. Strong 3P% that bends the defense and creates spacing.",
   "Efficient": "Scores with high efficiency (shot quality + finishing). Converts possessions into points at an above-average rate.",
@@ -158,6 +193,7 @@ const ROLE_DESCRIPTIONS = {
 };
 
 const STAT_GLOSSARY = {
+  'Height': 'Player height (feet and inches). Sourced from ESPN roster data for WBB players.',
   'G': 'Games Played. Number of games a player appeared in during the season.',
   'MP': 'Minutes Per Game. Average minutes played per game. Used to derive the minutes multiplier in valuation — higher MP signals a larger role.',
   'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',

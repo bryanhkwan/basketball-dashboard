@@ -15,6 +15,7 @@ const LIST_COLS = [
   {key:'Player', label:'Player'},
   {key:'Team', label:'Team'},
   {key:'Conference', label:'Conf'},
+  {key:'Height', label:'Ht', wbbOnly:true},
   {key:'ConfMult_calc', label:'CM'},
   {key:'MP', label:'MP'},
   {key:'Score', label:'Perf'},
@@ -46,7 +47,7 @@ function renderPlayers(){
   let data = computed;
   if(q){
     data = data.filter(r => {
-      return ['Player','Team','Conference','Position'].some(k => (r[k] ?? '').toString().toLowerCase().includes(q));
+      return ['Player','Team','Conference','Position','Height'].some(k => (r[k] ?? '').toString().toLowerCase().includes(q));
     });
   }
   filteredData = sortData(data);
@@ -60,6 +61,7 @@ function renderPlayersPage(){
     if(c.key === '_opp_add') return typeof oppAddPlayer !== 'undefined';
     if(c.key === '_sched_diff') return typeof league !== 'undefined' && league === 'MBB';
     if(c.key === '_draft_prob') return typeof league !== 'undefined' && league === 'MBB' && typeof draftBadgeHtml === 'function';
+    if(c.wbbOnly) return typeof league !== 'undefined' && league === 'WBB';
     return true;
   });
 

@@ -39,6 +39,7 @@ var teamStatsCache         = {}; // keyed "teamName:season" → full team season
 var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shooting zone object
 var playsCache             = {}; // keyed by gameId → compact shots array
 var playerShotsCache       = {}; // keyed "team:season:playerName" → shots array
+var _wbbTeamIdCache        = {}; // ESPN team name → id, populated once per session
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 
@@ -278,9 +279,11 @@ function ensureWeightsCoverStats(forPos, rowArr){
 }
 
 function loadScoringWeight(){
-  excelWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
-  currentWeights = {Guards: JSON.parse(JSON.stringify(GUARD_DEFAULTS)), Bigs: JSON.parse(JSON.stringify(BIG_DEFAULTS))};
-  baseStatsAll = [...new Set([...GUARD_DEFAULTS.map(x=>x.stat), ...BIG_DEFAULTS.map(x=>x.stat)])];
+  var gDef = (league === 'WBB' && typeof WBB_GUARD_DEFAULTS !== 'undefined') ? WBB_GUARD_DEFAULTS : GUARD_DEFAULTS;
+  var bDef = (league === 'WBB' && typeof WBB_BIG_DEFAULTS   !== 'undefined') ? WBB_BIG_DEFAULTS   : BIG_DEFAULTS;
+  excelWeights   = {Guards: JSON.parse(JSON.stringify(gDef)), Bigs: JSON.parse(JSON.stringify(bDef))};
+  currentWeights = {Guards: JSON.parse(JSON.stringify(gDef)), Bigs: JSON.parse(JSON.stringify(bDef))};
+  baseStatsAll = [...new Set([...gDef.map(x=>x.stat), ...bDef.map(x=>x.stat)])];
   return true;
 }
 
@@ -842,17 +845,11 @@ async function loadAllData(year) {
   try {
     if (!isInitialLoad) showWarn('Loading data…');
 
-    // Build Google Sheets URL for WBB only
-    const sid = extractSpreadsheetId(DEFAULT_GS_URL);
-    const wbbRange = encodeURIComponent(SHEET_MAP.WBB + '!A1:ZZ');
-    const sheetsUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid +
-      '/values:batchGet?key=' + encodeURIComponent(DEFAULT_GS_API_KEY) +
-      '&valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS&ranges=' + wbbRange;
-
-    // Fetch both sources in parallel
-    const [mbbSettled, wbbSettled] = await Promise.allSettled([
+    // Fetch MBB (CBD API), WBB (direct ESPN byathlete), and WBB teams (Worker) in parallel
+    const [mbbSettled, wbbPlayersSettled, wbbTeamsSettled] = await Promise.allSettled([
       fetch(WORKER + '/api/cbdata/players?season=' + encodeURIComponent(year)),
-      fetch(sheetsUrl)
+      _wbbLoadAllPlayerPages(year),
+      fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(year)).then(r => r.json()),
     ]);
 
     wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
@@ -876,13 +873,29 @@ async function loadAllData(year) {
       wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
     }
 
-    // — WBB from Google Sheets —
-    if (wbbSettled.status === 'fulfilled' && wbbSettled.value.ok) {
-      const sheetsData = await wbbSettled.value.json();
-      const vr = sheetsData.valueRanges && sheetsData.valueRanges[0];
-      wb.Sheets[SHEET_MAP.WBB] = { __aoa: vr ? (vr.values || []) : [] };
+    // — WBB from ESPN byathlete API (direct browser fetch, CORS-friendly) —
+    var _wbbLoadedPlayers = null; // keep ref for background height loading
+    if (wbbPlayersSettled.status === 'fulfilled' && wbbPlayersSettled.value && wbbPlayersSettled.value.length) {
+      const players = wbbPlayersSettled.value;
+      // Enrich Conference from /api/wbb/teams response
+      if (wbbTeamsSettled.status === 'fulfilled' && wbbTeamsSettled.value && wbbTeamsSettled.value.teams) {
+        const teamsMap = wbbTeamsSettled.value.teams;
+        players.forEach(p => {
+          const tid = String(p.TeamId || '');
+          if (tid && teamsMap[tid]) {
+            p.Conference = teamsMap[tid].conference || '';
+            if (!p.Team) p.Team = teamsMap[tid].displayName || '';
+          }
+        });
+      }
+      // Compute derived advanced stats (eFG%, TS%, A/TO, BPM, WS/40) in-place
+      players.forEach(_calcWbbDerivedStats);
+      const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
+      const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
+      wb.Sheets[SHEET_MAP.WBB] = { __aoa: aoa };
+      _wbbLoadedPlayers = players;
     } else {
-      const errText = wbbSettled.reason ? String(wbbSettled.reason) : 'HTTP ' + (wbbSettled.value && wbbSettled.value.status);
+      const errText = wbbPlayersSettled.reason ? String(wbbPlayersSettled.reason) : 'ESPN byathlete fetch failed';
       warnings.push('Could not load WBB data: ' + errText);
       wb.Sheets[SHEET_MAP.WBB] = { __aoa: [['Player','Team','Conference','Pos']] };
     }
@@ -912,6 +925,11 @@ async function loadAllData(year) {
       if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     }).catch(() => {});
     finishIfInitial();
+
+    // Background height loading for WBB — fetches rosters from ESPN after initial render
+    if (_wbbLoadedPlayers && _wbbLoadedPlayers.length) {
+      _wbbLoadHeightsBackground(_wbbLoadedPlayers).catch(() => {});
+    }
 
   } catch (err) {
     showWarn('Data load error: ' + (err.message || err));
@@ -1002,11 +1020,14 @@ function _applyInferredClassAll() {
 // ── Shared worker URL ──────────────────────────────────────────────────────
 var WORKER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
 
-// ── loadTeamRatings — adjusted efficiency + SRS for all MBB teams ──────────
+// ── loadTeamRatings — adjusted efficiency + SRS for all teams ─────────────
 async function loadTeamRatings(year) {
   year = year || 2026;
   try {
-    const r = await fetch(WORKER_URL + '/api/cbdata/ratings?season=' + year);
+    const endpoint = league === 'WBB'
+      ? WORKER_URL + '/api/wbb/ratings?season=' + year
+      : WORKER_URL + '/api/cbdata/ratings?season=' + year;
+    const r = await fetch(endpoint);
     if (!r.ok) return;
     const data = await r.json();
     // Filter to requested season only — API returns all historical seasons,
@@ -1048,6 +1069,16 @@ async function loadTeamStats(team, year) {
   const key = (team + ':' + year).toLowerCase();
   if (teamStatsCache[key] !== undefined) return teamStatsCache[key];
   try {
+    if (league === 'WBB') {
+      // ESPN team stats — called directly from browser (CORS-friendly)
+      const teamId = await _wbbEspnTeamId(team);
+      if (!teamId) { teamStatsCache[key] = null; return null; }
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/statistics?season=${year}`);
+      if (!r.ok) { teamStatsCache[key] = null; return null; }
+      const data = await r.json();
+      teamStatsCache[key] = _mapEspnTeamStats(data);
+      return teamStatsCache[key];
+    }
     const r = await fetch(WORKER_URL + '/api/cbdata/teamstats?team=' + encodeURIComponent(team) + '&season=' + year);
     if (!r.ok) return null;
     const data = await r.json();
@@ -1076,6 +1107,16 @@ async function loadGamesForTeam(team, year) {
   const key = (team + ':' + year).toLowerCase();
   if (teamGamesCache[key]) return teamGamesCache[key];
   try {
+    if (league === 'WBB') {
+      // ESPN schedule — called directly from browser (CORS-friendly)
+      const teamId = await _wbbEspnTeamId(team);
+      if (!teamId) { teamGamesCache[key] = null; return null; }
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/schedule?season=${year}&seasontype=2`);
+      if (!r.ok) { teamGamesCache[key] = null; return null; }
+      const data = await r.json();
+      teamGamesCache[key] = _mapEspnScheduleToGames(data, team);
+      return teamGamesCache[key];
+    }
     const r = await fetch(WORKER_URL + '/api/cbdata/games?team=' + encodeURIComponent(team) + '&season=' + year);
     if (!r.ok) return null;
     const data = await r.json();
@@ -1090,7 +1131,10 @@ async function loadGamesForTeam(team, year) {
 async function loadPlaysForGame(gameId) {
   if (playsCache[gameId]) return playsCache[gameId];
   try {
-    const r = await fetch(WORKER_URL + '/api/cbdata/plays?gameId=' + gameId);
+    const endpoint = league === 'WBB'
+      ? WORKER_URL + '/api/wbb/plays?gameId=' + gameId
+      : WORKER_URL + '/api/cbdata/plays?gameId=' + gameId;
+    const r = await fetch(endpoint);
     if (!r.ok) return [];
     const data = await r.json();
     playsCache[gameId] = data.plays || [];
@@ -1104,16 +1148,299 @@ async function loadPlayerShots(team, season, playerName) {
   const key = (team + ':' + season + ':' + playerName).toLowerCase();
   if (playerShotsCache[key]) return playerShotsCache[key];
   try {
-    const r = await fetch(
-      WORKER_URL + '/api/cbdata/playershots?team=' + encodeURIComponent(team) +
-      '&season=' + encodeURIComponent(season) +
-      '&playerName=' + encodeURIComponent(playerName)
-    );
+    const endpoint = league === 'WBB'
+      ? WORKER_URL + '/api/wbb/playershots?team=' + encodeURIComponent(team) +
+        '&season=' + encodeURIComponent(season) +
+        '&playerName=' + encodeURIComponent(playerName)
+      : WORKER_URL + '/api/cbdata/playershots?team=' + encodeURIComponent(team) +
+        '&season=' + encodeURIComponent(season) +
+        '&playerName=' + encodeURIComponent(playerName);
+    const r = await fetch(endpoint);
     const data = await r.json();
     const shots = data.shots || [];
     playerShotsCache[key] = shots;
     return shots;
   } catch (e) { return []; }
+}
+
+// ── WBB helpers — ESPN team ID lookup, derived stats, team stats mapping ──────
+
+// Fetch all WBB player stat pages directly from ESPN byathlete API (CORS-friendly).
+// Returns array of player objects with raw stats and _FGM/_FGA/etc. totals for derived stat calc.
+async function _wbbLoadAllPlayerPages(year) {
+  const base = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/womens-college-basketball/statistics/byathlete';
+  let p1;
+  try {
+    p1 = await fetch(`${base}?limit=100&page=1&season=${year}`).then(r => r.json());
+  } catch(e) { return []; }
+
+  const totalPages = (p1.pagination && p1.pagination.pages) || 1;
+  // Schema: top-level d.categories[i].names; per-athlete: entry.categories[i].totals
+  const schema = (p1.categories || []).map(cat => cat.names || []);
+
+  function parseStats(entry) {
+    const stats = {};
+    schema.forEach((names, ci) => {
+      const vals = (entry.categories[ci] && entry.categories[ci].totals) || [];
+      names.forEach((n, ni) => { stats[n] = parseFloat(vals[ni]) || 0; });
+    });
+    return stats;
+  }
+
+  // Fetch remaining pages in parallel batches of 20 (browser has no subrequest limits)
+  const allPages = [p1];
+  const CHUNK = 20;
+  for (let start = 2; start <= totalPages; start += CHUNK) {
+    const end = Math.min(start + CHUNK - 1, totalPages);
+    const nums = [];
+    for (let n = start; n <= end; n++) nums.push(n);
+    const chunk = await Promise.all(
+      nums.map(n => fetch(`${base}?limit=100&page=${n}&season=${year}`).then(r => r.json()).catch(() => null))
+    );
+    chunk.forEach(r => { if (r && r.athletes) allPages.push(r); });
+  }
+
+  const players = [];
+  allPages.forEach(page => {
+    (page.athletes || []).forEach(entry => {
+      const ath = entry.athlete || {};
+      if (!ath.displayName) return;
+      const stats = parseStats(entry);
+      players.push({
+        Player:  ath.displayName || '',
+        Team:    ath.teamName    || '',
+        TeamId:  ath.teamId      || null,
+        Conference: '',
+        Pos:     (ath.position && ath.position.abbreviation) || '',
+        Height:  '',
+        G:       stats.gamesPlayed || 0,
+        MP:      +(stats.avgMinutes  || 0).toFixed(1),
+        PPG:     +(stats.avgPoints   || 0).toFixed(1),
+        'FG%':   stats.fieldGoalPct           ? +(stats.fieldGoalPct / 100).toFixed(4)           : 0,
+        '3P%':   stats.threePointFieldGoalPct ? +(stats.threePointFieldGoalPct / 100).toFixed(4) : 0,
+        'FT%':   stats.freeThrowPct           ? +(stats.freeThrowPct / 100).toFixed(4)           : 0,
+        RPG:     +(stats.avgRebounds  || 0).toFixed(1),
+        APG:     +(stats.avgAssists   || 0).toFixed(1),
+        TOPG:    +(stats.avgTurnovers || 0).toFixed(2),
+        SPG:     +(stats.avgSteals    || 0).toFixed(2),
+        BPG:     +(stats.avgBlocks    || 0).toFixed(2),
+        '3PA/G': +(stats.avgThreePointFieldGoalsAttempted || 0).toFixed(1),
+        PER:     +(stats.PER || 0).toFixed(2),
+        _FGM:    stats.fieldGoalsMade               || 0,
+        _FGA:    stats.fieldGoalsAttempted           || 0,
+        _3PM:    stats.threePointFieldGoalsMade      || 0,
+        _3PA:    stats.threePointFieldGoalsAttempted || 0,
+        _FTM:    stats.freeThrowsMade                || 0,
+        _FTA:    stats.freeThrowsAttempted           || 0,
+        _AST:    stats.assists    || 0,
+        _TOV:    stats.turnovers  || 0,
+        _PTS:    stats.points     || 0,
+      });
+    });
+  });
+  return players;
+}
+
+// Background enrichment after initial WBB load — populates Team (full name), Conference, Height.
+// Fetches ESPN team details + roster for each unique teamId (all CORS-friendly).
+// Updates players in-place and triggers a re-render when done.
+async function _wbbEnrichPlayersBackground(players) {
+  const teamIds = [...new Set(players.map(p => String(p.TeamId || '')).filter(Boolean))];
+  const teamDetailMap = {}; // teamId → {displayName, groupId}
+  const heightMap     = {}; // playerName lowercase → height string
+
+  // Batch fetch team details + rosters in parallel (20 teams per batch)
+  // team detail → displayName + groups.id; roster → height
+  const CHUNK = 20;
+  for (let i = 0; i < teamIds.length; i += CHUNK) {
+    const batch = teamIds.slice(i, i + CHUNK);
+    const [detailResps, rosterResps] = await Promise.all([
+      Promise.all(batch.map(tid =>
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${tid}`)
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      )),
+      Promise.all(batch.map(tid =>
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${tid}/roster`)
+          .then(r => r.ok ? r.json() : null).catch(() => null)
+      )),
+    ]);
+
+    detailResps.forEach((d, j) => {
+      if (!d || !d.team) return;
+      teamDetailMap[String(batch[j])] = {
+        displayName: d.team.displayName || '',
+        groupId:     d.team.groups && d.team.groups.id ? String(d.team.groups.id) : null,
+      };
+    });
+    rosterResps.forEach(rd => {
+      if (!rd) return;
+      (rd.athletes || []).forEach(p => {
+        const name = (p.displayName || p.fullName || '').toLowerCase();
+        const ht   = p.displayHeight || (p.height ? String(p.height) : '');
+        if (name && ht) heightMap[name] = ht;
+      });
+    });
+  }
+
+  // Fetch conference names for unique group IDs (ESPN sports.core API, CORS-friendly)
+  const groupIds = [...new Set(Object.values(teamDetailMap).map(t => t.groupId).filter(Boolean))];
+  const groupResps = await Promise.all(
+    groupIds.map(gid =>
+      fetch(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/womens-college-basketball/groups/${gid}`)
+        .then(r => r.ok ? r.json() : null).catch(() => null)
+    )
+  );
+  const confMap = {}; // groupId → shortName
+  groupResps.forEach((g, i) => {
+    if (g && (g.shortName || g.name)) confMap[groupIds[i]] = g.shortName || g.name;
+  });
+
+  // Update player objects with enriched data
+  let updated = 0;
+  players.forEach(p => {
+    const tid = String(p.TeamId || '');
+    const td  = teamDetailMap[tid];
+
+    if (td && td.displayName && p.Team !== td.displayName) { p.Team = td.displayName; updated++; }
+    const conf = td && td.groupId ? (confMap[td.groupId] || '') : '';
+    if (conf && p.Conference !== conf) { p.Conference = conf; updated++; }
+    const h = heightMap[(p.Player || '').toLowerCase()];
+    if (h && !p.Height) { p.Height = h; updated++; }
+  });
+
+  if (updated > 0 && wb && wb.Sheets) {
+    const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
+    const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
+    wb.Sheets[SHEET_MAP.WBB] = { __aoa: aoa };
+    if (league === 'WBB') reloadActiveSheet();
+  }
+}
+// Alias for backwards compatibility with loadAllData call site
+var _wbbLoadHeightsBackground = _wbbEnrichPlayersBackground;
+
+// Resolve ESPN team name → team ID (fetches once per session, caches in memory)
+async function _wbbEspnTeamId(teamName) {
+  const norm = s => s.toLowerCase().replace(/\b(university|college|of|the|at)\b/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const key = norm(teamName);
+  if (_wbbTeamIdCache[key]) return _wbbTeamIdCache[key];
+  if (!_wbbTeamIdCache._loaded) {
+    try {
+      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams?limit=500');
+      const data = await r.json();
+      (((data.sports || [])[0] || {}).leagues || [])[0]?.teams?.forEach(e => {
+        const t = e.team;
+        [t.displayName, t.shortDisplayName, t.location, t.name, t.abbreviation]
+          .filter(Boolean).forEach(n => { _wbbTeamIdCache[norm(n)] = t.id; });
+      });
+    } catch(_) {}
+    _wbbTeamIdCache._loaded = true;
+  }
+  return _wbbTeamIdCache[key] || null;
+}
+
+// Calculate WBB advanced stats in-place from raw ESPN totals; deletes _ prefixed fields
+function _calcWbbDerivedStats(p) {
+  const fgm = p._FGM || 0, fga = p._FGA || 0;
+  const m3  = p._3PM  || 0, a3  = p._3PA  || 0;
+  const ftm = p._FTM  || 0, fta = p._FTA  || 0;
+  const pts = p._PTS  || 0;
+  const ast = p._AST  || 0, tov = p._TOV  || 0;
+
+  p['eFG%']  = fga > 0 ? +((fgm + 0.5 * m3) / fga).toFixed(4) : 0;
+  p['TS%']   = (fga + 0.44 * fta) > 0 ? +(pts / (2 * (fga + 0.44 * fta))).toFixed(4) : 0;
+  p['A/TO']  = tov > 0 ? +(ast / tov).toFixed(2) : 0;
+  // Ensure 3P% is decimal not whole-percent
+  if (p['3P%'] > 1) p['3P%'] = +(p['3P%'] / 100).toFixed(4);
+  // PER used as BPM substitute; WS/40 estimated from PER
+  const per  = p.PER || 0;
+  p['BPM']   = per;
+  p['WS/40'] = +((per - 15) * 0.025).toFixed(4);
+  p['USG%']  = 0; // filled later by team-level pass if available
+  // Clean up temp fields
+  delete p._FGM; delete p._FGA; delete p._3PM; delete p._3PA;
+  delete p._FTM; delete p._FTA; delete p._AST; delete p._TOV; delete p._PTS;
+}
+
+// Map ESPN team statistics API response → statsData format expected by thRenderDNA/thRenderTeamScout
+function _mapEspnTeamStats(data) {
+  // Flatten ESPN stats categories into a named lookup
+  const raw = {};
+  function extractStats(items) {
+    (items || []).forEach(s => {
+      if (s.name && s.value !== undefined) raw[s.name] = s.value;
+    });
+  }
+  // Try multiple ESPN response formats
+  if (data.results && data.results.stats) {
+    (data.results.stats.categories || []).forEach(cat => extractStats(cat.stats || []));
+  }
+  if (Array.isArray(data.statistics)) {
+    data.statistics.forEach(cat => {
+      extractStats(cat.stats || []);
+      // ESPN sometimes puts values directly in the category
+      if (cat.name && cat.value !== undefined) raw[cat.name] = cat.value;
+    });
+  }
+
+  const g   = raw.gamesPlayed || 1;
+  const fgm = (raw.avgFieldGoalsMade      || 0) * g;
+  const fga = (raw.avgFieldGoalsAttempted || 0) * g;
+  const tpm = (raw.avgThreePointFieldGoalsMade      || 0) * g;
+  const tpa = (raw.avgThreePointFieldGoalsAttempted || 0) * g;
+  const ftm = (raw.avgFreeThrowsMade      || 0) * g;
+  const fta = (raw.avgFreeThrowsAttempted || 0) * g;
+  const ast = (raw.avgAssists    || 0) * g;
+  const tov = (raw.avgTurnovers  || 0) * g;
+  const pts = (raw.avgPoints     || 0) * g;
+  const oreb= (raw.avgOffensiveRebounds || 0) * g;
+  const dreb= (raw.avgDefensiveRebounds || 0) * g;
+  const inPaint = (raw.avgPointsInPaint || 0) * g;
+
+  const efgPct = fga > 0 ? +((fgm + 0.5 * tpm) / fga * 100).toFixed(1) : null;
+  const tovRate= (fga + 0.44 * fta + tov) > 0 ? +(tov / (fga + 0.44 * fta + tov)).toFixed(4) : null;
+  const orebPct= (oreb + dreb) > 0 ? +(oreb / (oreb + dreb) * 100).toFixed(1) : null;
+  const ftrPct = fga > 0 ? +(ftm / fga * 100).toFixed(1) : null;
+
+  return {
+    games: g,
+    pace: raw.possessionsPerGame || raw.avgPossessions || null,
+    teamStats: {
+      points: { total: pts, inPaint },
+      fieldGoals: { made: fgm, attempted: fga },
+      threePointFieldGoals: { attempted: tpa },
+      assists: ast,
+      turnovers: tov,
+      fourFactors: {
+        effectiveFieldGoalPct: efgPct,
+        turnoverRatio:         tovRate,
+        offensiveReboundPct:   orebPct,
+        freeThrowRate:         ftrPct,
+      },
+    },
+    opponentStats: null,
+  };
+}
+
+// Map ESPN team schedule → game list format used by thLoadMatchup
+function _mapEspnScheduleToGames(data, teamName) {
+  const games = (data.events || [])
+    .filter(e => e.competitions && e.competitions[0])
+    .map(e => {
+      const comp  = e.competitions[0];
+      const comps = comp.competitors || [];
+      const home  = comps.find(c => c.homeAway === 'home') || {};
+      const away  = comps.find(c => c.homeAway === 'away') || {};
+      return {
+        id:         e.id,
+        startDate:  e.date || '',
+        homeTeam:   (home.team && (home.team.displayName || home.team.name)) || '',
+        awayTeam:   (away.team && (away.team.displayName || away.team.name)) || '',
+        homePoints: home.score != null ? parseInt(home.score) : null,
+        awayPoints: away.score != null ? parseInt(away.score) : null,
+        completed:  !!(comp.status && comp.status.type && comp.status.type.completed),
+      };
+    });
+  return { games, teamStats: [] };
 }
 
 // ── loadRecruitingData — multi-class recruiting data ─────────────────────────
@@ -1184,6 +1511,8 @@ function switchLeague(newLeague){
   setActiveTab(document.getElementById(`tab${newLeague}`), '.tab[data-league]');
   applyLeagueDefaults(false);
   applyLeagueTheme(newLeague);
+  loadScoringWeight();   // Pick WBB or MBB scoring defaults
+  renderWeights();
   renderConfMultTable();
   reloadActiveSheet();
 
