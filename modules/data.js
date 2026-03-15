@@ -40,6 +40,8 @@ var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shoot
 var playsCache             = {}; // keyed by gameId → compact shots array
 var playerShotsCache       = {}; // keyed "team:season:playerName" → shots array
 var _wbbTeamIdCache        = {}; // ESPN team name → id, populated once per session
+var _mbbTeamIdCache        = {}; // ESPN MBB team name → id, populated once per session
+var _mbbHeightsBySeason    = {}; // season → true once background enrichment has been attempted
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 
@@ -824,6 +826,11 @@ async function loadFromCBData(year) {
     reloadActiveSheet();
     finishIfInitial();
 
+    // Background enrichment for MBB — fills Height from ESPN rosters.
+    if (players && players.length) {
+      _mbbLoadHeightsBackground(players, year).catch(() => {});
+    }
+
   } catch (err) {
     showWarn('College Basketball API error: ' + (err.message || err));
     finishIfInitial();
@@ -855,6 +862,8 @@ async function loadAllData(year) {
     wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
     const warnings = [];
 
+    var _mbbLoadedPlayers = null; // keep ref for background height loading
+
     // — MBB from CBD API —
     if (mbbSettled.status === 'fulfilled' && mbbSettled.value.ok) {
       const data = await mbbSettled.value.json();
@@ -863,6 +872,7 @@ async function loadAllData(year) {
         const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
         const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
         wb.Sheets[SHEET_MAP.MBB] = { __aoa: aoa };
+        _mbbLoadedPlayers = players;
       } else {
         warnings.push('No MBB players returned from API (season ' + year + ').');
         wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
@@ -941,6 +951,11 @@ async function loadAllData(year) {
     // Background height loading for WBB — fetches rosters from ESPN after initial render
     if (_wbbLoadedPlayers && _wbbLoadedPlayers.length) {
       _wbbLoadHeightsBackground(_wbbLoadedPlayers).catch(() => {});
+    }
+
+    // Background height loading for MBB — fetches rosters from ESPN after initial render
+    if (_mbbLoadedPlayers && _mbbLoadedPlayers.length) {
+      _mbbLoadHeightsBackground(_mbbLoadedPlayers, year).catch(() => {});
     }
 
   } catch (err) {
@@ -1430,6 +1445,107 @@ async function _wbbEnrichPlayersBackground(players) {
   }
 }
 var _wbbLoadHeightsBackground = _wbbEnrichPlayersBackground;
+
+// Background enrichment after MBB load — populates Height from ESPN team rosters.
+// This intentionally runs after CBD data is loaded so it cannot affect CBD API logic.
+async function _mbbEnrichPlayersBackground(players, season) {
+  season = season || _currentDataSeason || 2026;
+  if (!players || !players.length) { console.log('[Height] no players, abort'); return; }
+  if (_mbbHeightsBySeason[String(season)]) { console.log('[Height] already ran for', season); return; }
+  _mbbHeightsBySeason[String(season)] = true;
+  console.log('[Height] starting enrichment for', players.length, 'players, season', season);
+
+  const norm = s => String(s || '')
+    .toLowerCase()
+    .replace(/\b(university|college|of|the|at)\b/g, '')
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Build team name → ESPN team id cache once.
+  if (!_mbbTeamIdCache._loaded) {
+    try {
+      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams?limit=500');
+      const data = await r.json();
+      const teams = ((((data.sports || [])[0] || {}).leagues || [])[0] || {}).teams || [];
+      console.log('[Height] ESPN teams fetched:', teams.length);
+      teams.forEach(e => {
+        const t = e && e.team;
+        if (!t || !t.id) return;
+        [t.displayName, t.shortDisplayName, t.location, t.name, t.abbreviation]
+          .filter(Boolean)
+          .forEach(n => { _mbbTeamIdCache[norm(n)] = String(t.id); });
+      });
+    } catch (err) { console.log('[Height] teams fetch error:', err); }
+    _mbbTeamIdCache._loaded = true;
+  }
+
+  // Collect unique team IDs for teams represented in the CBD player pool.
+  const seenTeamIds = {};
+  const teamIds = [];
+  players.forEach(p => {
+    const id = _mbbTeamIdCache[norm(p && p.Team)] || '';
+    if (!id || seenTeamIds[id]) return;
+    seenTeamIds[id] = true;
+    teamIds.push(id);
+  });
+  console.log('[Height] matched', teamIds.length, 'unique team IDs from ESPN');
+  if (!teamIds.length) return;
+
+  // teamId|normName → displayHeight string (e.g. "6' 8\"")
+  const bioMap = {};
+
+  const CHUNK = 25;
+  for (let i = 0; i < teamIds.length; i += CHUNK) {
+    const batch = teamIds.slice(i, i + CHUNK);
+    const rosterResps = await Promise.all(batch.map(tid =>
+      fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/teams/' + tid + '/roster')
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+    ));
+    rosterResps.forEach((rd, idx) => {
+      if (!rd) return;
+      const tid = batch[idx];
+      (rd.athletes || []).forEach(a => {
+        const h = (a && a.displayHeight) || '';
+        const n = norm(a && a.displayName);
+        if (!h || !n) return;
+        bioMap[tid + '|' + n] = h;
+      });
+    });
+  }
+  console.log('[Height] bioMap entries:', Object.keys(bioMap).length);
+
+  // Update player objects in-place and refresh workbook if we enriched anything.
+  let updated = 0;
+  players.forEach(p => {
+    if (!p || p.Height) return;
+    const tid = _mbbTeamIdCache[norm(p.Team)] || '';
+    if (!tid) return;
+    const h = bioMap[tid + '|' + norm(p.Player)] || '';
+    if (!h) return;
+    p.Height = h;
+    updated++;
+  });
+  console.log('[Height] updated', updated, 'players with height');
+
+  if (updated > 0 && wb && wb.Sheets) {
+    const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
+    if (headers.indexOf('Height') === -1) headers.push('Height');
+    const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
+    wb.Sheets[SHEET_MAP.MBB] = { __aoa: aoa };
+    if (league === 'MBB') {
+      reloadActiveSheet();
+      // If a player profile modal is currently open, refresh it so height appears immediately.
+      if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer && _currentProfilePlayer.Player) {
+        const fresh = computed.find(p => p.Player === _currentProfilePlayer.Player && p.Team === _currentProfilePlayer.Team);
+        if (fresh && fresh.Height && typeof openProfile === 'function') openProfile(fresh);
+      }
+    }
+  }
+}
+var _mbbLoadHeightsBackground = _mbbEnrichPlayersBackground;
 
 // Resolve ESPN team name → team ID (fetches once per session, caches in memory)
 async function _wbbEspnTeamId(teamName) {
