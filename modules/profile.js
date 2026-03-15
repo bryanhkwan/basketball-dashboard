@@ -806,6 +806,9 @@ function _buildCourtHeatmap(p) {
   }
 
   const ftColor = ftPct == null ? 'var(--muted)' : ftPct >= 75 ? 'var(--good)' : ftPct >= 60 ? 'var(--accent)' : ftPct >= 45 ? 'var(--warn)' : 'var(--bad)';
+  const trackedShots = Number.isFinite(+p.trackedShots) ? Math.round(+p.trackedShots) : 0;
+  const astText = Number.isFinite(+p.assistedPct) ? (Math.round(+p.assistedPct) + '%') : '—';
+  const ftrText = Number.isFinite(+p.freeThrowRate) ? (Math.round(+p.freeThrowRate) + '%') : '—';
 
   return '<div class="courtHeatmapWrap">'
   + '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'"'
@@ -856,7 +859,7 @@ function _buildCourtHeatmap(p) {
   // Footer summary row
   + '<div class="courtFooter">'
   + '<div class="cfStat"><div class="cfVal" style="color:'+ftColor+'">'+( ftPct != null ? ftPct+'%' : '—')+'</div><div class="cfLabel">Free Throw</div><div class="cfSub">'+(ft.made||0)+'/'+(ft.attempted||0)+' made</div></div>'
-  + '<div class="cfStat"><div class="cfVal">'+(p.trackedShots||0)+'</div><div class="cfLabel">Tracked Shots</div><div class="cfSub">'+(p.assistedPct||0)+'% ast · FTR '+(p.freeThrowRate||0)+'%</div></div>'
+  + '<div class="cfStat"><div class="cfVal">'+trackedShots+'</div><div class="cfLabel">Tracked Shots</div><div class="cfSub">'+astText+' ast · FTR '+ftrText+'</div></div>'
   + '</div>'
   // Heat legend
   + '<div class="courtLegend">'

@@ -1140,9 +1140,81 @@ async function loadTeamShootingZones(team, year) {
   if (teamShootingZonesCache[key] !== undefined) return teamShootingZonesCache[key];
   try {
     if (league === 'WBB') {
-      // ESPN WBB does not expose team shooting zones — return null so Teams Hub degrades gracefully
-      teamShootingZonesCache[key] = null;
-      return null;
+      // Derive zone profile from WBB play-by-play so Team DNA can render a heatmap.
+      const teamId = await _wbbEspnTeamId(team);
+      const gamesData = await loadGamesForTeam(team, year);
+      const games = (gamesData && gamesData.games) ? gamesData.games : [];
+      if (!teamId || !games.length) { teamShootingZonesCache[key] = null; return null; }
+
+      const completed = games.filter(g => g && g.id && g.completed !== false);
+      if (!completed.length) { teamShootingZonesCache[key] = null; return null; }
+
+      const playsArrays = await Promise.all(completed.map(g => loadPlaysForGame(g.id)));
+      let rimAtt=0, rimMade=0, midAtt=0, midMade=0, threeAtt=0, threeMade=0, ftAtt=0, ftMade=0;
+      let oppRimAtt=0, oppRimMade=0, oppMidAtt=0, oppMidMade=0, oppThreeAtt=0, oppThreeMade=0, oppFtAtt=0, oppFtMade=0;
+
+      completed.forEach((g, idx) => {
+        const arr = playsArrays[idx] || [];
+        arr.forEach(s => {
+          const tid = String(s && s.teamId || '');
+          // Keep only plays with team attribution so we can split offense/defense.
+          if (!tid) return;
+          const ours = tid === String(teamId);
+          const made = !!(s && s.made);
+          const r = s && s.range;
+          if (ours) {
+            if (r === 'rim') { rimAtt++; if (made) rimMade++; }
+            else if (r === 'jumper') { midAtt++; if (made) midMade++; }
+            else if (r === 'three_pointer') { threeAtt++; if (made) threeMade++; }
+            else if (r === 'free_throw') { ftAtt++; if (made) ftMade++; }
+          } else {
+            if (r === 'rim') { oppRimAtt++; if (made) oppRimMade++; }
+            else if (r === 'jumper') { oppMidAtt++; if (made) oppMidMade++; }
+            else if (r === 'three_pointer') { oppThreeAtt++; if (made) oppThreeMade++; }
+            else if (r === 'free_throw') { oppFtAtt++; if (made) oppFtMade++; }
+          }
+        });
+      });
+
+      const nonFt = Math.max(1, rimAtt + midAtt + threeAtt);
+      const pct = (m,a) => a > 0 ? +(m / a * 100).toFixed(1) : null;
+      const vol = a => +(a / nonFt * 100).toFixed(1);
+
+      const tracked = rimAtt + midAtt + threeAtt;
+      const ftr = tracked > 0 ? +(ftAtt / tracked * 100).toFixed(1) : null;
+      const oppFga = oppRimAtt + oppMidAtt + oppThreeAtt;
+      const oppFgm = oppRimMade + oppMidMade + oppThreeMade;
+      const oppEfg = oppFga > 0 ? +(((oppFgm + 0.5 * oppThreeMade) / oppFga) * 100).toFixed(1) : null;
+      const oppFtr = oppFga > 0 ? +((oppFtMade / oppFga) * 100).toFixed(1) : null;
+
+      const derived = {
+        // Map rim attempts into restricted-area bucket used by existing heatmap function.
+        dunks: { attempted: rimAtt, made: rimMade, pct: pct(rimMade, rimAtt) },
+        tipIns: { attempted: 0, made: 0, pct: null },
+        layups: { attempted: 0, made: 0, pct: null },
+        twoPointJumpers: { attempted: midAtt, made: midMade, pct: pct(midMade, midAtt) },
+        threePointJumpers: { attempted: threeAtt, made: threeMade, pct: pct(threeMade, threeAtt) },
+        freeThrows: { attempted: ftAtt, made: ftMade, pct: pct(ftMade, ftAtt) },
+        trackedShots: tracked,
+        assistedPct: null,
+        freeThrowRate: ftr,
+        attemptsBreakdown: {
+          dunks: vol(rimAtt),
+          tipIns: 0,
+          layups: 0,
+          twoPointJumpers: vol(midAtt),
+          threePointJumpers: vol(threeAtt),
+        },
+        defenseFourFactors: {
+          effectiveFieldGoalPct: oppEfg,
+          turnoverRatio: null,
+          offensiveReboundPct: null,
+          freeThrowRate: oppFtr,
+        },
+      };
+
+      teamShootingZonesCache[key] = derived;
+      return derived;
     }
     const r = await fetch(WORKER_URL + '/api/cbdata/teamshooting?team=' + encodeURIComponent(team) + '&season=' + year);
     if (!r.ok) return null;
@@ -1437,7 +1509,12 @@ function _mapEspnTeamStats(data) {
   const pts = (raw.avgPoints     || 0) * g;
   const oreb= (raw.avgOffensiveRebounds || 0) * g;
   const dreb= (raw.avgDefensiveRebounds || 0) * g;
-  const inPaint = (raw.avgPointsInPaint || 0) * g;
+  const hasInPaint = raw.avgPointsInPaint != null;
+  const hasFastBreak = raw.avgFastBreakPoints != null || raw.avgPointsInTransition != null || raw.avgPointsFastBreak != null;
+  const hasOffTov = raw.avgPointsOffTurnovers != null || raw.avgPtsOffTurnovers != null;
+  const inPaint = hasInPaint ? (raw.avgPointsInPaint * g) : null;
+  const fastBreakPts = hasFastBreak ? ((raw.avgFastBreakPoints || raw.avgPointsInTransition || raw.avgPointsFastBreak || 0) * g) : null;
+  const offTovPts = hasOffTov ? ((raw.avgPointsOffTurnovers || raw.avgPtsOffTurnovers || 0) * g) : null;
 
   const efgPct = fga > 0 ? +((fgm + 0.5 * tpm) / fga * 100).toFixed(1) : null;
   const tovRate= (fga + 0.44 * fta + tov) > 0 ? +(tov / (fga + 0.44 * fta + tov)).toFixed(4) : null;
@@ -1448,7 +1525,7 @@ function _mapEspnTeamStats(data) {
     games: g,
     pace: raw.possessionsPerGame || raw.avgPossessions || null,
     teamStats: {
-      points: { total: pts, inPaint },
+      points: { total: pts, inPaint, fastBreak: fastBreakPts, offTurnovers: offTovPts },
       fieldGoals: { made: fgm, attempted: fga },
       threePointFieldGoals: { attempted: tpa },
       assists: ast,
@@ -1484,7 +1561,9 @@ function _mapEspnScheduleToGames(data, teamName) {
         id:         e.id,
         startDate:  e.date || '',
         homeTeam:   (home.team && (home.team.location || home.team.displayName || home.team.name)) || '',
+        homeTeamId: (home.team && home.team.id) ? String(home.team.id) : '',
         awayTeam:   (away.team && (away.team.location || away.team.displayName || away.team.name)) || '',
+        awayTeamId: (away.team && away.team.id) ? String(away.team.id) : '',
         homePoints: parseScore(home.score),
         awayPoints: parseScore(away.score),
         completed:  !!(comp.status && comp.status.type && comp.status.type.completed),

@@ -21,6 +21,7 @@ var _thRecentTournamentCtx = null;
 var _thTournamentIntelCtx = null;
 var _thTeamIntelCache = {};
 var _thDeepShotIntelCtx = null;
+var _thWbbConfStandingsCache = {};
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
@@ -91,6 +92,100 @@ function _thLoading(msg) {
     thLoadingEl.textContent = msg || '';
     thLoadingEl.style.display = msg ? 'block' : 'none';
   }
+}
+
+function _thNormTeamName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\b(university|college|of|the|at)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _thFindWbbConferenceForTeam(teamName) {
+  if (!teamName || typeof tbGetAllPlayers !== 'function') return '';
+  const tKey = _thNormTeamName(teamName);
+  const sample = tbGetAllPlayers('WBB').find(p => _thNormTeamName(p.Team) === tKey && p.Conference);
+  return sample ? String(sample.Conference).trim() : '';
+}
+
+async function _thBuildWbbConferenceStandings(confName, season) {
+  const conf = String(confName || '').trim();
+  const yr = String(season || thCurrentSeason || '2026');
+  if (!conf || typeof tbGetAllPlayers !== 'function' || typeof loadGamesForTeam !== 'function') return null;
+  const cacheKey = (conf + ':' + yr).toLowerCase();
+  if (_thWbbConfStandingsCache[cacheKey] !== undefined) return _thWbbConfStandingsCache[cacheKey];
+
+  const confKey = conf.toLowerCase();
+  const confTeams = [...new Set(
+    tbGetAllPlayers('WBB')
+      .filter(p => String(p.Conference || '').trim().toLowerCase() === confKey)
+      .map(p => p.Team)
+      .filter(Boolean)
+  )];
+  if (!confTeams.length) {
+    _thWbbConfStandingsCache[cacheKey] = null;
+    return null;
+  }
+
+  const normSet = new Set(confTeams.map(_thNormTeamName));
+  const gamesByTeam = await Promise.all(confTeams.map(t => loadGamesForTeam(t, yr).catch(() => null)));
+
+  const rows = confTeams.map((team, idx) => {
+    const tNorm = _thNormTeamName(team);
+    const gd = gamesByTeam[idx] || null;
+    const games = gd && gd.games ? gd.games : [];
+    let confW = 0, confL = 0, overallW = 0, overallL = 0;
+
+    games.forEach(g => {
+      const hn = _thNormTeamName(g.homeTeam);
+      const an = _thNormTeamName(g.awayTeam);
+      const isHome = hn === tNorm;
+      const isAway = an === tNorm;
+      if (!isHome && !isAway) return;
+
+      const ts = Number(isHome ? g.homePoints : g.awayPoints);
+      const os = Number(isHome ? g.awayPoints : g.homePoints);
+      if (!Number.isFinite(ts) || !Number.isFinite(os)) return;
+
+      const won = ts > os;
+      if (won) overallW++; else overallL++;
+
+      const oppNorm = isHome ? an : hn;
+      if (normSet.has(oppNorm)) {
+        if (won) confW++; else confL++;
+      }
+    });
+
+    const confGames = confW + confL;
+    const overallGames = overallW + overallL;
+    return {
+      team: team,
+      confW: confW,
+      confL: confL,
+      confPct: confGames ? (confW / confGames) : 0,
+      overallW: overallW,
+      overallL: overallL,
+      overallPct: overallGames ? (overallW / overallGames) : 0,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (b.confPct !== a.confPct) return b.confPct - a.confPct;
+    if (b.confW !== a.confW) return b.confW - a.confW;
+    if (b.overallPct !== a.overallPct) return b.overallPct - a.overallPct;
+    if (b.overallW !== a.overallW) return b.overallW - a.overallW;
+    return String(a.team || '').localeCompare(String(b.team || ''));
+  });
+
+  const out = {};
+  rows.forEach((r, i) => {
+    out[_thNormTeamName(r.team)] = Object.assign({ rank: i + 1 }, r);
+  });
+
+  _thWbbConfStandingsCache[cacheKey] = out;
+  return out;
 }
 
 // ── Render: Program Overview ──────────────────────────────────────────────────
@@ -231,21 +326,71 @@ function thRenderOverview(teamData, gamesData, statsData) {
 }
 
 // ── Render: Conference Threats ────────────────────────────────────────────────
-function thRenderThreats(teamData, gamesData) {
+function thRenderThreats(teamData, gamesData, wbbStandings) {
   if (!thThreatsEl) return;
-  if (!teamData) {
+  const isWBB = (typeof league !== 'undefined' && league === 'WBB');
+  if (!teamData && !isWBB) {
     thThreatsEl.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Select a team to view threats.</div>';
     return;
   }
 
-  const conf = teamData.conference;
+  let conf = teamData && teamData.conference ? teamData.conference : '';
+  if (!conf && isWBB && thCurrentTeam) {
+    conf = _thFindWbbConferenceForTeam(thCurrentTeam);
+  }
+
+  const effectiveTeamData = teamData || { team: thCurrentTeam, conference: conf, season: +(thSeasonInput ? thSeasonInput.value : '2026'), adjEM: null };
   // Filter to the same season as teamData to avoid showing duplicate historical rows
-  const targetSeason = teamData.season || +(thSeasonInput ? thSeasonInput.value : '2026');
+  const targetSeason = effectiveTeamData.season || +(thSeasonInput ? thSeasonInput.value : '2026');
   const confTeams = allRatingsData
     .filter(t => t.conference === conf && +t.season === +targetSeason)
     .sort((a, b) => (b.adjEM || 0) - (a.adjEM || 0));
 
-  if (!confTeams.length) {
+  let fallbackTeams = [];
+  if (!confTeams.length && isWBB && conf && typeof tbGetAllPlayers === 'function') {
+    const confKey = String(conf).trim().toLowerCase();
+    const inConf = tbGetAllPlayers('WBB').filter(p => String(p.Conference || '').trim().toLowerCase() === confKey);
+    const byTeam = {};
+    inConf.forEach(p => {
+      const t = p.Team || '';
+      if (!t) return;
+      if (!byTeam[t]) byTeam[t] = [];
+      byTeam[t].push(p);
+    });
+    fallbackTeams = Object.keys(byTeam).map(t => {
+      const arr = byTeam[t];
+      const top = arr
+        .map(p => safeNum(p.PerfScore))
+        .filter(Number.isFinite)
+        .sort((a,b) => b-a)
+        .slice(0, 8);
+      const avgTop = top.length ? +(top.reduce((s,v)=>s+v,0) / top.length).toFixed(1) : null;
+      const key = t.toLowerCase();
+      const known = teamRatings[key] || null;
+      const adjEM = (known && Number.isFinite(+known.adjEM)) ? +known.adjEM : avgTop;
+      return {
+        team: t,
+        conference: conf,
+        season: +targetSeason,
+        adjEM: adjEM,
+        srs: null,
+      };
+    }).sort((a,b) => (b.adjEM || 0) - (a.adjEM || 0));
+  }
+
+  let listTeams = confTeams.length ? confTeams : fallbackTeams;
+  if (isWBB && wbbStandings) {
+    listTeams = listTeams.slice().sort((a, b) => {
+      const sa = wbbStandings[_thNormTeamName(a.team)] || null;
+      const sb = wbbStandings[_thNormTeamName(b.team)] || null;
+      if (sa && sb) return sa.rank - sb.rank;
+      if (sa) return -1;
+      if (sb) return 1;
+      return (b.adjEM || 0) - (a.adjEM || 0);
+    });
+  }
+
+  if (!listTeams.length) {
     thThreatsEl.innerHTML = `<div class="muted" style="padding:16px;text-align:center">No conference data for ${conf || 'unknown conference'}.</div>`;
     return;
   }
@@ -256,7 +401,7 @@ function thRenderThreats(teamData, gamesData) {
   games.forEach(g => {
     const hn = (g.homeTeam || '').toLowerCase();
     const an = (g.awayTeam || '').toLowerCase();
-    const tn = (teamData.team || '').toLowerCase();
+    const tn = (effectiveTeamData.team || '').toLowerCase();
     const isHome = hn === tn;
     const isAway = an === tn;
     if (!isHome && !isAway) return;
@@ -273,25 +418,26 @@ function thRenderThreats(teamData, gamesData) {
       <span>#</span><span>Team</span><span>AdjEM</span><span>SRS</span><span>H2H</span><span></span>
     </div>`;
 
-  confTeams.forEach((t, i) => {
-    const isUs = (t.team || '').toLowerCase() === (teamData.team || '').toLowerCase();
+  listTeams.forEach((t, i) => {
+    const sRow = isWBB && wbbStandings ? (wbbStandings[_thNormTeamName(t.team)] || null) : null;
+    const isUs = (t.team || '').toLowerCase() === (effectiveTeamData.team || '').toLowerCase();
     const rec = Object.entries(h2hMap).find(([k]) => k.toLowerCase() === (t.team||'').toLowerCase());
     const h2h = rec ? rec[1] : null;
     const h2hStr = h2h ? `${h2h.w}–${h2h.l}` : isUs ? '—' : '';
     const h2hColor = h2h ? (h2h.w > h2h.l ? 'var(--good)' : h2h.w < h2h.l ? 'var(--bad)' : 'var(--warn)') : 'var(--muted)';
     const emColor = (t.adjEM||0) >= 0 ? 'var(--good)' : 'var(--bad)';
-    const isThreat = !isUs && (t.adjEM || 0) > (teamData.adjEM || 0) && (!h2h || h2h.l >= h2h.w);
+    const isThreat = !isUs && (t.adjEM || 0) > (effectiveTeamData.adjEM || 0) && (!h2h || h2h.l >= h2h.w);
     const escapedName = (t.team || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     html += `<div class="thThreatRow${isUs ? ' thThreatUs' : isThreat ? ' thThreatDanger' : ''}">
-      <span class="thThreatRank">${i + 1}</span>
+      <span class="thThreatRank">${sRow ? sRow.rank : (i + 1)}</span>
       <span class="thThreatName">
         ${t.team || '—'}
         ${isUs ? '<span class="thYouBadge">you</span>' : ''}
         ${isThreat ? '<span class="thDangerBadge">⚠ threat</span>' : ''}
       </span>
       <span style="color:${emColor};font-weight:700">${(t.adjEM||0)>=0?'+':''}${_thFmt(t.adjEM)}</span>
-      <span style="color:var(--muted)">${_thFmt(t.srs)}</span>
+      <span style="color:var(--muted)">${sRow ? (sRow.confW + '–' + sRow.confL) : _thFmt(t.srs)}</span>
       <span style="color:${h2hColor};font-weight:700">${h2hStr}</span>
       <span>${!isUs ? `<button class="secondary thOppBtn" onclick="thLoadOpponent('${escapedName}')" title="Load ${t.team} as opponent">⚔</button>` : ''}</span>
     </div>`;
@@ -426,14 +572,32 @@ function thRenderDNA(teamData, statsData, shootingData) {
   const os = s ? s.opponentStats : null;
   const g  = (s && s.games) || 1;
 
-  const ppg       = ts ? +(ts.points.total / g).toFixed(1)                                    : null;
-  const oppg      = os ? +(os.points.total / g).toFixed(1)                                    : null;
-  const paintPct  = ts ? Math.round(ts.points.inPaint / ts.points.total * 100)                : null;
-  const fbPct     = ts ? Math.round(ts.points.fastBreak / ts.points.total * 100)              : null;
-  const topPct    = ts ? Math.round(ts.points.offTurnovers / ts.points.total * 100)           : null;
-  const threeTend = ts ? Math.round(ts.threePointFieldGoals.attempted / ts.fieldGoals.attempted * 100) : null;
-  const astRate   = ts ? Math.round(ts.assists / ts.fieldGoals.made * 100)                    : null;
+  function pctOf(part, total) {
+    const p = Number(part), t = Number(total);
+    return (Number.isFinite(p) && Number.isFinite(t) && t > 0) ? Math.round(p / t * 100) : null;
+  }
+  const ppg       = ts ? +(ts.points.total / g).toFixed(1) : null;
+  const oppg      = os ? +(os.points.total / g).toFixed(1) : null;
+  const paintPct  = ts ? pctOf(ts.points && ts.points.inPaint, ts.points && ts.points.total) : null;
+  let fbPct       = ts ? pctOf(ts.points && ts.points.fastBreak, ts.points && ts.points.total) : null;
+  let topPct      = ts ? pctOf(ts.points && ts.points.offTurnovers, ts.points && ts.points.total) : null;
+  const threeTend = ts ? pctOf(ts.threePointFieldGoals && ts.threePointFieldGoals.attempted, ts.fieldGoals && ts.fieldGoals.attempted) : null;
+  const astRate   = ts ? pctOf(ts.assists, ts.fieldGoals && ts.fieldGoals.made) : null;
   const pace      = s  ? s.pace : null;
+
+  // WBB fallback: estimate paint share from derived shooting zones when ESPN paint points are unavailable/zero.
+  let paintPctResolved = paintPct;
+  if (typeof league !== 'undefined' && league === 'WBB' && ts && ts.points && Number(ts.points.total) > 0 && shootingData) {
+    if (paintPctResolved == null || paintPctResolved === 0) {
+      const rimMade = Number((shootingData.dunks && shootingData.dunks.made) || 0)
+        + Number((shootingData.tipIns && shootingData.tipIns.made) || 0)
+        + Number((shootingData.layups && shootingData.layups.made) || 0);
+      paintPctResolved = pctOf(rimMade * 2, ts.points.total);
+    }
+    // ESPN WBB often omits these; suppress misleading 0% when source is effectively missing.
+    if (fbPct === 0) fbPct = null;
+    if (topPct === 0) topPct = null;
+  }
 
   const ff  = ts ? ts.fourFactors : null;
   const ofs = os ? os.fourFactors : null;
@@ -441,10 +605,11 @@ function thRenderDNA(teamData, statsData, shootingData) {
   const offTov  = ff  ? Math.round(ff.turnoverRatio * 100) : null;
   const offOreb = ff  ? ff.offensiveReboundPct             : null;
   const offFtr  = ff  ? ff.freeThrowRate                   : null;
-  const defEfg  = ofs ? ofs.effectiveFieldGoalPct          : null;
-  const defTov  = ofs ? Math.round(ofs.turnoverRatio * 100) : null;
-  const defOreb = ofs ? ofs.offensiveReboundPct             : null;
-  const defFtr  = ofs ? ofs.freeThrowRate                   : null;
+  const defFallback = shootingData && shootingData.defenseFourFactors ? shootingData.defenseFourFactors : null;
+  const defEfg  = ofs ? ofs.effectiveFieldGoalPct           : (defFallback ? defFallback.effectiveFieldGoalPct : null);
+  const defTov  = ofs ? Math.round(ofs.turnoverRatio * 100) : (defFallback && Number.isFinite(defFallback.turnoverRatio) ? Math.round(defFallback.turnoverRatio * 100) : null);
+  const defOreb = ofs ? ofs.offensiveReboundPct             : (defFallback ? defFallback.offensiveReboundPct : null);
+  const defFtr  = ofs ? ofs.freeThrowRate                   : (defFallback ? defFallback.freeThrowRate : null);
 
   // Auto-generate insights from the numbers
   const insights = [];
@@ -474,9 +639,9 @@ function thRenderDNA(teamData, statsData, shootingData) {
     if (defOreb <= 24) insights.push({ type: 'strength', text: `Excellent defensive rebounding — holding opponents to ${defOreb}% OReb rate. Boxes out well.` });
     else if (defOreb >= 35) insights.push({ type: 'weakness', text: `Gets out-rebounded — opponents grab ${defOreb}% of their own misses, generating second-chance points.` });
   }
-  if (paintPct != null) {
-    if (paintPct >= 48) insights.push({ type: 'style', text: `Inside-out attack — ${paintPct}% of points in the paint. Forces opponents to commit to interior defense.` });
-    else if (paintPct <= 34) insights.push({ type: 'style', text: `Perimeter-oriented offense — only ${paintPct}% of points come from the paint. Very jump-shot dependent.` });
+  if (paintPctResolved != null) {
+    if (paintPctResolved >= 48) insights.push({ type: 'style', text: `Inside-out attack — ${paintPctResolved}% of points in the paint. Forces opponents to commit to interior defense.` });
+    else if (paintPctResolved <= 34) insights.push({ type: 'style', text: `Perimeter-oriented offense — only ${paintPctResolved}% of points come from the paint. Very jump-shot dependent.` });
   }
   if (threeTend != null) {
     if (threeTend >= 48) insights.push({ type: 'style', text: `Heavy three-point volume — ${threeTend}% of FGA are 3s. Live-or-die by the three style.` });
@@ -526,7 +691,7 @@ function thRenderDNA(teamData, statsData, shootingData) {
     ppg       != null ? `<div class="thProfRow"><span class="thProfLabel">Points / game</span><span class="thProfVal">${ppg}</span></div>` : '',
     oppg      != null ? `<div class="thProfRow"><span class="thProfLabel">Opp Pts / game</span><span class="thProfVal">${oppg}</span></div>` : '',
     pace      != null ? `<div class="thProfRow"><span class="thProfLabel" title="Estimated possessions per 40 min game">Pace</span><span class="thProfVal">${pace} poss/g</span></div>` : '',
-    paintPct  != null ? `<div class="thProfRow"><span class="thProfLabel">Paint scoring</span><span class="thProfVal">${paintPct}% of pts</span></div>` : '',
+    paintPctResolved  != null ? `<div class="thProfRow"><span class="thProfLabel">Paint scoring</span><span class="thProfVal">${paintPctResolved}% of pts</span></div>` : '',
     fbPct     != null ? `<div class="thProfRow"><span class="thProfLabel">Fast break pts</span><span class="thProfVal">${fbPct}% of pts</span></div>` : '',
     topPct    != null ? `<div class="thProfRow"><span class="thProfLabel">Pts off TOs</span><span class="thProfVal">${topPct}% of pts</span></div>` : '',
     threeTend != null ? `<div class="thProfRow"><span class="thProfLabel" title="3-point attempts as % of all FGA">3PT tendency</span><span class="thProfVal">${threeTend}% of FGA</span></div>` : '',
@@ -934,6 +1099,51 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   return result;
 }
 
+function _thEstimateOppPpgFromGames(teamName, season) {
+  try {
+    const key = (String(teamName || '') + ':' + String(season || thCurrentSeason || '2026')).toLowerCase();
+    const gd = (typeof teamGamesCache !== 'undefined') ? teamGamesCache[key] : null;
+    const games = gd && gd.games ? gd.games : [];
+    if (!games.length) return null;
+    const tn = String(teamName || '').toLowerCase();
+    let sum = 0, n = 0;
+    games.forEach(g => {
+      const hn = String(g.homeTeam || '').toLowerCase();
+      const an = String(g.awayTeam || '').toLowerCase();
+      const hp = Number(g.homePoints), ap = Number(g.awayPoints);
+      if (!Number.isFinite(hp) || !Number.isFinite(ap)) return;
+      if (hn === tn) { sum += ap; n++; }
+      else if (an === tn) { sum += hp; n++; }
+    });
+    return n ? (sum / n) : null;
+  } catch (_) { return null; }
+}
+
+function _thFallbackRating(teamName, ratingObj, statsObj, season) {
+  if (ratingObj && Number.isFinite(+ratingObj.adjO) && Number.isFinite(+ratingObj.adjD)) return ratingObj;
+  if (!statsObj || !statsObj.teamStats || !statsObj.teamStats.points) return null;
+
+  const g = Number(statsObj.games) || 1;
+  const pace = Number(statsObj.pace) || 68;
+  const ppg = Number(statsObj.teamStats.points.total) / g;
+  let oppg = null;
+  if (statsObj.opponentStats && statsObj.opponentStats.points && Number.isFinite(Number(statsObj.opponentStats.points.total))) {
+    oppg = Number(statsObj.opponentStats.points.total) / g;
+  }
+  if (!Number.isFinite(oppg)) oppg = _thEstimateOppPpgFromGames(teamName, season);
+  if (!Number.isFinite(oppg)) oppg = ppg; // neutral fallback when opponent scoring is unavailable
+
+  const adjO = +(ppg / Math.max(1, pace) * 100).toFixed(1);
+  const adjD = +(oppg / Math.max(1, pace) * 100).toFixed(1);
+  return {
+    team: teamName,
+    adjO: adjO,
+    adjD: adjD,
+    adjEM: +(adjO - adjD).toFixed(1),
+    _derived: true,
+  };
+}
+
 // ── MC Sensitivity Analysis — how win% shifts with parameter tweaks ──────────
 function _thRunMCSensitivity(ratA, ratB, statsA, statsB, baseOpts) {
   var quickN = 5000; // fewer sims for sensitivity (speed)
@@ -971,8 +1181,8 @@ function thRunMonteCarloUI() {
 
   var aName = thCurrentTeam;
   var bName = thCurrentCompareTeam;
-  var ratA = teamRatings[(aName || '').toLowerCase()] || null;
-  var ratB = teamRatings[(bName || '').toLowerCase()] || null;
+  var ratA = _thFallbackRating(aName, teamRatings[(aName || '').toLowerCase()] || null, _thCurrentStats, thCurrentSeason);
+  var ratB = _thFallbackRating(bName, teamRatings[(bName || '').toLowerCase()] || null, _thCompareStats, thCurrentSeason);
 
   var runCountEl = document.getElementById('thMCRunCount');
   var nSims = runCountEl ? parseInt(runCountEl.value, 10) || 10000 : 10000;
@@ -1978,41 +2188,87 @@ async function thLoadCompare() {
 }
 
 // ── _thShotToSVG — transform full-court coordinates to SVG half-court ─────────
-// Full court origin: x=0–940, y=0–500. Left basket (75,250), right basket (875,250).
-// SVG half court: viewBox 0 0 400 455. Basket at (200, 415).
-function _thShotToSVG(shot, attacksLeft) {
-  const dx = attacksLeft ? (shot.x - 75) : (875 - shot.x);  // depth from basket
-  const dy = shot.y - 250;                                    // offset from lane center
+// Full court origin: x=0–940, y=0–500. SVG half court: viewBox 0 0 400 455. Basket at (200, 415).
+// basketX: actual full-court x of the attacking basket (adaptive; defaults to 75 for MBB).
+function _thShotToSVG(shot, attacksLeft, basketX) {
+  if (basketX == null) basketX = attacksLeft ? 75 : 865;
+  const dx = attacksLeft ? (shot.x - basketX) : (basketX - shot.x);  // depth from basket
+  const dy = shot.y - 250;                                             // offset from lane center
   return {
     x: Math.round(200 + dy * 0.76),
     y: Math.round(415 - dx * 1.025),
   };
 }
 
+// Normalize source shot coordinates into full-court space expected by _thShotToSVG.
+// Supports both:
+// 1) Full-court: x 0..940, y 0..500
+// 2) ESPN compact: x 0..50 (lateral), y 0..25 or 0..47 (depth)
+function _thNormalizeShotForCourt(shot, compactMode) {
+  const sx = Number(shot && shot.x);
+  const sy = Number(shot && shot.y);
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
+    return { x: 0, y: 0 };
+  }
+  if (!compactMode) {
+    return { x: sx, y: sy };
+  }
+
+  // Default compact ESPN mapping: x~0..50 lateral, y~0..94 depth.
+  const depthScale = compactMode === 'espn-compact' ? 10 : (940 / 47);
+  // ESPN compact -> full-court: lateral maps to y-axis, depth maps to x-axis.
+  const fx = sy * depthScale;
+  const fy = sx * 10;
+  return {
+    x: Math.max(0, Math.min(940, fx)),
+    y: Math.max(0, Math.min(500, fy)),
+  };
+}
+
 // ── _th_buildShotChartSVG — SVG court with dots for made/missed shots ─────────
 function _escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 function _th_buildShotChartSVG(shots, teamName, color) {
-  // Detect which basket this team attacks (avg x of rim shots)
-  const rimShots = shots.filter(s => s.range === 'rim');
+  // Detect compact ESPN coordinate scale so WBB and MBB plot consistently.
+  const maxAbsX = shots.reduce((m, s) => Math.max(m, Math.abs(Number(s && s.x) || 0)), 0);
+  const maxAbsY = shots.reduce((m, s) => Math.max(m, Math.abs(Number(s && s.y) || 0)), 0);
+  let compactMode = null;
+  if (maxAbsX <= 60 && maxAbsY <= 120) {
+    compactMode = 'espn-compact';
+  }
+
+  const normShots = shots.map(s => {
+    const c = _thNormalizeShotForCourt(s, compactMode);
+    return Object.assign({}, s, { x: c.x, y: c.y });
+  });
+
+  // Detect which basket this team attacks and compute actual basket x position.
+  // Using rim shots only on the dominant side so mixed full-season data doesn't confuse the calc.
+  const rimShots = normShots.filter(s => s.range === 'rim');
   const avgX = rimShots.length
     ? rimShots.reduce((s, p) => s + p.x, 0) / rimShots.length
     : 470;
   const attacksLeft = avgX < 470;
+  const activeRim = rimShots.filter(s => attacksLeft ? s.x < 470 : s.x >= 470);
+  const basketX = activeRim.length
+    ? Math.round(activeRim.reduce((s, p) => s + p.x, 0) / activeRim.length)
+    : (attacksLeft ? 75 : 865);
 
   const W = 400, H = 455;
   const tW = 'rgba(255,255,255,0.35)';
   const tD = 'rgba(255,255,255,0.20)';
   const bX = 200, bY = 415, pL = 148, pR = 252, pT = 265, ftY = 265, ftR = 52;
-  const cX1 = 50, cX2 = 350, cY = 325;
+  // 3pt ellipse: rx=167 (lateral), ry=213 (depth) centered at basket (bX, bY).
+  // Derived from transform scale: 20.75ft * 1.025px/unit ≈ 213px vertical; 22ft * 0.76 ≈ 167px lateral.
+  const arc3L = bX - 167, arc3R = bX + 167, arc3T = bY - 213; // 33, 367, 202
 
   // Range colors
   const rangeColor = { rim: 'rgba(34,197,94,0.9)', jumper: 'rgba(99,179,237,0.9)', three_pointer: 'rgba(251,146,60,0.9)' };
   const rangeMissColor = { rim: 'rgba(34,197,94,0.4)', jumper: 'rgba(99,179,237,0.4)', three_pointer: 'rgba(251,146,60,0.4)' };
 
   let dots = '';
-  shots.forEach(shot => {
+  normShots.forEach(shot => {
     if (shot.range === 'free_throw') return;
-    const { x, y } = _thShotToSVG(shot, attacksLeft);
+    const { x, y } = _thShotToSVG(shot, attacksLeft, basketX);
     if (x < 0 || x > W || y < -20 || y > H + 20) return; // outside visible area
     const c  = shot.made ? (rangeColor[shot.range] || 'rgba(200,200,200,0.8)') : (rangeMissColor[shot.range] || 'rgba(200,200,200,0.35)');
     const da = `class="shot-dot" data-player="${_escAttr(shot.shooter)}" data-zone="${shot.range}" data-made="${shot.made?'1':'0'}" data-period="${shot.period||''}" data-clock="${_escAttr(shot.clock||'')}"`;
@@ -2033,7 +2289,7 @@ function _th_buildShotChartSVG(shots, teamName, color) {
 
   // Build zone stats for labels
   const zoneStats = {};
-  shots.forEach(s => {
+  normShots.forEach(s => {
     if (s.range === 'free_throw') return;
     if (!zoneStats[s.range]) zoneStats[s.range] = { made: 0, att: 0 };
     zoneStats[s.range].att++;
@@ -2050,7 +2306,7 @@ function _th_buildShotChartSVG(shots, teamName, color) {
   };
 
   const ftZ = zoneStats['free_throw'];
-  const ftStats = shots.filter(s => s.range === 'free_throw');
+  const ftStats = normShots.filter(s => s.range === 'free_throw');
   const ftMade = ftStats.filter(s => s.made).length;
   const ftAtt  = ftStats.length;
 
@@ -2065,15 +2321,15 @@ function _th_buildShotChartSVG(shots, teamName, color) {
       <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 0 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5" stroke-dasharray="4 4"/>
       <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 1 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
       <circle cx="${bX}" cy="${bY}" r="28" fill="none" stroke="${tW}" stroke-width="1.5"/>
-      <line x1="${cX1}" y1="440" x2="${cX1}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
-      <line x1="${cX2}" y1="440" x2="${cX2}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
-      <path d="M ${cX1} ${cY} A 187 187 0 0 0 ${cX2} ${cY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${arc3L}" y1="440" x2="${arc3L}" y2="${bY}" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${arc3R}" y1="440" x2="${arc3R}" y2="${bY}" stroke="${tW}" stroke-width="1.5"/>
+      <path d="M ${arc3L} ${bY} A 167 213 0 0 1 ${bX} ${arc3T} A 167 213 0 0 1 ${arc3R} ${bY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
       <line x1="${bX-20}" y1="${bY-28}" x2="${bX+20}" y2="${bY-28}" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
       <circle cx="${bX}" cy="${bY}" r="12" fill="none" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
       ${dots}
-      ${zoneLbl('three_pointer', 200, 115)}
-      ${zoneLbl('jumper', 110, 300)}
-      ${zoneLbl('rim', 200, 395)}
+      ${zoneLbl('three_pointer', 200, 148)}
+      ${zoneLbl('jumper', 110, 310)}
+      ${zoneLbl('rim', 200, 438)}
     </svg>
     <div class="thShotStats">
       <span class="thShotStat" style="color:rgba(34,197,94,0.9)">● Rim ${zoneStats.rim ? Math.round(zoneStats.rim.made/zoneStats.rim.att*100)+'%' : '—'}</span>
@@ -2773,10 +3029,44 @@ async function thLoadMatchup(compareTeam, mode) {
     return;
   }
 
+  // Backward-compatible fallback: older in-memory game cache may not include homeTeamId/awayTeamId.
+  // For WBB, hydrate missing team ids from /api/wbb/teams so play.teamId can still map to team names.
+  if (typeof league !== 'undefined' && league === 'WBB' && matchupGames.some(g => !g.homeTeamId || !g.awayTeamId)) {
+    try {
+      const tr = await fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(thCurrentSeason)).then(r => r.json());
+      const teamsMap = (tr && tr.teams) ? tr.teams : {};
+      const nameToId = {};
+      Object.keys(teamsMap).forEach(tid => {
+        const t = teamsMap[tid] || {};
+        [t.location, t.displayName, t.abbreviation, t.name].filter(Boolean).forEach(n => {
+          nameToId[String(n).toLowerCase()] = String(tid);
+        });
+      });
+      matchupGames.forEach(g => {
+        if (!g.homeTeamId && g.homeTeam) g.homeTeamId = nameToId[String(g.homeTeam).toLowerCase()] || '';
+        if (!g.awayTeamId && g.awayTeam) g.awayTeamId = nameToId[String(g.awayTeam).toLowerCase()] || '';
+      });
+    } catch (_) {}
+  }
+
   el.innerHTML = `<div class="muted" style="padding:20px;text-align:center">Loading play-by-play for ${matchupGames.length} game${matchupGames.length!==1?'s':''}…</div>`;
 
   const playsArrays = await Promise.all(matchupGames.map(g => loadPlaysForGame(g.id)));
-  const allShots = playsArrays.flat();
+  const allShots = [];
+  playsArrays.forEach((arr, idx) => {
+    const g = matchupGames[idx] || {};
+    const hId = String(g.homeTeamId || '');
+    const aId = String(g.awayTeamId || '');
+    const hName = g.homeTeam || '';
+    const aName = g.awayTeam || '';
+    (arr || []).forEach(p => {
+      const tid = String(p && p.teamId || '');
+      const mappedTeam = tid && hId && aId
+        ? (tid === hId ? hName : (tid === aId ? aName : (p.team || '')))
+        : (p.team || '');
+      allShots.push(Object.assign({}, p, { team: mappedTeam }));
+    });
+  });
 
   const boxScores = matchupGames.map(g => {
     const tn = (thCurrentTeam || '').toLowerCase();
@@ -2846,11 +3136,16 @@ async function thLoadTeam(teamName, season) {
     loadTeamStats(teamName, thCurrentSeason),
     loadTeamShootingZones(teamName, thCurrentSeason),
   ]);
+  let wbbStandings = null;
+  if (typeof league !== 'undefined' && league === 'WBB') {
+    const confName = (teamData && teamData.conference) ? teamData.conference : _thFindWbbConferenceForTeam(teamName);
+    wbbStandings = await _thBuildWbbConferenceStandings(confName, thCurrentSeason);
+  }
   _thCurrentStats = statsData;
   _thLoading('');
 
   thRenderOverview(teamData, gamesData, statsData);
-  thRenderThreats(teamData, gamesData);
+  thRenderThreats(teamData, gamesData, wbbStandings);
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);
   thRenderDNA(teamData, statsData, shootingData);
