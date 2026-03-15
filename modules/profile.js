@@ -172,7 +172,7 @@ function openProfile(r){
     const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
     mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data…</div>';
     if (typeof loadPlayerShots === 'function') {
-      loadPlayerShots(team, yr, player).then(function(shots) {
+      loadPlayerShots(team, yr, player, r['EspnId'] || null).then(function(shots) {
         if (!shots || !shots.length) {
           mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
           return;

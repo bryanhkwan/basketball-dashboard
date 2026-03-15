@@ -138,39 +138,33 @@ const BIG_DEFAULTS = [
   {stat:'TOPG', w:5, min:3.5, max:0.5, dir:'lower'},
 ];
 
-// WBB-specific scoring defaults — same structure as MBB but:
-// • OR%/DR% removed (not available from ESPN byathlete endpoint)
-// • BPM uses ESPN PER as substitute (stored as 'BPM' via _calcWbbDerivedStats)
-// • WS/40 is estimated from PER ((PER-15)*0.025)
-// • Bigs: redistributed OR%/DR% weight to RPG and BPG
+// WBB-specific scoring defaults — only stats genuinely available from ESPN byathlete.
+// BPM, WS/40, DRtg, OR%, DR% excluded — not available or not calculable for WBB.
+// USG% is approximated from player volume (FGA+FTA+TOV) vs estimated team possession-actions.
+// Ranges calibrated to WBB distributions.
 const WBB_GUARD_DEFAULTS = [
-  {stat:'PPG',   w:10, min:0,    max:30,   dir:'higher'},
-  {stat:'eFG%',  w:10, min:0.35, max:0.60, dir:'higher'},
-  {stat:'3P%',   w:8,  min:0.25, max:0.42, dir:'higher'},
-  {stat:'FT%',   w:5,  min:0.60, max:0.90, dir:'higher'},
-  {stat:'APG',   w:10, min:0.5,  max:7,    dir:'higher'},
-  {stat:'A/TO',  w:8,  min:0.5,  max:2.5,  dir:'higher'},
-  {stat:'SPG',   w:7,  min:0.3,  max:2.0,  dir:'higher'},
-  {stat:'BPM',   w:10, min:-3,   max:8,    dir:'higher'},  // PER as substitute
-  {stat:'WS/40', w:8,  min:0.05, max:0.25, dir:'higher'},
-  {stat:'DRtg',  w:7,  min:115,  max:90,   dir:'lower'},
-  {stat:'USG%',  w:5,  min:12,   max:32,   dir:'higher'},
-  {stat:'RPG',   w:5,  min:1,    max:7,    dir:'higher'},
-  {stat:'TOPG',  w:7,  min:3.5,  max:0.5,  dir:'lower'},
+  {stat:'PPG',   w:14, min:0,    max:25,   dir:'higher'},
+  {stat:'eFG%',  w:13, min:0.35, max:0.60, dir:'higher'},
+  {stat:'3P%',   w:9,  min:0.25, max:0.40, dir:'higher'},
+  {stat:'FT%',   w:6,  min:0.60, max:0.90, dir:'higher'},
+  {stat:'APG',   w:13, min:0.5,  max:6.0,  dir:'higher'},
+  {stat:'A/TO',  w:11, min:0.5,  max:2.5,  dir:'higher'},
+  {stat:'SPG',   w:11, min:0.3,  max:2.5,  dir:'higher'},
+  {stat:'RPG',   w:6,  min:1.0,  max:6.0,  dir:'higher'},
+  {stat:'TOPG',  w:11, min:3.0,  max:0.5,  dir:'lower'},
+  {stat:'USG%',  w:6,  min:12,   max:30,   dir:'higher'},
 ];
 
 const WBB_BIG_DEFAULTS = [
-  {stat:'PPG',   w:10, min:0,    max:25,   dir:'higher'},
-  {stat:'eFG%',  w:10, min:0.40, max:0.65, dir:'higher'},
-  {stat:'FT%',   w:5,  min:0.55, max:0.85, dir:'higher'},
-  {stat:'BPG',   w:11, min:0.2,  max:2.5,  dir:'higher'},  // boosted (+2 from DR%)
-  {stat:'RPG',   w:13, min:2,    max:12,   dir:'higher'},  // boosted (+3 from OR%)
-  {stat:'DRtg',  w:8,  min:115,  max:90,   dir:'lower'},
-  {stat:'BPM',   w:10, min:-3,   max:8,    dir:'higher'},  // PER as substitute
-  {stat:'WS/40', w:8,  min:0.05, max:0.25, dir:'higher'},
-  {stat:'A/TO',  w:6,  min:0.3,  max:2.0,  dir:'higher'},
-  {stat:'USG%',  w:5,  min:12,   max:32,   dir:'higher'},
-  {stat:'TOPG',  w:5,  min:3.5,  max:0.5,  dir:'lower'},
+  {stat:'PPG',   w:12, min:0,    max:20,   dir:'higher'},
+  {stat:'eFG%',  w:14, min:0.40, max:0.65, dir:'higher'},
+  {stat:'FT%',   w:6,  min:0.55, max:0.85, dir:'higher'},
+  {stat:'RPG',   w:20, min:2,    max:12,   dir:'higher'},
+  {stat:'BPG',   w:16, min:0.2,  max:3.0,  dir:'higher'},
+  {stat:'SPG',   w:8,  min:0.2,  max:1.5,  dir:'higher'},
+  {stat:'A/TO',  w:8,  min:0.3,  max:2.0,  dir:'higher'},
+  {stat:'TOPG',  w:8,  min:3.0,  max:0.5,  dir:'lower'},
+  {stat:'USG%',  w:8,  min:12,   max:28,   dir:'higher'},
 ];
 
 const ROLE_DESCRIPTIONS = {

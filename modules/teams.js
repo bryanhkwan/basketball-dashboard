@@ -94,9 +94,15 @@ function _thLoading(msg) {
 }
 
 // ── Render: Program Overview ──────────────────────────────────────────────────
-function thRenderOverview(teamData, gamesData) {
+function thRenderOverview(teamData, gamesData, statsData) {
   if (!thOverviewEl) return;
-  if (!teamData) {
+  // For WBB, teamData from ratings may be null — allow rendering with fallback
+  const isWBB = (typeof league !== 'undefined' && league === 'WBB');
+  if (!teamData && !isWBB) {
+    thOverviewEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Select a team to view program analysis.</div>';
+    return;
+  }
+  if (!teamData && isWBB && !thCurrentTeam) {
     thOverviewEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Select a team to view program analysis.</div>';
     return;
   }
@@ -104,12 +110,12 @@ function thRenderOverview(teamData, gamesData) {
   // Derive W-L record from games
   const games = (gamesData && gamesData.games) ? gamesData.games : [];
   let wins = 0, losses = 0, confW = 0, confL = 0;
+  const tnForRecord = (teamData && teamData.team) ? teamData.team.toLowerCase() : (thCurrentTeam || '').toLowerCase();
   games.forEach(g => {
     const hn = (g.homeTeam || '').toLowerCase();
     const an = (g.awayTeam || '').toLowerCase();
-    const tn = (teamData.team || '').toLowerCase();
-    const isHome = hn === tn;
-    const isAway = an === tn;
+    const isHome = hn === tnForRecord;
+    const isAway = an === tnForRecord;
     if (!isHome && !isAway) return;
     const ts = isHome ? g.homePoints : g.awayPoints;
     const os = isHome ? g.awayPoints : g.homePoints;
@@ -123,14 +129,33 @@ function thRenderOverview(teamData, gamesData) {
   const recordStr = hasRecord ? `${wins}–${losses}` : '—';
   const confRecord = (confW + confL) > 0 ? `${confW}–${confL} conf` : '';
 
+  // Conference standing from ESPN (WBB) or game log (MBB)
+  const standing = statsData && statsData.conferenceStanding;
+  let confStandingStr = confRecord;
+  if (standing && (standing.confWins != null || standing.confLosses != null)) {
+    const cw = standing.confWins != null ? standing.confWins : '?';
+    const cl = standing.confLosses != null ? standing.confLosses : '?';
+    const rankPart = standing.confRank ? ` · #${standing.confRank} in conf` : '';
+    confStandingStr = `${cw}–${cl} conf${rankPart}`;
+  }
+
   const adjOs = allRatingsData.map(x => x.adjO).filter(Number.isFinite).sort((a,b)=>a-b);
   const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
-  const oPct  = _thPctOf(adjOs, teamData.adjO);
-  const dPct  = teamData.adjD != null ? (100 - _thPctOf(adjDs, teamData.adjD)) : null;
-  const adjEM = Number.isFinite(teamData.adjEM) ? teamData.adjEM : null;
+  const oPct  = teamData ? _thPctOf(adjOs, teamData.adjO) : null;
+  const dPct  = (teamData && teamData.adjD != null) ? (100 - _thPctOf(adjDs, teamData.adjD)) : null;
+  const adjEM = (teamData && Number.isFinite(teamData.adjEM)) ? teamData.adjEM : null;
   const emStr = adjEM != null ? ((adjEM >= 0 ? '+' : '') + _thFmt(adjEM)) : '—';
-  const rankStr  = teamData.rank ? '#' + teamData.rank : '—';
-  const rankColor = teamData.rank ? (teamData.rank <= 10 ? 'var(--good)' : teamData.rank <= 25 ? 'var(--accent)' : teamData.rank <= 50 ? 'var(--warn)' : 'var(--muted)') : 'var(--muted)';
+  const rankStr  = (teamData && teamData.rank) ? '#' + teamData.rank : '—';
+  const rankColor = (teamData && teamData.rank) ? (teamData.rank <= 10 ? 'var(--good)' : teamData.rank <= 25 ? 'var(--accent)' : teamData.rank <= 50 ? 'var(--warn)' : 'var(--muted)') : 'var(--muted)';
+  const displayName = (teamData && teamData.team) ? teamData.team : thCurrentTeam;
+  // For WBB (no ratings), try to find conference from player pool
+  let displayConf = (teamData && teamData.conference) ? teamData.conference : '';
+  if (!displayConf && isWBB && thCurrentTeam && typeof tbGetAllPlayers === 'function') {
+    const sample = tbGetAllPlayers().find(p => (p.Team || '').toLowerCase() === thCurrentTeam.toLowerCase());
+    displayConf = (sample && sample.Conference) ? sample.Conference : '';
+  }
+  if (!displayConf) displayConf = '—';
+  const displaySeason = thSeasonInput ? thSeasonInput.value : '2026';
 
   // Style-of-play assessments (only O/D based — tempo unavailable)
   const styleLines = [];
@@ -149,40 +174,58 @@ function thRenderOverview(teamData, gamesData) {
     else if (adjEM <= -10) styleLines.push('📉 Negative net efficiency');
   }
 
+  // WBB ESPN-based stats panel (when no Barttorvik ratings)
+  const wbbStatsHtml = isWBB && statsData && statsData.teamStats ? (() => {
+    const ts = statsData.teamStats;
+    const ff = ts.fourFactors || {};
+    const ppg = ts.points && statsData.games ? (ts.points.total / statsData.games).toFixed(1) : '—';
+    const efg = ff.effectiveFieldGoalPct != null ? ff.effectiveFieldGoalPct.toFixed(1) + '%' : '—';
+    const tovR = ff.turnoverRatio != null ? (ff.turnoverRatio * 100).toFixed(1) + '%' : '—';
+    const orebP = ff.offensiveReboundPct != null ? ff.offensiveReboundPct.toFixed(1) + '%' : '—';
+    const ftr = ff.freeThrowRate != null ? ff.freeThrowRate.toFixed(1) + '%' : '—';
+    return `
+      <div class="thRatCard"><div class="thRatVal">${ppg}</div><div class="thRatLabel">PPG</div><div class="thRatPct">points/game</div></div>
+      <div class="thRatCard"><div class="thRatVal">${efg}</div><div class="thRatLabel">eFG%</div><div class="thRatPct">eff. FG rate</div></div>
+      <div class="thRatCard"><div class="thRatVal">${orebP}</div><div class="thRatLabel">OREB%</div><div class="thRatPct">off. rebounding</div></div>
+      <div class="thRatCard"><div class="thRatVal">${tovR}</div><div class="thRatLabel">TOV%</div><div class="thRatPct">turnover rate</div></div>
+      <div class="thRatCard"><div class="thRatVal">${ftr}</div><div class="thRatLabel">FT Rate</div><div class="thRatPct">FTM/FGA</div></div>`;
+  })() : `
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${_thGrade(oPct)}">${teamData ? _thFmt(teamData.adjO) : '—'}</div>
+        <div class="thRatLabel">Adj. Offense</div>
+        <div class="thRatPct">${oPct != null ? oPct+'th %ile' : ''}</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${_thGrade(dPct)}">${teamData ? _thFmt(teamData.adjD) : '—'}</div>
+        <div class="thRatLabel">Adj. Defense</div>
+        <div class="thRatPct">${dPct != null ? dPct+'th %ile' : ''}</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${adjEM!=null&&adjEM>=0?'var(--good)':adjEM!=null?'var(--bad)':'var(--muted)'}">${emStr}</div>
+        <div class="thRatLabel">Net Efficiency</div>
+        <div class="thRatPct">net rating</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${rankColor};font-size:20px">${rankStr}</div>
+        <div class="thRatLabel">Natl Rank</div>
+        <div class="thRatPct">by net efficiency</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal">${teamData ? _thFmt(teamData.srs) : '—'}</div>
+        <div class="thRatLabel">SRS Rating</div>
+        <div class="thRatPct">simple rating</div>
+      </div>`;
+
   thOverviewEl.innerHTML = `
     <div class="thHeroCard">
       <div class="thHeroLeft">
-        <div class="thTeamName">${teamData.team}</div>
-        <div class="thConf">${teamData.conference || '—'} · Season ${thSeasonInput ? thSeasonInput.value : '2026'}</div>
-        <div class="thRecord">${recordStr}${confRecord ? ' · ' + confRecord : ''}</div>
+        <div class="thTeamName">${displayName}</div>
+        <div class="thConf">${displayConf} · Season ${displaySeason}</div>
+        <div class="thRecord">${recordStr}${confStandingStr ? ' · ' + confStandingStr : ''}</div>
         ${styleLines.length ? `<div class="thStyleLines">${styleLines.map(s=>`<span class="thStyleTag">${s}</span>`).join('')}</div>` : ''}
       </div>
       <div class="thRatingsGrid">
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${_thGrade(oPct)}">${_thFmt(teamData.adjO)}</div>
-          <div class="thRatLabel">Adj. Offense</div>
-          <div class="thRatPct">${oPct != null ? oPct+'th %ile' : ''}</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${_thGrade(dPct)}">${_thFmt(teamData.adjD)}</div>
-          <div class="thRatLabel">Adj. Defense</div>
-          <div class="thRatPct">${dPct != null ? dPct+'th %ile' : ''}</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${adjEM!=null&&adjEM>=0?'var(--good)':adjEM!=null?'var(--bad)':'var(--muted)'}">${emStr}</div>
-          <div class="thRatLabel">Net Efficiency</div>
-          <div class="thRatPct">net rating</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${rankColor};font-size:20px">${rankStr}</div>
-          <div class="thRatLabel">Natl Rank</div>
-          <div class="thRatPct">by net efficiency</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal">${_thFmt(teamData.srs)}</div>
-          <div class="thRatLabel">SRS Rating</div>
-          <div class="thRatPct">simple rating</div>
-        </div>
+        ${wbbStatsHtml}
       </div>
     </div>`;
 }
@@ -266,7 +309,7 @@ function thRenderGameLog(teamData, gamesData) {
     return;
   }
 
-  const tn = (teamData ? teamData.team : '').toLowerCase();
+  const tn = (teamData ? teamData.team : thCurrentTeam || '').toLowerCase();
   const games = gamesData.games.slice().sort((a, b) =>
     new Date(a.startDate || a.date || 0) - new Date(b.startDate || b.date || 0)
   );
@@ -315,7 +358,7 @@ function thRenderH2H(teamData, gamesData) {
     return;
   }
 
-  const tn = (teamData ? teamData.team : '').toLowerCase();
+  const tn = (teamData ? teamData.team : thCurrentTeam || '').toLowerCase();
   const oppMap = {};
 
   gamesData.games.forEach(g => {
@@ -2791,7 +2834,7 @@ async function thLoadTeam(teamName, season) {
   const teamData = teamRatings[teamKey] || null;
 
   // Show overview immediately while rest loads in parallel
-  thRenderOverview(teamData, null);
+  thRenderOverview(teamData, null, null);
   const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
     document.getElementById('thDNA'), document.getElementById('thCompare'),
     document.getElementById('thMatchup'), document.getElementById('thScout')];
@@ -2806,7 +2849,7 @@ async function thLoadTeam(teamName, season) {
   _thCurrentStats = statsData;
   _thLoading('');
 
-  thRenderOverview(teamData, gamesData);
+  thRenderOverview(teamData, gamesData, statsData);
   thRenderThreats(teamData, gamesData);
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);

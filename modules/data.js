@@ -877,14 +877,26 @@ async function loadAllData(year) {
     var _wbbLoadedPlayers = null; // keep ref for background height loading
     if (wbbPlayersSettled.status === 'fulfilled' && wbbPlayersSettled.value && wbbPlayersSettled.value.length) {
       const players = wbbPlayersSettled.value;
-      // Enrich Conference from /api/wbb/teams response
+      // Enrich Team name + Conference from /api/wbb/teams response
+      // Always overwrite ath.teamName (which is mascot-only like "Huskies") with proper school name
       if (wbbTeamsSettled.status === 'fulfilled' && wbbTeamsSettled.value && wbbTeamsSettled.value.teams) {
         const teamsMap = wbbTeamsSettled.value.teams;
+        // Build a name→teamData lookup as fallback for when TeamId is missing
+        const nameToTeamData = {};
+        Object.values(teamsMap).forEach(td => {
+          if (td.location)     nameToTeamData[td.location.toLowerCase()]     = td;
+          if (td.displayName)  nameToTeamData[td.displayName.toLowerCase()]  = td;
+          if (td.abbreviation) nameToTeamData[td.abbreviation.toLowerCase()] = td;
+          if (td.name)         nameToTeamData[td.name.toLowerCase()]         = td; // mascot fallback
+        });
         players.forEach(p => {
           const tid = String(p.TeamId || '');
-          if (tid && teamsMap[tid]) {
-            p.Conference = teamsMap[tid].conference || '';
-            if (!p.Team) p.Team = teamsMap[tid].displayName || '';
+          let td = tid ? teamsMap[tid] : null;
+          // Fallback: look up by current team name string if TeamId didn't resolve
+          if (!td && p.Team) td = nameToTeamData[p.Team.toLowerCase()] || null;
+          if (td) {
+            p.Team       = td.location || td.displayName || p.Team;
+            p.Conference = td.conference || '';
           }
         });
       }
@@ -1063,6 +1075,35 @@ async function loadShootingForTeam(team, year) {
   }
 }
 
+// ── loadWbbConferenceStanding — fetch conference W/L/rank from ESPN standings ──
+var _wbbStandingsCache = null; // { teamId: {confWins, confLosses, confRank, overallWins, overallLosses} }
+async function loadWbbConferenceStanding(teamId) {
+  if (!teamId) return null;
+  if (!_wbbStandingsCache) {
+    _wbbStandingsCache = {};
+    try {
+      const url = 'https://site.web.api.espn.com/apis/v2/sports/basketball/womens-college-basketball/standings?region=us&lang=en&contentorigin=espn&type=0&level=1&sort=gamesbehind%3Aasc%2Cwins%3Adesc%2Closses%3Aasc&limit=500&groups=50';
+      const data = await fetch(url).then(r => r.json()).catch(() => null);
+      const entries = (data && data.standings && data.standings.entries) || [];
+      entries.forEach(e => {
+        const tid = String(e.team && e.team.id || '');
+        if (!tid) return;
+        const statMap = {};
+        (e.stats || []).forEach(s => { statMap[s.name] = s; });
+        _wbbStandingsCache[tid] = {
+          confWins:   statMap.wins          ? parseInt(statMap.wins.value)   : null,
+          confLosses: statMap.losses        ? parseInt(statMap.losses.value) : null,
+          confRank:   statMap.playoffSeed   ? parseInt(statMap.playoffSeed.value) : null,
+          confPct:    statMap.leagueWinPercent ? statMap.leagueWinPercent.displayValue : null,
+          gamesBehind: statMap.gamesBehind  ? statMap.gamesBehind.displayValue : null,
+          rank:       e.team.rank           || null,
+        };
+      });
+    } catch(_) {}
+  }
+  return _wbbStandingsCache[String(teamId)] || null;
+}
+
 // ── loadTeamStats — full team season stats (offense + defense + four factors) ─
 async function loadTeamStats(team, year) {
   year = year || 2026;
@@ -1073,10 +1114,15 @@ async function loadTeamStats(team, year) {
       // ESPN team stats — called directly from browser (CORS-friendly)
       const teamId = await _wbbEspnTeamId(team);
       if (!teamId) { teamStatsCache[key] = null; return null; }
-      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/statistics?season=${year}`);
-      if (!r.ok) { teamStatsCache[key] = null; return null; }
-      const data = await r.json();
-      teamStatsCache[key] = _mapEspnTeamStats(data);
+      const [statsResp, standing] = await Promise.all([
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/statistics?season=${year}`),
+        loadWbbConferenceStanding(teamId),
+      ]);
+      if (!statsResp.ok) { teamStatsCache[key] = null; return null; }
+      const data = await statsResp.json();
+      const result = _mapEspnTeamStats(data);
+      if (result && standing) result.conferenceStanding = standing;
+      teamStatsCache[key] = result;
       return teamStatsCache[key];
     }
     const r = await fetch(WORKER_URL + '/api/cbdata/teamstats?team=' + encodeURIComponent(team) + '&season=' + year);
@@ -1093,6 +1139,11 @@ async function loadTeamShootingZones(team, year) {
   const key = (team + ':' + year).toLowerCase();
   if (teamShootingZonesCache[key] !== undefined) return teamShootingZonesCache[key];
   try {
+    if (league === 'WBB') {
+      // ESPN WBB does not expose team shooting zones — return null so Teams Hub degrades gracefully
+      teamShootingZonesCache[key] = null;
+      return null;
+    }
     const r = await fetch(WORKER_URL + '/api/cbdata/teamshooting?team=' + encodeURIComponent(team) + '&season=' + year);
     if (!r.ok) return null;
     const data = await r.json();
@@ -1111,7 +1162,7 @@ async function loadGamesForTeam(team, year) {
       // ESPN schedule — called directly from browser (CORS-friendly)
       const teamId = await _wbbEspnTeamId(team);
       if (!teamId) { teamGamesCache[key] = null; return null; }
-      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/schedule?season=${year}&seasontype=2`);
+      const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${teamId}/schedule?season=${year}`);
       if (!r.ok) { teamGamesCache[key] = null; return null; }
       const data = await r.json();
       teamGamesCache[key] = _mapEspnScheduleToGames(data, team);
@@ -1143,7 +1194,7 @@ async function loadPlaysForGame(gameId) {
 }
 
 // ── loadPlayerShots — all season shots for one player via the worker ──────────
-async function loadPlayerShots(team, season, playerName) {
+async function loadPlayerShots(team, season, playerName, espnId) {
   if (!team || !season || !playerName) return [];
   const key = (team + ':' + season + ':' + playerName).toLowerCase();
   if (playerShotsCache[key]) return playerShotsCache[key];
@@ -1151,7 +1202,8 @@ async function loadPlayerShots(team, season, playerName) {
     const endpoint = league === 'WBB'
       ? WORKER_URL + '/api/wbb/playershots?team=' + encodeURIComponent(team) +
         '&season=' + encodeURIComponent(season) +
-        '&playerName=' + encodeURIComponent(playerName)
+        '&playerName=' + encodeURIComponent(playerName) +
+        (espnId ? '&espnId=' + encodeURIComponent(espnId) : '')
       : WORKER_URL + '/api/cbdata/playershots?team=' + encodeURIComponent(team) +
         '&season=' + encodeURIComponent(season) +
         '&playerName=' + encodeURIComponent(playerName);
@@ -1210,9 +1262,12 @@ async function _wbbLoadAllPlayerPages(year) {
         Player:  ath.displayName || '',
         Team:    ath.teamName    || '',
         TeamId:  ath.teamId      || null,
+        EspnId:  ath.id          || null,
         Conference: '',
         Pos:     (ath.position && ath.position.abbreviation) || '',
         Height:  '',
+        Class:   '',
+        Hometown: '',
         G:       stats.gamesPlayed || 0,
         MP:      +(stats.avgMinutes  || 0).toFixed(1),
         PPG:     +(stats.avgPoints   || 0).toFixed(1),
@@ -1225,7 +1280,6 @@ async function _wbbLoadAllPlayerPages(year) {
         SPG:     +(stats.avgSteals    || 0).toFixed(2),
         BPG:     +(stats.avgBlocks    || 0).toFixed(2),
         '3PA/G': +(stats.avgThreePointFieldGoalsAttempted || 0).toFixed(1),
-        PER:     +(stats.PER || 0).toFixed(2),
         _FGM:    stats.fieldGoalsMade               || 0,
         _FGA:    stats.fieldGoalsAttempted           || 0,
         _3PM:    stats.threePointFieldGoalsMade      || 0,
@@ -1241,71 +1295,59 @@ async function _wbbLoadAllPlayerPages(year) {
   return players;
 }
 
-// Background enrichment after initial WBB load — populates Team (full name), Conference, Height.
-// Fetches ESPN team details + roster for each unique teamId (all CORS-friendly).
-// Updates players in-place and triggers a re-render when done.
+// Background enrichment after initial WBB load — populates Height, Class, Hometown.
+// Fetches ESPN team rosters (CORS-friendly) in batches, keyed by EspnId for accuracy.
 async function _wbbEnrichPlayersBackground(players) {
   const teamIds = [...new Set(players.map(p => String(p.TeamId || '')).filter(Boolean))];
-  const teamDetailMap = {}; // teamId → {displayName, groupId}
-  const heightMap     = {}; // playerName lowercase → height string
+  // EspnId → {height, classYear, hometown}
+  const bioMap = {};
 
-  // Batch fetch team details + rosters in parallel (20 teams per batch)
-  // team detail → displayName + groups.id; roster → height
-  const CHUNK = 20;
+  function fmtHeight(inches) {
+    if (!inches || isNaN(inches)) return '';
+    return Math.floor(inches / 12) + "'" + (inches % 12) + '"';
+  }
+  function fmtClass(exp) {
+    if (!exp) return '';
+    const abbr = exp.abbreviation || exp.displayValue || '';
+    if (abbr) return abbr;
+    const yr = parseInt(exp.year || exp.yearValue || 0);
+    return yr === 1 ? 'Fr' : yr === 2 ? 'So' : yr === 3 ? 'Jr' : yr === 4 ? 'Sr' : '';
+  }
+  function fmtHometown(bp) {
+    if (!bp) return '';
+    const parts = [bp.city, bp.state || bp.country].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  // Batch roster fetches — 25 teams per batch
+  const CHUNK = 25;
   for (let i = 0; i < teamIds.length; i += CHUNK) {
     const batch = teamIds.slice(i, i + CHUNK);
-    const [detailResps, rosterResps] = await Promise.all([
-      Promise.all(batch.map(tid =>
-        fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${tid}`)
-          .then(r => r.ok ? r.json() : null).catch(() => null)
-      )),
-      Promise.all(batch.map(tid =>
-        fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${tid}/roster`)
-          .then(r => r.ok ? r.json() : null).catch(() => null)
-      )),
-    ]);
-
-    detailResps.forEach((d, j) => {
-      if (!d || !d.team) return;
-      teamDetailMap[String(batch[j])] = {
-        displayName: d.team.displayName || '',
-        groupId:     d.team.groups && d.team.groups.id ? String(d.team.groups.id) : null,
-      };
-    });
+    const rosterResps = await Promise.all(batch.map(tid =>
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/teams/${tid}/roster`)
+        .then(r => r.ok ? r.json() : null).catch(() => null)
+    ));
     rosterResps.forEach(rd => {
       if (!rd) return;
-      (rd.athletes || []).forEach(p => {
-        const name = (p.displayName || p.fullName || '').toLowerCase();
-        const ht   = p.displayHeight || (p.height ? String(p.height) : '');
-        if (name && ht) heightMap[name] = ht;
+      (rd.athletes || []).forEach(a => {
+        if (!a.id) return;
+        bioMap[String(a.id)] = {
+          height:   fmtHeight(a.height),
+          classYr:  fmtClass(a.experience),
+          hometown: fmtHometown(a.birthPlace),
+        };
       });
     });
   }
 
-  // Fetch conference names for unique group IDs (ESPN sports.core API, CORS-friendly)
-  const groupIds = [...new Set(Object.values(teamDetailMap).map(t => t.groupId).filter(Boolean))];
-  const groupResps = await Promise.all(
-    groupIds.map(gid =>
-      fetch(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/womens-college-basketball/groups/${gid}`)
-        .then(r => r.ok ? r.json() : null).catch(() => null)
-    )
-  );
-  const confMap = {}; // groupId → shortName
-  groupResps.forEach((g, i) => {
-    if (g && (g.shortName || g.name)) confMap[groupIds[i]] = g.shortName || g.name;
-  });
-
-  // Update player objects with enriched data
+  // Update player objects in-place using EspnId
   let updated = 0;
   players.forEach(p => {
-    const tid = String(p.TeamId || '');
-    const td  = teamDetailMap[tid];
-
-    if (td && td.displayName && p.Team !== td.displayName) { p.Team = td.displayName; updated++; }
-    const conf = td && td.groupId ? (confMap[td.groupId] || '') : '';
-    if (conf && p.Conference !== conf) { p.Conference = conf; updated++; }
-    const h = heightMap[(p.Player || '').toLowerCase()];
-    if (h && !p.Height) { p.Height = h; updated++; }
+    const bio = p.EspnId ? bioMap[String(p.EspnId)] : null;
+    if (!bio) return;
+    if (bio.height   && !p.Height)   { p.Height   = bio.height;   updated++; }
+    if (bio.classYr  && !p.Class)    { p.Class    = bio.classYr;  updated++; }
+    if (bio.hometown && !p.Hometown) { p.Hometown = bio.hometown; updated++; }
   });
 
   if (updated > 0 && wb && wb.Sheets) {
@@ -1315,7 +1357,6 @@ async function _wbbEnrichPlayersBackground(players) {
     if (league === 'WBB') reloadActiveSheet();
   }
 }
-// Alias for backwards compatibility with loadAllData call site
 var _wbbLoadHeightsBackground = _wbbEnrichPlayersBackground;
 
 // Resolve ESPN team name → team ID (fetches once per session, caches in memory)
@@ -1339,23 +1380,25 @@ async function _wbbEspnTeamId(teamName) {
 }
 
 // Calculate WBB advanced stats in-place from raw ESPN totals; deletes _ prefixed fields
+// Only computes stats that are genuinely derivable from ESPN byathlete data.
+// BPM, WS/40, DRtg, OR%, DR% are NOT available for WBB — not set here.
 function _calcWbbDerivedStats(p) {
   const fgm = p._FGM || 0, fga = p._FGA || 0;
-  const m3  = p._3PM  || 0, a3  = p._3PA  || 0;
-  const ftm = p._FTM  || 0, fta = p._FTA  || 0;
+  const m3  = p._3PM  || 0;
+  const fta = p._FTA  || 0;
   const pts = p._PTS  || 0;
   const ast = p._AST  || 0, tov = p._TOV  || 0;
+  const g   = p.G     || 1;
 
-  p['eFG%']  = fga > 0 ? +((fgm + 0.5 * m3) / fga).toFixed(4) : 0;
-  p['TS%']   = (fga + 0.44 * fta) > 0 ? +(pts / (2 * (fga + 0.44 * fta))).toFixed(4) : 0;
-  p['A/TO']  = tov > 0 ? +(ast / tov).toFixed(2) : 0;
+  p['eFG%'] = fga > 0 ? +((fgm + 0.5 * m3) / fga).toFixed(4) : 0;
+  p['TS%']  = (fga + 0.44 * fta) > 0 ? +(pts / (2 * (fga + 0.44 * fta))).toFixed(4) : 0;
+  p['A/TO'] = tov > 0 ? +(ast / tov).toFixed(2) : 0;
   // Ensure 3P% is decimal not whole-percent
   if (p['3P%'] > 1) p['3P%'] = +(p['3P%'] / 100).toFixed(4);
-  // PER used as BPM substitute; WS/40 estimated from PER
-  const per  = p.PER || 0;
-  p['BPM']   = per;
-  p['WS/40'] = +((per - 15) * 0.025).toFixed(4);
-  p['USG%']  = 0; // filled later by team-level pass if available
+  // USG% approximated from player volume vs estimated WBB team possession-actions
+  // NCAA WBB avg: ~57 FGA/g + 0.44×22 FTA/g + 14 TOV/g ≈ 80.7 possession-actions/game
+  const fgaPG = fga / g, ftaPG = fta / g;
+  p['USG%'] = +((fgaPG + 0.44 * ftaPG + p.TOPG) / 80.7 * 100).toFixed(1);
   // Clean up temp fields
   delete p._FGM; delete p._FGA; delete p._3PM; delete p._3PA;
   delete p._FTM; delete p._FTA; delete p._AST; delete p._TOV; delete p._PTS;
@@ -1423,6 +1466,12 @@ function _mapEspnTeamStats(data) {
 
 // Map ESPN team schedule → game list format used by thLoadMatchup
 function _mapEspnScheduleToGames(data, teamName) {
+  // ESPN sometimes returns score as object {value, displayValue} or plain string/number
+  const parseScore = s => {
+    if (s == null) return null;
+    const n = typeof s === 'object' ? parseInt(s.value != null ? s.value : s.displayValue) : parseInt(s);
+    return isNaN(n) ? null : n;
+  };
   const games = (data.events || [])
     .filter(e => e.competitions && e.competitions[0])
     .map(e => {
@@ -1430,13 +1479,14 @@ function _mapEspnScheduleToGames(data, teamName) {
       const comps = comp.competitors || [];
       const home  = comps.find(c => c.homeAway === 'home') || {};
       const away  = comps.find(c => c.homeAway === 'away') || {};
+      // Prefer location ("Ohio") over displayName ("Ohio Bobcats") so it matches thCurrentTeam
       return {
         id:         e.id,
         startDate:  e.date || '',
-        homeTeam:   (home.team && (home.team.displayName || home.team.name)) || '',
-        awayTeam:   (away.team && (away.team.displayName || away.team.name)) || '',
-        homePoints: home.score != null ? parseInt(home.score) : null,
-        awayPoints: away.score != null ? parseInt(away.score) : null,
+        homeTeam:   (home.team && (home.team.location || home.team.displayName || home.team.name)) || '',
+        awayTeam:   (away.team && (away.team.location || away.team.displayName || away.team.name)) || '',
+        homePoints: parseScore(home.score),
+        awayPoints: parseScore(away.score),
         completed:  !!(comp.status && comp.status.type && comp.status.type.completed),
       };
     });
@@ -1523,6 +1573,13 @@ function switchLeague(newLeague){
   // Refresh Team Builder and Opponent UI with restored rosters
   tbRefresh();
   oppRefresh();
+
+  // Reload team ratings for the new league so Teams Hub shows correct data
+  teamRatings = {};
+  allRatingsData = [];
+  loadTeamRatings(_currentDataSeason).then(() => {
+    if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+  }).catch(() => {});
 
   // Notify AI chat that league changed (clears stale roster context from history)
   if (typeof window._chatOnLeagueSwitch === 'function') window._chatOnLeagueSwitch(newLeague);
