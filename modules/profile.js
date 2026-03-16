@@ -1221,7 +1221,8 @@ async function _fetchWbbGameLog(r, season) {
         var opp     = (evInfo.opponent || {});
         var dateStr = ((evInfo.gameDate || evInfo.date || '').slice(0, 10));
         var homeAway = (evInfo.homeAway || 'home').toLowerCase() === 'home' ? 'H' : 'A';
-        // Score: evInfo.score = "74-68" or homeTeamScore / awayTeamScore
+        var evNote  = evInfo.eventNote || '';
+        var isTournament = isPost || /quarterfinal|semifinal|\bfinal\b|championship|tournament.*round|\d+(st|nd|rd|th) round/i.test(evNote);
         var score   = (evInfo.score || '').split('-').map(Number);
         var result  = '—';
         if (score.length === 2 && !isNaN(score[0]) && !isNaN(score[1])) {
@@ -1240,20 +1241,23 @@ async function _fetchWbbGameLog(r, season) {
         var fgm = parseInt(fgRaw[0]) || 0;
         var fga = parseInt(fgRaw[1]) || 0;
         games.push({
-          date:        dateStr,
-          opponent:    opp.displayName || opp.abbreviation || '',
-          homeAway:    homeAway,
-          neutralSite: false,
-          result:      result,
-          seasonType:  isPost ? 'postseason' : 'regular',
-          points:      pts,
-          rebounds:    reb,
-          assists:     ast,
-          steals:      stl,
-          blocks:      blk,
-          minutes:     min,
-          fgm:         fgm,
-          fga:         fga,
+          date:         dateStr,
+          opponent:     opp.displayName || opp.abbreviation || '',
+          homeAway:     homeAway,
+          neutralSite:  false,
+          result:       result,
+          seasonType:   isTournament ? 'postseason' : 'regular',
+          isTournament: isTournament,
+          gameNotes:    evNote || null,
+          statsAvailable: true,
+          points:       pts,
+          rebounds:     reb,
+          assists:      ast,
+          steals:       stl,
+          blocks:       blk,
+          minutes:      min,
+          fgm:          fgm,
+          fga:          fga,
         });
       });
     });
