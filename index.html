@@ -33,6 +33,7 @@
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
   <script src="modules/teams.js" defer></script>
+  <script src="modules/lab.js" defer></script>
   <script src="modules/chat.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="app.js" defer></script>
@@ -104,6 +105,7 @@
   <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
+  <button class="pageNavBtn" data-page="pageLab">🔬 Tournament Lab</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
   <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
@@ -827,6 +829,144 @@
   </div>
 </div>
 </div><!-- /pageMethodology -->
+
+<!-- Tournament Lab Page -->
+<div id="pageLab" style="display:none">
+<div class="wrap">
+  <div class="labPage">
+    <div class="labHeader">
+      <h2 class="labTitle">🔬 Tournament Lab</h2>
+      <p class="muted" style="font-size:13px">Select multiple teams to analyze common traits, archetypes, and what drives tournament success.</p>
+    </div>
+
+    <!-- Team Picker -->
+    <div class="card labPickerCard">
+      <div class="labPickerRow">
+        <div class="labPickerGroup">
+          <label class="labLabel">Add Teams</label>
+          <div class="labSearchWrap">
+            <input id="labTeamInput" type="text" class="labTeamInput" placeholder="Type a team name…" autocomplete="off">
+            <div id="labTeamDropdown" class="labDropdown" style="display:none"></div>
+          </div>
+        </div>
+        <button id="labRunBtn" class="labRunBtn" disabled>Run Analysis →</button>
+      </div>
+      <div id="labPills" class="labPills"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <div id="labPickerNote" class="muted" style="font-size:11px">Add at least 2 teams to run analysis.</div>
+        <button id="labPasteToggle" class="labPasteToggleBtn">📋 Paste a list</button>
+      </div>
+      <!-- Paste list panel (hidden by default) -->
+      <div id="labPastePanel" style="display:none;margin-top:12px">
+        <label class="labLabel" style="margin-bottom:4px;display:block">Paste team names (one per line, or comma/bullet separated):</label>
+        <textarea id="labPasteInput" class="labPasteArea" placeholder="e.g.&#10;Duke&#10;Kansas&#10;Houston&#10;UConn&#10;&#10;Or comma-separated: Duke, Kansas, Houston"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <button id="labPasteApplyBtn" class="labRunBtn" style="font-size:12px;padding:6px 14px">Add Matched Teams</button>
+          <button id="labPasteClearBtn" class="labPasteToggleBtn">Clear</button>
+          <span id="labPasteStatus" class="muted" style="font-size:11px"></span>
+        </div>
+        <div id="labPastePreview" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="labLoading" style="display:none;text-align:center;padding:32px">
+      <div class="labSpinner"></div>
+      <div class="muted" style="margin-top:12px;font-size:12px" id="labLoadingText">Fetching team data…</div>
+    </div>
+
+    <!-- Results Container -->
+    <div id="labResults" style="display:none">
+
+      <!-- Overview KPIs -->
+      <div class="labSection">
+        <div class="labSectionHead">📊 Overview</div>
+        <div id="labOverview" class="card labOverviewCard"></div>
+      </div>
+
+      <!-- Common Traits -->
+      <div class="labSection">
+        <div class="labSectionHead">🧬 Common DNA</div>
+        <div class="labSectionSub">Statistical thresholds met by the majority of selected teams. Higher % = stronger signal.</div>
+        <div id="labTraits" class="card"></div>
+      </div>
+
+      <!-- Team Profiles Table -->
+      <div class="labSection">
+        <div class="labSectionHead">📋 Team Profiles</div>
+        <div class="labSectionSub">Side-by-side comparison of key metrics across all selected teams.</div>
+        <div id="labProfiles" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- K-Means Clusters -->
+      <div class="labSection">
+        <div class="labSectionHead">🔮 K-Means Clusters</div>
+        <div class="labSectionSub">Teams grouped by statistical similarity using k-means clustering on z-score normalized dimensions. Distance = how far from cluster center.</div>
+        <div id="labClusters" class="card"></div>
+      </div>
+
+      <!-- Logistic Regression -->
+      <div class="labSection">
+        <div class="labSectionHead">📈 Tournament Predictor</div>
+        <div class="labSectionSub">Logistic regression trained on full D1 population — feature importances show which stats most predict tournament inclusion.</div>
+        <div id="labRegression" class="card"></div>
+      </div>
+
+      <!-- Archetypes -->
+      <div class="labSection">
+        <div class="labSectionHead">🏷️ Archetypes</div>
+        <div class="labSectionSub">Derived from cluster assignment, regression feature importances, shot zones, and clutch performance.</div>
+        <div id="labArchetypes" class="card"></div>
+      </div>
+
+      <!-- Shot Zones -->
+      <div class="labSection">
+        <div class="labSectionHead">🎯 Shot Zone Profiles</div>
+        <div class="labSectionSub">Paint / midrange / 3PT frequency and efficiency breakdown from team shooting data.</div>
+        <div id="labShotZones" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Play-by-Play Tendencies -->
+      <div class="labSection">
+        <div class="labSectionHead">📊 Play-by-Play Tendencies</div>
+        <div class="labSectionSub">Shot distribution, period efficiency, and clutch performance from recent game play-by-play data.</div>
+        <div id="labTendencies" class="card"></div>
+      </div>
+
+      <!-- Metric Distributions -->
+      <div class="labSection">
+        <div class="labSectionHead">📐 Metric Distributions</div>
+        <div class="labSectionSub">Min / P25 / Median / P75 / Max across your selected group.</div>
+        <div id="labDistributions" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Deep Analysis -->
+      <div class="labSection">
+        <div class="labSectionHead">🤖 AI Deep Analysis</div>
+        <div class="labSectionSub">AI-generated narrative identifying patterns, archetypes, and what separates these teams.</div>
+        <div class="card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+            <button id="labDeepBtn" class="labRunBtn" style="flex:1;min-width:180px">Run AI Deep Analysis →</button>
+            <!-- Model toggle -->
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="lsLabel active" id="labModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
+              <label class="leagueSwitch" style="margin:0 2px">
+                <input type="checkbox" id="labModelSwitchInput">
+                <span class="leagueSwitchTrack"></span>
+              </label>
+              <span class="lsLabel" id="labModelLblHeavy" style="font-size:10.5px">🧠 Pro</span>
+            </div>
+            <!-- Download PDF button (hidden until analysis runs) -->
+            <button id="labDownloadBtn" class="labPasteToggleBtn" style="display:none">⬇ Download PDF</button>
+          </div>
+          <div id="labDeepOutput" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+    </div><!-- /labResults -->
+  </div>
+</div>
+</div><!-- /pageLab -->
 
 <!-- Favorites Page -->
 <div id="pageFavorites" style="display:none">
