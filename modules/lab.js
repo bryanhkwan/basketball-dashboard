@@ -1713,7 +1713,7 @@ function labRunDeepAnalysis() {
   var useHeavy = _labDeepUseHeavyModel && !isGuest;
   var selectedModel = useHeavy ? 'gemini-3-flash-preview' : 'gemini-2.5-flash-lite';
   var maxTokens = useHeavy ? 8000 : 5000;
-  var GEMINI_PROXY_URL = (typeof WORKER_URL !== 'undefined' ? WORKER_URL : 'https://hidden-salad-773b.bryanhkwan.workers.dev');
+  var GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 
   fetch(GEMINI_PROXY_URL, {
     method: 'POST',
