@@ -109,7 +109,7 @@
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
   <button class="pageNavBtn" data-page="pageLab">🔬 Tournament Lab</button>
-  <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
+  <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites <span id="favsPortalBadge" class="sharesNavBadge" style="display:none">0</span></button>
   <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
 
@@ -377,8 +377,8 @@
         </div>
         <div style="align-self:end;min-width:210px">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input id="portalUseSnapshot" type="checkbox">
-            <span>Use local 247 snapshot</span>
+            <input id="portalUseSnapshot" type="checkbox" checked>
+            <span>Auto-merge local 247 snapshot</span>
           </label>
         </div>
         <div style="align-self:end">
@@ -393,6 +393,8 @@
       <span class="pill">Source: <b>Portal Feed</b></span>
       <span class="pill" id="portalStatus">Idle</span>
     </div>
+
+    <div id="portalWatchAlertWrap" style="display:none"></div>
 
     <div style="margin-top:12px" class="scrollY">
       <table>
@@ -412,7 +414,7 @@
       </table>
     </div>
     <div id="portalEmpty" class="hint" style="text-align:center;padding:20px;display:none">No portal entries found for current filters.</div>
-    <div class="hint">Shows real transfer portal entries from live feed and optional local 247 snapshot when enabled.</div>
+    <div class="hint">Shows real transfer portal entries from live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.</div>
   </div>
 
   <div class="card" style="margin-top:14px">
@@ -1128,6 +1130,7 @@
       </select>
     </div>
   </div>
+  <div id="favsPortalAlertWrap" style="display:none"></div>
   <div id="favsFolderBar" class="favsFolderBar"></div>
   <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
     <input id="favsFolderInput" type="text" placeholder="Folder name…" maxlength="50">

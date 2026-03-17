@@ -10,6 +10,7 @@ var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, port
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
+var portalWatchAlertWrapEl, favsPortalAlertWrapEl, favsPortalBadgeEl;
 
 var portalTeamCtx = null;
 var portalRecDist = null;
@@ -18,6 +19,7 @@ var portalTargetSeason = '2026';
 var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
 var portalSelectedDepartureNames = [];
+var portalWatchAlerts = [];
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -49,10 +51,21 @@ function initPortalDOMRefs() {
   portalAIDownloadBtn = document.getElementById('portalAIDownloadBtn');
   portalAIStatusEl = document.getElementById('portalAIStatus');
   portalAIOutputEl = document.getElementById('portalAIOutput');
+  portalWatchAlertWrapEl = document.getElementById('portalWatchAlertWrap');
+  favsPortalAlertWrapEl = document.getElementById('favsPortalAlertWrap');
+  favsPortalBadgeEl = document.getElementById('favsPortalBadge');
 }
 
 function portalNorm(s) {
   return (s || '').toString().toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function portalEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function portalGetAllPlayers() {
@@ -401,6 +414,181 @@ function portalShowToast(msg) {
     t.classList.remove('show');
     setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
   }, 2400);
+}
+
+function portalUserStorageKey(suffix) {
+  var user = 'guest';
+  try {
+    if (typeof authIsGuest === 'function' && !authIsGuest() && typeof authGetUser === 'function') {
+      user = authGetUser() || user;
+    }
+  } catch (_) {}
+  user = String(user || 'guest').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  return 'portal_' + suffix + '_' + user;
+}
+
+function portalSeenAlertsMap() {
+  try {
+    var raw = localStorage.getItem(portalUserStorageKey('watch_alerts_seen')) || '{}';
+    var parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function portalSaveSeenAlertsMap(map) {
+  try {
+    localStorage.setItem(portalUserStorageKey('watch_alerts_seen'), JSON.stringify(map || {}));
+  } catch (_) {}
+}
+
+function portalEntryKey(it) {
+  return [
+    portalNorm(it && it.playerName),
+    portalNorm(it && it.fromTeam),
+    portalNorm(it && it.status),
+    portalNorm(it && it.source),
+  ].join('|');
+}
+
+function portalFavoritePortalMatch(fav) {
+  if (!fav) return null;
+  var favKey = String(fav.player_key || '');
+  var favName = portalNorm(fav.player_name || '');
+  var favTeam = portalNorm(fav.team || '');
+
+  for (var i = 0; i < portalItems.length; i++) {
+    var entry = portalItems[i];
+    var match = portalFindPlayerMatch(entry.playerName);
+    if (match && typeof tbPlayerKey === 'function' && tbPlayerKey(match) === favKey) {
+      return { entry: entry, player: match };
+    }
+    var entryName = portalNorm(entry && entry.playerName);
+    var entryTeam = portalNorm(entry && entry.fromTeam);
+    if (favName && entryName === favName && (!favTeam || !entryTeam || favTeam === entryTeam)) {
+      return { entry: entry, player: match };
+    }
+  }
+  return null;
+}
+
+function portalBuildWatchAlerts() {
+  var favs = (typeof favsState !== 'undefined' && favsState && Array.isArray(favsState.favorites))
+    ? favsState.favorites
+    : [];
+  var alerts = [];
+  favs.forEach(function (fav) {
+    if (String(fav.league || 'MBB') !== 'MBB') return;
+    var matched = portalFavoritePortalMatch(fav);
+    if (!matched || !matched.entry) return;
+    alerts.push({
+      key: portalEntryKey(matched.entry),
+      favorite: fav,
+      entry: matched.entry,
+      player: matched.player || null,
+    });
+  });
+  alerts.sort(function (a, b) {
+    var da = Date.parse((a.entry && a.entry.date) || '') || 0;
+    var db = Date.parse((b.entry && b.entry.date) || '') || 0;
+    if (db !== da) return db - da;
+    return String((a.favorite && a.favorite.player_name) || '').localeCompare(String((b.favorite && b.favorite.player_name) || ''));
+  });
+  return alerts;
+}
+
+function portalAlertMarkup(alerts, opts) {
+  opts = opts || {};
+  var title = opts.title || 'Watchlist hit';
+  var emptyText = opts.emptyText || '';
+  var maxItems = opts.maxItems || alerts.length || 3;
+  if (!alerts.length) return emptyText ? ('<div class="muted" style="font-size:12px">' + emptyText + '</div>') : '';
+  var count = alerts.length;
+  var label = count === 1 ? 'player from your watchlist is now in the portal.' : 'players from your watchlist are now in the portal.';
+  var html = '<div class="portalWatchAlert">' +
+    '<div class="portalWatchAlertHeader">' +
+      '<div>' +
+        '<div class="portalWatchAlertTitle">' + portalEsc(title) + '</div>' +
+        '<div class="portalWatchAlertText">' + portalEsc(count + ' ' + label) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="portalWatchAlertList">';
+  alerts.slice(0, maxItems).forEach(function (alert) {
+    var fav = alert.favorite || {};
+    var entry = alert.entry || {};
+    html += '<span class="portalWatchAlertItem">' +
+      '<b>' + portalEsc(fav.player_name || entry.playerName || 'Player') + '</b>' +
+      '<span class="portalWatchAlertMeta">' + portalEsc((entry.status || 'Entered') + ' • ' + (entry.fromTeam || fav.team || '—')) + '</span>' +
+    '</span>';
+  });
+  html += '</div>';
+  if (count > maxItems) {
+    html += '<div class="portalWatchAlertText" style="margin-top:10px">' + portalEsc('+' + (count - maxItems) + ' more watched player' + (count - maxItems === 1 ? '' : 's') + ' currently in the portal.') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function portalRenderWatchAlerts() {
+  var activeAlerts = portalWatchAlerts.filter(function (alert) {
+    return portalFiltered.some(function (entry) { return portalEntryKey(entry) === alert.key; });
+  });
+  if (portalWatchAlertWrapEl) {
+    if (activeAlerts.length) {
+      portalWatchAlertWrapEl.style.display = '';
+      portalWatchAlertWrapEl.innerHTML = portalAlertMarkup(activeAlerts, {
+        title: 'Watchlist Portal Hits',
+        maxItems: 4
+      });
+    } else {
+      portalWatchAlertWrapEl.style.display = 'none';
+      portalWatchAlertWrapEl.innerHTML = '';
+    }
+  }
+  if (favsPortalAlertWrapEl) {
+    if (portalWatchAlerts.length) {
+      favsPortalAlertWrapEl.className = 'favsPortalAlertWrap';
+      favsPortalAlertWrapEl.style.display = '';
+      favsPortalAlertWrapEl.innerHTML = portalAlertMarkup(portalWatchAlerts, {
+        title: 'Tracked Players Now In The Portal',
+        maxItems: 6
+      });
+    } else {
+      favsPortalAlertWrapEl.style.display = 'none';
+      favsPortalAlertWrapEl.innerHTML = '';
+    }
+  }
+  if (favsPortalBadgeEl) {
+    favsPortalBadgeEl.textContent = String(portalWatchAlerts.length);
+    favsPortalBadgeEl.style.display = portalWatchAlerts.length ? '' : 'none';
+  }
+}
+
+function portalRefreshWatchAlerts() {
+  portalWatchAlerts = portalBuildWatchAlerts();
+  portalRenderWatchAlerts();
+  return portalWatchAlerts;
+}
+
+function portalNotifyNewWatchAlerts() {
+  var seen = portalSeenAlertsMap();
+  var unseen = portalWatchAlerts.filter(function (alert) {
+    return !seen[alert.key];
+  });
+  if (!unseen.length) return;
+  unseen.forEach(function (alert) {
+    seen[alert.key] = {
+      player: (alert.favorite && alert.favorite.player_name) || (alert.entry && alert.entry.playerName) || '',
+      seen_at: new Date().toISOString(),
+    };
+  });
+  portalSaveSeenAlertsMap(seen);
+  if (unseen.length === 1) {
+    portalShowToast((unseen[0].favorite.player_name || unseen[0].entry.playerName || 'Watched player') + ' is now in the transfer portal');
+  } else {
+    portalShowToast(unseen.length + ' watched players are now in the transfer portal');
+  }
 }
 
 async function portalLoadTeamContext(teamName) {
@@ -1275,6 +1463,7 @@ function portalApplyFilters() {
   });
 
   portalRenderTable();
+  portalRenderWatchAlerts();
 
   if (portalRecRows.length && portalTeamCtx) {
     portalComputeRecommendations();
@@ -1376,7 +1565,9 @@ async function loadPortalEntries() {
   if (typeof league !== 'undefined' && league === 'WBB') {
     portalItems = [];
     portalFiltered = [];
+    portalWatchAlerts = [];
     portalRenderTable();
+    portalRenderWatchAlerts();
     portalSetStatus('MBB source only');
     if (portalEmptyEl) {
       portalEmptyEl.style.display = '';
@@ -1469,11 +1660,15 @@ async function loadPortalEntries() {
     portalSetStatus((resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live') + ' · ' + sourcePart + ' · ' + portalItems.length + ' rows' + errorSuffix);
     if (portalEmptyEl) portalEmptyEl.textContent = 'No portal entries found for current filters.';
     portalApplyFilters();
+    portalRefreshWatchAlerts();
+    portalNotifyNewWatchAlerts();
     portalRefreshTeamOptions();
   } catch (e) {
     portalItems = [];
     portalFiltered = [];
+    portalWatchAlerts = [];
     portalRenderTable();
+    portalRenderWatchAlerts();
     portalSetStatus('Load failed');
     if (portalEmptyEl) {
       portalEmptyEl.style.display = '';
@@ -1489,13 +1684,26 @@ function initPortalPage() {
   initPortalDOMRefs();
   if (!portalRefreshBtnEl) return;
 
+  if (portalUseSnapshotEl) {
+    try {
+      var saved = localStorage.getItem(portalUserStorageKey('snapshot_pref'));
+      if (saved === '0') portalUseSnapshotEl.checked = false;
+      else if (saved === '1') portalUseSnapshotEl.checked = true;
+    } catch (_) {}
+  }
+
   portalRefreshBtnEl.addEventListener('click', function () {
     loadPortalEntries();
   });
 
   if (portalSearchInputEl) portalSearchInputEl.addEventListener('input', portalApplyFilters);
   if (portalStatusFilterEl) portalStatusFilterEl.addEventListener('change', function () { loadPortalEntries(); });
-  if (portalUseSnapshotEl) portalUseSnapshotEl.addEventListener('change', function () { loadPortalEntries(); });
+  if (portalUseSnapshotEl) portalUseSnapshotEl.addEventListener('change', function () {
+    try {
+      localStorage.setItem(portalUserStorageKey('snapshot_pref'), portalUseSnapshotEl.checked ? '1' : '0');
+    } catch (_) {}
+    loadPortalEntries();
+  });
 
   if (portalRecRefreshTeamBtn) {
     portalRecRefreshTeamBtn.addEventListener('click', async function () {
@@ -1530,11 +1738,13 @@ function initPortalPage() {
   }
 
   portalRefreshTeamOptions();
+  portalRenderWatchAlerts();
 }
 
 window.TransferPortal = {
   initPage: initPortalPage,
   loadEntries: loadPortalEntries,
+  refreshWatchAlerts: portalRefreshWatchAlerts,
   runRecommendations: portalRunRecommendations,
   runAIAnalysis: portalRunAIAnalysis,
   downloadAIReport: portalDownloadAIReport,

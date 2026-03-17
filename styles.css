@@ -198,8 +198,72 @@
     .portalDepartureName{font-size:12.5px;font-weight:700;line-height:1.35}
     .portalDepartureMeta{font-size:10.5px;color:var(--muted);margin-top:3px}
     .portalRecContext{padding:8px 14px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(var(--accent-rgb),.08);border-bottom:1px solid rgba(var(--accent-rgb),.18);letter-spacing:.02em}
-    .portalToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:rgba(20,32,56,.97);border:1px solid rgba(var(--accent-rgb),.35);color:#e8eaf0;font-size:12.5px;font-weight:600;padding:9px 20px;border-radius:24px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;white-space:nowrap}
-    .portalToast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.portalToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:rgba(20,32,56,.97);border:1px solid rgba(var(--accent-rgb),.35);color:#e8eaf0;font-size:12.5px;font-weight:600;padding:9px 20px;border-radius:24px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;white-space:nowrap}
+.portalToast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.portalWatchAlert{
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(248,113,113,.28);
+  background: linear-gradient(180deg, rgba(120,20,28,.22), rgba(46,10,16,.28));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+.portalWatchAlertHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.portalWatchAlertTitle{
+  font-size: 13px;
+  font-weight: 800;
+  color: #fecaca;
+}
+.portalWatchAlertText{
+  font-size: 12px;
+  color: #fca5a5;
+}
+.portalWatchAlertList{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.portalWatchAlertItem{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(248,113,113,.22);
+  background: rgba(10,16,30,.38);
+  color: #ffe4e6;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.portalWatchAlertItem b{
+  color: #fff1f2;
+}
+.portalWatchAlertMeta{
+  color: #fda4af;
+}
+.portalWatchAlertBtn{
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(248,113,113,.28);
+  background: rgba(255,255,255,.04);
+  color: #ffe4e6;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: none;
+}
+.portalWatchAlertBtn:hover{
+  background: rgba(248,113,113,.12);
+  border-color: rgba(248,113,113,.4);
+  transform: none;
+}
     .portalRecTableWrap{max-height:420px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .portalRecTableWrap table{border:none;border-radius:0}
     .portalRecTableWrap th{top:0}
@@ -1853,6 +1917,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
+}
+.favsPortalAlertWrap {
+  margin-bottom: 14px;
 }
 .favCard {
   background: rgba(10,18,35,.8);

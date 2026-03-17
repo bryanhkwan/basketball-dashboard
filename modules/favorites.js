@@ -10,6 +10,12 @@ function _devFavsWrite(arr) { localStorage.setItem('_devFavs', JSON.stringify(ar
 function _devFavFoldersStore() { try { return JSON.parse(localStorage.getItem('_devFavFolders') || '[]'); } catch (_) { return []; } }
 function _devFavFoldersWrite(arr) { localStorage.setItem('_devFavFolders', JSON.stringify(arr)); }
 
+function favsRefreshPortalAlerts() {
+  if (window.TransferPortal && typeof window.TransferPortal.refreshWatchAlerts === 'function') {
+    window.TransferPortal.refreshWatchAlerts();
+  }
+}
+
 async function _favsFetchDev(path, opts) {
   var method = ((opts && opts.method) || 'GET').toUpperCase();
   // ── Folders sub-resource ──────────────────────────────────────────────────
@@ -93,6 +99,7 @@ async function favsLoad() {
     favsState.loaded = true;
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
     if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer)
       favsUpdateModalBtn(_currentProfilePlayer);
     favsUpdateTableHearts();
@@ -129,6 +136,7 @@ async function favsSetFolder(playerKey, folderName) {
     if (fav) fav.folder = folderName;
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
   } catch (e) { console.warn('[Favorites] setFolder error:', e); }
 }
 
@@ -229,6 +237,7 @@ async function favsHeart(r) {
       favsRenderFolderBar();
       favsRenderPage();
       favsUpdateTableHearts();
+      favsRefreshPortalAlerts();
     } catch (e) { console.warn('[Favorites] unheart error:', e); }
   } else {
     // ── Add ──
@@ -258,6 +267,7 @@ async function favsHeart(r) {
         favsRenderFolderBar();
         favsRenderPage();
         favsUpdateTableHearts();
+        favsRefreshPortalAlerts();
       }
     } catch (e) { console.warn('[Favorites] heart error:', e); }
   }
@@ -362,6 +372,7 @@ function _favsRenderBulkBar() {
     favsState.selectedKeys.clear();
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
   };
 }
 
@@ -537,6 +548,7 @@ function initFavsPage() {
 
   favsRenderFolderBar();
   favsRenderPage();
+  favsRefreshPortalAlerts();
 }
 
 window.FavoritesManager = { favsLoad, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, favsRenderFolderBar, favsGetFolders, favsSetFolder, initFavsPage };
