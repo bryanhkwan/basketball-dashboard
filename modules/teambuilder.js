@@ -939,6 +939,7 @@ function initPageNav(){
       // Refresh player table when switching back (roster icons may be stale)
       if(targetId === 'pagePlayers') renderPlayersPage();
       if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
+      if(targetId === 'pageTeams' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') window.TeamHub.refreshTournamentHub();
       // Re-render favorites cards every time that tab is opened
       if(targetId === 'pageFavorites') {
         if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();

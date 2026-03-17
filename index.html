@@ -781,6 +781,98 @@
         <div class="muted" style="padding:32px;text-align:center">Load a primary team, then select an opponent and click Compare →</div>
       </div>
     </div>
+
+    <div class="thSection">
+      <div class="thSectionHead">🏆 Tournament War Room</div>
+      <div class="thSectionSub">Build and save tournament brackets, run Monte Carlo simulations across the full field, and generate a bracket-level AI scouting report. This workspace is available only for logged-in users.</div>
+      <div id="thBracketGate" class="card thBracketGate" style="display:none"></div>
+      <div id="thBracketWorkspace" style="display:none">
+        <div class="card thBracketShell">
+          <div class="thBracketTopbar">
+            <div class="thBracketManager">
+              <div class="thSearchGroup">
+                <label class="thLabel">Saved bracket</label>
+                <select id="thBracketSelect" class="thTeamSelect"><option value="">— Select bracket —</option></select>
+              </div>
+              <button id="thBracketNewBtn" class="secondary">+ New</button>
+              <button id="thBracketDuplicateBtn" class="secondary">Duplicate</button>
+              <button id="thBracketDeleteBtn" class="secondary">Delete</button>
+            </div>
+            <div class="thBracketMeta">
+              <div class="thSearchGroup">
+                <label class="thLabel">Bracket name</label>
+                <input id="thBracketName" type="text" class="thSeasonInput" placeholder="2026 NCAA Tournament">
+              </div>
+              <div class="thSearchGroup">
+                <label class="thLabel">Season</label>
+                <input id="thBracketSeason" type="number" value="2026" min="2020" max="2035" class="thSeasonInput">
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketGrid">
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Field Builder</div>
+              <div class="thBracketPanelBody">
+                <div class="thBracketAddRow">
+                  <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">— Add a team —</option></select>
+                  <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
+                  <select id="thBracketRegionAdd" class="thTeamSelect" style="max-width:150px">
+                    <option value="South">South</option>
+                    <option value="East">East</option>
+                    <option value="West">West</option>
+                    <option value="Midwest">Midwest</option>
+                  </select>
+                  <button id="thBracketAddBtn" class="thLoadBtn">Add Team</button>
+                </div>
+                <div class="thBracketImportLabel">Bulk import</div>
+                <textarea id="thBracketImport" class="thBracketImport" placeholder="One team per line. Examples:&#10;1 | Auburn | South&#10;2 | Duke | East&#10;Florida | West&#10;Houston"></textarea>
+                <div class="thBracketImportActions">
+                  <button id="thBracketImportBtn" class="secondary">Import Lines</button>
+                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
+                  <span id="thBracketImportStatus" class="muted" style="font-size:11px"></span>
+                </div>
+                <div class="thBracketSummaryRow">
+                  <span class="pill">Teams: <b id="thBracketTeamCount">0</b></span>
+                  <span class="pill">Regions: <b id="thBracketRegionCount">0</b></span>
+                  <span class="pill">Structure: <b id="thBracketStructure">Needs power-of-two field</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Field View</div>
+              <div class="thBracketPanelBody">
+                <div id="thBracketBoard" class="thBracketBoard">
+                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketPanel" style="margin-top:12px">
+            <div class="thBracketPanelHead">Simulation & Analysis</div>
+            <div class="thBracketPanelBody">
+              <div class="thBracketSimRow">
+                <div class="thBracketSimControls">
+                  <select id="thBracketSimCount" class="thMCSelect">
+                    <option value="1000">1,000 sims</option>
+                    <option value="5000" selected>5,000 sims</option>
+                    <option value="10000">10,000 sims</option>
+                    <option value="25000">25,000 sims</option>
+                  </select>
+                  <button id="thBracketSimBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)">🎲 Simulate Bracket</button>
+                  <button id="thBracketAnalyzeBtn" class="thDeepBtn">🧠 Gemini Bracket Analysis</button>
+                </div>
+                <div id="thBracketStatus" class="muted" style="font-size:11px"></div>
+              </div>
+              <div id="thBracketResults" class="thDeepOutput" style="display:none"></div>
+              <div id="thBracketAIOutput" class="thDeepOutput" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </div><!-- /pageTeams -->

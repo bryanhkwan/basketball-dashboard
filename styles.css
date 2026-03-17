@@ -1886,6 +1886,238 @@
   line-height: 1.4;
 }
 
+.thBracketGate {
+  padding: 28px 24px;
+  text-align: center;
+}
+.thBracketLockIcon {
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+.thBracketShell {
+  padding: 16px;
+}
+.thBracketTopbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.thBracketManager,
+.thBracketMeta,
+.thBracketAddRow,
+.thBracketSimControls,
+.thBracketSimRow,
+.thBracketImportActions,
+.thBracketSummaryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.thBracketManager,
+.thBracketMeta {
+  flex: 1 1 320px;
+}
+.thBracketGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+.thBracketPanel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(9,15,30,.55);
+  overflow: hidden;
+}
+.thBracketPanelHead {
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--fg);
+  border-bottom: 1px solid var(--line);
+  background: rgba(255,255,255,.02);
+}
+.thBracketPanelBody {
+  padding: 14px;
+}
+.thBracketImportLabel {
+  margin-top: 10px;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.thBracketImport {
+  width: 100%;
+  min-height: 118px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(6,12,26,.55);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.45;
+}
+.thBracketBoard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.thBracketRegion {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(6,10,24,.42);
+  overflow: hidden;
+}
+.thBracketRegionHead {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--fg);
+  border-bottom: 1px solid var(--line2);
+}
+.thBracketRegionList {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.thBracketTeamRow {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: rgba(255,255,255,.02);
+}
+.thBracketSeed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-rgb),.35);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+.thBracketTeamMeta {
+  min-width: 0;
+}
+.thBracketTeamName {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thBracketTeamSub {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.thBracketRemoveBtn {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.03);
+  color: var(--muted);
+  padding: 5px 8px;
+  cursor: pointer;
+  box-shadow: none;
+}
+.thBracketRemoveBtn:hover {
+  color: #fda4af;
+  border-color: rgba(248,113,113,.35);
+  background: rgba(248,113,113,.08);
+  transform: none;
+}
+.thBracketSimRow {
+  justify-content: space-between;
+}
+.thBracketResultsWrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  gap: 12px;
+}
+.thBracketStatGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.thBracketStatCard {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255,255,255,.03);
+  padding: 10px 12px;
+}
+.thBracketStatVal {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--fg);
+}
+.thBracketStatLbl {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.thBracketTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.thBracketTable th,
+.thBracketTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line2);
+  font-size: 11.5px;
+  text-align: left;
+}
+.thBracketTable th {
+  color: var(--muted);
+  font-weight: 700;
+}
+.thBracketMiniHead {
+  margin: 2px 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--fg);
+}
+.thBracketInsightList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.thBracketInsightItem {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: rgba(255,255,255,.02);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.thBracketInsightItem b {
+  color: var(--fg);
+}
+@media (max-width: 1080px) {
+  .thBracketGrid,
+  .thBracketResultsWrap {
+    grid-template-columns: 1fr;
+  }
+  .thBracketStatGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ──────────── Favorites Page ──────────── */
 .favsPageHeader {
   display: flex;

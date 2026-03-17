@@ -7,6 +7,10 @@
 var thTeamSearch, thSeasonInput, thLoadBtn;
 var thOverviewEl, thThreatsEl, thGameLogEl, thH2HEl;
 var thLoadingEl;
+var thBracketGateEl, thBracketWorkspaceEl, thBracketSelectEl, thBracketNameEl, thBracketSeasonEl;
+var thBracketTeamAddEl, thBracketSeedAddEl, thBracketRegionAddEl, thBracketImportEl, thBracketImportStatusEl;
+var thBracketBoardEl, thBracketStatusEl, thBracketResultsEl, thBracketAIOutputEl;
+var thBracketTeamCountEl, thBracketRegionCountEl, thBracketStructureEl, thBracketSimCountEl;
 
 // ── State (persisted across renders for compare feature) ──────────────────────
 var thCurrentTeam   = '';
@@ -25,6 +29,7 @@ var _thWbbConfStandingsCache = {};
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
+var _thBracketState = { brackets: [], activeId: '', results: {} };
 
 function _thGuestDACount() {
   return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
@@ -36,6 +41,782 @@ function _thGuestDAIncrement() {
 }
 function _thIsGuest() {
   return typeof authIsGuest === 'function' && authIsGuest();
+}
+
+function _thBracketStorageKey() {
+  var user = 'guest';
+  try {
+    if (!_thIsGuest() && typeof authGetUser === 'function') user = authGetUser() || user;
+  } catch (_) {}
+  user = String(user || 'guest').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  return 'th_tournament_brackets_' + user;
+}
+
+function _thEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _thBracketId() {
+  return 'br_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function _thBracketRegions() {
+  return ['South', 'East', 'West', 'Midwest'];
+}
+
+function _thDefaultBracket() {
+  return {
+    id: _thBracketId(),
+    name: 'New Tournament Bracket',
+    season: String(thSeasonInput && thSeasonInput.value ? thSeasonInput.value : '2026'),
+    teams: [],
+    createdAt: new Date().toISOString()
+  };
+}
+
+function _thBracketActive() {
+  return _thBracketState.brackets.find(function (b) { return b.id === _thBracketState.activeId; }) || null;
+}
+
+function _thSaveBracketState() {
+  if (_thIsGuest()) return;
+  try {
+    localStorage.setItem(_thBracketStorageKey(), JSON.stringify(_thBracketState));
+  } catch (_) {}
+}
+
+function _thLoadBracketState() {
+  if (_thIsGuest()) {
+    _thBracketState = { brackets: [], activeId: '', results: {} };
+    return;
+  }
+  try {
+    var raw = localStorage.getItem(_thBracketStorageKey()) || '';
+    if (!raw) {
+      _thBracketState = { brackets: [_thDefaultBracket()], activeId: '', results: {} };
+      _thBracketState.activeId = _thBracketState.brackets[0].id;
+      _thSaveBracketState();
+      return;
+    }
+    var parsed = JSON.parse(raw);
+    _thBracketState = {
+      brackets: Array.isArray(parsed.brackets) ? parsed.brackets : [],
+      activeId: parsed.activeId || '',
+      results: parsed.results && typeof parsed.results === 'object' ? parsed.results : {}
+    };
+    if (!_thBracketState.brackets.length) {
+      _thBracketState.brackets = [_thDefaultBracket()];
+    }
+    if (!_thBracketActive()) _thBracketState.activeId = _thBracketState.brackets[0].id;
+  } catch (_) {
+    _thBracketState = { brackets: [_thDefaultBracket()], activeId: '', results: {} };
+    _thBracketState.activeId = _thBracketState.brackets[0].id;
+  }
+}
+
+function _thBracketAllTeams() {
+  return [...new Set(
+    (typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers('MBB') : [])
+      .map(function (p) { return p.Team || ''; })
+      .filter(Boolean)
+  )].sort();
+}
+
+function _thPopulateBracketTeamSelects() {
+  var teams = _thBracketAllTeams();
+  var opts = '<option value="">— Add a team —</option>' + teams.map(function (t) {
+    return '<option value="' + _thEsc(t) + '">' + _thEsc(t) + '</option>';
+  }).join('');
+  if (thBracketTeamAddEl) thBracketTeamAddEl.innerHTML = opts;
+}
+
+function _thBracketFieldStructure(bracket) {
+  var teams = bracket && Array.isArray(bracket.teams) ? bracket.teams : [];
+  var total = teams.length;
+  var byRegion = {};
+  teams.forEach(function (item) {
+    var region = item.region || 'Unassigned';
+    byRegion[region] = (byRegion[region] || 0) + 1;
+  });
+  var counts = Object.keys(byRegion).map(function (k) { return byRegion[k]; });
+  var isPowerOfTwo = total > 1 && (total & (total - 1)) === 0;
+  var balanced = counts.length ? counts.every(function (c) { return c === counts[0]; }) : false;
+  if (!total) return 'No teams added';
+  if (counts.length === 4 && counts[0] === 16) return '64-team regional bracket';
+  if (isPowerOfTwo && balanced) return total + '-team balanced field';
+  if (isPowerOfTwo) return total + '-team custom field';
+  return 'Needs power-of-two field';
+}
+
+function _thRoundLabel(teamCount) {
+  if (teamCount === 64) return 'Round of 64';
+  if (teamCount === 32) return 'Round of 32';
+  if (teamCount === 16) return 'Sweet 16';
+  if (teamCount === 8) return 'Elite 8';
+  if (teamCount === 4) return 'Final 4';
+  if (teamCount === 2) return 'Championship';
+  return 'Round of ' + teamCount;
+}
+
+function _thBracketRoundLabels(totalTeams) {
+  var out = [];
+  var n = totalTeams;
+  while (n >= 2) {
+    out.push(_thRoundLabel(n));
+    n = n / 2;
+  }
+  out.push('Champion');
+  return out;
+}
+
+function _thNormalizeBracketName(name) {
+  return String(name || '').trim() || 'Tournament Bracket';
+}
+
+function _thBracketSeedPairs(size) {
+  if (size <= 1) return [1];
+  var prev = _thBracketSeedPairs(size / 2);
+  var out = [];
+  prev.forEach(function (seed) {
+    out.push(seed);
+    out.push(size + 1 - seed);
+  });
+  return out;
+}
+
+function _thBuildBracketPairings(entries) {
+  var ordered = (entries || []).slice().sort(function (a, b) {
+    var sa = Number(a.seed) || 99;
+    var sb = Number(b.seed) || 99;
+    if (sa !== sb) return sa - sb;
+    return String(a.team || '').localeCompare(String(b.team || ''));
+  });
+  var n = ordered.length;
+  if (n < 2 || (n & (n - 1)) !== 0) return [];
+  var pairSeeds = _thBracketSeedPairs(n);
+  var bySeed = {};
+  ordered.forEach(function (item, idx) {
+    var key = Number(item.seed) || (idx + 1);
+    if (!bySeed[key]) bySeed[key] = [];
+    bySeed[key].push(item);
+  });
+  var slotOrder = [];
+  pairSeeds.forEach(function (seed) {
+    if (bySeed[seed] && bySeed[seed].length) slotOrder.push(bySeed[seed].shift());
+  });
+  ordered.forEach(function (item) {
+    if (slotOrder.indexOf(item) === -1) slotOrder.push(item);
+  });
+  var pairs = [];
+  for (var i = 0; i < slotOrder.length; i += 2) {
+    if (slotOrder[i + 1]) pairs.push([slotOrder[i], slotOrder[i + 1]]);
+  }
+  return pairs;
+}
+
+function _thTeamPaceForBracket(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  if (typeof teamStatsCache !== 'undefined' && teamStatsCache[key] && Number.isFinite(+teamStatsCache[key].pace)) {
+    return +teamStatsCache[key].pace;
+  }
+  return 68;
+}
+
+function _thBracketTeamRating(teamName, season) {
+  var key = String(teamName || '').toLowerCase();
+  var rating = teamRatings[key] || null;
+  var statKey = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  var stats = (typeof teamStatsCache !== 'undefined' && teamStatsCache[statKey]) ? teamStatsCache[statKey] : null;
+  return _thFallbackRating(teamName, rating, stats, season);
+}
+
+function _thSimSingleGame(teamA, teamB, season) {
+  var ratA = _thBracketTeamRating(teamA.team, season);
+  var ratB = _thBracketTeamRating(teamB.team, season);
+  if (!ratA || !ratB) return null;
+
+  var eOA = (+ratA.adjO + +ratB.adjD) / 2;
+  var eOB = (+ratB.adjO + +ratA.adjD) / 2;
+  var pace = (_thTeamPaceForBracket(teamA.team, season) + _thTeamPaceForBracket(teamB.team, season)) / 2;
+
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  var scoreA = Math.round((eOA / 100) * pace + randn() * 11);
+  var scoreB = Math.round((eOB / 100) * pace + randn() * 11);
+  scoreA = Math.max(45, scoreA);
+  scoreB = Math.max(45, scoreB);
+  while (scoreA === scoreB) {
+    scoreA += Math.max(1, Math.round(randn() * 3 + 4));
+    scoreB += Math.max(1, Math.round(randn() * 3 + 4));
+  }
+
+  var winner = scoreA > scoreB ? teamA : teamB;
+  var loser = scoreA > scoreB ? teamB : teamA;
+  return {
+    winner: winner,
+    loser: loser,
+    scoreA: scoreA,
+    scoreB: scoreB,
+    upset: (Number(winner.seed) || 99) > (Number(loser.seed) || 99),
+    margin: Math.abs(scoreA - scoreB)
+  };
+}
+
+function _thRecordRoundAdvancement(summary, teamName, label) {
+  if (!summary.rounds[teamName]) summary.rounds[teamName] = {};
+  summary.rounds[teamName][label] = (summary.rounds[teamName][label] || 0) + 1;
+}
+
+function _thSimBracketOnce(bracket) {
+  var season = bracket.season || '2026';
+  var totalTeams = bracket.teams.length;
+  var labels = _thBracketRoundLabels(totalTeams);
+  var rounds = labels.slice(0, labels.length - 1);
+  var summary = { rounds: {}, games: [], champion: null, finalists: [], regionWinners: [], upsetCount: 0 };
+  var regions = {};
+  bracket.teams.forEach(function (team) {
+    var region = team.region || 'Field';
+    if (!regions[region]) regions[region] = [];
+    regions[region].push(team);
+    _thRecordRoundAdvancement(summary, team.team, rounds[0]);
+  });
+
+  var regionalWinners = [];
+  Object.keys(regions).sort().forEach(function (region) {
+    var current = _thBuildBracketPairings(regions[region]).map(function (pair) { return pair.slice(); });
+    var roundIdx = 0;
+    while (current.length) {
+      var next = [];
+      current.forEach(function (pair) {
+        var result = _thSimSingleGame(pair[0], pair[1], season);
+        if (!result) return;
+        if (result.upset) summary.upsetCount += 1;
+        summary.games.push({
+          round: rounds[Math.min(roundIdx, rounds.length - 1)],
+          region: region,
+          teamA: pair[0].team,
+          teamB: pair[1].team,
+          winner: result.winner.team,
+          loser: result.loser.team,
+          margin: result.margin,
+          upset: result.upset
+        });
+        next.push(result.winner);
+      });
+      if (next.length === 1) {
+        regionalWinners.push(next[0]);
+        summary.regionWinners.push({ region: region, team: next[0].team });
+        break;
+      }
+      if (roundIdx + 1 < rounds.length) {
+        next.forEach(function (team) { _thRecordRoundAdvancement(summary, team.team, rounds[roundIdx + 1]); });
+      }
+      current = [];
+      for (var i = 0; i < next.length; i += 2) {
+        if (next[i + 1]) current.push([next[i], next[i + 1]]);
+      }
+      roundIdx += 1;
+    }
+  });
+
+  var finalPool = regionalWinners.slice();
+  if (!finalPool.length) return summary;
+  if (finalPool.length > 1 && rounds.indexOf('Final 4') >= 0) {
+    finalPool.forEach(function (team) { _thRecordRoundAdvancement(summary, team.team, 'Final 4'); });
+  }
+  while (finalPool.length > 1) {
+    var nextPool = [];
+    for (var fp = 0; fp < finalPool.length; fp += 2) {
+      if (!finalPool[fp + 1]) {
+        nextPool.push(finalPool[fp]);
+        continue;
+      }
+      var finalsGame = _thSimSingleGame(finalPool[fp], finalPool[fp + 1], season);
+      if (!finalsGame) continue;
+      summary.games.push({
+        round: finalPool.length === 2 ? 'Championship' : 'Final 4',
+        region: 'National',
+        teamA: finalPool[fp].team,
+        teamB: finalPool[fp + 1].team,
+        winner: finalsGame.winner.team,
+        loser: finalsGame.loser.team,
+        margin: finalsGame.margin,
+        upset: finalsGame.upset
+      });
+      nextPool.push(finalsGame.winner);
+      if (finalPool.length === 2) {
+        summary.finalists = [finalPool[fp].team, finalPool[fp + 1].team];
+      }
+    }
+    if (nextPool.length === 1) {
+      summary.champion = nextPool[0].team;
+      _thRecordRoundAdvancement(summary, nextPool[0].team, 'Champion');
+      break;
+    }
+    nextPool.forEach(function (team) {
+      if (nextPool.length === 2) _thRecordRoundAdvancement(summary, team.team, 'Championship');
+    });
+    finalPool = nextPool;
+  }
+
+  return summary;
+}
+
+function _thAggregateBracketSims(bracket, sims) {
+  var total = sims || 5000;
+  var labels = _thBracketRoundLabels(bracket.teams.length);
+  var roundCounts = {};
+  var championCounts = {};
+  var finalistCounts = {};
+  var regionWinnerCounts = {};
+  var upsetMap = {};
+  var totalUpsets = 0;
+  for (var i = 0; i < total; i++) {
+    var sim = _thSimBracketOnce(bracket);
+    totalUpsets += sim.upsetCount || 0;
+    Object.keys(sim.rounds || {}).forEach(function (team) {
+      if (!roundCounts[team]) roundCounts[team] = {};
+      Object.keys(sim.rounds[team]).forEach(function (label) {
+        roundCounts[team][label] = (roundCounts[team][label] || 0) + sim.rounds[team][label];
+      });
+    });
+    if (sim.champion) championCounts[sim.champion] = (championCounts[sim.champion] || 0) + 1;
+    (sim.finalists || []).forEach(function (team) {
+      finalistCounts[team] = (finalistCounts[team] || 0) + 1;
+    });
+    (sim.regionWinners || []).forEach(function (item) {
+      var key = item.region + '|' + item.team;
+      regionWinnerCounts[key] = (regionWinnerCounts[key] || 0) + 1;
+    });
+    (sim.games || []).forEach(function (game) {
+      if (!game.upset) return;
+      var upsetKey = game.winner + ' over ' + game.loser;
+      upsetMap[upsetKey] = (upsetMap[upsetKey] || 0) + 1;
+    });
+  }
+
+  var teamRows = bracket.teams.map(function (team) {
+    var counts = roundCounts[team.team] || {};
+    return {
+      team: team.team,
+      seed: team.seed,
+      region: team.region,
+      championPct: +(((championCounts[team.team] || 0) / total) * 100).toFixed(1),
+      finalistPct: +(((finalistCounts[team.team] || 0) / total) * 100).toFixed(1),
+      finalFourPct: +(((counts['Final 4'] || 0) / total) * 100).toFixed(1),
+      eliteEightPct: +(((counts['Elite 8'] || 0) / total) * 100).toFixed(1),
+      sweetSixteenPct: +(((counts['Sweet 16'] || 0) / total) * 100).toFixed(1),
+      round32Pct: +(((counts['Round of 32'] || 0) / total) * 100).toFixed(1),
+      reached: counts
+    };
+  }).sort(function (a, b) {
+    if (b.championPct !== a.championPct) return b.championPct - a.championPct;
+    if (b.finalFourPct !== a.finalFourPct) return b.finalFourPct - a.finalFourPct;
+    return String(a.team).localeCompare(String(b.team));
+  });
+
+  var regionRows = Object.keys(regionWinnerCounts).map(function (key) {
+    var parts = key.split('|');
+    return {
+      region: parts[0],
+      team: parts[1],
+      pct: +((regionWinnerCounts[key] / total) * 100).toFixed(1)
+    };
+  }).sort(function (a, b) { return b.pct - a.pct; });
+
+  var upsetRows = Object.keys(upsetMap).map(function (key) {
+    return { label: key, pct: +((upsetMap[key] / total) * 100).toFixed(1) };
+  }).sort(function (a, b) { return b.pct - a.pct; }).slice(0, 10);
+
+  return {
+    simulations: total,
+    bracketName: bracket.name,
+    season: bracket.season,
+    totalTeams: bracket.teams.length,
+    labels: labels,
+    teams: teamRows,
+    regions: regionRows,
+    upsets: upsetRows,
+    avgUpsetsPerSim: +((totalUpsets / total) || 0).toFixed(2),
+    championFavorite: teamRows[0] || null
+  };
+}
+
+function _thRenderBracketManager() {
+  if (!thBracketSelectEl) return;
+  var active = _thBracketActive();
+  thBracketSelectEl.innerHTML = _thBracketState.brackets.map(function (b) {
+    return '<option value="' + _thEsc(b.id) + '"' + (active && active.id === b.id ? ' selected' : '') + '>' + _thEsc(b.name) + '</option>';
+  }).join('');
+  if (active) {
+    if (thBracketNameEl) thBracketNameEl.value = active.name || '';
+    if (thBracketSeasonEl) thBracketSeasonEl.value = active.season || '2026';
+  }
+}
+
+function _thRenderBracketBoard() {
+  if (!thBracketBoardEl) return;
+  var bracket = _thBracketActive();
+  if (!bracket) {
+    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Create a bracket to get started.</div>';
+    return;
+  }
+  var groups = {};
+  bracket.teams.forEach(function (item) {
+    var region = item.region || 'Unassigned';
+    if (!groups[region]) groups[region] = [];
+    groups[region].push(item);
+  });
+  var regions = Object.keys(groups).sort();
+  if (!regions.length) {
+    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No teams added yet. Use Add Team or Bulk Import.</div>';
+  } else {
+    thBracketBoardEl.innerHTML = regions.map(function (region) {
+      var items = groups[region].slice().sort(function (a, b) {
+        var sa = Number(a.seed) || 99;
+        var sb = Number(b.seed) || 99;
+        if (sa !== sb) return sa - sb;
+        return String(a.team).localeCompare(String(b.team));
+      });
+      return '<div class="thBracketRegion">' +
+        '<div class="thBracketRegionHead">' + _thEsc(region) + ' · ' + items.length + ' teams</div>' +
+        '<div class="thBracketRegionList">' +
+          items.map(function (item) {
+            return '<div class="thBracketTeamRow">' +
+              '<span class="thBracketSeed">' + _thEsc(item.seed) + '</span>' +
+              '<div class="thBracketTeamMeta"><div class="thBracketTeamName">' + _thEsc(item.team) + '</div><div class="thBracketTeamSub">' + _thEsc(region) + ' region</div></div>' +
+              '<button class="thBracketRemoveBtn" data-bracket-remove="' + _thEsc(item.id) + '">Remove</button>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+  thBracketBoardEl.querySelectorAll('[data-bracket-remove]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      _thRemoveBracketTeam(btn.getAttribute('data-bracket-remove'));
+    });
+  });
+  if (thBracketTeamCountEl) thBracketTeamCountEl.textContent = String(bracket.teams.length);
+  if (thBracketRegionCountEl) thBracketRegionCountEl.textContent = String(Object.keys(groups).length);
+  if (thBracketStructureEl) thBracketStructureEl.textContent = _thBracketFieldStructure(bracket);
+}
+
+function _thRenderBracketResults() {
+  if (!thBracketResultsEl) return;
+  var active = _thBracketActive();
+  if (!active) {
+    thBracketResultsEl.style.display = 'none';
+    thBracketResultsEl.innerHTML = '';
+    return;
+  }
+  var result = _thBracketState.results[active.id];
+  if (!result) {
+    thBracketResultsEl.style.display = 'none';
+    thBracketResultsEl.innerHTML = '';
+    return;
+  }
+  var topTeams = result.teams.slice(0, 12);
+  var insightRows = [];
+  if (result.championFavorite) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Model favorite:</b> ' + _thEsc(result.championFavorite.team) + ' wins the title in <b>' + result.championFavorite.championPct + '%</b> of sims.</div>');
+  }
+  if (result.upsets[0]) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Most common upset:</b> ' + _thEsc(result.upsets[0].label) + ' in <b>' + result.upsets[0].pct + '%</b> of simulations.</div>');
+  }
+  insightRows.push('<div class="thBracketInsightItem"><b>Bracket chaos level:</b> field averages <b>' + result.avgUpsetsPerSim + '</b> upsets per simulated tournament.</div>');
+
+  thBracketResultsEl.style.display = 'block';
+  thBracketResultsEl.innerHTML =
+    '<div class="thBracketStatGrid">' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.simulations.toLocaleString() + '</div><div class="thBracketStatLbl">Simulations</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.totalTeams + '</div><div class="thBracketStatLbl">Teams In Field</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + (result.championFavorite ? _thEsc(result.championFavorite.team) : '—') + '</div><div class="thBracketStatLbl">Top Champion Pick</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.avgUpsetsPerSim + '</div><div class="thBracketStatLbl">Avg Upsets / Bracket</div></div>' +
+    '</div>' +
+    '<div class="thBracketResultsWrap">' +
+      '<div>' +
+        '<div class="thBracketMiniHead">Champion & Final Four Odds</div>' +
+        '<table class="thBracketTable"><thead><tr><th>Team</th><th>Seed</th><th>Region</th><th>Champion</th><th>Final 4</th></tr></thead><tbody>' +
+          topTeams.map(function (row) {
+            return '<tr><td>' + _thEsc(row.team) + '</td><td>' + _thEsc(row.seed) + '</td><td>' + _thEsc(row.region) + '</td><td>' + row.championPct + '%</td><td>' + row.finalFourPct + '%</td></tr>';
+          }).join('') +
+        '</tbody></table>' +
+      '</div>' +
+      '<div>' +
+        '<div class="thBracketMiniHead">War Room Notes</div>' +
+        '<div class="thBracketInsightList">' + insightRows.join('') + '</div>' +
+        '<div class="thBracketMiniHead" style="margin-top:12px">Region Winner Leaders</div>' +
+        '<table class="thBracketTable"><thead><tr><th>Region</th><th>Team</th><th>Win %</th></tr></thead><tbody>' +
+          result.regions.slice(0, 8).map(function (row) {
+            return '<tr><td>' + _thEsc(row.region) + '</td><td>' + _thEsc(row.team) + '</td><td>' + row.pct + '%</td></tr>';
+          }).join('') +
+        '</tbody></table>' +
+      '</div>' +
+    '</div>';
+}
+
+function _thRenderBracketWorkspace() {
+  var guest = _thIsGuest();
+  if (thBracketGateEl) {
+    thBracketGateEl.style.display = guest ? '' : 'none';
+    thBracketGateEl.innerHTML = guest
+      ? '<div class="thBracketLockIcon">🔒</div><div style="font-size:16px;font-weight:800;color:var(--fg);margin-bottom:6px">Tournament War Room is user-only</div><div class="muted" style="font-size:12px;max-width:560px;margin:0 auto 10px">Log in to save tournament brackets, simulate the full field, and run Gemini 3 Flash bracket analysis.</div><button class="thLoadBtn" onclick="document.getElementById(\'guestLoginBtn\').click()">Login to unlock</button>'
+      : '';
+  }
+  if (thBracketWorkspaceEl) thBracketWorkspaceEl.style.display = guest ? 'none' : '';
+  if (guest) return;
+  _thLoadBracketState();
+  _thPopulateBracketTeamSelects();
+  _thRenderBracketManager();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thCommitBracketMeta() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.name = _thNormalizeBracketName(thBracketNameEl ? thBracketNameEl.value : bracket.name);
+  bracket.season = String(thBracketSeasonEl && thBracketSeasonEl.value ? thBracketSeasonEl.value : bracket.season || '2026');
+  _thSaveBracketState();
+  _thRenderBracketManager();
+}
+
+function _thCreateBracket() {
+  var bracket = _thDefaultBracket();
+  _thBracketState.brackets.unshift(bracket);
+  _thBracketState.activeId = bracket.id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thDuplicateBracket() {
+  var active = _thBracketActive();
+  if (!active) return;
+  var copy = JSON.parse(JSON.stringify(active));
+  copy.id = _thBracketId();
+  copy.name = active.name + ' Copy';
+  copy.createdAt = new Date().toISOString();
+  copy.teams.forEach(function (team) { team.id = _thBracketId(); });
+  _thBracketState.brackets.unshift(copy);
+  _thBracketState.activeId = copy.id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thDeleteBracket() {
+  var active = _thBracketActive();
+  if (!active) return;
+  if (!confirm('Delete "' + active.name + '"?')) return;
+  _thBracketState.brackets = _thBracketState.brackets.filter(function (b) { return b.id !== active.id; });
+  delete _thBracketState.results[active.id];
+  if (!_thBracketState.brackets.length) _thBracketState.brackets.push(_thDefaultBracket());
+  _thBracketState.activeId = _thBracketState.brackets[0].id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thAddBracketTeam(teamName, seed, region) {
+  var bracket = _thBracketActive();
+  if (!bracket || !teamName) return;
+  if (bracket.teams.some(function (item) { return String(item.team).toLowerCase() === String(teamName).toLowerCase(); })) {
+    if (typeof showWarn === 'function') showWarn(teamName + ' is already in this bracket.');
+    return;
+  }
+  bracket.teams.push({
+    id: _thBracketId(),
+    team: teamName,
+    seed: Math.max(1, Math.min(16, parseInt(seed, 10) || 1)),
+    region: region || 'South'
+  });
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thRemoveBracketTeam(id) {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.teams = bracket.teams.filter(function (item) { return item.id !== id; });
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thClearBracketTeams() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  if (!confirm('Clear every team from this bracket?')) return;
+  bracket.teams = [];
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thImportBracketTeams() {
+  var bracket = _thBracketActive();
+  if (!bracket || !thBracketImportEl) return;
+  var lines = String(thBracketImportEl.value || '').split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+  var knownTeams = _thBracketAllTeams();
+  var teamMap = {};
+  knownTeams.forEach(function (team) { teamMap[_thNormTeamName(team)] = team; });
+  var added = 0;
+  var failed = [];
+  lines.forEach(function (line, idx) {
+    var parts = line.split('|').map(function (x) { return x.trim(); }).filter(Boolean);
+    var seed = idx + 1;
+    var region = _thBracketRegions()[Math.min(_thBracketRegions().length - 1, Math.floor(idx / 16))] || 'South';
+    var rawTeam = '';
+    if (parts.length >= 3) {
+      seed = parseInt(parts[0], 10) || seed;
+      rawTeam = parts[1];
+      region = parts[2] || region;
+    } else if (parts.length === 2) {
+      seed = parseInt(parts[0], 10) || seed;
+      rawTeam = parts[1];
+    } else {
+      var commaParts = line.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (commaParts.length >= 2) {
+        rawTeam = commaParts[0];
+        region = commaParts[1];
+      } else {
+        rawTeam = line.replace(/^\d+\s+/, '').trim();
+      }
+    }
+    var match = teamMap[_thNormTeamName(rawTeam)];
+    if (!match) {
+      failed.push(rawTeam);
+      return;
+    }
+    if (bracket.teams.some(function (item) { return String(item.team).toLowerCase() === String(match).toLowerCase(); })) return;
+    bracket.teams.push({ id: _thBracketId(), team: match, seed: seed, region: region || 'South' });
+    added += 1;
+  });
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+  if (thBracketImportStatusEl) {
+    thBracketImportStatusEl.textContent = added + ' added' + (failed.length ? ' · Unmatched: ' + failed.slice(0, 4).join(', ') + (failed.length > 4 ? '…' : '') : '');
+  }
+}
+
+function _thRunBracketSimulation() {
+  var bracket = _thBracketActive();
+  if (!bracket || !thBracketResultsEl) return;
+  var total = bracket.teams.length;
+  if (total < 2 || (total & (total - 1)) !== 0) {
+    if (typeof showWarn === 'function') showWarn('Bracket simulation needs a power-of-two field (4, 8, 16, 32, 64…).');
+    return;
+  }
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Running tournament simulations...';
+  thBracketResultsEl.style.display = 'block';
+  thBracketResultsEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running full-bracket Monte Carlo simulations...</div>';
+  if (thBracketAIOutputEl) {
+    thBracketAIOutputEl.style.display = 'none';
+    thBracketAIOutputEl.innerHTML = '';
+  }
+  var nSims = thBracketSimCountEl ? (parseInt(thBracketSimCountEl.value, 10) || 5000) : 5000;
+  setTimeout(function () {
+    var result = _thAggregateBracketSims(bracket, nSims);
+    _thBracketState.results[bracket.id] = result;
+    _thSaveBracketState();
+    _thRenderBracketResults();
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete · ' + nSims.toLocaleString() + ' runs';
+  }, 30);
+}
+
+async function _thRunBracketAIAnalysis() {
+  var bracket = _thBracketActive();
+  var result = bracket ? _thBracketState.results[bracket.id] : null;
+  if (!bracket || !result || !thBracketAIOutputEl) {
+    if (typeof showWarn === 'function') showWarn('Run the bracket simulation first.');
+    return;
+  }
+  if (_thIsGuest()) {
+    if (typeof showWarn === 'function') showWarn('Tournament War Room is available only to logged-in users.');
+    return;
+  }
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Sending simulation context to Gemini 3 Flash...';
+  thBracketAIOutputEl.style.display = 'block';
+  thBracketAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Generating bracket-level analysis...</div>';
+
+  var payload = {
+    bracket: {
+      name: bracket.name,
+      season: bracket.season,
+      teamCount: bracket.teams.length,
+      field: bracket.teams
+    },
+    simulation: {
+      simulations: result.simulations,
+      championOdds: result.teams.slice(0, 12).map(function (row) {
+        return {
+          team: row.team,
+          seed: row.seed,
+          region: row.region,
+          championPct: row.championPct,
+          finalFourPct: row.finalFourPct,
+          eliteEightPct: row.eliteEightPct,
+          sweetSixteenPct: row.sweetSixteenPct
+        };
+      }),
+      regionLeaders: result.regions.slice(0, 8),
+      upsetLeaders: result.upsets.slice(0, 8),
+      avgUpsetsPerSim: result.avgUpsetsPerSim
+    }
+  };
+
+  var systemInstruction = {
+    parts: [{ text: 'You are an expert NCAA tournament strategist. Analyze only the provided bracket structure and simulation outputs. Be sharp, specific, and actionable for coaching staffs and front-office decision makers. Use markdown with ## headers and concise bullets.' }]
+  };
+  var prompt =
+    'Analyze this NCAA tournament bracket simulation and produce a war-room report.\n\n' +
+    'Use these exact sections:\n' +
+    '## Title Favorite\n' +
+    '## Final Four Outlook\n' +
+    '## Best Value Teams\n' +
+    '## Upset Watch\n' +
+    '## Region By Region\n' +
+    '## Most Likely Finals Paths\n' +
+    '## Model Risk Notes\n' +
+    '## Recommendation\n\n' +
+    'Explain where the model is confident, where the bracket is volatile, and which teams appear underseeded or dangerous relative to seed. Keep it grounded in the simulation data only.\n\n' +
+    '```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+
+  try {
+    var res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-3-flash-preview',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: systemInstruction,
+        generationConfig: { temperature: 0.6, maxOutputTokens: 5000 }
+      })
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    var text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    var joined = text.map(function (p) { return p.text || ''; }).join('\n').trim();
+    thBracketAIOutputEl.innerHTML = _thFmtDeepText(joined || 'No analysis returned.');
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Gemini bracket analysis ready';
+  } catch (e) {
+    thBracketAIOutputEl.innerHTML = '<div class="thMCError">Bracket analysis failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Bracket analysis failed';
+  }
 }
 
 // ── Model toggle (exact same structure as MBB/WBB league toggle) ─────────────
@@ -66,6 +847,24 @@ function initTeamsDOMRefs() {
   thGameLogEl   = document.getElementById('thGameLog');
   thH2HEl       = document.getElementById('thH2H');
   thLoadingEl   = document.getElementById('thLoading');
+  thBracketGateEl = document.getElementById('thBracketGate');
+  thBracketWorkspaceEl = document.getElementById('thBracketWorkspace');
+  thBracketSelectEl = document.getElementById('thBracketSelect');
+  thBracketNameEl = document.getElementById('thBracketName');
+  thBracketSeasonEl = document.getElementById('thBracketSeason');
+  thBracketTeamAddEl = document.getElementById('thBracketTeamAdd');
+  thBracketSeedAddEl = document.getElementById('thBracketSeedAdd');
+  thBracketRegionAddEl = document.getElementById('thBracketRegionAdd');
+  thBracketImportEl = document.getElementById('thBracketImport');
+  thBracketImportStatusEl = document.getElementById('thBracketImportStatus');
+  thBracketBoardEl = document.getElementById('thBracketBoard');
+  thBracketStatusEl = document.getElementById('thBracketStatus');
+  thBracketResultsEl = document.getElementById('thBracketResults');
+  thBracketAIOutputEl = document.getElementById('thBracketAIOutput');
+  thBracketTeamCountEl = document.getElementById('thBracketTeamCount');
+  thBracketRegionCountEl = document.getElementById('thBracketRegionCount');
+  thBracketStructureEl = document.getElementById('thBracketStructure');
+  thBracketSimCountEl = document.getElementById('thBracketSimCount');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3172,6 +3971,7 @@ function thPopulateTeams() {
   const cmpEl = document.getElementById('thCompareTeam');
   if (cmpEl) cmpEl.innerHTML = '<option value="">— Select opponent team —</option>' +
     teams.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+  _thPopulateBracketTeamSelects();
 }
 
 // ── Refresh dropdown when player data changes (called from app.js) ────────────
@@ -3183,6 +3983,7 @@ function thRefreshTeamList() {
 function initTeamsPage() {
   initTeamsDOMRefs();
   thPopulateTeams();
+  _thRenderBracketWorkspace();
 
   if (thLoadBtn) {
     thLoadBtn.addEventListener('click', () => {
@@ -3199,6 +4000,42 @@ function initTeamsPage() {
     thCompareBtn.addEventListener('click', () => thLoadCompare());
   }
 
+  if (thBracketSelectEl) {
+    thBracketSelectEl.addEventListener('change', function () {
+      _thBracketState.activeId = thBracketSelectEl.value || '';
+      _thSaveBracketState();
+      _thRenderBracketWorkspace();
+    });
+  }
+  if (thBracketNameEl) {
+    thBracketNameEl.addEventListener('change', _thCommitBracketMeta);
+  }
+  if (thBracketSeasonEl) {
+    thBracketSeasonEl.addEventListener('change', _thCommitBracketMeta);
+  }
+  var newBtn = document.getElementById('thBracketNewBtn');
+  if (newBtn) newBtn.addEventListener('click', _thCreateBracket);
+  var dupBtn = document.getElementById('thBracketDuplicateBtn');
+  if (dupBtn) dupBtn.addEventListener('click', _thDuplicateBracket);
+  var delBtn = document.getElementById('thBracketDeleteBtn');
+  if (delBtn) delBtn.addEventListener('click', _thDeleteBracket);
+  var addBtn = document.getElementById('thBracketAddBtn');
+  if (addBtn) addBtn.addEventListener('click', function () {
+    _thAddBracketTeam(
+      thBracketTeamAddEl ? thBracketTeamAddEl.value : '',
+      thBracketSeedAddEl ? thBracketSeedAddEl.value : 1,
+      thBracketRegionAddEl ? thBracketRegionAddEl.value : 'South'
+    );
+  });
+  var importBtn = document.getElementById('thBracketImportBtn');
+  if (importBtn) importBtn.addEventListener('click', _thImportBracketTeams);
+  var clearTeamsBtn = document.getElementById('thBracketClearTeamsBtn');
+  if (clearTeamsBtn) clearTeamsBtn.addEventListener('click', _thClearBracketTeams);
+  var simBtn = document.getElementById('thBracketSimBtn');
+  if (simBtn) simBtn.addEventListener('click', _thRunBracketSimulation);
+  var analyzeBtn = document.getElementById('thBracketAnalyzeBtn');
+  if (analyzeBtn) analyzeBtn.addEventListener('click', _thRunBracketAIAnalysis);
+
   // Allow pressing Enter in team search select (or hitting Enter in season input)
   if (thSeasonInput) {
     thSeasonInput.addEventListener('keydown', e => {
@@ -3213,6 +4050,7 @@ class TeamHub {
   refreshTeamList()             { return thRefreshTeamList(); }
   loadTeam(name, season)        { return thLoadTeam(name, season); }
   loadOpponent(teamName)        { return thLoadOpponent(teamName); }
+  refreshTournamentHub()        { return _thRenderBracketWorkspace(); }
 }
 
 window.TeamHub = new TeamHub();
