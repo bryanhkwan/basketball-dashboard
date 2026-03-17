@@ -30,6 +30,9 @@ var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
 var _thBracketState = { brackets: [], activeId: '', results: {} };
+var _thBracketTeamOptionsHtml = '';
+var _thBracketTeamsCache = [];
+var _thBracketTeamSet = {};
 
 function _thGuestDACount() {
   return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
@@ -126,12 +129,47 @@ function _thBracketAllTeams() {
   )].sort();
 }
 
+function _thParseTeamCandidates(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return [];
+  text = text.replace(/^(winner\s+of|play-?in\s+winner\s*:?|first four\s*:?|tbd\s*:?|either\s+)/i, '').trim();
+  var knownTeams = _thBracketAllTeams();
+  var byNorm = {};
+  knownTeams.forEach(function (team) { byNorm[_thNormTeamName(team)] = team; });
+
+  if (byNorm[_thNormTeamName(text)]) return [byNorm[_thNormTeamName(text)]];
+
+  var parts = text
+    .split(/\s*\/\s*|\s+or\s+|\s*\|\s*/i)
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean);
+
+  var out = [];
+  parts.forEach(function (part) {
+    var match = byNorm[_thNormTeamName(part)];
+    if (match && out.indexOf(match) === -1) out.push(match);
+  });
+  return out;
+}
+
 function _thPopulateBracketTeamSelects() {
   var teams = _thBracketAllTeams();
-  var opts = '<option value="">— Add a team —</option>' + teams.map(function (t) {
+  _thBracketTeamsCache = teams.slice();
+  _thBracketTeamSet = {};
+  teams.forEach(function (team) { _thBracketTeamSet[_thNormTeamName(team)] = true; });
+  _thBracketTeamOptionsHtml = teams.map(function (t) {
     return '<option value="' + _thEsc(t) + '">' + _thEsc(t) + '</option>';
   }).join('');
-  if (thBracketTeamAddEl) thBracketTeamAddEl.innerHTML = opts;
+  if (thBracketTeamAddEl) thBracketTeamAddEl.innerHTML = '<option value="">-- Add a team --</option>' + _thBracketTeamOptionsHtml;
+}
+
+function _thBracketSlotOptions(currentName) {
+  var current = String(currentName || '').trim();
+  var prefix = '';
+  if (current && !_thBracketTeamSet[_thNormTeamName(current)]) {
+    prefix = '<option value="' + _thEsc(current) + '">' + _thEsc(current) + '</option>';
+  }
+  return prefix + _thBracketTeamOptionsHtml + '<option value="__PLAYIN__">Pick play-in pair...</option>';
 }
 
 function _thBracketFieldStructure(bracket) {
@@ -410,11 +448,19 @@ async function _thPrepareBracketContexts(bracket) {
   if (!bracket || !Array.isArray(bracket.teams)) return;
   var season = bracket.season || '2026';
   var seen = {};
-  var names = bracket.teams.map(function (t) { return t.team; }).filter(Boolean).filter(function (name) {
-    var key = String(name).toLowerCase();
-    if (seen[key]) return false;
-    seen[key] = true;
-    return true;
+  var names = [];
+  bracket.teams.forEach(function (entry) {
+    var pool = Array.isArray(entry && entry.candidates) && entry.candidates.length
+      ? entry.candidates
+      : [entry && entry.team];
+    pool.forEach(function (name) {
+      var clean = String(name || '').trim();
+      if (!clean) return;
+      var key = clean.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      names.push(clean);
+    });
   });
   await Promise.all(names.map(function (name) {
     return Promise.all([
@@ -440,7 +486,7 @@ function _thBracketTeamRating(teamName, season) {
   return _thFallbackRating(teamName, rating, stats, season);
 }
 
-function _thSimSingleGame(teamA, teamB, season) {
+function _thSimResolvedTeams(teamA, teamB, season) {
   var ratA = _thBracketTeamRating(teamA.team, season);
   var ratB = _thBracketTeamRating(teamB.team, season);
   if (!ratA || !ratB) return null;
@@ -496,9 +542,54 @@ function _thSimSingleGame(teamA, teamB, season) {
   };
 }
 
+function _thResolvePlayInEntry(teamEntry, season) {
+  if (!teamEntry) return null;
+  var candidates = Array.isArray(teamEntry.candidates) ? teamEntry.candidates.slice() : [];
+  if (!candidates.length) return teamEntry;
+  if (candidates.length === 1) {
+    return Object.assign({}, teamEntry, { team: candidates[0], candidates: [candidates[0]] });
+  }
+  var left = { team: candidates[0], seed: teamEntry.seed, region: teamEntry.region };
+  var right = { team: candidates[1], seed: teamEntry.seed, region: teamEntry.region };
+  var playIn = _thSimResolvedTeams(left, right, season);
+  if (!playIn) return Object.assign({}, teamEntry, { team: candidates[0] });
+  return Object.assign({}, teamEntry, {
+    team: playIn.winner.team,
+    candidates: candidates,
+    playIn: {
+      teamA: left.team,
+      teamB: right.team,
+      winner: playIn.winner.team,
+      scoreA: playIn.scoreA,
+      scoreB: playIn.scoreB
+    }
+  });
+}
+
+function _thSimSingleGame(teamA, teamB, season) {
+  var resolvedA = _thResolvePlayInEntry(teamA, season);
+  var resolvedB = _thResolvePlayInEntry(teamB, season);
+  if (!resolvedA || !resolvedB) return null;
+  var result = _thSimResolvedTeams(resolvedA, resolvedB, season);
+  if (!result) return null;
+  result.resolvedA = resolvedA;
+  result.resolvedB = resolvedB;
+  return result;
+}
+
 function _thRecordRoundAdvancement(summary, teamName, label) {
   if (!summary.rounds[teamName]) summary.rounds[teamName] = {};
   summary.rounds[teamName][label] = (summary.rounds[teamName][label] || 0) + 1;
+}
+
+function _thCommitBracketMutation(bracket, opts) {
+  if (!bracket) return;
+  delete _thBracketState.results[bracket.id];
+  if (!(opts && opts.skipSave)) _thSaveBracketState();
+  if (!(opts && opts.deferRender)) {
+    _thRenderBracketBoard();
+    _thRenderBracketResults();
+  }
 }
 
 function _thSimBracketOnce(bracket) {
@@ -596,7 +687,7 @@ function _thSimBracketOnce(bracket) {
   return summary;
 }
 
-function _thAggregateBracketSims(bracket, sims) {
+async function _thAggregateBracketSims(bracket, sims, onProgress) {
   var total = sims || 5000;
   var labels = _thBracketRoundLabels(bracket.teams.length);
   var roundCounts = {};
@@ -606,6 +697,7 @@ function _thAggregateBracketSims(bracket, sims) {
   var upsetMap = {};
   var totalUpsets = 0;
   var samplePath = null;
+  var chunkSize = total >= 10000 ? 250 : 100;
   for (var i = 0; i < total; i++) {
     var sim = _thSimBracketOnce(bracket);
     if (!samplePath) {
@@ -640,6 +732,12 @@ function _thAggregateBracketSims(bracket, sims) {
       var upsetKey = game.winner + ' over ' + game.loser;
       upsetMap[upsetKey] = (upsetMap[upsetKey] || 0) + 1;
     });
+    if ((i + 1) % chunkSize === 0 || i === total - 1) {
+      if (typeof onProgress === 'function') onProgress(i + 1, total);
+      if (i < total - 1) {
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+      }
+    }
   }
 
   var teamRows = bracket.teams.map(function (team) {
@@ -718,7 +816,6 @@ function _thRenderBracketBoard() {
   var regions = _thBracketRegions();
   var result = _thBracketState.results[bracket.id] || null;
   var samplePath = result && result.samplePath ? result.samplePath : null;
-  var allTeams = _thBracketAllTeams();
 
   function renderFutureGameCard(roundLabel, idx, slots) {
     return '<div class="thBracketGame thBracketGame--future">' +
@@ -738,12 +835,11 @@ function _thRenderBracketBoard() {
           return '<div class="thBracketSlot">' +
             '<span class="thBracketSeed">' + seed + '</span>' +
             '<div>' +
-              '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' +
+              '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '" data-current="' + _thEsc(current && current.team ? current.team : '') + '">' +
                 '<option value="">— Select team —</option>' +
-                allTeams.map(function (teamName) {
-                  return '<option value="' + _thEsc(teamName) + '"' + (current && current.team === teamName ? ' selected' : '') + '>' + _thEsc(teamName) + '</option>';
-                }).join('') +
+                _thBracketSlotOptions(current && current.team ? current.team : '') +
               '</select>' +
+              ((current && current.candidates && current.candidates.length > 1) ? '<div class="thBracketSlotMeta">Play-in: ' + _thEsc(current.candidates.join(' / ')) + '</div>' : '') +
             '</div>' +
           '</div>';
         }).join('') +
@@ -808,10 +904,31 @@ function _thRenderBracketBoard() {
         renderRegion('Midwest', 'right') +
       '</div>' +
     '</div>';
-  thBracketBoardEl.querySelectorAll('[data-bracket-region][data-bracket-seed]').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-      _thAssignBracketSeed(sel.getAttribute('data-bracket-region'), parseInt(sel.getAttribute('data-bracket-seed'), 10), sel.value || '');
+  if (!thBracketBoardEl._thBracketBoardBound) {
+    thBracketBoardEl.addEventListener('change', function (e) {
+      var sel = e.target && e.target.closest ? e.target.closest('[data-bracket-region][data-bracket-seed]') : null;
+      if (!sel) return;
+      var region = sel.getAttribute('data-bracket-region') || '';
+      var seed = parseInt(sel.getAttribute('data-bracket-seed'), 10) || 0;
+      var value = sel.value || '';
+      if (value === '__PLAYIN__') {
+        var raw = prompt('Enter the play-in teams for this slot, like: Texas / NC State', '');
+        var candidates = _thParseTeamCandidates(raw || '');
+        if (candidates.length >= 2) {
+          _thAssignBracketSeedEntry(region, seed, { team: candidates.join(' / '), candidates: candidates });
+        } else {
+          if (typeof showWarn === 'function') showWarn('Use two valid team names separated by "/" or "or" for a play-in slot.');
+          _thRenderBracketBoard();
+        }
+        return;
+      }
+      _thAssignBracketSeed(region, seed, value || '');
     });
+    thBracketBoardEl._thBracketBoardBound = true;
+  }
+  thBracketBoardEl.querySelectorAll('[data-bracket-region][data-bracket-seed]').forEach(function (sel) {
+    var current = sel.getAttribute('data-current') || '';
+    if (current) sel.value = current;
   });
   var groups = {};
   bracket.teams.forEach(function (item) {
@@ -953,47 +1070,53 @@ function _thAddBracketTeam(teamName, seed, region) {
     seed: Math.max(1, Math.min(16, parseInt(seed, 10) || 1)),
     region: region || 'South'
   });
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket);
 }
 
 function _thRemoveBracketTeam(id) {
   var bracket = _thBracketActive();
   if (!bracket) return;
   bracket.teams = bracket.teams.filter(function (item) { return item.id !== id; });
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket);
 }
 
-function _thAssignBracketSeed(region, seed, teamName) {
+function _thAssignBracketSeed(region, seed, teamName, opts) {
+  return _thAssignBracketSeedEntry(region, seed, { team: teamName }, opts);
+}
+
+function _thAssignBracketSeedEntry(region, seed, entry, opts) {
   var bracket = _thBracketActive();
   if (!bracket || !region || !seed) return;
+  entry = entry || {};
+  var teamName = entry.team || '';
   bracket.teams = bracket.teams.filter(function (item) {
     if ((item.region || '') === region && Number(item.seed) === Number(seed)) return false;
     if (teamName && String(item.team).toLowerCase() === String(teamName).toLowerCase()) return false;
+    if (Array.isArray(entry.candidates) && entry.candidates.length && Array.isArray(item.candidates)) {
+      return !item.candidates.some(function (c) { return entry.candidates.indexOf(c) >= 0; });
+    }
+    if (Array.isArray(entry.candidates) && entry.candidates.length && item.team) {
+      return !entry.candidates.some(function (c) { return String(c).toLowerCase() === String(item.team).toLowerCase(); });
+    }
     return true;
   });
   if (teamName) {
-    bracket.teams.push({ id: _thBracketId(), team: teamName, seed: seed, region: region });
+    bracket.teams.push({
+      id: _thBracketId(),
+      team: teamName,
+      seed: seed,
+      region: region,
+      candidates: Array.isArray(entry.candidates) ? entry.candidates.slice() : undefined
+    });
   }
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket, opts);
 }
 
 function _thBuildEmpty64Bracket() {
   var bracket = _thBracketActive();
   if (!bracket) return;
   bracket.teams = [];
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket);
   if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Empty 64-slot bracket ready. Use the slot selectors or smart import.';
 }
 
@@ -1002,10 +1125,7 @@ function _thClearBracketTeams() {
   if (!bracket) return;
   if (!confirm('Clear every team from this bracket?')) return;
   bracket.teams = [];
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket);
 }
 
 function _thImportBracketTeams() {
@@ -1048,7 +1168,9 @@ function _thImportBracketTeams() {
     }
 
     var match = teamMap[_thNormTeamName(rawTeam)];
-    if (!match) {
+    var candidateList = [];
+    if (!match) candidateList = _thParseTeamCandidates(rawTeam);
+    if (!match && candidateList.length < 2) {
       failed.push(rawTeam);
       return;
     }
@@ -1058,9 +1180,17 @@ function _thImportBracketTeams() {
     } else {
       seedCounters[region] = Math.max(seedCounters[region] || 0, seed);
     }
-    _thAssignBracketSeed(region, seed, match);
+    if (match) {
+      _thAssignBracketSeed(region, seed, match, { deferRender: true, skipSave: true });
+    } else {
+      _thAssignBracketSeedEntry(region, seed, {
+        team: candidateList.join(' / '),
+        candidates: candidateList
+      }, { deferRender: true, skipSave: true });
+    }
     added += 1;
   });
+  _thCommitBracketMutation(bracket);
   if (thBracketImportStatusEl) {
     thBracketImportStatusEl.textContent = added + ' added' + (failed.length ? ' · Unmatched: ' + failed.slice(0, 4).join(', ') + (failed.length > 4 ? '…' : '') : '');
   }
@@ -1087,10 +1217,7 @@ function _thAutofillBracketBySeedList() {
       bracket.teams.push({ id: _thBracketId(), team: row.team, seed: seed, region: regions[r] });
     }
   }
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
+  _thCommitBracketMutation(bracket);
   if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Auto-filled a 64-team bracket using current model order.';
 }
 
@@ -1113,14 +1240,15 @@ async function _thRunBracketSimulation() {
   try {
     if (thBracketStatusEl) thBracketStatusEl.textContent = 'Loading team contexts and recent form...';
     await _thPrepareBracketContexts(bracket);
-    setTimeout(function () {
-      var result = _thAggregateBracketSims(bracket, nSims);
-      _thBracketState.results[bracket.id] = result;
-      _thSaveBracketState();
-      _thRenderBracketBoard();
-      _thRenderBracketResults();
-      if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete · ' + nSims.toLocaleString() + ' runs';
-    }, 30);
+    var result = await _thAggregateBracketSims(bracket, nSims, function (done, totalSims) {
+      if (thBracketStatusEl) thBracketStatusEl.textContent = 'Running tournament simulations... ' + done.toLocaleString() + ' / ' + totalSims.toLocaleString();
+    });
+    _thBracketState.results[bracket.id] = result;
+    _thSaveBracketState();
+    _thRenderBracketBoard();
+    _thRenderBracketResults();
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete - ' + nSims.toLocaleString() + ' runs';
+
   } catch (e) {
     if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation failed';
     thBracketResultsEl.innerHTML = '<div class="thMCError">Simulation failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';

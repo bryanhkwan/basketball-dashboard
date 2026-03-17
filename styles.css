@@ -1922,9 +1922,15 @@
 }
 .thBracketGrid {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 14px;
+}
+.thBracketToolStack {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
 }
 .thBracketPanel {
   border: 1px solid var(--line);
@@ -1942,6 +1948,9 @@
 }
 .thBracketPanelBody {
   padding: 14px;
+}
+.thBracketPanelBody--board {
+  padding: 10px 8px 12px;
 }
 .thBracketImportLabel {
   margin-top: 10px;
@@ -1971,23 +1980,23 @@
 }
 .thBracketFantasy {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px minmax(0, 1fr);
-  gap: 18px;
-  min-width: 1680px;
+  grid-template-columns: minmax(0, 1fr) 236px minmax(0, 1fr);
+  gap: 12px;
+  min-width: 1480px;
   align-items: start;
 }
 .thBracketFantasySide {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .thBracketFantasyCenter {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   align-self: stretch;
   justify-content: center;
-  padding-top: 52px;
+  padding-top: 40px;
 }
 .thBracketFantasyCenterTitle {
   text-align: center;
@@ -2011,14 +2020,14 @@
 }
 .thBracketRegionBracket {
   display: grid;
-  grid-template-columns: 248px 220px 190px 160px;
-  gap: 12px;
+  grid-template-columns: 220px 184px 154px 132px;
+  gap: 10px;
   align-items: start;
 }
 .thBracketRoundCol {
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 28px;
 }
 .thBracketRoundTitle {
   font-size: 10px;
@@ -2040,25 +2049,25 @@
   opacity: .94;
 }
 .thBracketGameHead {
-  padding: 6px 9px;
-  font-size: 10px;
+  padding: 5px 8px;
+  font-size: 9.5px;
   color: #6b7280;
   border-bottom: 1px solid rgba(18,27,44,.08);
   background: rgba(249,250,251,.96);
 }
 .thBracketSlot {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 7px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px;
   align-items: center;
-  padding: 8px 9px;
+  padding: 7px 8px;
 }
 .thBracketSlot + .thBracketSlot {
   border-top: 1px solid rgba(18,27,44,.08);
 }
 .thBracketSlotSelect {
   width: 100%;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border: 1px solid rgba(209,213,219,.95);
   border-radius: 8px;
   background: #fff;
@@ -2066,7 +2075,7 @@
   font-size: 11px;
 }
 .thBracketSlotTeam {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
@@ -2092,8 +2101,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   border: 1px solid rgba(209,213,219,.95);
   color: #374151;
@@ -2203,6 +2212,7 @@
 }
 @media (max-width: 1080px) {
   .thBracketGrid,
+  .thBracketToolStack,
   .thBracketResultsWrap {
     grid-template-columns: 1fr;
   }
