@@ -38,6 +38,78 @@ var _thBracketTeamSet = {};
 var _thBracketTeamSourceRef = null;
 var _thBracketPlayInTarget = null;
 var _thBracketRenderFrame = 0;
+var _thBracketJsPdfPromise = null;
+var _TH_2026_ESPN_PRESET = {
+  name: '2026 ESPN Men\'s Bracket',
+  season: '2026',
+  source: 'ESPN Men\'s Tournament Challenge bracket field (March 17, 2026)',
+  entries: [
+    { region: 'East', seed: 1, team: 'Duke' },
+    { region: 'East', seed: 2, team: 'UConn' },
+    { region: 'East', seed: 3, team: 'Michigan St' },
+    { region: 'East', seed: 4, team: 'Kansas' },
+    { region: 'East', seed: 5, team: 'St John\'s' },
+    { region: 'East', seed: 6, team: 'Louisville' },
+    { region: 'East', seed: 7, team: 'UCLA' },
+    { region: 'East', seed: 8, team: 'Ohio State' },
+    { region: 'East', seed: 9, team: 'TCU' },
+    { region: 'East', seed: 10, team: 'UCF' },
+    { region: 'East', seed: 11, team: 'South Florida' },
+    { region: 'East', seed: 12, team: 'Northern Iowa' },
+    { region: 'East', seed: 13, team: 'CA Baptist' },
+    { region: 'East', seed: 14, team: 'N Dakota St' },
+    { region: 'East', seed: 15, team: 'Furman' },
+    { region: 'East', seed: 16, team: 'Siena' },
+    { region: 'South', seed: 1, team: 'Florida' },
+    { region: 'South', seed: 2, team: 'Houston' },
+    { region: 'South', seed: 3, team: 'Illinois' },
+    { region: 'South', seed: 4, team: 'Nebraska' },
+    { region: 'South', seed: 5, team: 'Vanderbilt' },
+    { region: 'South', seed: 6, team: 'North Carolina' },
+    { region: 'South', seed: 7, team: 'Saint Mary\'s' },
+    { region: 'South', seed: 8, team: 'Clemson' },
+    { region: 'South', seed: 9, team: 'Iowa' },
+    { region: 'South', seed: 10, team: 'Texas A&M' },
+    { region: 'South', seed: 11, team: 'VCU' },
+    { region: 'South', seed: 12, team: 'McNeese' },
+    { region: 'South', seed: 13, team: 'Troy' },
+    { region: 'South', seed: 14, team: 'Penn' },
+    { region: 'South', seed: 15, team: 'Idaho' },
+    { region: 'South', seed: 16, candidates: ['Prairie View A&M', 'Lehigh'] },
+    { region: 'West', seed: 1, team: 'Arizona' },
+    { region: 'West', seed: 2, team: 'Purdue' },
+    { region: 'West', seed: 3, team: 'Gonzaga' },
+    { region: 'West', seed: 4, team: 'Arkansas' },
+    { region: 'West', seed: 5, team: 'Wisconsin' },
+    { region: 'West', seed: 6, team: 'BYU' },
+    { region: 'West', seed: 7, team: 'Miami' },
+    { region: 'West', seed: 8, team: 'Villanova' },
+    { region: 'West', seed: 9, team: 'Utah State' },
+    { region: 'West', seed: 10, team: 'Missouri' },
+    { region: 'West', seed: 11, candidates: ['Texas', 'NC State'] },
+    { region: 'West', seed: 12, team: 'High Point' },
+    { region: 'West', seed: 13, team: 'Hawai\'i' },
+    { region: 'West', seed: 14, team: 'Kennesaw St' },
+    { region: 'West', seed: 15, team: 'Queens' },
+    { region: 'West', seed: 16, team: 'Long Island' },
+    { region: 'Midwest', seed: 1, team: 'Michigan' },
+    { region: 'Midwest', seed: 2, team: 'Iowa State' },
+    { region: 'Midwest', seed: 3, team: 'Virginia' },
+    { region: 'Midwest', seed: 4, team: 'Alabama' },
+    { region: 'Midwest', seed: 5, team: 'Texas Tech' },
+    { region: 'Midwest', seed: 6, team: 'Tennessee' },
+    { region: 'Midwest', seed: 7, team: 'Kentucky' },
+    { region: 'Midwest', seed: 8, team: 'Georgia' },
+    { region: 'Midwest', seed: 9, team: 'Saint Louis' },
+    { region: 'Midwest', seed: 10, team: 'Santa Clara' },
+    { region: 'Midwest', seed: 11, candidates: ['Miami (OH)', 'SMU'] },
+    { region: 'Midwest', seed: 12, team: 'Akron' },
+    { region: 'Midwest', seed: 13, team: 'Hofstra' },
+    { region: 'Midwest', seed: 14, team: 'Wright St' },
+    { region: 'Midwest', seed: 15, team: 'Tennessee St' },
+    { region: 'Midwest', seed: 16, candidates: ['UMBC', 'Howard'] }
+  ]
+};
 
 function _thGuestDACount() {
   return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
@@ -155,6 +227,54 @@ function _thBracketAllTeams() {
       .filter(Boolean)
   )].sort();
   return _thBracketTeamsCache.slice();
+}
+
+function _thResolvePresetTeamName(rawTeam, teamMap) {
+  var knownMap = teamMap || {};
+  var raw = String(rawTeam || '').trim();
+  if (!raw) return '';
+  var exact = knownMap[_thNormTeamName(raw)];
+  if (exact) return exact;
+
+  var aliasMap = {
+    'miami': ['Miami', 'Miami (FL)', 'Miami FL'],
+    'st johns': ['St John\'s', 'Saint John\'s'],
+    'michigan st': ['Michigan St', 'Michigan State'],
+    'ca baptist': ['CA Baptist', 'California Baptist'],
+    'n dakota st': ['N Dakota St', 'North Dakota State', 'North Dakota St'],
+    'saint marys': ['Saint Mary\'s', 'Saint Mary\'s CA', 'Saint Marys'],
+    'hawaii': ['Hawai\'i', 'Hawaii'],
+    'kennesaw st': ['Kennesaw St', 'Kennesaw State'],
+    'saint louis': ['Saint Louis', 'Saint Louis Billikens', 'St Louis'],
+    'miami oh': ['Miami (OH)', 'Miami OH', 'Miami-Ohio'],
+    'wright st': ['Wright St', 'Wright State'],
+    'tennessee st': ['Tennessee St', 'Tennessee State'],
+    'long island': ['Long Island', 'LIU'],
+    'prairie view am': ['Prairie View A&M', 'Prairie View', 'Prairie View AM'],
+    'nc state': ['NC State', 'NCSU'],
+    'south florida': ['South Florida', 'USF']
+  };
+  var aliasKey = _thNormTeamName(raw);
+  var aliases = aliasMap[aliasKey] || [];
+  for (var i = 0; i < aliases.length; i++) {
+    var match = knownMap[_thNormTeamName(aliases[i])];
+    if (match) return match;
+  }
+
+  var tokens = aliasKey.split(' ').filter(Boolean);
+  var bestScore = 0;
+  var bestTeam = '';
+  Object.keys(knownMap).forEach(function (key) {
+    var score = 0;
+    tokens.forEach(function (token) {
+      if (key.indexOf(token) >= 0) score += 1;
+    });
+    if (score > bestScore && score >= Math.max(2, tokens.length - 1)) {
+      bestScore = score;
+      bestTeam = knownMap[key];
+    }
+  });
+  return bestTeam || raw;
 }
 
 function _thParseTeamCandidates(raw) {
@@ -1333,6 +1453,197 @@ function _thAutofillBracketBySeedList() {
   if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Auto-filled a 64-team bracket using current model order.';
 }
 
+function _thLoadEspn2026Preset() {
+  var bracket = _thBracketActive();
+  if (!bracket) {
+    _thCreateBracket();
+    bracket = _thBracketActive();
+  }
+  if (!bracket) return;
+  if (bracket.teams && bracket.teams.length && !confirm('Replace the current field with the ESPN 2026 preset?')) return;
+
+  var teamMap = {};
+  _thBracketAllTeams().forEach(function (team) { teamMap[_thNormTeamName(team)] = team; });
+  var unresolved = [];
+  bracket.name = _TH_2026_ESPN_PRESET.name;
+  bracket.season = _TH_2026_ESPN_PRESET.season;
+  bracket.teams = [];
+
+  _TH_2026_ESPN_PRESET.entries.forEach(function (entry) {
+    if (Array.isArray(entry.candidates) && entry.candidates.length) {
+      var resolvedCandidates = entry.candidates.map(function (candidate) {
+        return _thResolvePresetTeamName(candidate, teamMap);
+      });
+      resolvedCandidates.forEach(function (candidate, idx) {
+        if (!teamMap[_thNormTeamName(candidate)]) unresolved.push(entry.candidates[idx]);
+      });
+      bracket.teams.push({
+        id: _thBracketId(),
+        team: resolvedCandidates.join(' / '),
+        seed: entry.seed,
+        region: entry.region,
+        candidates: resolvedCandidates
+      });
+      return;
+    }
+
+    var resolvedTeam = _thResolvePresetTeamName(entry.team, teamMap);
+    if (!teamMap[_thNormTeamName(resolvedTeam)]) unresolved.push(entry.team);
+    bracket.teams.push({
+      id: _thBracketId(),
+      team: resolvedTeam,
+      seed: entry.seed,
+      region: entry.region
+    });
+  });
+
+  _thCommitBracketMutation(bracket);
+  _thRenderBracketManager();
+  if (thBracketImportStatusEl) {
+    thBracketImportStatusEl.textContent = 'Loaded ESPN 2026 preset (' + bracket.teams.length + ' slots).' +
+      (unresolved.length ? ' Check unmatched names: ' + unresolved.slice(0, 4).join(', ') + (unresolved.length > 4 ? '…' : '') : '');
+  }
+}
+
+function _thEnsureBracketJsPdf() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!_thBracketJsPdfPromise) {
+    _thBracketJsPdfPromise = loadScriptOnce(
+      'jspdf',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      {
+        timeoutMs: 12000,
+        test: function () { return window.jspdf && window.jspdf.jsPDF; },
+        errorMessage: 'jsPDF failed to load.'
+      }
+    );
+  }
+  return _thBracketJsPdfPromise;
+}
+
+function _thPdfFileName(name) {
+  return String(name || 'tournament-war-room')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') + '.pdf';
+}
+
+async function _thOpenBracketPdfReport() {
+  var bracket = _thBracketActive();
+  var result = bracket ? _thBracketState.results[bracket.id] : null;
+  if (!bracket || !result) {
+    if (typeof showWarn === 'function') showWarn('Run a bracket simulation before exporting the War Room PDF.');
+    return;
+  }
+
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Building PDF preview...';
+  try {
+    var JsPDF = await _thEnsureBracketJsPdf();
+    var doc = new JsPDF({ unit: 'pt', format: 'letter' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 42;
+    var y = margin;
+
+    function ensureSpace(height) {
+      if (y + height <= pageH - margin) return;
+      doc.addPage();
+      y = margin;
+    }
+    function addTitle(text, size) {
+      ensureSpace((size || 18) + 16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(size || 18);
+      doc.text(text, margin, y);
+      y += (size || 18) + 10;
+    }
+    function addBody(text, opts) {
+      opts = opts || {};
+      var fontSize = opts.fontSize || 10;
+      var lineHeight = opts.lineHeight || 13;
+      var indent = opts.indent || 0;
+      var maxWidth = pageW - (margin * 2) - indent;
+      var raw = Array.isArray(text) ? text.join('\n') : String(text || '');
+      var lines = doc.splitTextToSize(raw, maxWidth);
+      ensureSpace(lines.length * lineHeight + 4);
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      doc.text(lines, margin + indent, y);
+      y += lines.length * lineHeight + (opts.gap != null ? opts.gap : 6);
+    }
+    function addSection(title, lines) {
+      addTitle(title, 13);
+      (lines || []).forEach(function (line) {
+        addBody(line, { fontSize: 10, lineHeight: 13 });
+      });
+      y += 4;
+    }
+
+    var exportedAt = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
+    var champion = result.championFavorite ? result.championFavorite.team + ' (' + result.championFavorite.championPct + '% title odds)' : 'No favorite available';
+    var topTeams = result.teams.slice(0, 12);
+    var regionLeaders = result.regions.slice(0, 8);
+    var upsets = result.upsets.slice(0, 8);
+    var methodology = result.methodology || {};
+    var aiRaw = thBracketAIOutputEl && thBracketAIOutputEl.dataset ? (thBracketAIOutputEl.dataset.lastRaw || '') : '';
+
+    doc.setProperties({
+      title: bracket.name + ' War Room Report',
+      subject: 'Tournament War Room simulation report',
+      author: 'NCAA Scouting Dashboard'
+    });
+
+    addTitle(bracket.name || 'Tournament War Room', 20);
+    addBody('Season: ' + (bracket.season || '2026') + '   •   Source preset: ' + (_TH_2026_ESPN_PRESET.source || 'Custom field'), { fontSize: 11, lineHeight: 14 });
+    addBody('Exported: ' + exportedAt, { fontSize: 9, lineHeight: 12, gap: 10 });
+
+    addSection('Simulation Snapshot', [
+      'Simulations: ' + result.simulations.toLocaleString(),
+      'Teams in field: ' + result.totalTeams,
+      'Model favorite: ' + champion,
+      'Average upsets per bracket: ' + result.avgUpsetsPerSim,
+      'Sample champion path: ' + ((result.samplePath && result.samplePath.champion) || 'Not available')
+    ]);
+
+    addSection('Champion and Final Four Odds', topTeams.map(function (row, idx) {
+      return (idx + 1) + '. ' + row.team + ' — Seed ' + row.seed + ' (' + row.region + '), Champion ' + row.championPct + '%, Final Four ' + row.finalFourPct + '%';
+    }));
+
+    addSection('Region Winner Leaders', regionLeaders.length ? regionLeaders.map(function (row) {
+      return row.region + ': ' + row.team + ' (' + row.pct + '%)';
+    }) : ['No region results available yet.']);
+
+    addSection('Most Common Upsets', upsets.length ? upsets.map(function (row, idx) {
+      return (idx + 1) + '. ' + row.label + ' — ' + row.pct + '%';
+    }) : ['No upset patterns available yet.']);
+
+    addSection('Methodology', [
+      'Baseline: ' + (methodology.baseline || 'Adjusted offense/defense blended against opponent profile'),
+      'Matchup: ' + (methodology.matchup || 'Four-factor and scoring-profile interactions adjust expected efficiency'),
+      'Recency: ' + (methodology.recency || 'Last 10 games and recent postseason results nudge team strength'),
+      'Volatility: ' + (methodology.volatility || 'Team-specific scoring volatility estimated from full-season and recent game logs')
+    ]);
+
+    addSection('Gemini Analysis', aiRaw
+      ? aiRaw.split(/\r?\n/).map(function (line) {
+          return line.replace(/^##\s*/, '').replace(/^###\s*/, '').trim();
+        }).filter(Boolean)
+      : ['Run Gemini Bracket Analysis to include the narrative scouting report in this PDF.']);
+
+    var blobUrl = doc.output('bloburl');
+    var preview = window.open(blobUrl, '_blank');
+    if (!preview) {
+      doc.save(_thPdfFileName((bracket.name || 'tournament-war-room') + '-report'));
+      if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF downloaded';
+      return;
+    }
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF preview opened in a new tab';
+  } catch (e) {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF export failed';
+    if (typeof showWarn === 'function') showWarn('War Room PDF export failed: ' + (e && e.message ? e.message : e));
+  }
+}
+
 async function _thRunBracketSimulation() {
   var bracket = _thBracketActive();
   if (!bracket || !thBracketResultsEl) return;
@@ -1347,6 +1658,7 @@ async function _thRunBracketSimulation() {
   if (thBracketAIOutputEl) {
     thBracketAIOutputEl.style.display = 'none';
     thBracketAIOutputEl.innerHTML = '';
+    if (thBracketAIOutputEl.dataset) delete thBracketAIOutputEl.dataset.lastRaw;
   }
   var nSims = thBracketSimCountEl ? (parseInt(thBracketSimCountEl.value, 10) || 5000) : 5000;
   try {
@@ -1443,9 +1755,13 @@ async function _thRunBracketAIAnalysis() {
     var text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
     var joined = text.map(function (p) { return p.text || ''; }).join('\n').trim();
     thBracketAIOutputEl.innerHTML = _thFmtDeepText(joined || 'No analysis returned.');
+    thBracketAIOutputEl.dataset.lastRaw = joined || 'No analysis returned.';
+    thBracketAIOutputEl.dataset.bracketName = bracket.name || '';
+    thBracketAIOutputEl.dataset.bracketSeason = bracket.season || '';
     if (thBracketStatusEl) thBracketStatusEl.textContent = 'Gemini bracket analysis ready';
   } catch (e) {
     thBracketAIOutputEl.innerHTML = '<div class="thMCError">Bracket analysis failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';
+    if (thBracketAIOutputEl.dataset) delete thBracketAIOutputEl.dataset.lastRaw;
     if (thBracketStatusEl) thBracketStatusEl.textContent = 'Bracket analysis failed';
   }
 }
@@ -4669,6 +4985,8 @@ function initTeamsPage() {
   if (importBtn) importBtn.addEventListener('click', _thImportBracketTeams);
   var build64Btn = document.getElementById('thBracketBuild64Btn');
   if (build64Btn) build64Btn.addEventListener('click', _thBuildEmpty64Bracket);
+  var preset2026Btn = document.getElementById('thBracketPreset2026Btn');
+  if (preset2026Btn) preset2026Btn.addEventListener('click', _thLoadEspn2026Preset);
   var autofillBtn = document.getElementById('thBracketAutofillSeedsBtn');
   if (autofillBtn) autofillBtn.addEventListener('click', _thAutofillBracketBySeedList);
   var clearTeamsBtn = document.getElementById('thBracketClearTeamsBtn');
@@ -4677,6 +4995,8 @@ function initTeamsPage() {
   if (simBtn) simBtn.addEventListener('click', _thRunBracketSimulation);
   var analyzeBtn = document.getElementById('thBracketAnalyzeBtn');
   if (analyzeBtn) analyzeBtn.addEventListener('click', _thRunBracketAIAnalysis);
+  var pdfBtn = document.getElementById('thBracketPdfBtn');
+  if (pdfBtn) pdfBtn.addEventListener('click', _thOpenBracketPdfReport);
   var playInCancelBtn = document.getElementById('thBracketPlayInCancelBtn');
   if (playInCancelBtn) playInCancelBtn.addEventListener('click', _thClosePlayInModal);
   var playInSaveBtn = document.getElementById('thBracketPlayInSaveBtn');
