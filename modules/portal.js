@@ -17,8 +17,7 @@ var portalAllMbbPlayers = [];
 var portalTargetSeason = '2026';
 var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
-var portalSelectedDepartureName = '';
-var portalSelectedDeparture = null;
+var portalSelectedDepartureNames = [];
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -265,12 +264,13 @@ function portalCategoryPriorityFromTeamStats(teamStats) {
 }
 
 function portalSelectedReplaceNames() {
-  if (!portalSelectedDepartureName) return [];
-  // Prefer the roster player's actual name for accurate score computation
-  var rosterName = portalSelectedDeparture && portalSelectedDeparture.player
-    ? portalGetPlayerName(portalSelectedDeparture.player)
-    : portalSelectedDepartureName;
-  return rosterName ? [rosterName] : [portalSelectedDepartureName];
+  if (!portalSelectedDepartureNames.length) return [];
+  return portalSelectedDepartureNames.map(function (nm) {
+    var dep = portalDetectedDepartures.find(function (d) {
+      return d.player && portalGetPlayerName(d.player) === nm;
+    });
+    return dep && dep.player ? portalGetPlayerName(dep.player) : nm;
+  });
 }
 
 function portalBuildTeamSummary(teamName, ratings, stats, games, roster) {
@@ -343,40 +343,46 @@ function portalRenderDepartureCards(departures) {
     var pos = r.Position || r.Pos || (typeof tbPosGroup === 'function' ? (tbPosGroup(r) === 'guard' ? 'G' : 'F/C') : '?');
     var score = portalSafeNum(r.Score) || portalSafeNum(r.PerfScore_calc);
     var card = document.createElement('div');
-    card.className = 'portalDepartureCard' + (portalSelectedDepartureName === nm ? ' selected' : '');
+    card.className = 'portalDepartureCard' + (portalSelectedDepartureNames.indexOf(nm) >= 0 ? ' selected' : '');
     card.setAttribute('data-player-name', nm);
     card.innerHTML =
       '<div class="portalDepartureName">' + nm + '</div>' +
       '<div class="portalDepartureMeta">' + pos + (score !== null ? ' · Perf ' + portalFmtNum(score, 1) : '') + '</div>';
     card.addEventListener('click', function () {
-      portalSelectDeparture(portalSelectedDepartureName === nm ? '' : nm);
+      portalToggleDeparture(nm);
     });
     portalReplaceListEl.appendChild(card);
   });
 }
 
-function portalSelectDeparture(name) {
-  portalSelectedDepartureName = name || '';
-  portalSelectedDeparture = name
-    ? (portalDetectedDepartures.find(function (d) {
-        var nm = d.player ? portalGetPlayerName(d.player) : '';
-        return nm === name;
-      }) || null)
-    : null;
+function portalToggleDeparture(name) {
+  if (!name) return;
+  var idx = portalSelectedDepartureNames.indexOf(name);
+  if (idx >= 0) {
+    portalSelectedDepartureNames.splice(idx, 1);
+  } else {
+    portalSelectedDepartureNames.push(name);
+  }
+  // Update card selected states
   if (portalReplaceListEl) {
     portalReplaceListEl.querySelectorAll('.portalDepartureCard').forEach(function (c) {
-      var matches = c.getAttribute('data-player-name') === portalSelectedDepartureName;
-      c.classList.toggle('selected', matches);
+      var cn = c.getAttribute('data-player-name');
+      c.classList.toggle('selected', portalSelectedDepartureNames.indexOf(cn) >= 0);
     });
   }
+  // Update context banner
   if (portalRecContextEl) {
-    if (portalSelectedDepartureName) {
+    if (portalSelectedDepartureNames.length) {
       portalRecContextEl.style.display = '';
-      portalRecContextEl.textContent = 'Finding upgrades to replace: ' + portalSelectedDepartureName;
+      portalRecContextEl.textContent = 'Finding upgrades to replace ' +
+        portalSelectedDepartureNames.length + ' departure' +
+        (portalSelectedDepartureNames.length > 1 ? 's' : '') + ': ' +
+        portalSelectedDepartureNames.join(', ');
     } else {
       portalRecContextEl.style.display = 'none';
     }
   }
+  // Rerun recommendations
   if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length) {
     var players = portalCollectAllMbbPlayers();
     portalRecDist = portalBuildDistributions(players);
@@ -450,8 +456,7 @@ async function portalLoadTeamContext(teamName) {
   };
 
   if (portalRecTeamSummaryEl) portalRecTeamSummaryEl.innerHTML = portalBuildTeamSummary(teamName, ratings, stats, games, roster);
-  portalSelectedDepartureName = '';
-  portalSelectedDeparture = null;
+  portalSelectedDepartureNames = [];
   if (portalRecContextEl) portalRecContextEl.style.display = 'none';
   portalDetectDepartures(roster);
   portalRenderDepartureCards(portalDetectedDepartures);
@@ -681,8 +686,8 @@ function portalBuildAIContext(topN) {
   return {
     team: portalTeamCtx ? portalTeamCtx.team : null,
     season: portalTeamCtx ? portalTeamCtx.season : portalTargetSeason,
-    mode: portalSelectedDepartureName ? 'replace' : 'fit',
-    replacingPlayer: portalSelectedDepartureName || null,
+    mode: portalSelectedDepartureNames.length ? 'replace' : 'fit',
+    replacingPlayers: portalSelectedDepartureNames.slice(),
     removedPlayers: removed,
     teamRatings: portalTeamCtx ? portalTeamCtx.ratings : null,
     teamStats: portalTeamCtx ? portalTeamCtx.stats : null,
@@ -712,7 +717,9 @@ function portalDownloadAIReport() {
 
   var teamName = (portalTeamCtx && portalTeamCtx.team ? portalTeamCtx.team : 'Team');
   var season = (portalTeamCtx && portalTeamCtx.season ? portalTeamCtx.season : portalTargetSeason);
-  var mode = portalSelectedDepartureName ? 'Replacing ' + portalSelectedDepartureName : 'Team Fit Mode';
+  var mode = portalSelectedDepartureNames.length
+    ? 'Replacing ' + portalSelectedDepartureNames.join(', ')
+    : 'Team Fit Mode';
   var dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   if (window.jspdf && window.jspdf.jsPDF) {
@@ -929,16 +936,163 @@ async function portalRunAIAnalysis() {
 
   portalAIAnalyzeBtn.disabled = true;
   if (portalAIDownloadBtn) portalAIDownloadBtn.disabled = true;
-  portalSetAIStatus('Analyzing with Gemini 2.5 Flash Lite...');
   portalAIOutputEl.style.display = 'block';
-  portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Evaluating picks and fit strategy...</div>';
 
-  var ctx = portalBuildAIContext(8);
+  var teamName = portalTeamCtx.team;
+  var season = portalTeamCtx.season || portalTargetSeason;
+  var departures = portalSelectedDepartureNames.slice();
+  var topPicks = (portalRecRows || []).slice(0, 8);
+
+  // ── Phase 1: Fetch CBD API data for deep analysis ──
+  portalSetAIStatus('Fetching shooting data for ' + teamName + '...');
+  portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Gathering advanced data from CBD API...</div>';
+
+  var teamShooting = [];
+  var picksShooting = {};
+  var gameLog = [];
+
+  // Fetch per-player shooting breakdown for the team
+  try {
+    if (typeof loadShootingForTeam === 'function') {
+      teamShooting = await loadShootingForTeam(teamName, season) || [];
+    }
+  } catch (_) {}
+
+  // Fetch shooting data for top recommended players' teams (dedupe teams)
+  var pickTeams = {};
+  topPicks.forEach(function (row) {
+    var t = row.entry.fromTeam || portalGetPlayerTeam(row.player) || '';
+    if (t && !pickTeams[t]) pickTeams[t] = true;
+  });
+  var pickTeamKeys = Object.keys(pickTeams);
+
+  portalSetAIStatus('Fetching shooting data for ' + pickTeamKeys.length + ' source team(s)...');
+  for (var ti = 0; ti < pickTeamKeys.length; ti++) {
+    try {
+      if (typeof loadShootingForTeam === 'function') {
+        var psd = await loadShootingForTeam(pickTeamKeys[ti], season);
+        if (psd && psd.length) picksShooting[pickTeamKeys[ti]] = psd;
+      }
+    } catch (_) {}
+  }
+
+  // Get game log (already cached from team context)
+  if (portalTeamCtx.games && Array.isArray(portalTeamCtx.games.games)) {
+    var tn = portalNorm(teamName);
+    gameLog = portalTeamCtx.games.games.slice(0, 12).map(function (g) {
+      var hn = portalNorm(g.homeTeam || '');
+      var isHome = hn === tn;
+      return {
+        date: g.date || null,
+        opponent: isHome ? g.awayTeam : g.homeTeam,
+        teamPoints: isHome ? g.homePoints : g.awayPoints,
+        oppPoints: isHome ? g.awayPoints : g.homePoints,
+        result: (isHome ? g.homePoints : g.awayPoints) > (isHome ? g.awayPoints : g.homePoints) ? 'W' : 'L',
+      };
+    });
+  }
+
+  // ── Build departing player profiles ──
+  var departureProfiles = departures.map(function (nm) {
+    var rosterP = (portalTeamCtx.roster || []).find(function (r) {
+      return portalGetPlayerName(r) === nm;
+    });
+    var shootingP = teamShooting.find(function (s) {
+      return portalNorm(s.name || s.playerName || '') === portalNorm(nm);
+    });
+
+    var profile = { name: nm };
+    if (rosterP) {
+      profile.position = rosterP.Position || rosterP.Pos || null;
+      profile.stats = {
+        ppg: portalSafeNum(rosterP.PPG), rpg: portalSafeNum(rosterP.RPG),
+        apg: portalSafeNum(rosterP.APG), spg: portalSafeNum(rosterP.SPG),
+        bpg: portalSafeNum(rosterP.BPG), mp: portalSafeNum(rosterP.MP),
+        efg: portalSafeNum(rosterP['eFG%']), threePct: portalSafeNum(rosterP['3P%']),
+        ftPct: portalSafeNum(rosterP['FT%']), topg: portalSafeNum(rosterP.TOPG),
+        bpm: portalSafeNum(rosterP.BPM), drtg: portalSafeNum(rosterP.DRtg),
+        ws40: portalSafeNum(rosterP['WS/40']), usg: portalSafeNum(rosterP['USG%']),
+        orPct: portalSafeNum(rosterP['OR%']), drPct: portalSafeNum(rosterP['DR%']),
+        perf: portalSafeNum(rosterP.Score) || portalSafeNum(rosterP.PerfScore_calc),
+      };
+    }
+    if (shootingP) {
+      profile.shooting = shootingP;
+    }
+    return profile;
+  });
+
+  // ── Build recommended player profiles with shooting ──
+  var recommendedProfiles = topPicks.map(function (row) {
+    var p = row.player || {};
+    var recTeam = row.entry.fromTeam || portalGetPlayerTeam(p) || '';
+    var recShooting = (picksShooting[recTeam] || []).find(function (s) {
+      return portalNorm(s.name || s.playerName || '') === portalNorm(row.entry.playerName || portalGetPlayerName(p));
+    });
+
+    return {
+      rank: 0,
+      name: row.entry.playerName || portalGetPlayerName(p),
+      sourceTeam: recTeam,
+      position: row.entry.position || p.Position || p.Pos || null,
+      fitScore: Math.round((row.fit || 0) * 100),
+      replaceGainPts: row.replaceGain == null ? null : Math.round(row.replaceGain * 100),
+      reasons: row.reasons,
+      risks: row.risks,
+      stats: {
+        ppg: portalSafeNum(p.PPG), rpg: portalSafeNum(p.RPG),
+        apg: portalSafeNum(p.APG), spg: portalSafeNum(p.SPG),
+        bpg: portalSafeNum(p.BPG), mp: portalSafeNum(p.MP),
+        efg: portalSafeNum(p['eFG%']), threePct: portalSafeNum(p['3P%']),
+        ftPct: portalSafeNum(p['FT%']), topg: portalSafeNum(p.TOPG),
+        bpm: portalSafeNum(p.BPM), drtg: portalSafeNum(p.DRtg),
+        ws40: portalSafeNum(p['WS/40']), usg: portalSafeNum(p['USG%']),
+        orPct: portalSafeNum(p['OR%']), drPct: portalSafeNum(p['DR%']),
+        perf: portalSafeNum(p.Score) || portalSafeNum(p.PerfScore_calc),
+      },
+      shooting: recShooting || null,
+    };
+  });
+  recommendedProfiles.forEach(function (r, i) { r.rank = i + 1; });
+
+  // ── Phase 2: Build deep analysis context ──
+  portalSetAIStatus('Running deep analysis with Gemini...');
+  portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Analyzing ' +
+    departures.length + ' departure' + (departures.length !== 1 ? 's' : '') +
+    ' and ' + recommendedProfiles.length + ' replacement candidates...</div>';
+
+  var deepCtx = {
+    team: teamName,
+    season: season,
+    teamRatings: portalTeamCtx.ratings || null,
+    teamStats: portalTeamCtx.stats || null,
+    teamShotProfile: portalTeamCtx.zones || null,
+    recentGames: gameLog,
+    departures: departureProfiles,
+    recommendations: recommendedProfiles,
+  };
+
   var prompt =
-    'You are an elite college basketball roster strategist. Analyze transfer portal replacement targets for the selected team using only the structured data below. ' +
-    'Include strengths, weaknesses, fit rationale, and a practical replacement strategy. Explicitly reference team performance trends and shot profile where available. ' +
-    'Return concise markdown with sections: ## Best Fits, ## Replacement Plan, ## Risks, ## Action Steps.\n\n' +
-    '```json\n' + JSON.stringify(ctx, null, 2) + '\n```';
+    'You are an elite college basketball roster strategist and transfer portal analyst. ' +
+    'Analyze the following team situation in depth using ALL the structured data provided.\n\n' +
+    '## Context\n' +
+    '**' + teamName + '** (' + season + ' season) has ' + departures.length +
+    ' player' + (departures.length !== 1 ? 's' : '') + ' departing via the transfer portal. ' +
+    'Your job is to evaluate the top ' + recommendedProfiles.length + ' portal replacement candidates.\n\n' +
+    '## Instructions\n' +
+    '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
+    '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats and shooting profile against what was lost.\n' +
+    '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
+    '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
+    '- Give a practical priority order: who to pursue first and why.\n' +
+    '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n\n' +
+    'Return detailed markdown with these sections:\n' +
+    '## What You Lose (per departure)\n' +
+    '## Best Replacement Matches (who replaces whom and why)\n' +
+    '## Combined Impact (net team improvement or regression)\n' +
+    '## Recruitment Priority (ordered action plan)\n' +
+    '## Risks & Watchouts\n\n' +
+    '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```';
 
   try {
     var res = await fetch(PORTAL_GEMINI_PROXY_URL, {
@@ -947,7 +1101,7 @@ async function portalRunAIAnalysis() {
       body: JSON.stringify({
         model: PORTAL_GEMINI_MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.55, maxOutputTokens: 2600 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 4500 },
       })
     });
     var data = await res.json();
@@ -958,14 +1112,17 @@ async function portalRunAIAnalysis() {
       .trim();
     if (!text) throw new Error('Empty AI response');
     portalLastAIReportText = text;
-    portalSetAIStatus('Done');
+    portalSetAIStatus('Done — analyzed ' + departures.length + ' departure(s) with shooting + game data');
     portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' +
       text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
         .replace(/^##\s+(.*)$/gm, '<h4>$1</h4>')
+        .replace(/^###\s+(.*)$/gm, '<h5 style="margin:8px 0 4px;font-size:12px;color:var(--accent)">$1</h5>')
         .replace(/^[-*]\s+(.*)$/gm, '<div class="portalAIBullet">• $1</div>')
+        .replace(/^(\d+)\.\s+(.*)$/gm, '<div class="portalAIBullet"><b>$1.</b> $2</div>')
         .replace(/\n{2,}/g, '<br><br>')
       + '</div>';
   } catch (e) {

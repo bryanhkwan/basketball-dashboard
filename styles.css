@@ -208,7 +208,7 @@
     .portalAIMarkdown{font-size:12px;line-height:1.6}
     .portalAIMarkdown h4{margin:10px 0 6px;color:var(--accent);font-size:13px}
     .portalAIBullet{margin:3px 0 0 8px}
-    .portalAIOutput{max-height:420px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    .portalAIOutput{max-height:600px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
     .portalAIOutput .portalAIMarkdown{padding:14px 16px;white-space:normal}
 
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
