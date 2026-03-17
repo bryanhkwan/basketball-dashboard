@@ -950,8 +950,8 @@ function _thRenderBracketBoard() {
   thBracketBoardEl.innerHTML =
     '<div class="thBracketFantasy">' +
       '<div class="thBracketFantasySide thBracketFantasySide--left">' +
-        renderRegion('South', 'left') +
         renderRegion('East', 'left') +
+        renderRegion('South', 'left') +
       '</div>' +
       '<div class="thBracketFantasyCenter">' +
         '<div class="thBracketFantasyCenterTitle">Final Four</div>' +
