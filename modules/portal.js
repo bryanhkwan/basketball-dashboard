@@ -7,8 +7,8 @@ var portalRecRows = [];
 
 var portalSearchInputEl, portalStatusFilterEl, portalRefreshBtnEl, portalUseSnapshotEl;
 var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, portalEmptyEl;
-var portalRecTeamEl, portalRecModeEl, portalRecRefreshTeamBtn, portalRecRunBtn;
-var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl;
+var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
+var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
 
 var portalTeamCtx = null;
@@ -16,6 +16,9 @@ var portalRecDist = null;
 var portalAllMbbPlayers = [];
 var portalTargetSeason = '2026';
 var portalLastAIReportText = '';
+var portalDetectedDepartures = [];
+var portalSelectedDepartureName = '';
+var portalSelectedDeparture = null;
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -36,13 +39,13 @@ function initPortalDOMRefs() {
   portalEmptyEl = document.getElementById('portalEmpty');
 
   portalRecTeamEl = document.getElementById('portalRecTeam');
-  portalRecModeEl = document.getElementById('portalRecMode');
   portalRecRefreshTeamBtn = document.getElementById('portalRecRefreshTeam');
   portalRecRunBtn = document.getElementById('portalRecRunBtn');
   portalRecTeamSummaryEl = document.getElementById('portalRecTeamSummary');
   portalReplaceListEl = document.getElementById('portalReplaceList');
   portalRecBodyEl = document.getElementById('portalRecBody');
   portalRecEmptyEl = document.getElementById('portalRecEmpty');
+  portalRecContextEl = document.getElementById('portalRecContext');
   portalAIAnalyzeBtn = document.getElementById('portalAIAnalyzeBtn');
   portalAIDownloadBtn = document.getElementById('portalAIDownloadBtn');
   portalAIStatusEl = document.getElementById('portalAIStatus');
@@ -262,12 +265,12 @@ function portalCategoryPriorityFromTeamStats(teamStats) {
 }
 
 function portalSelectedReplaceNames() {
-  if (!portalReplaceListEl) return [];
-  var out = [];
-  portalReplaceListEl.querySelectorAll('input[type="checkbox"][data-player-name]:checked').forEach(function (el) {
-    out.push(String(el.getAttribute('data-player-name') || ''));
-  });
-  return out;
+  if (!portalSelectedDepartureName) return [];
+  // Prefer the roster player's actual name for accurate score computation
+  var rosterName = portalSelectedDeparture && portalSelectedDeparture.player
+    ? portalGetPlayerName(portalSelectedDeparture.player)
+    : portalSelectedDepartureName;
+  return rosterName ? [rosterName] : [portalSelectedDepartureName];
 }
 
 function portalBuildTeamSummary(teamName, ratings, stats, games, roster) {
@@ -311,15 +314,10 @@ function portalBuildTeamSummary(teamName, ratings, stats, games, roster) {
   return parts.join('');
 }
 
-function portalRenderReplaceList(roster) {
-  if (!portalReplaceListEl) return;
-  portalReplaceListEl.innerHTML = '';
-  if (!roster || !roster.length) {
-    portalReplaceListEl.innerHTML = '<div class="muted" style="font-size:12px">No roster data found for selected team in loaded pool.</div>';
-    return;
-  }
-
-  var sorted = roster.slice().sort(function (a, b) {
+function portalDetectDepartures(roster) {
+  // Show the full roster as selectable targets — staff knows who's leaving
+  // before it's official. No live portal cross-reference needed.
+  var sorted = (roster || []).slice().sort(function (a, b) {
     var mpA = portalSafeNum(a.MP) || portalSafeNum(a.MP_num) || 0;
     var mpB = portalSafeNum(b.MP) || portalSafeNum(b.MP_num) || 0;
     if (mpB !== mpA) return mpB - mpA;
@@ -328,17 +326,75 @@ function portalRenderReplaceList(roster) {
     return sB - sA;
   }).slice(0, 15);
 
-  sorted.forEach(function (r) {
+  portalDetectedDepartures = sorted.map(function (r) { return { player: r }; });
+  return portalDetectedDepartures;
+}
+
+function portalRenderDepartureCards(departures) {
+  if (!portalReplaceListEl) return;
+  portalReplaceListEl.innerHTML = '';
+  if (!departures || !departures.length) {
+    portalReplaceListEl.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 4px">No roster data loaded for this team.</div>';
+    return;
+  }
+  departures.forEach(function (dep) {
+    var r = dep.player;
     var nm = portalGetPlayerName(r);
+    var pos = r.Position || r.Pos || (typeof tbPosGroup === 'function' ? (tbPosGroup(r) === 'guard' ? 'G' : 'F/C') : '?');
     var score = portalSafeNum(r.Score) || portalSafeNum(r.PerfScore_calc);
-    var posText = (r.Position || r.Pos || (typeof tbPosGroup === 'function' && tbPosGroup(r) === 'guard' ? 'Guard' : 'Big'));
-    var div = document.createElement('label');
-    div.className = 'portalReplaceItem';
-    div.innerHTML =
-      '<input type="checkbox" data-player-name="' + nm.replace(/"/g, '&quot;') + '">' +
-      '<span class="portalReplaceText">' + nm + ' <span class="muted">(' + posText + (score !== null ? ', Perf ' + portalFmtNum(score, 1) : '') + ')</span></span>';
-    portalReplaceListEl.appendChild(div);
+    var card = document.createElement('div');
+    card.className = 'portalDepartureCard' + (portalSelectedDepartureName === nm ? ' selected' : '');
+    card.setAttribute('data-player-name', nm);
+    card.innerHTML =
+      '<div class="portalDepartureName">' + nm + '</div>' +
+      '<div class="portalDepartureMeta">' + pos + (score !== null ? ' · Perf ' + portalFmtNum(score, 1) : '') + '</div>';
+    card.addEventListener('click', function () {
+      portalSelectDeparture(portalSelectedDepartureName === nm ? '' : nm);
+    });
+    portalReplaceListEl.appendChild(card);
   });
+}
+
+function portalSelectDeparture(name) {
+  portalSelectedDepartureName = name || '';
+  portalSelectedDeparture = name
+    ? (portalDetectedDepartures.find(function (d) {
+        var nm = d.player ? portalGetPlayerName(d.player) : '';
+        return nm === name;
+      }) || null)
+    : null;
+  if (portalReplaceListEl) {
+    portalReplaceListEl.querySelectorAll('.portalDepartureCard').forEach(function (c) {
+      var matches = c.getAttribute('data-player-name') === portalSelectedDepartureName;
+      c.classList.toggle('selected', matches);
+    });
+  }
+  if (portalRecContextEl) {
+    if (portalSelectedDepartureName) {
+      portalRecContextEl.style.display = '';
+      portalRecContextEl.textContent = 'Finding upgrades to replace: ' + portalSelectedDepartureName;
+    } else {
+      portalRecContextEl.style.display = 'none';
+    }
+  }
+  if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length) {
+    var players = portalCollectAllMbbPlayers();
+    portalRecDist = portalBuildDistributions(players);
+    portalComputeRecommendations();
+    portalRenderRecommendations();
+  }
+}
+
+function portalShowToast(msg) {
+  var t = document.createElement('div');
+  t.className = 'portalToast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function () { t.classList.add('show'); }, 10);
+  setTimeout(function () {
+    t.classList.remove('show');
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }, 2400);
 }
 
 async function portalLoadTeamContext(teamName) {
@@ -375,6 +431,14 @@ async function portalLoadTeamContext(teamName) {
     return portalNorm(portalGetPlayerTeam(p)) === portalNorm(teamName);
   });
 
+  // If no roster found, try to collect players again (in case they loaded after team dropdown was built)
+  if (!roster.length && portalGetAllPlayers) {
+    portalCollectAllMbbPlayers();
+    roster = (portalAllMbbPlayers || []).filter(function (p) {
+      return portalNorm(portalGetPlayerTeam(p)) === portalNorm(teamName);
+    });
+  }
+
   portalTeamCtx = {
     team: teamName,
     season: season,
@@ -386,7 +450,11 @@ async function portalLoadTeamContext(teamName) {
   };
 
   if (portalRecTeamSummaryEl) portalRecTeamSummaryEl.innerHTML = portalBuildTeamSummary(teamName, ratings, stats, games, roster);
-  portalRenderReplaceList(roster);
+  portalSelectedDepartureName = '';
+  portalSelectedDeparture = null;
+  if (portalRecContextEl) portalRecContextEl.style.display = 'none';
+  portalDetectDepartures(roster);
+  portalRenderDepartureCards(portalDetectedDepartures);
   return portalTeamCtx;
 }
 
@@ -416,7 +484,6 @@ function portalComputeRecommendations() {
     return [];
   }
 
-  var mode = (portalRecModeEl && portalRecModeEl.value) ? portalRecModeEl.value : 'fit';
   var removedNames = portalSelectedReplaceNames();
   var removedSet = {};
   removedNames.forEach(function (n) { removedSet[portalNorm(n)] = true; });
@@ -486,7 +553,7 @@ function portalComputeRecommendations() {
     }
 
     var final = 0.45 * needFit + 0.25 * style + 0.20 * impact + 0.10 * 0.55;
-    if (replaceGain !== null && mode === 'replace') final += 0.20 * replaceGain;
+    if (replaceGain !== null) final += 0.20 * replaceGain;
 
     var risks = portalCandidateRisk(m);
     if (risks.length) final -= Math.min(0.12, 0.03 * risks.length);
@@ -550,7 +617,11 @@ function portalRenderRecommendations() {
     var btnAdd = tr.querySelector('.portalRecAdd');
     if (btnAdd) {
       btnAdd.addEventListener('click', function () {
-        if (typeof tbAddPlayer === 'function') tbAddPlayer(row.player);
+        if (typeof tbAddPlayer === 'function') {
+          tbAddPlayer(row.player);
+          var nm = row.entry.playerName || portalGetPlayerName(row.player) || 'Player';
+          portalShowToast(nm + ' added to Team Builder');
+        }
       });
     }
     var btnOpen = tr.querySelector('.portalRecOpen');
@@ -610,7 +681,8 @@ function portalBuildAIContext(topN) {
   return {
     team: portalTeamCtx ? portalTeamCtx.team : null,
     season: portalTeamCtx ? portalTeamCtx.season : portalTargetSeason,
-    mode: (portalRecModeEl && portalRecModeEl.value) ? portalRecModeEl.value : 'fit',
+    mode: portalSelectedDepartureName ? 'replace' : 'fit',
+    replacingPlayer: portalSelectedDepartureName || null,
     removedPlayers: removed,
     teamRatings: portalTeamCtx ? portalTeamCtx.ratings : null,
     teamStats: portalTeamCtx ? portalTeamCtx.stats : null,
@@ -638,42 +710,210 @@ function portalDownloadAIReport() {
     return;
   }
 
-  var title = 'Transfer Portal Fit Report';
-  var subtitle = (portalTeamCtx && portalTeamCtx.team ? portalTeamCtx.team : 'Team') + ' · Season ' + (portalTeamCtx && portalTeamCtx.season ? portalTeamCtx.season : portalTargetSeason);
-  var text = title + '\n' + subtitle + '\n\n' + reportText.replace(/\u2022/g, '-');
+  var teamName = (portalTeamCtx && portalTeamCtx.team ? portalTeamCtx.team : 'Team');
+  var season = (portalTeamCtx && portalTeamCtx.season ? portalTeamCtx.season : portalTargetSeason);
+  var mode = portalSelectedDepartureName ? 'Replacing ' + portalSelectedDepartureName : 'Team Fit Mode';
+  var dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   if (window.jspdf && window.jspdf.jsPDF) {
     var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
     var pageW = doc.internal.pageSize.getWidth();
     var pageH = doc.internal.pageSize.getHeight();
-    var margin = 42;
-    var lineH = 16;
-    var y = margin;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    var lines = doc.splitTextToSize(text, pageW - margin * 2);
+    var margin = 50;
+    var contentW = pageW - margin * 2;
+    var pageNum = 1;
 
-    for (var i = 0; i < lines.length; i++) {
-      if (y > pageH - margin) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(lines[i], margin, y);
-      y += lineH;
+    function addFooter() {
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(155, 155, 165);
+      doc.text('NCAA Scouting Dashboard  ·  Transfer Portal Fit Analysis  ·  ' + dateStr, margin, pageH - 22);
+      doc.text('Page ' + pageNum, pageW - margin, pageH - 22, { align: 'right' });
+      doc.setDrawColor(210, 215, 228);
+      doc.setLineWidth(0.4);
+      doc.line(margin, pageH - 32, pageW - margin, pageH - 32);
+      doc.setTextColor(0, 0, 0);
     }
-    doc.save(portalBuildReportFileName());
-    portalSetAIStatus('PDF downloaded.');
+
+    // — Cover header block (navy, taller, with date + mode) —
+    doc.setFillColor(15, 30, 60);
+    doc.rect(0, 0, pageW, 128, 'F');
+    doc.setFillColor(255, 210, 0);
+    doc.rect(0, 128, pageW, 3, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.text('Transfer Portal Fit Report', margin, 46);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.setTextColor(190, 207, 235);
+    doc.text(teamName + '  ·  Season ' + season + '  ·  ' + mode, margin, 72);
+
+    doc.setFontSize(9.5);
+    doc.setTextColor(130, 150, 185);
+    doc.text('Generated ' + dateStr, margin, 98);
+
+    doc.setTextColor(0, 0, 0);
+    var y = 148;
+    addFooter();
+
+    // Helper: check page overflow, add new page with mini header
+    function checkPage(needed) {
+      needed = needed || 18;
+      if (y + needed > pageH - 46) {
+        addFooter();
+        doc.addPage();
+        pageNum++;
+        // Mini continuation header
+        doc.setFillColor(15, 30, 60);
+        doc.rect(0, 0, pageW, 28, 'F');
+        doc.setFillColor(255, 210, 0);
+        doc.rect(0, 28, pageW, 2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(195, 210, 235);
+        doc.text('Transfer Portal Fit Report  ·  ' + teamName + '  ·  Season ' + season, margin, 19);
+        doc.setTextColor(0, 0, 0);
+        y = 46;
+        addFooter();
+      }
+    }
+
+    // — Render markdown lines —
+    var lines = reportText.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Section header ##
+      if (/^##\s+/.test(line)) {
+        checkPage(34);
+        y += 8;
+        var hText = line.replace(/^##\s+/, '');
+        // Navy/gold themed band
+        doc.setFillColor(238, 242, 252);
+        doc.rect(margin, y - 14, contentW, 26, 'F');
+        doc.setFillColor(255, 210, 0);
+        doc.rect(margin, y - 14, 4, 26, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11.5);
+        doc.setTextColor(15, 30, 60);
+        doc.text(hText, margin + 12, y + 4);
+        doc.setTextColor(0, 0, 0);
+        y += 22;
+        continue;
+      }
+
+      // Sub-header ###
+      if (/^###\s+/.test(line)) {
+        checkPage(22);
+        y += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        doc.setTextColor(30, 45, 85);
+        doc.text(line.replace(/^###\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1'), margin + 6, y);
+        doc.setTextColor(0, 0, 0);
+        y += 16;
+        continue;
+      }
+
+      // Bullet  -  *  •
+      if (/^[-*•]\s+/.test(line)) {
+        var bText = line.replace(/^[-*•]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
+        var bWrapped = doc.splitTextToSize(bText, contentW - 20);
+        checkPage(bWrapped.length * 14 + 4);
+        doc.setFillColor(255, 210, 0);
+        doc.circle(margin + 6, y - 3.5, 2, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(40, 48, 68);
+        for (var bw = 0; bw < bWrapped.length; bw++) {
+          doc.text(bWrapped[bw], margin + 16, y);
+          y += 14;
+        }
+        y += 2;
+        doc.setTextColor(0, 0, 0);
+        continue;
+      }
+
+      // Numbered list  1.  2.
+      if (/^\d+\.\s+/.test(line)) {
+        var nm = line.match(/^(\d+)\.\s+(.*)/);
+        var numLabel = nm ? nm[1] + '.' : '';
+        var numText  = (nm ? nm[2] : line).replace(/\*\*([^*]+)\*\*/g, '$1');
+        var nWrapped = doc.splitTextToSize(numText, contentW - 24);
+        checkPage(nWrapped.length * 14 + 4);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(200, 140, 0);
+        doc.text(numLabel, margin + 4, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(40, 48, 68);
+        for (var nw = 0; nw < nWrapped.length; nw++) {
+          doc.text(nWrapped[nw], margin + 22, y);
+          y += 14;
+        }
+        y += 2;
+        doc.setTextColor(0, 0, 0);
+        continue;
+      }
+
+      // Empty line
+      if (!line.trim()) { y += 6; continue; }
+
+      // Regular paragraph
+      var cleanLine = line.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
+      var pWrapped = doc.splitTextToSize(cleanLine, contentW);
+      checkPage(pWrapped.length * 14 + 2);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(40, 48, 68);
+      for (var pw = 0; pw < pWrapped.length; pw++) {
+        doc.text(pWrapped[pw], margin, y);
+        y += 14;
+      }
+      y += 2;
+      doc.setTextColor(0, 0, 0);
+    }
+
+    var blobUrl = doc.output('bloburl');
+    window.open(blobUrl, '_blank');
+    portalSetAIStatus('Report opened in new tab — use your browser\'s download button to save.');
     return;
   }
 
+  // — Fallback: styled print window —
   var w = window.open('', '_blank');
-  if (!w) {
-    portalSetAIStatus('Popup blocked. Allow popups to export PDF.');
-    return;
-  }
-  w.document.write('<!doctype html><html><head><title>' + title + '</title><style>body{font-family:Arial,sans-serif;padding:24px;line-height:1.45;}pre{white-space:pre-wrap;font-family:inherit;}</style></head><body><h2>' + title + '</h2><div>' + subtitle + '</div><hr><pre>' +
-    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-    '</pre></body></html>');
+  if (!w) { portalSetAIStatus('Popup blocked. Allow popups to export PDF.'); return; }
+  var htmlBody = reportText
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^##\s+(.*)$/gm, '</p><h3>$1</h3><p>')
+    .replace(/^###\s+(.*)$/gm, '</p><h4>$1</h4><p>')
+    .replace(/^[-*•]\s+(.*)$/gm, '<li>$1</li>')
+    .replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p>');
+  w.document.write('<!doctype html><html><head><title>Transfer Portal Fit Report</title><style>' +
+    'body{font-family:system-ui,Arial,sans-serif;margin:0;color:#222;}' +
+    '.hdr{background:#0f1e3c;color:#fff;padding:28px 40px 22px;}' +
+    '.hdr h1{margin:0 0 6px;font-size:22px;font-weight:700;}' +
+    '.hdr .meta{margin:0;color:#bccce0;font-size:13px;}' +
+    '.hdr .date{margin:4px 0 0;color:#8a9dbf;font-size:11px;}' +
+    '.accent{height:3px;background:#ffd200;}' +
+    '.body{padding:28px 40px;}' +
+    'h3{background:#eef2fc;border-left:4px solid #ffd200;color:#0f1e3c;padding:9px 12px 9px 14px;margin:24px 0 10px;font-size:14px;}' +
+    'h4{color:#1e2d5a;margin-top:16px;font-size:12.5px;}' +
+    'li{margin:5px 0 5px 20px;line-height:1.6;font-size:13px;}' +
+    'p{font-size:13px;line-height:1.65;margin:8px 0;}' +
+    '@media print{body{margin:0;}.hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '</style></head><body>' +
+    '<div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
+    '<p class="meta">' + teamName + ' &nbsp;·&nbsp; Season ' + season + ' &nbsp;·&nbsp; ' + mode + '</p>' +
+    '<p class="date">Generated ' + dateStr + '</p></div>' +
+    '<div class="accent"></div>' +
+    '<div class="body"><p>' + htmlBody + '</p></div>' +
+    '</body></html>');
   w.document.close();
   w.focus();
   w.print();
@@ -781,6 +1021,11 @@ async function portalRunRecommendations() {
 
   var players = portalCollectAllMbbPlayers();
   portalRecDist = portalBuildDistributions(players);
+  // Re-detect departures in case portal items loaded after team selection
+  if (portalTeamCtx && portalTeamCtx.roster) {
+    portalDetectDepartures(portalTeamCtx.roster);
+    portalRenderDepartureCards(portalDetectedDepartures);
+  }
   portalComputeRecommendations();
   portalRenderRecommendations();
   if (portalRecRunBtn) portalRecRunBtn.disabled = false;
@@ -1018,7 +1263,10 @@ async function loadPortalEntries() {
     var apiItems = Array.isArray(data.items) ? data.items : [];
     var summary = (data && data.sourceSummary) ? data.sourceSummary : {};
     var snapshotInfo = { items: [], path: '' };
-    if (portalUseSnapshotEnabled()) {
+
+    // Auto-load snapshot as fallback if live feed returned nothing
+    var autoSnapshotFallback = apiItems.length === 0 && !portalUseSnapshotEnabled();
+    if (portalUseSnapshotEnabled() || autoSnapshotFallback) {
       snapshotInfo = await portalLoadSnapshot(year);
       if (snapshotInfo.items.length) {
         snapshotInfo.items = snapshotInfo.items.filter(function (it) {
@@ -1054,7 +1302,14 @@ async function loadPortalEntries() {
     if (portalUseSnapshotEnabled() && !snapshotInfo.items.length) {
       sourcePart += ' (snapshot: not found)';
     }
-    portalSetStatus((resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live') + ' · ' + sourcePart + ' · ' + portalItems.length + ' rows');
+    if (autoSnapshotFallback && snapshotInfo.items.length) {
+      sourcePart += ' (live empty — using local snapshot)';
+    }
+    var sourceErrors = Array.isArray(data.sourceErrors) ? data.sourceErrors : [];
+    var errorSuffix = sourceErrors.length
+      ? ' ⚠ ' + sourceErrors.map(function (e) { return (e.source || 'src') + ': ' + (e.error || 'failed'); }).join('; ')
+      : '';
+    portalSetStatus((resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live') + ' · ' + sourcePart + ' · ' + portalItems.length + ' rows' + errorSuffix);
     if (portalEmptyEl) portalEmptyEl.textContent = 'No portal entries found for current filters.';
     portalApplyFilters();
     portalRefreshTeamOptions();
@@ -1102,19 +1357,6 @@ function initPortalPage() {
   if (portalRecRunBtn) {
     portalRecRunBtn.addEventListener('click', function () {
       portalRunRecommendations();
-    });
-  }
-
-  if (portalRecModeEl) {
-    portalRecModeEl.addEventListener('change', function () {
-      if (portalTeamCtx && portalRecRows.length) portalRunRecommendations();
-    });
-  }
-
-  if (portalReplaceListEl) {
-    portalReplaceListEl.addEventListener('change', function () {
-      if (!portalRecModeEl || portalRecModeEl.value !== 'replace') return;
-      if (portalTeamCtx && portalRecRows.length) portalRunRecommendations();
     });
   }
 

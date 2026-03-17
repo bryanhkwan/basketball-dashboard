@@ -192,10 +192,14 @@
     .portalRecGrid > *{min-width:0}
     @media(max-width:1080px){.portalRecGrid{grid-template-columns:1fr}}
     .portalReplaceList{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:6px}
-    .portalReplaceItem{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:rgba(6,12,26,.35);cursor:pointer;transition:border-color .15s,background .15s}
-    .portalReplaceItem:hover{border-color:rgba(var(--accent-rgb),.28);background:rgba(var(--accent-rgb),.04)}
-    .portalReplaceItem input{margin-top:2px;accent-color:var(--accent)}
-    .portalReplaceText{font-size:11.5px;line-height:1.45}
+    .portalDepartureCard{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(6,12,26,.35);cursor:pointer;transition:border-color .15s,background .15s}
+    .portalDepartureCard:hover{border-color:rgba(var(--accent-rgb),.35);background:rgba(var(--accent-rgb),.05)}
+    .portalDepartureCard.selected{border-color:rgba(var(--accent-rgb),.7);background:rgba(var(--accent-rgb),.10);box-shadow:0 0 0 1px rgba(var(--accent-rgb),.25)}
+    .portalDepartureName{font-size:12.5px;font-weight:700;line-height:1.35}
+    .portalDepartureMeta{font-size:10.5px;color:var(--muted);margin-top:3px}
+    .portalRecContext{padding:8px 14px;font-size:11px;font-weight:700;color:var(--accent);background:rgba(var(--accent-rgb),.08);border-bottom:1px solid rgba(var(--accent-rgb),.18);letter-spacing:.02em}
+    .portalToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);background:rgba(20,32,56,.97);border:1px solid rgba(var(--accent-rgb),.35);color:#e8eaf0;font-size:12.5px;font-weight:600;padding:9px 20px;border-radius:24px;z-index:9999;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;white-space:nowrap}
+    .portalToast.show{opacity:1;transform:translateX(-50%) translateY(0)}
     .portalRecTableWrap{max-height:420px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .portalRecTableWrap table{border:none;border-radius:0}
     .portalRecTableWrap th{top:0}

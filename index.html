@@ -419,7 +419,7 @@
     <div class="row" style="justify-content:space-between;gap:12px;align-items:flex-end">
       <div>
         <div style="font-size:18px;font-weight:800">🧠 Portal Fit Lab</div>
-        <div class="muted" style="font-size:12px;margin-top:4px">Pick your team, optionally mark players to replace, and rank transfer targets by fit and improvement potential.</div>
+        <div class="muted" style="font-size:12px;margin-top:4px">Select your team, pick the player you know is leaving, and find the best portal upgrades for that spot — before it's official.</div>
       </div>
       <div class="row" style="gap:8px;align-items:flex-end">
         <div>
@@ -428,15 +428,8 @@
             <option value="">- Select team -</option>
           </select>
         </div>
-        <div>
-          <label>Mode</label><br/>
-          <select id="portalRecMode" style="width:160px">
-            <option value="fit" selected>Team fit</option>
-            <option value="replace">Replace mode</option>
-          </select>
-        </div>
         <div style="display:flex;gap:6px">
-          <button id="portalRecRefreshTeam" class="secondary">Load team profile</button>
+          <button id="portalRecRefreshTeam" class="secondary" style="display:none">Load team profile</button>
           <button id="portalRecRunBtn" class="primary">Recommend targets</button>
         </div>
       </div>
@@ -448,9 +441,9 @@
 
     <div class="portalRecGrid" style="margin-top:12px">
       <div class="panel">
-        <div class="panelHead">Replace Candidates</div>
+        <div class="panelHead">Who's Leaving?</div>
         <div class="panelBody">
-          <div class="muted" style="font-size:11px;margin-bottom:8px">Check players you want to move out. Replace mode will prioritize upgrades over this set.</div>
+          <div class="muted" style="font-size:11px;margin-bottom:8px">Pick the player you know is heading out. We'll rank the best portal upgrades for that role.</div>
           <div id="portalReplaceList" class="portalReplaceList"></div>
         </div>
       </div>
@@ -458,6 +451,7 @@
       <div class="panel">
         <div class="panelHead">Recommended Portal Targets</div>
         <div class="panelBody" style="padding:0">
+          <div id="portalRecContext" class="portalRecContext" style="display:none"></div>
           <div class="portalRecTableWrap">
             <table>
               <thead>
@@ -467,7 +461,7 @@
                   <th style="width:13%">Team</th>
                   <th style="width:8%">Pos</th>
                   <th style="width:10%">Fit</th>
-                  <th style="width:10%">Replace Δ</th>
+                  <th style="width:10%">Upgrade Δ</th>
                   <th style="width:24%">Why</th>
                   <th style="width:10%">Actions</th>
                 </tr>
