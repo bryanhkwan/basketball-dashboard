@@ -181,8 +181,8 @@ function portalGetPlayerTeam(r) {
 }
 
 function portalGetSeason() {
-  var yearEl = document.getElementById('cbdSeason');
-  return (yearEl && yearEl.value) ? String(yearEl.value) : String(new Date().getFullYear());
+  if (typeof getDashboardSelectedSeason === 'function') return getDashboardSelectedSeason('2026');
+  return '2026';
 }
 
 function portalStatDir(stat) {

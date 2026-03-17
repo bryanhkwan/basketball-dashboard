@@ -888,8 +888,9 @@ async function renderShootingZones(r) {
   el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading shot data…</div>';
 
   const team = r.Team || '';
-  const seasonEl = document.getElementById('cbdSeason');
-  const season = seasonEl ? (seasonEl.value || '2026') : '2026';
+  const season = typeof getDashboardSelectedSeason === 'function'
+    ? getDashboardSelectedSeason('2026')
+    : '2026';
   const playerName = (r.Player || '').toLowerCase().trim();
 
   const players = await loadShootingForTeam(team, season);

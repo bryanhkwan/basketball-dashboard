@@ -9,6 +9,28 @@ const clamp01 = (x) => clamp(x, 0, 1);
 const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
 const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
 const _scriptLoadPromises = Object.create(null);
+const DASHBOARD_SEASON_OPTIONS = [
+  { value: '2022', label: '2021-2022' },
+  { value: '2023', label: '2022-2023' },
+  { value: '2024', label: '2023-2024' },
+  { value: '2025', label: '2024-2025' },
+  { value: '2026', label: '2025-2026' },
+];
+
+function normalizeDashboardSeason(value, fallback){
+  var fb = String(fallback || '2026');
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return fb;
+  var labelMatch = raw.match(/^(\d{4})\s*-\s*(\d{4})$/);
+  if (labelMatch) return labelMatch[2];
+  var year = parseInt(raw, 10);
+  return Number.isFinite(year) ? String(year) : fb;
+}
+
+function getDashboardSelectedSeason(fallback){
+  var el = document.getElementById('cbdSeason');
+  return normalizeDashboardSeason(el && el.value, fallback || '2026');
+}
 
 function loadScriptOnce(key, urls, opts){
   opts = opts || {};

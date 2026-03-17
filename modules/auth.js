@@ -96,9 +96,12 @@ function authStartLoading() {
     _loadVideoEnded = true;
   }
 
-  // Trigger data load in parallel — MBB from CBD API, WBB from Google Sheets
+  // Trigger data load in parallel — MBB from CBD API, WBB from ESPN/worker-backed sources
   if (typeof loadAllData === 'function') {
-    setTimeout(() => loadAllData(2026), 50);
+    const season = typeof getDashboardSelectedSeason === 'function'
+      ? getDashboardSelectedSeason('2026')
+      : '2026';
+    setTimeout(() => loadAllData(season), 50);
   } else if (typeof loadFromGoogleSheets === 'function') {
     setTimeout(() => loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY), 50);
   }

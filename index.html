@@ -106,11 +106,17 @@
       <div>
         <label>Season</label>
         <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-          <input id="cbdSeason" type="number" value="2026" min="2010" max="2035"
-            style="width:74px;padding:4px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(0,8,20,.5);color:#e2e8f0;text-align:center"
-            title="MBB season year">
+          <select id="cbdSeason"
+            style="width:136px;padding:4px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(0,8,20,.5);color:#e2e8f0;text-align:center"
+            title="Dashboard season for both MBB and WBB">
+            <option value="2022">2021-2022</option>
+            <option value="2023">2022-2023</option>
+            <option value="2024">2023-2024</option>
+            <option value="2025">2024-2025</option>
+            <option value="2026" selected>2025-2026</option>
+          </select>
         </div>
-        <div class="hint">MBB: Live API &middot; WBB: Google Sheets</div>
+        <div class="hint">MBB: CBD API &middot; WBB: ESPN + worker cache</div>
       </div>
       <div>
         <label>API key</label><br/>

@@ -136,11 +136,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if(wb) { computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)})); renderPlayers(); }
   });
 
-  // Refresh data — MBB always from CBD API, WBB always from Google Sheets
+  // Refresh data — MBB from CBD API, WBB from ESPN/worker-backed sources
   if (loadGsBtn) {
     loadGsBtn.addEventListener('click', async () => {
-      var seasonEl = document.getElementById('cbdSeason');
-      var seasonVal = seasonEl ? (seasonEl.value || '2026') : '2026';
+      var seasonVal = typeof getDashboardSelectedSeason === 'function'
+        ? getDashboardSelectedSeason('2026')
+        : '2026';
       await loadAllData(seasonVal);
       if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     });

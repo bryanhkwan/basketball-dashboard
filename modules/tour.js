@@ -20,7 +20,7 @@
     {
       target: '#loadGs',
       title: '🔄 Refresh Data',
-      body: 'Reload the latest player data. MBB data comes from the CBD API and WBB from Google Sheets — both refresh at once. Data also loads automatically when you first open the dashboard.',
+      body: 'Reload the latest player data. MBB data comes from the CBD API and WBB from ESPN/worker-backed feeds — both refresh at once. Data also loads automatically when you first open the dashboard.',
       position: 'bottom',
       page: 'pagePlayers'
     },
