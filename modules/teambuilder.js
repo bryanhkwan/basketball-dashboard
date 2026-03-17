@@ -939,32 +939,61 @@ function tbRenderSuggestions(){
 
 // --- Page navigation ---
 
+function showDashboardPage(targetId, activeNavId){
+  var activeId = activeNavId || targetId;
+  document.querySelectorAll('.pageNavBtn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.page === activeId);
+  });
+  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate').forEach(function(el) {
+    el.style.display = 'none';
+  });
+  var target = document.getElementById(targetId);
+  if(target) target.style.display = '';
+
+  if(targetId === 'pagePlayers') renderPlayersPage();
+  if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
+  if(targetId === 'pageLab' && window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
+    window.TeamHub.refreshTournamentLauncher();
+  }
+  if(targetId === 'pageWarRoom' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
+    requestAnimationFrame(function(){ window.TeamHub.refreshTournamentHub(); });
+  }
+  if(targetId === 'pageFavorites') {
+    if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
+    if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
+    if(typeof favsRenderPage     === 'function') favsRenderPage();
+  }
+}
+
 function initPageNav(){
   // Buttons use data-page attribute (no IDs) — use querySelectorAll
   document.querySelectorAll('.pageNavBtn').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.page;
-      document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageFavorites, #pageCollaborate').forEach(el => {
-        el.style.display = 'none';
-      });
-      const target = document.getElementById(targetId);
-      if(target) target.style.display = '';
-      btn.classList.add('active');
-      // Refresh player table when switching back (roster icons may be stale)
-      if(targetId === 'pagePlayers') renderPlayersPage();
-      if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
-      if(targetId === 'pageLab' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
-        requestAnimationFrame(function(){ window.TeamHub.refreshTournamentHub(); });
-      }
-      // Re-render favorites cards every time that tab is opened
-      if(targetId === 'pageFavorites') {
-        if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
-        if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
-        if(typeof favsRenderPage     === 'function') favsRenderPage();
-      }
+      showDashboardPage(targetId);
     });
   });
+
+  var warRoomBtn = document.getElementById('labWarRoomBtn');
+  if (warRoomBtn && !warRoomBtn._navBound) {
+    warRoomBtn.addEventListener('click', function () {
+      if (warRoomBtn.disabled) {
+        var guestLoginBtn = document.getElementById('guestLoginBtn');
+        if (guestLoginBtn) guestLoginBtn.click();
+        return;
+      }
+      showDashboardPage('pageWarRoom', 'pageLab');
+    });
+    warRoomBtn._navBound = true;
+  }
+
+  var warRoomBackBtn = document.getElementById('warRoomBackBtn');
+  if (warRoomBackBtn && !warRoomBackBtn._navBound) {
+    warRoomBackBtn.addEventListener('click', function () {
+      showDashboardPage('pageLab', 'pageLab');
+    });
+    warRoomBackBtn._navBound = true;
+  }
   // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)
 }
 
@@ -1068,6 +1097,7 @@ class TeamBuilder {
   oppRefresh(){ return oppRefresh(); }
   setupQuickAdd(inputId, dropdownId, addFn, getRoster){ return setupQuickAdd(inputId, dropdownId, addFn, getRoster); }
   initPageNav(){ return initPageNav(); }
+  showDashboardPage(targetId, activeNavId){ return showDashboardPage(targetId, activeNavId); }
   initTbSubNav(){ return initTbSubNav(); }
   pctToGrade(pct){ return pctToGrade(pct); }
   getHeadToHead(){ return getHeadToHead(); }

@@ -12,6 +12,7 @@ var thBracketTeamAddEl, thBracketSeedAddEl, thBracketRegionAddEl, thBracketImpor
 var thBracketBoardEl, thBracketStatusEl, thBracketResultsEl, thBracketAIOutputEl;
 var thBracketTeamCountEl, thBracketRegionCountEl, thBracketStructureEl, thBracketSimCountEl;
 var thBracketPlayInModalEl, thBracketPlayInRegionEl, thBracketPlayInSeedEl, thBracketPlayInTeamAEl, thBracketPlayInTeamBEl;
+var thWarRoomLaunchBtnEl, thWarRoomLockNoteEl;
 
 // ── State (persisted across renders for compare feature) ──────────────────────
 var thCurrentTeam   = '';
@@ -48,6 +49,20 @@ function _thGuestDAIncrement() {
 }
 function _thIsGuest() {
   return typeof authIsGuest === 'function' && authIsGuest();
+}
+
+function _thSyncWarRoomLauncher() {
+  if (!thWarRoomLaunchBtnEl) return;
+  var guest = _thIsGuest();
+  thWarRoomLaunchBtnEl.disabled = guest;
+  thWarRoomLaunchBtnEl.textContent = guest ? '🔒 Tournament War Room (Users Only)' : '🏆 Open Tournament War Room';
+  thWarRoomLaunchBtnEl.style.opacity = guest ? '0.72' : '1';
+  thWarRoomLaunchBtnEl.style.cursor = guest ? 'not-allowed' : '';
+  if (thWarRoomLockNoteEl) {
+    thWarRoomLockNoteEl.textContent = guest
+      ? 'Guest accounts can use Tournament Lab analysis, but Tournament War Room is locked until you log in.'
+      : 'Open the dedicated bracket workspace for saved fields, simulations, and AI scouting reports.';
+  }
 }
 
 function _thBracketStorageKey() {
@@ -1082,6 +1097,7 @@ function _thRenderBracketResults() {
 
 function _thRenderBracketWorkspace() {
   var guest = _thIsGuest();
+  _thSyncWarRoomLauncher();
   if (thBracketGateEl) {
     thBracketGateEl.style.display = guest ? '' : 'none';
     thBracketGateEl.innerHTML = guest
@@ -1101,8 +1117,8 @@ function _thScheduleBracketWorkspaceRender() {
   if (_thBracketRenderFrame) cancelAnimationFrame(_thBracketRenderFrame);
   _thBracketRenderFrame = requestAnimationFrame(function () {
     _thBracketRenderFrame = 0;
-    var labPage = document.getElementById('pageLab');
-    if (labPage && labPage.style.display === 'none') return;
+    var warRoomPage = document.getElementById('pageWarRoom');
+    if (warRoomPage && warRoomPage.style.display === 'none') return;
     _thRenderBracketWorkspace();
   });
 }
@@ -1478,6 +1494,8 @@ function initTeamsDOMRefs() {
   thBracketPlayInSeedEl = document.getElementById('thBracketPlayInSeed');
   thBracketPlayInTeamAEl = document.getElementById('thBracketPlayInTeamA');
   thBracketPlayInTeamBEl = document.getElementById('thBracketPlayInTeamB');
+  thWarRoomLaunchBtnEl = document.getElementById('labWarRoomBtn');
+  thWarRoomLockNoteEl = document.getElementById('labWarRoomLockNote');
   thBracketTeamCountEl = document.getElementById('thBracketTeamCount');
   thBracketRegionCountEl = document.getElementById('thBracketRegionCount');
   thBracketStructureEl = document.getElementById('thBracketStructure');
@@ -4600,6 +4618,7 @@ function thRefreshTeamList() {
 function initTeamsPage() {
   initTeamsDOMRefs();
   thPopulateTeams();
+  _thSyncWarRoomLauncher();
 
   if (thLoadBtn) {
     thLoadBtn.addEventListener('click', () => {
@@ -4682,6 +4701,7 @@ class TeamHub {
   loadTeam(name, season)        { return thLoadTeam(name, season); }
   loadOpponent(teamName)        { return thLoadOpponent(teamName); }
   refreshTournamentHub()        { return _thScheduleBracketWorkspaceRender(); }
+  refreshTournamentLauncher()   { return _thSyncWarRoomLauncher(); }
 }
 
 window.TeamHub = new TeamHub();

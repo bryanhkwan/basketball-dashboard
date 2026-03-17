@@ -166,6 +166,12 @@ function _authSetupHeader() {
     if (guestLoginBtn) guestLoginBtn.style.display = 'none';
     if (notesToggle)  notesToggle.style.display = '';
   }
+  if (window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
+    window.TeamHub.refreshTournamentLauncher();
+  }
+  if (window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
+    window.TeamHub.refreshTournamentHub();
+  }
 }
 
 function authShowOverlay() {
