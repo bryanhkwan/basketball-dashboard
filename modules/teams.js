@@ -4566,7 +4566,6 @@ function thRefreshTeamList() {
 function initTeamsPage() {
   initTeamsDOMRefs();
   thPopulateTeams();
-  _thRenderBracketWorkspace();
 
   if (thLoadBtn) {
     thLoadBtn.addEventListener('click', () => {

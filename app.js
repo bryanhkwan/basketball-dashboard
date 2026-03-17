@@ -94,7 +94,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Conference multiplier listeners
   confMultToggleEl.addEventListener('change', ()=>{
     renderConfMultTable();
-    if(wb) computeAll();
+    if(wb) requestComputeAll(0);
   });
   resetConfMultBtn.addEventListener('click', ()=>{
     confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
@@ -167,8 +167,9 @@ window.addEventListener('DOMContentLoaded', () => {
   advancedDirEl.addEventListener('change', renderWeights);
 
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
-    el.addEventListener('input', ()=>{ if(wb) computeAll(); });
-    el.addEventListener('change', ()=>{ if(wb) computeAll(); });
+    if(!el) return;
+    el.addEventListener('input', ()=>{ if(wb) requestComputeAll(120); });
+    el.addEventListener('change', ()=>{ if(wb) requestComputeAll(0); });
   });
 
   // Team builder listeners
@@ -179,7 +180,8 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   tbWeakThreshEl.addEventListener('input', () => {
     tbWeakThreshLabelEl.textContent = tbWeakThreshEl.value + 'th';
-    tbRefresh();
+    if(typeof tbScheduleRefresh === 'function') tbScheduleRefresh(90);
+    else tbRefresh();
   });
 
   // Page navigation

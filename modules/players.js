@@ -53,6 +53,11 @@ function renderPlayers(){
   filteredData = sortData(data);
   currentPage = 0;
   playersHead.innerHTML = '';
+  const playersPage = document.getElementById('pagePlayers');
+  if(playersPage && playersPage.style.display === 'none'){
+    playersBody.innerHTML = '';
+    return;
+  }
   renderPlayersPage();
 }
 

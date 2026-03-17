@@ -57,6 +57,8 @@ var kpiPlayers, kpiStats, kpiTotalW, kpiAvgPerf, kpiStarPerf;
 var avgPayEl, minPayEl, maxPayEl, starValueEl, starPctEl, mpModeEl, mpPctEl;
 var modalBack, mClose, mTitle, mSub, mScore, mFit, mVal, mMult, mMeta, mBars, mAllStats, mTags;
 var confMultToggleEl, confMultBodyEl, confMultTableBody, confMultRangeEl, confMultLeagueNote, resetConfMultBtn;
+var _computeAllTimer = null;
+var _xlsxLoadPromise = null;
 
 function initDataDOMRefs(){
   gsUrlInput = document.getElementById('gsUrl');
@@ -358,7 +360,7 @@ function renderWeights(){
       const it2 = currentWeights[pos][i];
       row.style.background = ((Number(it2.w)||0) !== 0) ? 'rgba(122,162,255,.08)' : 'transparent';
       updateWeightFooter();
-      if(wb) computeAll();
+      if(wb) requestComputeAll(120);
     });
   });
 
@@ -522,7 +524,7 @@ function renderConfMultTable(){
       confMultipliers[conf] = val;
       e.target.style.color = val > 1 ? 'var(--good)' : val < 1 ? 'var(--bad)' : 'var(--text)';
       updateConfMultRange();
-      if(wb) computeAll();
+      if(wb) requestComputeAll(120);
     });
   });
 
@@ -563,9 +565,22 @@ function sheetHasConference(){
   });
 }
 
+function requestComputeAll(delayMs){
+  if(_computeAllTimer) clearTimeout(_computeAllTimer);
+  const wait = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 120;
+  _computeAllTimer = setTimeout(() => {
+    _computeAllTimer = null;
+    computeAll();
+  }, wait);
+}
+
 // --- computeAll ---
 
 function computeAll(){
+  if(_computeAllTimer){
+    clearTimeout(_computeAllTimer);
+    _computeAllTimer = null;
+  }
   ensureWeightsCoverStats(pos, rows);
 
   if(!rows.length) { computed = []; renderPlayers(); return; }
@@ -1698,16 +1713,22 @@ async function loadRecruitingData() {
 }
 
 function waitForXLSX(timeoutMs=5000){
-  return new Promise((resolve, reject)=>{
-    const start = Date.now();
-    const t = setInterval(()=>{
-      if(window.XLSX){ clearInterval(t); resolve(true); }
-      if(Date.now()-start > timeoutMs){
-        clearInterval(t);
-        reject(new Error("XLSX library not loaded. Put xlsx.full.min.js next to this HTML."));
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(!_xlsxLoadPromise){
+    _xlsxLoadPromise = loadScriptOnce(
+      'xlsx',
+      [
+        'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+        './xlsx.full.min.js'
+      ],
+      {
+        timeoutMs: timeoutMs,
+        test: function(){ return window.XLSX; },
+        errorMessage: 'XLSX library not loaded. Put xlsx.full.min.js next to this HTML.'
       }
-    }, 50);
-  });
+    );
+  }
+  return _xlsxLoadPromise;
 }
 
 // --- League/pos functions ---
@@ -1876,6 +1897,7 @@ class DataManager {
   renderWeights(){ return renderWeights(); }
   renderConfMultTable(){ return renderConfMultTable(); }
   computeAll(){ return computeAll(); }
+  requestComputeAll(delayMs){ return requestComputeAll(delayMs); }
   reloadActiveSheet(){ return reloadActiveSheet(); }
   applyLeagueDefaults(force){ return applyLeagueDefaults(force); }
   loadFromGoogleSheets(url, key){ return loadFromGoogleSheets(url, key); }

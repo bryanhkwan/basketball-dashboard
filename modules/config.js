@@ -8,6 +8,69 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const clamp01 = (x) => clamp(x, 0, 1);
 const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
 const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+const _scriptLoadPromises = Object.create(null);
+
+function loadScriptOnce(key, urls, opts){
+  opts = opts || {};
+  const test = typeof opts.test === 'function' ? opts.test : function(){ return false; };
+  const timeoutMs = Number(opts.timeoutMs) || 10000;
+  const srcs = Array.isArray(urls) ? urls.slice() : [urls];
+  if(test()) return Promise.resolve(test());
+  if(_scriptLoadPromises[key]) return _scriptLoadPromises[key];
+
+  _scriptLoadPromises[key] = new Promise((resolve, reject) => {
+    function tryNext(idx){
+      if(test()) { resolve(test()); return; }
+      if(idx >= srcs.length){
+        delete _scriptLoadPromises[key];
+        reject(new Error(opts.errorMessage || ('Failed to load script: ' + key)));
+        return;
+      }
+
+      const s = document.createElement('script');
+      let done = false;
+      const timer = window.setTimeout(() => {
+        if(done) return;
+        done = true;
+        s.remove();
+        tryNext(idx + 1);
+      }, timeoutMs);
+
+      function cleanup(){
+        window.clearTimeout(timer);
+        s.onload = null;
+        s.onerror = null;
+      }
+
+      s.src = srcs[idx];
+      s.async = true;
+      s.defer = true;
+      s.dataset.loaderKey = key;
+      s.onload = function(){
+        if(done) return;
+        done = true;
+        cleanup();
+        if(test()) resolve(test());
+        else {
+          s.remove();
+          tryNext(idx + 1);
+        }
+      };
+      s.onerror = function(){
+        if(done) return;
+        done = true;
+        cleanup();
+        s.remove();
+        tryNext(idx + 1);
+      };
+      document.head.appendChild(s);
+    }
+
+    tryNext(0);
+  });
+
+  return _scriptLoadPromises[key];
+}
 
 // Convert Google Sheets AOA (array-of-arrays) into row objects using header row.
 function aoaToObjects(aoa){

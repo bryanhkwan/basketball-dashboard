@@ -20,6 +20,11 @@ var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
 var portalSelectedDepartureNames = [];
 var portalWatchAlerts = [];
+var portalFilterTimer = null;
+var portalPlayerIndexRef = null;
+var portalPlayerIndexExact = Object.create(null);
+var portalPlayerIndexLoose = [];
+var portalJsPdfPromise = null;
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -78,22 +83,62 @@ function portalGetAllPlayers() {
   return [];
 }
 
+function portalGetPlayerIndex() {
+  var players = portalGetAllPlayers();
+  if (portalPlayerIndexRef === players) {
+    return { exact: portalPlayerIndexExact, loose: portalPlayerIndexLoose };
+  }
+
+  portalPlayerIndexRef = players;
+  portalPlayerIndexExact = Object.create(null);
+  portalPlayerIndexLoose = [];
+
+  for (var i = 0; i < players.length; i++) {
+    var player = players[i];
+    var norm = portalNorm(player.Player || player.Name || '');
+    if (!norm) continue;
+    if (!portalPlayerIndexExact[norm]) portalPlayerIndexExact[norm] = player;
+    portalPlayerIndexLoose.push({ norm: norm, player: player });
+  }
+
+  return { exact: portalPlayerIndexExact, loose: portalPlayerIndexLoose };
+}
+
 function portalFindPlayerMatch(name) {
   if (!name) return null;
   var needle = portalNorm(name);
   if (!needle) return null;
-  var players = portalGetAllPlayers();
-  if (!players.length) return null;
-
-  for (var i = 0; i < players.length; i++) {
-    var n = portalNorm(players[i].Player || players[i].Name || '');
-    if (n && n === needle) return players[i];
-  }
-  for (var j = 0; j < players.length; j++) {
-    var n2 = portalNorm(players[j].Player || players[j].Name || '');
-    if (n2 && (n2.includes(needle) || needle.includes(n2))) return players[j];
+  var index = portalGetPlayerIndex();
+  if (index.exact[needle]) return index.exact[needle];
+  for (var j = 0; j < index.loose.length; j++) {
+    var n2 = index.loose[j].norm;
+    if (n2 && (n2.includes(needle) || needle.includes(n2))) return index.loose[j].player;
   }
   return null;
+}
+
+function portalScheduleApplyFilters(delayMs) {
+  if (portalFilterTimer) clearTimeout(portalFilterTimer);
+  portalFilterTimer = setTimeout(function () {
+    portalFilterTimer = null;
+    portalApplyFilters();
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 120);
+}
+
+function portalEnsureJsPdf() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!portalJsPdfPromise) {
+    portalJsPdfPromise = loadScriptOnce(
+      'jspdf',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      {
+        timeoutMs: 12000,
+        test: function () { return window.jspdf && window.jspdf.jsPDF; },
+        errorMessage: 'jsPDF failed to load.'
+      }
+    );
+  }
+  return portalJsPdfPromise;
 }
 
 function portalFmtDate(iso) {
@@ -940,7 +985,7 @@ function portalBuildReportFileName() {
   return safe + '.pdf';
 }
 
-function portalDownloadAIReport() {
+async function portalDownloadAIReport() {
   var reportText = (portalLastAIReportText || '').trim();
   if (!reportText && portalAIOutputEl) reportText = (portalAIOutputEl.innerText || '').trim();
   if (!reportText) {
@@ -954,6 +999,14 @@ function portalDownloadAIReport() {
     ? 'Replacing ' + portalSelectedDepartureNames.join(', ')
     : 'Team Fit Mode';
   var dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  try {
+    await portalEnsureJsPdf();
+  } catch (e) {
+    portalSetAIStatus('PDF export unavailable right now.');
+    if (typeof showWarn === 'function') showWarn('PDF export failed: ' + (e && e.message ? e.message : e));
+    return;
+  }
 
   if (window.jspdf && window.jspdf.jsPDF) {
     var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
@@ -1521,6 +1574,7 @@ function portalRenderTable() {
   portalTableBodyEl.innerHTML = '';
 
   var matched = 0;
+  var frag = document.createDocumentFragment();
   portalFiltered.forEach(function (it) {
     var tr = document.createElement('tr');
     tr.id = portalAlertDomId(portalEntryKey(it));
@@ -1597,8 +1651,9 @@ function portalRenderTable() {
     tr.appendChild(tdMatch);
     tr.appendChild(tdProfile);
     tr.appendChild(tdSrc);
-    portalTableBodyEl.appendChild(tr);
+    frag.appendChild(tr);
   });
+  portalTableBodyEl.appendChild(frag);
 
   if (portalCountEl) portalCountEl.textContent = String(portalFiltered.length);
   if (portalMatchedCountEl) portalMatchedCountEl.textContent = String(matched);
@@ -1742,7 +1797,9 @@ function initPortalPage() {
     loadPortalEntries();
   });
 
-  if (portalSearchInputEl) portalSearchInputEl.addEventListener('input', portalApplyFilters);
+  if (portalSearchInputEl) portalSearchInputEl.addEventListener('input', function () {
+    portalScheduleApplyFilters(120);
+  });
   if (portalStatusFilterEl) portalStatusFilterEl.addEventListener('change', function () { loadPortalEntries(); });
   if (portalUseSnapshotEl) portalUseSnapshotEl.addEventListener('change', function () {
     try {

@@ -69,6 +69,7 @@ async function _favsFetchDev(path, opts) {
 // serverFolders: persisted folder names loaded from / saved to the backend.
 // Replaces the old in-memory pendingFolders array.
 var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [], lastSyncedAt: 0, syncPromise: null };
+var _favsRenderTimer = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -541,7 +542,13 @@ function initFavsPage() {
   var inp       = document.getElementById('favsFolderInput');
   var createRow = document.getElementById('favsFolderCreateRow');
 
-  if (searchEl) searchEl.addEventListener('input',  favsRenderPage);
+  if (searchEl) searchEl.addEventListener('input', function () {
+    if (_favsRenderTimer) clearTimeout(_favsRenderTimer);
+    _favsRenderTimer = setTimeout(function () {
+      _favsRenderTimer = null;
+      favsRenderPage();
+    }, 120);
+  });
   if (lgEl)     lgEl.addEventListener    ('change', favsRenderPage);
 
   function _doCreate() {

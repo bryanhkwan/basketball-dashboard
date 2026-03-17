@@ -23,6 +23,7 @@ var h2hBars;
 var _tbBatchMode = false;
 var _cachedAllPlayers = null;
 var _cachedAllPlayersLg = '';
+var _tbRefreshTimer = null;
 
 function initTeamBuilderDOMRefs(){
   tbBudgetEl = document.getElementById('tbBudget');
@@ -59,6 +60,7 @@ function initTeamBuilderDOMRefs(){
 function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
 
 function tbPlayerLeague(r){
+  if(r && r._league) return r._league;
   for(const [key, arr] of Object.entries(tbAllComputed)){
     if(arr.some(x => tbPlayerKey(x) === tbPlayerKey(r))){
       return key.startsWith('MBB') ? 'MBB' : 'WBB';
@@ -87,6 +89,7 @@ function tbGetAllPlayers(forLeague){
       const pk = tbPlayerKey(r);
       if(seen.has(pk)) return;
       seen.add(pk);
+      r._league = lg;
       if(!(r.Position||r.Pos||'').toString().trim()){
         r._tbPosGroup = posLabel;
       }
@@ -528,6 +531,10 @@ function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
 // --- tbRefresh (main roster refresh) ---
 
 function tbRefresh(){
+  if(_tbRefreshTimer){
+    clearTimeout(_tbRefreshTimer);
+    _tbRefreshTimer = null;
+  }
   const maxR = Number(tbMaxRosterEl.value) || 13;
   const budget = Number(tbBudgetEl.value) || 0;
   const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
@@ -696,6 +703,14 @@ function tbRefresh(){
   var _pp = document.getElementById('pagePlayers');
   if(!_pp || _pp.style.display !== 'none') renderPlayersPage();
   h2hRefresh();
+}
+
+function tbScheduleRefresh(delayMs){
+  if(_tbRefreshTimer) clearTimeout(_tbRefreshTimer);
+  _tbRefreshTimer = setTimeout(function(){
+    _tbRefreshTimer = null;
+    tbRefresh();
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 90);
 }
 
 // --- Roster render ---
@@ -1043,6 +1058,7 @@ class TeamBuilder {
   tbAddPlayer(r){ return tbAddPlayer(r); }
   tbRemovePlayer(idx){ return tbRemovePlayer(idx); }
   tbRefresh(){ return tbRefresh(); }
+  tbScheduleRefresh(delayMs){ return tbScheduleRefresh(delayMs); }
   tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl){ return tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl); }
   h2hRefresh(){ return h2hRefresh(); }
   oppAddPlayer(r){ return oppAddPlayer(r); }
