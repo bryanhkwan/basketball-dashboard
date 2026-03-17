@@ -783,132 +783,7 @@
       </div>
     </div>
 
-    <div class="thSection">
-      <div class="thSectionHead">🏆 Tournament War Room</div>
-      <div class="thSectionSub">Build and save tournament brackets, run Monte Carlo simulations across the full field, and generate a bracket-level AI scouting report. This workspace is available only for logged-in users.</div>
-      <div id="thBracketGate" class="card thBracketGate" style="display:none"></div>
-      <div id="thBracketWorkspace" style="display:none">
-        <div class="card thBracketShell">
-          <div class="thBracketTopbar">
-            <div class="thBracketManager">
-              <div class="thSearchGroup">
-                <label class="thLabel">Saved bracket</label>
-                <select id="thBracketSelect" class="thTeamSelect"><option value="">— Select bracket —</option></select>
-              </div>
-              <button id="thBracketNewBtn" class="secondary">+ New</button>
-              <button id="thBracketDuplicateBtn" class="secondary">Duplicate</button>
-              <button id="thBracketDeleteBtn" class="secondary">Delete</button>
-            </div>
-            <div class="thBracketMeta">
-              <div class="thSearchGroup">
-                <label class="thLabel">Bracket name</label>
-                <input id="thBracketName" type="text" class="thSeasonInput" placeholder="2026 NCAA Tournament">
-              </div>
-              <div class="thSearchGroup">
-                <label class="thLabel">Season</label>
-                <input id="thBracketSeason" type="number" value="2026" min="2020" max="2035" class="thSeasonInput">
-              </div>
-            </div>
-          </div>
-
-          <div class="thBracketGrid">
-            <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
-              <div class="thBracketPanelBody thBracketPanelBody--board">
-                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in button inside a slot when you need to set a TBD matchup like Texas vs NC State, then run the simulation and winners will auto-advance through the tree.</div>
-                <div id="thBracketBoard" class="thBracketBoard">
-                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="thBracketToolStack">
-            <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Bracket Tools</div>
-              <div class="thBracketPanelBody">
-                <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
-                <div class="thBracketAddRow">
-                  <button id="thBracketBuild64Btn" class="thLoadBtn">Reset to Empty 64-Team Board</button>
-                  <button id="thBracketAutofillSeedsBtn" class="secondary">Auto-fill by Seed List</button>
-                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
-                </div>
-                <div class="thBracketImportLabel">Optional direct add</div>
-                <div class="thBracketAddRow">
-                  <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">-- Add a team --</option></select>
-                  <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
-                  <select id="thBracketRegionAdd" class="thTeamSelect" style="max-width:150px">
-                    <option value="South">South</option>
-                    <option value="East">East</option>
-                    <option value="West">West</option>
-                    <option value="Midwest">Midwest</option>
-                  </select>
-                  <button id="thBracketAddBtn" class="thLoadBtn">Add Team</button>
-                </div>
-                <div class="thBracketImportLabel">Smart import from ESPN / copied PDF text</div>
-                <textarea id="thBracketImport" class="thBracketImport" placeholder="Paste copied bracket text here. Examples it should recognize:&#10;1 Duke&#10;16 Siena&#10;8 Ohio State&#10;9 TCU&#10;or lines like: 1 | Duke | South"></textarea>
-                <div class="thBracketImportActions">
-                  <button id="thBracketImportBtn" class="secondary">Smart Import</button>
-                  <span id="thBracketImportStatus" class="muted" style="font-size:11px"></span>
-                </div>
-                <div class="thBracketSummaryRow">
-                  <span class="pill">Teams: <b id="thBracketTeamCount">0</b></span>
-                  <span class="pill">Regions: <b id="thBracketRegionCount">0</b></span>
-                  <span class="pill">Structure: <b id="thBracketStructure">Needs power-of-two field</b></span>
-                </div>
-              </div>
-            </div>
-
-            <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Simulation & Analysis</div>
-              <div class="thBracketPanelBody">
-                <div class="thBracketSimRow">
-                  <div class="thBracketSimControls">
-                    <select id="thBracketSimCount" class="thMCSelect">
-                      <option value="1000">1,000 sims</option>
-                      <option value="5000" selected>5,000 sims</option>
-                      <option value="10000">10,000 sims</option>
-                      <option value="25000">25,000 sims</option>
-                    </select>
-                    <button id="thBracketSimBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)">Simulate Bracket</button>
-                    <button id="thBracketAnalyzeBtn" class="thDeepBtn">Gemini Bracket Analysis</button>
-                  </div>
-                  <div id="thBracketStatus" class="muted" style="font-size:11px"></div>
-                </div>
-                <div id="thBracketResults" class="thDeepOutput" style="display:none"></div>
-                <div id="thBracketAIOutput" class="thDeepOutput" style="display:none"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
-</div>
-          <div id="thBracketPlayInModal" class="thBracketPlayInModal" style="display:none">
-            <div class="thBracketPlayInCard">
-              <div class="thBracketPlayInHead">Set Play-In Pair</div>
-              <div class="muted" style="font-size:11px">Pick the two teams in this play-in game. The model will simulate this matchup first, then carry the winner into the main bracket.</div>
-              <div class="thBracketPlayInMeta">
-                <span class="pill" id="thBracketPlayInRegion">Region</span>
-                <span class="pill" id="thBracketPlayInSeed">Seed --</span>
-              </div>
-              <div class="thBracketPlayInGrid">
-                <div class="thSearchGroup">
-                  <label class="thLabel">Team 1</label>
-                  <select id="thBracketPlayInTeamA" class="thTeamSelect"><option value="">-- Select team --</option></select>
-                </div>
-                <div class="thSearchGroup">
-                  <label class="thLabel">Team 2</label>
-                  <select id="thBracketPlayInTeamB" class="thTeamSelect"><option value="">-- Select team --</option></select>
-                </div>
-              </div>
-              <div class="thBracketPlayInActions">
-                <button id="thBracketPlayInCancelBtn" class="secondary" type="button">Cancel</button>
-                <button id="thBracketPlayInSaveBtn" class="thLoadBtn" type="button">Save Play-In Pair</button>
-              </div>
-            </div>
-          </div>
 </div><!-- /pageTeams -->
 
 <!-- Methodology Page -->
@@ -1110,6 +985,107 @@
       <p class="muted" style="font-size:13px">Select multiple teams to analyze common traits, archetypes, and what drives tournament success.</p>
     </div>
 
+    <div class="thSection">
+      <div class="thSectionHead">🏆 Tournament War Room</div>
+      <div class="thSectionSub">Build and save tournament brackets, run Monte Carlo simulations across the full field, and generate a bracket-level AI scouting report. This workspace is available only for logged-in users.</div>
+      <div id="thBracketGate" class="card thBracketGate" style="display:none"></div>
+      <div id="thBracketWorkspace" style="display:none">
+        <div class="card thBracketShell">
+          <div class="thBracketTopbar">
+            <div class="thBracketManager">
+              <div class="thSearchGroup">
+                <label class="thLabel">Saved bracket</label>
+                <select id="thBracketSelect" class="thTeamSelect"><option value="">— Select bracket —</option></select>
+              </div>
+              <button id="thBracketNewBtn" class="secondary">+ New</button>
+              <button id="thBracketDuplicateBtn" class="secondary">Duplicate</button>
+              <button id="thBracketDeleteBtn" class="secondary">Delete</button>
+            </div>
+            <div class="thBracketMeta">
+              <div class="thSearchGroup">
+                <label class="thLabel">Bracket name</label>
+                <input id="thBracketName" type="text" class="thSeasonInput" placeholder="2026 NCAA Tournament">
+              </div>
+              <div class="thSearchGroup">
+                <label class="thLabel">Season</label>
+                <input id="thBracketSeason" type="number" value="2026" min="2020" max="2035" class="thSeasonInput">
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketGrid">
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
+              <div class="thBracketPanelBody thBracketPanelBody--board">
+                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in button inside a slot when you need to set a TBD matchup like Texas vs NC State, then run the simulation and winners will auto-advance through the tree.</div>
+                <div id="thBracketBoard" class="thBracketBoard">
+                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketToolStack">
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Bracket Tools</div>
+              <div class="thBracketPanelBody">
+                <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
+                <div class="thBracketAddRow">
+                  <button id="thBracketBuild64Btn" class="thLoadBtn">Reset to Empty 64-Team Board</button>
+                  <button id="thBracketAutofillSeedsBtn" class="secondary">Auto-fill by Seed List</button>
+                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
+                </div>
+                <div class="thBracketImportLabel">Optional direct add</div>
+                <div class="thBracketAddRow">
+                  <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">-- Add a team --</option></select>
+                  <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
+                  <select id="thBracketRegionAdd" class="thTeamSelect" style="max-width:150px">
+                    <option value="South">South</option>
+                    <option value="East">East</option>
+                    <option value="West">West</option>
+                    <option value="Midwest">Midwest</option>
+                  </select>
+                  <button id="thBracketAddBtn" class="thLoadBtn">Add Team</button>
+                </div>
+                <div class="thBracketImportLabel">Smart import from ESPN / copied PDF text</div>
+                <textarea id="thBracketImport" class="thBracketImport" placeholder="Paste copied bracket text here. Examples it should recognize:&#10;1 Duke&#10;16 Siena&#10;8 Ohio State&#10;9 TCU&#10;or lines like: 1 | Duke | South"></textarea>
+                <div class="thBracketImportActions">
+                  <button id="thBracketImportBtn" class="secondary">Smart Import</button>
+                  <span id="thBracketImportStatus" class="muted" style="font-size:11px"></span>
+                </div>
+                <div class="thBracketSummaryRow">
+                  <span class="pill">Teams: <b id="thBracketTeamCount">0</b></span>
+                  <span class="pill">Regions: <b id="thBracketRegionCount">0</b></span>
+                  <span class="pill">Structure: <b id="thBracketStructure">Needs power-of-two field</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Simulation & Analysis</div>
+              <div class="thBracketPanelBody">
+                <div class="thBracketSimRow">
+                  <div class="thBracketSimControls">
+                    <select id="thBracketSimCount" class="thMCSelect">
+                      <option value="1000">1,000 sims</option>
+                      <option value="5000" selected>5,000 sims</option>
+                      <option value="10000">10,000 sims</option>
+                      <option value="25000">25,000 sims</option>
+                    </select>
+                    <button id="thBracketSimBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)">Simulate Bracket</button>
+                    <button id="thBracketAnalyzeBtn" class="thDeepBtn">Gemini Bracket Analysis</button>
+                  </div>
+                  <div id="thBracketStatus" class="muted" style="font-size:11px"></div>
+                </div>
+                <div id="thBracketResults" class="thDeepOutput" style="display:none"></div>
+                <div id="thBracketAIOutput" class="thDeepOutput" style="display:none"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Team Picker -->
     <div class="card labPickerCard">
       <div class="labPickerRow">
@@ -1236,6 +1212,31 @@
 
     </div><!-- /labResults -->
   </div>
+          <div id="thBracketPlayInModal" class="thBracketPlayInModal" style="display:none">
+            <div class="thBracketPlayInCard">
+              <div class="thBracketPlayInHead">Set Play-In Pair</div>
+              <div class="muted" style="font-size:11px">Pick the two teams in this play-in game. The model will simulate this matchup first, then carry the winner into the main bracket.</div>
+              <div class="thBracketPlayInMeta">
+                <span class="pill" id="thBracketPlayInRegion">Region</span>
+                <span class="pill" id="thBracketPlayInSeed">Seed --</span>
+              </div>
+              <div class="thBracketPlayInGrid">
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 1</label>
+                  <select id="thBracketPlayInTeamA" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 2</label>
+                  <select id="thBracketPlayInTeamB" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+              </div>
+              <div class="thBracketPlayInActions">
+                <button id="thBracketPlayInCancelBtn" class="secondary" type="button">Cancel</button>
+                <button id="thBracketPlayInSaveBtn" class="thLoadBtn" type="button">Save Play-In Pair</button>
+              </div>
+            </div>
+          </div>
+
 </div>
 </div><!-- /pageLab -->
 
