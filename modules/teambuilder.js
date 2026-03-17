@@ -942,6 +942,7 @@ function initPageNav(){
       if(targetId === 'pageTeams' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') window.TeamHub.refreshTournamentHub();
       // Re-render favorites cards every time that tab is opened
       if(targetId === 'pageFavorites') {
+        if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
         if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
         if(typeof favsRenderPage     === 'function') favsRenderPage();
       }

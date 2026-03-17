@@ -68,7 +68,7 @@ async function _favsFetchDev(path, opts) {
 // They persist across tab switches until explicitly deleted.
 // serverFolders: persisted folder names loaded from / saved to the backend.
 // Replaces the old in-memory pendingFolders array.
-var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [] };
+var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [], lastSyncedAt: 0, syncPromise: null };
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -101,6 +101,7 @@ async function favsLoad() {
     // folders array is included in the same response
     favsState.serverFolders = Array.isArray(data.folders) ? data.folders : [];
     favsState.loaded = true;
+    favsMarkSynced();
     favsRenderFolderBar();
     favsRenderPage();
     favsRefreshPortalAlerts();
@@ -109,6 +110,8 @@ async function favsLoad() {
     favsUpdateTableHearts();
   } catch (e) {
     if (e && e.code === 'UNAUTHORIZED') {
+      favsState.loaded = false;
+      favsState.lastSyncedAt = 0;
       if (typeof authHandleUnauthorized === 'function') {
         authHandleUnauthorized('Your session expired. Please log in again to sync favorites.');
       }
@@ -524,6 +527,13 @@ function favsRenderPage() {
 
 // ── Init (search / filter / folder create event listeners) ───────────────────
 function initFavsPage() {
+  if (!window.__favsVisibilityBound) {
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) favsEnsureFresh(false);
+    });
+    window.addEventListener('focus', function () { favsEnsureFresh(false); });
+    window.__favsVisibilityBound = true;
+  }
   var searchEl  = document.getElementById('favsSearch');
   var lgEl      = document.getElementById('favsLeagueFilter');
   var addBtn    = document.getElementById('favsFolderAddBtn');
@@ -561,4 +571,4 @@ function initFavsPage() {
   favsRefreshPortalAlerts();
 }
 
-window.FavoritesManager = { favsLoad, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, favsRenderFolderBar, favsGetFolders, favsSetFolder, initFavsPage };
+window.FavoritesManager = { favsLoad, favsEnsureFresh, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, favsRenderFolderBar, favsGetFolders, favsSetFolder, initFavsPage };
