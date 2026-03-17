@@ -79,7 +79,11 @@ async function favsFetch(path, opts) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(FAVS_BASE + path, Object.assign({ credentials: 'include', headers: headers }, opts));
-  if (res.status === 401) return null;   // not logged in — silent
+  if (res.status === 401) {
+    var unauthorized = new Error('Unauthorized');
+    unauthorized.code = 'UNAUTHORIZED';
+    throw unauthorized;
+  }
   if (!res.ok) {
     const err = await res.json().catch(function() { return {}; });
     throw new Error(err.message || err.error || ('Error ' + res.status));
@@ -104,6 +108,12 @@ async function favsLoad() {
       favsUpdateModalBtn(_currentProfilePlayer);
     favsUpdateTableHearts();
   } catch (e) {
+    if (e && e.code === 'UNAUTHORIZED') {
+      if (typeof authHandleUnauthorized === 'function') {
+        authHandleUnauthorized('Your session expired. Please log in again to sync favorites.');
+      }
+      return;
+    }
     console.warn('[Favorites] load error:', e);
   }
 }

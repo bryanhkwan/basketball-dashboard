@@ -13,6 +13,7 @@ var GUEST_AI_KEY = 'ncaa_guest_ai_uses';
 function authIsGuest() { return !authGetToken() && localStorage.getItem(AUTH_GUEST_KEY) === '1'; }
 
 var LOGIN_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
+var ME_URL = LOGIN_URL.replace(/\/login$/, '/me');
 
 function authGetToken()    { return localStorage.getItem(AUTH_KEY); }
 function authGetUser()     { return localStorage.getItem(AUTH_USER_KEY); }
@@ -24,6 +25,46 @@ function authClear() {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
   localStorage.removeItem(AUTH_GUEST_KEY);
+}
+
+
+async function authFetchMe() {
+  const token = authGetToken();
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(ME_URL, { credentials: 'include', headers: headers });
+  if (!res.ok) throw new Error('Session check failed (' + res.status + ')');
+  const data = await res.json().catch(function () { return {}; });
+  return data && data.user ? data.user : null;
+}
+
+async function authValidateStoredSession() {
+  if (DEV_BYPASS_AUTH || authIsGuest()) return true;
+  const token = authGetToken();
+  if (!token) return false;
+  try {
+    const user = await authFetchMe();
+    if (!user || !user.username) {
+      authClear();
+      return false;
+    }
+    authSave(token, user.username);
+    return true;
+  } catch (_) {
+    authClear();
+    return false;
+  }
+}
+
+function authHandleUnauthorized(message) {
+  authClear();
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const welcomeOverlay = document.getElementById('welcomeOverlay');
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
+  if (welcomeOverlay) welcomeOverlay.classList.add('hidden');
+  authShowOverlay();
+  const loginErr = document.getElementById('loginError');
+  if (loginErr) loginErr.textContent = message || 'Your session expired. Please log in again.';
 }
 
 // Loading coordination — both flags must be true before Welcome shows
@@ -152,7 +193,7 @@ async function authPost(url, body) {
   return data;
 }
 
-function authInit() {
+async function authInit() {
   const loginForm   = document.getElementById('loginForm');
   const loginErr    = document.getElementById('loginError');
   const logoutBtn   = document.getElementById('logoutBtn');
@@ -192,7 +233,8 @@ function authInit() {
         || (data.user && (data.user.token || data.user.jwt))
         || '';
       console.log('[Auth] extracted token:', token ? `${token.slice(0,16)}…` : '(empty — check response above)');
-      authSave(token, username);
+      if (!token) throw new Error('Login succeeded but no session token was returned.');
+      authSave(token, (data.user && data.user.username) || username);
       localStorage.removeItem(AUTH_GUEST_KEY);  // exit guest mode on real login
       authStartLoading();
     } catch (err) {
@@ -221,7 +263,12 @@ function authInit() {
   }
 
   // Check existing session, guest mode, or dev bypass
-  if (DEV_BYPASS_AUTH || authGetToken() || authIsGuest()) {
+  if (DEV_BYPASS_AUTH || authIsGuest()) {
+    authStartLoading();
+    return;
+  }
+
+  if (await authValidateStoredSession()) {
     authStartLoading();
   } else {
     authShowOverlay();
