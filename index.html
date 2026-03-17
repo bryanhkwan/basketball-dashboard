@@ -812,8 +812,15 @@
 
           <div class="thBracketGrid">
             <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Field Builder</div>
+              <div class="thBracketPanelHead">Bracket Controls</div>
               <div class="thBracketPanelBody">
+                <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
+                <div class="thBracketAddRow">
+                  <button id="thBracketBuild64Btn" class="thLoadBtn">Build Empty 64-Team Bracket</button>
+                  <button id="thBracketAutofillSeedsBtn" class="secondary">Auto-fill by Seed List</button>
+                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
+                </div>
+                <div class="thBracketImportLabel">Manual slot fill</div>
                 <div class="thBracketAddRow">
                   <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">— Add a team —</option></select>
                   <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
@@ -825,11 +832,10 @@
                   </select>
                   <button id="thBracketAddBtn" class="thLoadBtn">Add Team</button>
                 </div>
-                <div class="thBracketImportLabel">Bulk import</div>
-                <textarea id="thBracketImport" class="thBracketImport" placeholder="One team per line. Examples:&#10;1 | Auburn | South&#10;2 | Duke | East&#10;Florida | West&#10;Houston"></textarea>
+                <div class="thBracketImportLabel">Smart import from ESPN / copied PDF text</div>
+                <textarea id="thBracketImport" class="thBracketImport" placeholder="Paste copied bracket text here. Examples it should recognize:&#10;1 Duke&#10;16 Siena&#10;8 Ohio State&#10;9 TCU&#10;or lines like: 1 | Duke | South"></textarea>
                 <div class="thBracketImportActions">
-                  <button id="thBracketImportBtn" class="secondary">Import Lines</button>
-                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
+                  <button id="thBracketImportBtn" class="secondary">Smart Import</button>
                   <span id="thBracketImportStatus" class="muted" style="font-size:11px"></span>
                 </div>
                 <div class="thBracketSummaryRow">
@@ -841,7 +847,7 @@
             </div>
 
             <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Field View</div>
+              <div class="thBracketPanelHead">Playable Bracket View</div>
               <div class="thBracketPanelBody">
                 <div id="thBracketBoard" class="thBracketBoard">
                   <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>

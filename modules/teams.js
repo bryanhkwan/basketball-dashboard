@@ -188,6 +188,10 @@ function _thBracketSeedPairs(size) {
   return out;
 }
 
+function _thFirstRoundSeedPairs() {
+  return [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
+}
+
 function _thBuildBracketPairings(entries) {
   var ordered = (entries || []).slice().sort(function (a, b) {
     var sa = Number(a.seed) || 99;
@@ -218,6 +222,208 @@ function _thBuildBracketPairings(entries) {
   return pairs;
 }
 
+function _thRegionSeedMap(bracket, region) {
+  var map = {};
+  (bracket && bracket.teams || []).forEach(function (item) {
+    if ((item.region || '') !== region) return;
+    map[Number(item.seed) || 0] = item;
+  });
+  return map;
+}
+
+function _thBracketTeamStats(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  return (typeof teamStatsCache !== 'undefined' && teamStatsCache[key]) ? teamStatsCache[key] : null;
+}
+
+function _thBracketTeamGames(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  var cached = (typeof teamGamesCache !== 'undefined' && teamGamesCache[key]) ? teamGamesCache[key] : null;
+  return cached && Array.isArray(cached.games) ? cached.games.slice() : [];
+}
+
+function _thClamp(v, lo, hi) {
+  if (!Number.isFinite(v)) return lo;
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function _thStdDev(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return null;
+  var mean = arr.reduce(function (s, x) { return s + x; }, 0) / arr.length;
+  var variance = arr.reduce(function (s, x) { return s + Math.pow(x - mean, 2); }, 0) / arr.length;
+  return Math.sqrt(Math.max(0, variance));
+}
+
+function _thTeamGameMetrics(teamName, season) {
+  var games = _thBracketTeamGames(teamName, season).filter(function (g) {
+    return Number.isFinite(Number(g.homePoints)) && Number.isFinite(Number(g.awayPoints));
+  }).sort(function (a, b) {
+    return new Date(a.startDate || a.date || 0) - new Date(b.startDate || b.date || 0);
+  });
+  if (!games.length) {
+    return {
+      seasonMargin: 0,
+      recentMargin: 0,
+      seasonWinPct: 0.5,
+      recentWinPct: 0.5,
+      scoreSd: 11,
+      recentScoreSd: 11,
+      postseasonMargin: 0,
+      postseasonWinPct: 0.5
+    };
+  }
+
+  var teamKey = String(teamName || '').toLowerCase();
+  var rows = games.map(function (g) {
+    var isHome = String(g.homeTeam || '').toLowerCase() === teamKey;
+    var teamPts = Number(isHome ? g.homePoints : g.awayPoints);
+    var oppPts = Number(isHome ? g.awayPoints : g.homePoints);
+    var meta = String((g.seasonType || '') + ' ' + (g.notes || '') + ' ' + (g.title || '') + ' ' + (g.label || '')).toLowerCase();
+    return {
+      teamPts: teamPts,
+      oppPts: oppPts,
+      margin: teamPts - oppPts,
+      win: teamPts > oppPts ? 1 : 0,
+      postseason: /post|tournament|semifinal|quarterfinal|championship|ncaa/.test(meta)
+    };
+  });
+  var recent10 = rows.slice(-10);
+  var recent5 = rows.slice(-5);
+  var post = rows.filter(function (r) { return r.postseason; }).slice(-5);
+
+  function avg(arr, key) {
+    if (!arr.length) return 0;
+    return arr.reduce(function (s, x) { return s + (x[key] || 0); }, 0) / arr.length;
+  }
+
+  return {
+    seasonMargin: avg(rows, 'margin'),
+    recentMargin: avg(recent10.length ? recent10 : rows, 'margin'),
+    seasonWinPct: avg(rows, 'win'),
+    recentWinPct: avg(recent10.length ? recent10 : rows, 'win'),
+    scoreSd: _thStdDev(rows.map(function (r) { return r.teamPts; })) || 11,
+    recentScoreSd: _thStdDev((recent5.length ? recent5 : rows).map(function (r) { return r.teamPts; })) || 11,
+    postseasonMargin: post.length ? avg(post, 'margin') : avg(recent5.length ? recent5 : rows, 'margin'),
+    postseasonWinPct: post.length ? avg(post, 'win') : avg(recent5.length ? recent5 : rows, 'win')
+  };
+}
+
+function _thGetStat(obj, path, fallback) {
+  try {
+    var cur = obj;
+    for (var i = 0; i < path.length; i++) {
+      cur = cur ? cur[path[i]] : null;
+    }
+    var num = Number(cur);
+    return Number.isFinite(num) ? num : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function _thComputeMatchupAdjustment(statsA, statsB) {
+  if (!statsA || !statsB) return { a: 0, b: 0, details: [] };
+  var aTs = statsA.teamStats || {};
+  var aOs = statsA.opponentStats || {};
+  var bTs = statsB.teamStats || {};
+  var bOs = statsB.opponentStats || {};
+  var aFf = aTs.fourFactors || {};
+  var aFfDef = aOs.fourFactors || {};
+  var bFf = bTs.fourFactors || {};
+  var bFfDef = bOs.fourFactors || {};
+  var a = 0, b = 0;
+  var details = [];
+
+  function addEdge(label, edgeA, edgeB, scale) {
+    a += edgeA * scale;
+    b += edgeB * scale;
+    details.push({ label: label, a: +(edgeA * scale).toFixed(2), b: +(edgeB * scale).toFixed(2) });
+  }
+
+  addEdge(
+    'eFG matchup',
+    ((_thGetStat(aFf, ['effectiveFieldGoalPct'], 50) - _thGetStat(bFfDef, ['effectiveFieldGoalPct'], 50)) / 10),
+    ((_thGetStat(bFf, ['effectiveFieldGoalPct'], 50) - _thGetStat(aFfDef, ['effectiveFieldGoalPct'], 50)) / 10),
+    1.8
+  );
+  addEdge(
+    'Turnover matchup',
+    ((_thGetStat(bFfDef, ['turnoverRatio'], 0.18) - _thGetStat(aFf, ['turnoverRatio'], 0.18)) * 100),
+    ((_thGetStat(aFfDef, ['turnoverRatio'], 0.18) - _thGetStat(bFf, ['turnoverRatio'], 0.18)) * 100),
+    0.24
+  );
+  addEdge(
+    'Rebounding matchup',
+    ((_thGetStat(aFf, ['offensiveReboundPct'], 28) - _thGetStat(bFfDef, ['offensiveReboundPct'], 28)) / 10),
+    ((_thGetStat(bFf, ['offensiveReboundPct'], 28) - _thGetStat(aFfDef, ['offensiveReboundPct'], 28)) / 10),
+    1.15
+  );
+  addEdge(
+    'FT rate matchup',
+    ((_thGetStat(aFf, ['freeThrowRate'], 28) - _thGetStat(bFfDef, ['freeThrowRate'], 28)) / 12),
+    ((_thGetStat(bFf, ['freeThrowRate'], 28) - _thGetStat(aFfDef, ['freeThrowRate'], 28)) / 12),
+    0.9
+  );
+
+  var a3Pct = _thGetStat(aTs, ['threePointFieldGoals', 'pct'], null);
+  var b3Def = _thGetStat(bOs, ['threePointFieldGoals', 'pct'], null);
+  var b3Pct = _thGetStat(bTs, ['threePointFieldGoals', 'pct'], null);
+  var a3Def = _thGetStat(aOs, ['threePointFieldGoals', 'pct'], null);
+  if (a3Pct !== null && b3Def !== null && b3Pct !== null && a3Def !== null) {
+    addEdge('3PT style', (a3Pct - b3Def) / 10, (b3Pct - a3Def) / 10, 0.8);
+  }
+
+  var aPaint = _thGetStat(aTs, ['points', 'inPaint'], null);
+  var bPaintAllow = _thGetStat(bOs, ['points', 'inPaint'], null);
+  var bPaint = _thGetStat(bTs, ['points', 'inPaint'], null);
+  var aPaintAllow = _thGetStat(aOs, ['points', 'inPaint'], null);
+  if (aPaint !== null && bPaintAllow !== null && bPaint !== null && aPaintAllow !== null) {
+    addEdge('Paint pressure', (aPaint - bPaintAllow) / 18, (bPaint - aPaintAllow) / 18, 0.75);
+  }
+
+  return {
+    a: _thClamp(a, -5.5, 5.5),
+    b: _thClamp(b, -5.5, 5.5),
+    details: details
+  };
+}
+
+function _thComputeRecencyAdjustment(teamName, season, ratingObj) {
+  var metrics = _thTeamGameMetrics(teamName, season);
+  var seasonStrength = ratingObj && Number.isFinite(+ratingObj.adjEM) ? +ratingObj.adjEM : 0;
+  var recentSignal = (metrics.recentMargin - metrics.seasonMargin) * 0.32;
+  var winSignal = (metrics.recentWinPct - metrics.seasonWinPct) * 5.2;
+  var postSignal = (metrics.postseasonMargin - metrics.seasonMargin) * 0.18 + (metrics.postseasonWinPct - metrics.seasonWinPct) * 3.5;
+  var shrink = seasonStrength > 20 ? 0.85 : seasonStrength < -5 ? 0.75 : 0.8;
+  return _thClamp((recentSignal + winSignal + postSignal) * shrink, -4.5, 4.5);
+}
+
+function _thComputeTeamVolatility(teamName, season) {
+  var metrics = _thTeamGameMetrics(teamName, season);
+  var raw = metrics.scoreSd * 0.65 + metrics.recentScoreSd * 0.35;
+  if (metrics.recentWinPct >= 0.8 && metrics.recentMargin >= 8) raw -= 0.6;
+  if (metrics.recentWinPct <= 0.4 || metrics.recentMargin <= -2) raw += 0.5;
+  return _thClamp(raw, 7.5, 15.5);
+}
+
+async function _thPrepareBracketContexts(bracket) {
+  if (!bracket || !Array.isArray(bracket.teams)) return;
+  var season = bracket.season || '2026';
+  var seen = {};
+  var names = bracket.teams.map(function (t) { return t.team; }).filter(Boolean).filter(function (name) {
+    var key = String(name).toLowerCase();
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  await Promise.all(names.map(function (name) {
+    return Promise.all([
+      typeof loadTeamStats === 'function' ? loadTeamStats(name, season).catch(function () { return null; }) : Promise.resolve(null),
+      typeof loadGamesForTeam === 'function' ? loadGamesForTeam(name, season).catch(function () { return null; }) : Promise.resolve(null)
+    ]);
+  }));
+}
+
 function _thTeamPaceForBracket(teamName, season) {
   var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
   if (typeof teamStatsCache !== 'undefined' && teamStatsCache[key] && Number.isFinite(+teamStatsCache[key].pace)) {
@@ -238,10 +444,18 @@ function _thSimSingleGame(teamA, teamB, season) {
   var ratA = _thBracketTeamRating(teamA.team, season);
   var ratB = _thBracketTeamRating(teamB.team, season);
   if (!ratA || !ratB) return null;
-
-  var eOA = (+ratA.adjO + +ratB.adjD) / 2;
-  var eOB = (+ratB.adjO + +ratA.adjD) / 2;
-  var pace = (_thTeamPaceForBracket(teamA.team, season) + _thTeamPaceForBracket(teamB.team, season)) / 2;
+  var statsA = _thBracketTeamStats(teamA.team, season);
+  var statsB = _thBracketTeamStats(teamB.team, season);
+  var recA = _thComputeRecencyAdjustment(teamA.team, season, ratA);
+  var recB = _thComputeRecencyAdjustment(teamB.team, season, ratB);
+  var matchup = _thComputeMatchupAdjustment(statsA, statsB);
+  var paceA = _thTeamPaceForBracket(teamA.team, season);
+  var paceB = _thTeamPaceForBracket(teamB.team, season);
+  var pace = _thClamp((paceA * 0.45) + (paceB * 0.45) + 6.8 * 0.10, 61, 75);
+  var eOA = ((+ratA.adjO + +ratB.adjD) / 2) + recA + matchup.a;
+  var eOB = ((+ratB.adjO + +ratA.adjD) / 2) + recB + matchup.b;
+  var sdA = _thComputeTeamVolatility(teamA.team, season);
+  var sdB = _thComputeTeamVolatility(teamB.team, season);
 
   function randn() {
     var u = 0, v = 0;
@@ -250,8 +464,8 @@ function _thSimSingleGame(teamA, teamB, season) {
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  var scoreA = Math.round((eOA / 100) * pace + randn() * 11);
-  var scoreB = Math.round((eOB / 100) * pace + randn() * 11);
+  var scoreA = Math.round((eOA / 100) * pace + randn() * sdA);
+  var scoreB = Math.round((eOB / 100) * pace + randn() * sdB);
   scoreA = Math.max(45, scoreA);
   scoreB = Math.max(45, scoreB);
   while (scoreA === scoreB) {
@@ -267,7 +481,18 @@ function _thSimSingleGame(teamA, teamB, season) {
     scoreA: scoreA,
     scoreB: scoreB,
     upset: (Number(winner.seed) || 99) > (Number(loser.seed) || 99),
-    margin: Math.abs(scoreA - scoreB)
+    margin: Math.abs(scoreA - scoreB),
+    model: {
+      pace: +pace.toFixed(1),
+      adjA: +eOA.toFixed(2),
+      adjB: +eOB.toFixed(2),
+      recencyA: +recA.toFixed(2),
+      recencyB: +recB.toFixed(2),
+      matchupA: +matchup.a.toFixed(2),
+      matchupB: +matchup.b.toFixed(2),
+      sdA: +sdA.toFixed(2),
+      sdB: +sdB.toFixed(2)
+    }
   };
 }
 
@@ -380,8 +605,21 @@ function _thAggregateBracketSims(bracket, sims) {
   var regionWinnerCounts = {};
   var upsetMap = {};
   var totalUpsets = 0;
+  var samplePath = null;
   for (var i = 0; i < total; i++) {
     var sim = _thSimBracketOnce(bracket);
+    if (!samplePath) {
+      samplePath = { regions: {} };
+      (sim.games || []).forEach(function (game) {
+        if (game.region === 'National') return;
+        if (!samplePath.regions[game.region]) samplePath.regions[game.region] = { round2: [], sweet16: [], elite8: null };
+        if (game.round === 'Round of 32') samplePath.regions[game.region].round2.push({ teamA: game.teamA, teamB: game.teamB, winner: game.winner });
+        if (game.round === 'Sweet 16') samplePath.regions[game.region].sweet16.push({ teamA: game.teamA, teamB: game.teamB, winner: game.winner });
+        if (game.round === 'Elite 8') samplePath.regions[game.region].elite8 = { teamA: game.teamA, teamB: game.teamB, winner: game.winner };
+      });
+      samplePath.finals = (sim.games || []).filter(function (game) { return game.region === 'National'; });
+      samplePath.champion = sim.champion || null;
+    }
     totalUpsets += sim.upsetCount || 0;
     Object.keys(sim.rounds || {}).forEach(function (team) {
       if (!roundCounts[team]) roundCounts[team] = {};
@@ -443,6 +681,13 @@ function _thAggregateBracketSims(bracket, sims) {
     season: bracket.season,
     totalTeams: bracket.teams.length,
     labels: labels,
+    samplePath: samplePath,
+    methodology: {
+      baseline: 'Adjusted offense/defense blended against opponent profile',
+      recency: 'Last 10 games and recent postseason results nudge team strength',
+      matchup: 'Four-factor and scoring-profile interactions adjust expected efficiency',
+      volatility: 'Team-specific scoring volatility estimated from full-season and recent game logs'
+    },
     teams: teamRows,
     regions: regionRows,
     upsets: upsetRows,
@@ -470,41 +715,108 @@ function _thRenderBracketBoard() {
     thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Create a bracket to get started.</div>';
     return;
   }
+  var regions = _thBracketRegions();
+  var result = _thBracketState.results[bracket.id] || null;
+  var samplePath = result && result.samplePath ? result.samplePath : null;
+  if (!bracket.teams.length) {
+    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No teams added yet. Use Add Team or Bulk Import.</div>';
+  } else {
+    function renderNationalGameCard(roundLabel, idx, slots) {
+      return '<div class="thBracketGame thBracketGame--future">' +
+        '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
+        slots.map(function (slot) {
+          return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
+        }).join('') +
+      '</div>';
+    }
+    var visualHtml = '<div class="thBracketVisual">' + regions.map(function (region) {
+      var seedMap = _thRegionSeedMap(bracket, region);
+      var round1Pairs = _thFirstRoundSeedPairs();
+      var regionRounds = samplePath && samplePath.regions && samplePath.regions[region] ? samplePath.regions[region] : null;
+
+      function renderFutureGame(roundLabel, idx, slots) {
+        return '<div class="thBracketGame thBracketGame--future">' +
+          '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
+          slots.map(function (slot) {
+            return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
+          }).join('') +
+        '</div>';
+      }
+
+      var round1Html = round1Pairs.map(function (pair, idx) {
+        return '<div class="thBracketGame">' +
+          '<div class="thBracketGameHead">Round of 64 · Game ' + (idx + 1) + '</div>' +
+          pair.map(function (seed) {
+            var current = seedMap[seed] || null;
+            return '<div class="thBracketSlot">' +
+              '<span class="thBracketSeed">' + seed + '</span>' +
+              '<div>' +
+                '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' +
+                  '<option value="">— Select team —</option>' +
+                  _thBracketAllTeams().map(function (teamName) {
+                    return '<option value="' + _thEsc(teamName) + '"' + (current && current.team === teamName ? ' selected' : '') + '>' + _thEsc(teamName) + '</option>';
+                  }).join('') +
+                '</select>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      }).join('');
+
+      var round2Games = [];
+      if (regionRounds && regionRounds.round2) {
+        round2Games = regionRounds.round2.map(function (game, idx) {
+          return renderFutureGame('Round of 32', idx, [game.teamA, game.teamB]);
+        });
+      } else {
+        round2Games = new Array(4).fill(null).map(function (_, idx) { return renderFutureGame('Round of 32', idx, ['TBD','TBD']); });
+      }
+      var sweet16Games = [];
+      if (regionRounds && regionRounds.sweet16) {
+        sweet16Games = regionRounds.sweet16.map(function (game, idx) {
+          return renderFutureGame('Sweet 16', idx, [game.teamA, game.teamB]);
+        });
+      } else {
+        sweet16Games = new Array(2).fill(null).map(function (_, idx) { return renderFutureGame('Sweet 16', idx, ['TBD','TBD']); });
+      }
+      var elite8Html = regionRounds && regionRounds.elite8
+        ? renderFutureGame('Elite 8', 0, [regionRounds.elite8.teamA, regionRounds.elite8.teamB])
+        : renderFutureGame('Elite 8', 0, ['TBD','TBD']);
+
+      return '<div class="thBracketRegion">' +
+        '<div class="thBracketRegionHead">' + _thEsc(region) + '</div>' +
+        '<div class="thBracketRegionBracket">' +
+          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 64</div>' + round1Html + '</div>' +
+          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 32</div>' + round2Games.join('') + '</div>' +
+          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Sweet 16</div>' + sweet16Games.join('') + '</div>' +
+          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Elite 8</div>' + elite8Html + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+    var nationalGames = samplePath && Array.isArray(samplePath.finals) ? samplePath.finals : [];
+    var finalFour = nationalGames.filter(function (g) { return g.round === 'Final 4'; });
+    var titleGame = nationalGames.filter(function (g) { return g.round === 'Championship'; })[0] || null;
+    visualHtml += '<div class="thBracketPanel"><div class="thBracketPanelHead">Final Four & Title Path</div><div class="thBracketPanelBody"><div class="thBracketResultsWrap">' +
+      '<div><div class="thBracketMiniHead">Final Four</div>' +
+      (finalFour.length ? finalFour.map(function (game, idx) {
+        return renderNationalGameCard('Final 4', idx, [game.teamA, game.teamB]);
+      }).join('') : renderNationalGameCard('Final 4', 0, ['TBD', 'TBD'])) +
+      '</div><div><div class="thBracketMiniHead">Championship</div>' +
+      (titleGame ? renderNationalGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderNationalGameCard('Championship', 0, ['TBD', 'TBD'])) +
+      '<div class="thBracketInsightList" style="margin-top:10px">' +
+      '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
+      '</div></div></div></div></div>';
+    thBracketBoardEl.innerHTML = visualHtml;
+  }
+  thBracketBoardEl.querySelectorAll('[data-bracket-region][data-bracket-seed]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      _thAssignBracketSeed(sel.getAttribute('data-bracket-region'), parseInt(sel.getAttribute('data-bracket-seed'), 10), sel.value || '');
+    });
+  });
   var groups = {};
   bracket.teams.forEach(function (item) {
     var region = item.region || 'Unassigned';
-    if (!groups[region]) groups[region] = [];
-    groups[region].push(item);
-  });
-  var regions = Object.keys(groups).sort();
-  if (!regions.length) {
-    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No teams added yet. Use Add Team or Bulk Import.</div>';
-  } else {
-    thBracketBoardEl.innerHTML = regions.map(function (region) {
-      var items = groups[region].slice().sort(function (a, b) {
-        var sa = Number(a.seed) || 99;
-        var sb = Number(b.seed) || 99;
-        if (sa !== sb) return sa - sb;
-        return String(a.team).localeCompare(String(b.team));
-      });
-      return '<div class="thBracketRegion">' +
-        '<div class="thBracketRegionHead">' + _thEsc(region) + ' · ' + items.length + ' teams</div>' +
-        '<div class="thBracketRegionList">' +
-          items.map(function (item) {
-            return '<div class="thBracketTeamRow">' +
-              '<span class="thBracketSeed">' + _thEsc(item.seed) + '</span>' +
-              '<div class="thBracketTeamMeta"><div class="thBracketTeamName">' + _thEsc(item.team) + '</div><div class="thBracketTeamSub">' + _thEsc(region) + ' region</div></div>' +
-              '<button class="thBracketRemoveBtn" data-bracket-remove="' + _thEsc(item.id) + '">Remove</button>' +
-            '</div>';
-          }).join('') +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-  thBracketBoardEl.querySelectorAll('[data-bracket-remove]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      _thRemoveBracketTeam(btn.getAttribute('data-bracket-remove'));
-    });
+    groups[region] = true;
   });
   if (thBracketTeamCountEl) thBracketTeamCountEl.textContent = String(bracket.teams.length);
   if (thBracketRegionCountEl) thBracketRegionCountEl.textContent = String(Object.keys(groups).length);
@@ -534,6 +846,9 @@ function _thRenderBracketResults() {
     insightRows.push('<div class="thBracketInsightItem"><b>Most common upset:</b> ' + _thEsc(result.upsets[0].label) + ' in <b>' + result.upsets[0].pct + '%</b> of simulations.</div>');
   }
   insightRows.push('<div class="thBracketInsightItem"><b>Bracket chaos level:</b> field averages <b>' + result.avgUpsetsPerSim + '</b> upsets per simulated tournament.</div>');
+  if (result.methodology) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Method:</b> ' + _thEsc(result.methodology.baseline) + '; ' + _thEsc(result.methodology.matchup) + '; ' + _thEsc(result.methodology.recency) + '; ' + _thEsc(result.methodology.volatility) + '.</div>');
+  }
 
   thBracketResultsEl.style.display = 'block';
   thBracketResultsEl.innerHTML =
@@ -654,6 +969,34 @@ function _thRemoveBracketTeam(id) {
   _thRenderBracketResults();
 }
 
+function _thAssignBracketSeed(region, seed, teamName) {
+  var bracket = _thBracketActive();
+  if (!bracket || !region || !seed) return;
+  bracket.teams = bracket.teams.filter(function (item) {
+    if ((item.region || '') === region && Number(item.seed) === Number(seed)) return false;
+    if (teamName && String(item.team).toLowerCase() === String(teamName).toLowerCase()) return false;
+    return true;
+  });
+  if (teamName) {
+    bracket.teams.push({ id: _thBracketId(), team: teamName, seed: seed, region: region });
+  }
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thBuildEmpty64Bracket() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.teams = [];
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+  if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Empty 64-slot bracket ready. Use the slot selectors or smart import.';
+}
+
 function _thClearBracketTeams() {
   var bracket = _thBracketActive();
   if (!bracket) return;
@@ -674,46 +1017,84 @@ function _thImportBracketTeams() {
   knownTeams.forEach(function (team) { teamMap[_thNormTeamName(team)] = team; });
   var added = 0;
   var failed = [];
-  lines.forEach(function (line, idx) {
+  var currentRegion = _thBracketRegions()[0];
+  var seedCounters = { South: 0, East: 0, West: 0, Midwest: 0 };
+
+  lines.forEach(function (line) {
+    var normalizedLine = line.replace(/\s+/g, ' ').trim();
+    var regionMatch = normalizedLine.match(/^(South|East|West|Midwest)\b/i);
+    if (regionMatch) {
+      currentRegion = regionMatch[1].charAt(0).toUpperCase() + regionMatch[1].slice(1).toLowerCase();
+      return;
+    }
+
     var parts = line.split('|').map(function (x) { return x.trim(); }).filter(Boolean);
-    var seed = idx + 1;
-    var region = _thBracketRegions()[Math.min(_thBracketRegions().length - 1, Math.floor(idx / 16))] || 'South';
+    var seed = null;
+    var region = currentRegion;
     var rawTeam = '';
+
     if (parts.length >= 3) {
-      seed = parseInt(parts[0], 10) || seed;
+      seed = parseInt(parts[0], 10) || null;
       rawTeam = parts[1];
       region = parts[2] || region;
-    } else if (parts.length === 2) {
-      seed = parseInt(parts[0], 10) || seed;
-      rawTeam = parts[1];
     } else {
-      var commaParts = line.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-      if (commaParts.length >= 2) {
-        rawTeam = commaParts[0];
-        region = commaParts[1];
+      var m = normalizedLine.match(/^(\d{1,2})\s+(.+)$/);
+      if (m) {
+        seed = parseInt(m[1], 10) || null;
+        rawTeam = m[2].replace(/\s+\d{1,2}\s+.+$/, '').trim();
       } else {
-        rawTeam = line.replace(/^\d+\s+/, '').trim();
+        rawTeam = normalizedLine;
       }
     }
+
     var match = teamMap[_thNormTeamName(rawTeam)];
     if (!match) {
       failed.push(rawTeam);
       return;
     }
-    if (bracket.teams.some(function (item) { return String(item.team).toLowerCase() === String(match).toLowerCase(); })) return;
-    bracket.teams.push({ id: _thBracketId(), team: match, seed: seed, region: region || 'South' });
+    if (!seed) {
+      seedCounters[region] = (seedCounters[region] || 0) + 1;
+      seed = Math.min(16, seedCounters[region]);
+    } else {
+      seedCounters[region] = Math.max(seedCounters[region] || 0, seed);
+    }
+    _thAssignBracketSeed(region, seed, match);
     added += 1;
   });
-  delete _thBracketState.results[bracket.id];
-  _thSaveBracketState();
-  _thRenderBracketBoard();
-  _thRenderBracketResults();
   if (thBracketImportStatusEl) {
     thBracketImportStatusEl.textContent = added + ' added' + (failed.length ? ' · Unmatched: ' + failed.slice(0, 4).join(', ') + (failed.length > 4 ? '…' : '') : '');
   }
 }
 
-function _thRunBracketSimulation() {
+function _thAutofillBracketBySeedList() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  var knownTeams = _thBracketAllTeams();
+  if (!knownTeams.length) return;
+  var byRating = knownTeams.map(function (team) {
+    var rating = _thBracketTeamRating(team, bracket.season || '2026');
+    return { team: team, adjEM: rating && Number.isFinite(+rating.adjEM) ? +rating.adjEM : -999 };
+  }).sort(function (a, b) { return b.adjEM - a.adjEM; });
+  var regions = _thBracketRegions();
+  var used = {};
+  bracket.teams = [];
+  for (var r = 0; r < regions.length; r++) {
+    for (var seed = 1; seed <= 16; seed++) {
+      var idx = r * 16 + (seed - 1);
+      var row = byRating[idx];
+      if (!row || used[row.team]) continue;
+      used[row.team] = true;
+      bracket.teams.push({ id: _thBracketId(), team: row.team, seed: seed, region: regions[r] });
+    }
+  }
+  delete _thBracketState.results[bracket.id];
+  _thSaveBracketState();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+  if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Auto-filled a 64-team bracket using current model order.';
+}
+
+async function _thRunBracketSimulation() {
   var bracket = _thBracketActive();
   if (!bracket || !thBracketResultsEl) return;
   var total = bracket.teams.length;
@@ -729,13 +1110,21 @@ function _thRunBracketSimulation() {
     thBracketAIOutputEl.innerHTML = '';
   }
   var nSims = thBracketSimCountEl ? (parseInt(thBracketSimCountEl.value, 10) || 5000) : 5000;
-  setTimeout(function () {
-    var result = _thAggregateBracketSims(bracket, nSims);
-    _thBracketState.results[bracket.id] = result;
-    _thSaveBracketState();
-    _thRenderBracketResults();
-    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete · ' + nSims.toLocaleString() + ' runs';
-  }, 30);
+  try {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Loading team contexts and recent form...';
+    await _thPrepareBracketContexts(bracket);
+    setTimeout(function () {
+      var result = _thAggregateBracketSims(bracket, nSims);
+      _thBracketState.results[bracket.id] = result;
+      _thSaveBracketState();
+      _thRenderBracketBoard();
+      _thRenderBracketResults();
+      if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete · ' + nSims.toLocaleString() + ' runs';
+    }, 30);
+  } catch (e) {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation failed';
+    thBracketResultsEl.innerHTML = '<div class="thMCError">Simulation failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';
+  }
 }
 
 async function _thRunBracketAIAnalysis() {
@@ -762,6 +1151,8 @@ async function _thRunBracketAIAnalysis() {
     },
     simulation: {
       simulations: result.simulations,
+      methodology: result.methodology,
+      samplePath: result.samplePath,
       championOdds: result.teams.slice(0, 12).map(function (row) {
         return {
           team: row.team,
@@ -793,7 +1184,7 @@ async function _thRunBracketAIAnalysis() {
     '## Most Likely Finals Paths\n' +
     '## Model Risk Notes\n' +
     '## Recommendation\n\n' +
-    'Explain where the model is confident, where the bracket is volatile, and which teams appear underseeded or dangerous relative to seed. Keep it grounded in the simulation data only.\n\n' +
+    'Explain where the model is confident, where the bracket is volatile, which teams appear underseeded or dangerous relative to seed, and how the simulation methodology likely shaped the results. Keep it grounded in the simulation data only.\n\n' +
     '```json\n' + JSON.stringify(payload, null, 2) + '\n```';
 
   try {
@@ -4029,6 +4420,10 @@ function initTeamsPage() {
   });
   var importBtn = document.getElementById('thBracketImportBtn');
   if (importBtn) importBtn.addEventListener('click', _thImportBracketTeams);
+  var build64Btn = document.getElementById('thBracketBuild64Btn');
+  if (build64Btn) build64Btn.addEventListener('click', _thBuildEmpty64Bracket);
+  var autofillBtn = document.getElementById('thBracketAutofillSeedsBtn');
+  if (autofillBtn) autofillBtn.addEventListener('click', _thAutofillBracketBySeedList);
   var clearTeamsBtn = document.getElementById('thBracketClearTeamsBtn');
   if (clearTeamsBtn) clearTeamsBtn.addEventListener('click', _thClearBracketTeams);
   var simBtn = document.getElementById('thBracketSimBtn');
