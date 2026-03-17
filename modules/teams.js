@@ -718,7 +718,9 @@ function _thRenderBracketBoard() {
   var regions = _thBracketRegions();
   var result = _thBracketState.results[bracket.id] || null;
   var samplePath = result && result.samplePath ? result.samplePath : null;
-  function renderNationalGameCard(roundLabel, idx, slots) {
+  var allTeams = _thBracketAllTeams();
+
+  function renderFutureGameCard(roundLabel, idx, slots) {
     return '<div class="thBracketGame thBracketGame--future">' +
       '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
       slots.map(function (slot) {
@@ -726,84 +728,86 @@ function _thRenderBracketBoard() {
       }).join('') +
     '</div>';
   }
-  var visualHtml = '<div class="thBracketVisual">' + regions.map(function (region) {
-      var seedMap = _thRegionSeedMap(bracket, region);
-      var round1Pairs = _thFirstRoundSeedPairs();
-      var regionRounds = samplePath && samplePath.regions && samplePath.regions[region] ? samplePath.regions[region] : null;
 
-      function renderFutureGame(roundLabel, idx, slots) {
-        return '<div class="thBracketGame thBracketGame--future">' +
-          '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
-          slots.map(function (slot) {
-            return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
-          }).join('') +
-        '</div>';
-      }
-
-      var round1Html = round1Pairs.map(function (pair, idx) {
-        return '<div class="thBracketGame">' +
-          '<div class="thBracketGameHead">Round of 64 · Game ' + (idx + 1) + '</div>' +
-          pair.map(function (seed) {
-            var current = seedMap[seed] || null;
-            return '<div class="thBracketSlot">' +
-              '<span class="thBracketSeed">' + seed + '</span>' +
-              '<div>' +
-                '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' +
-                  '<option value="">— Select team —</option>' +
-                  _thBracketAllTeams().map(function (teamName) {
-                    return '<option value="' + _thEsc(teamName) + '"' + (current && current.team === teamName ? ' selected' : '') + '>' + _thEsc(teamName) + '</option>';
-                  }).join('') +
-                '</select>' +
-              '</div>' +
-            '</div>';
-          }).join('') +
-        '</div>';
-      }).join('');
-
-      var round2Games = [];
-      if (regionRounds && regionRounds.round2) {
-        round2Games = regionRounds.round2.map(function (game, idx) {
-          return renderFutureGame('Round of 32', idx, [game.teamA, game.teamB]);
-        });
-      } else {
-        round2Games = new Array(4).fill(null).map(function (_, idx) { return renderFutureGame('Round of 32', idx, ['TBD','TBD']); });
-      }
-      var sweet16Games = [];
-      if (regionRounds && regionRounds.sweet16) {
-        sweet16Games = regionRounds.sweet16.map(function (game, idx) {
-          return renderFutureGame('Sweet 16', idx, [game.teamA, game.teamB]);
-        });
-      } else {
-        sweet16Games = new Array(2).fill(null).map(function (_, idx) { return renderFutureGame('Sweet 16', idx, ['TBD','TBD']); });
-      }
-      var elite8Html = regionRounds && regionRounds.elite8
-        ? renderFutureGame('Elite 8', 0, [regionRounds.elite8.teamA, regionRounds.elite8.teamB])
-        : renderFutureGame('Elite 8', 0, ['TBD','TBD']);
-
-      return '<div class="thBracketRegion">' +
-        '<div class="thBracketRegionHead">' + _thEsc(region) + '</div>' +
-        '<div class="thBracketRegionBracket">' +
-          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 64</div>' + round1Html + '</div>' +
-          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 32</div>' + round2Games.join('') + '</div>' +
-          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Sweet 16</div>' + sweet16Games.join('') + '</div>' +
-          '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Elite 8</div>' + elite8Html + '</div>' +
-        '</div>' +
+  function renderRound64(region, seedMap) {
+    return _thFirstRoundSeedPairs().map(function (pair, idx) {
+      return '<div class="thBracketGame">' +
+        '<div class="thBracketGameHead">Round of 64 · Game ' + (idx + 1) + '</div>' +
+        pair.map(function (seed) {
+          var current = seedMap[seed] || null;
+          return '<div class="thBracketSlot">' +
+            '<span class="thBracketSeed">' + seed + '</span>' +
+            '<div>' +
+              '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' +
+                '<option value="">— Select team —</option>' +
+                allTeams.map(function (teamName) {
+                  return '<option value="' + _thEsc(teamName) + '"' + (current && current.team === teamName ? ' selected' : '') + '>' + _thEsc(teamName) + '</option>';
+                }).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
       '</div>';
-    }).join('') + '</div>';
+    }).join('');
+  }
+
+  function renderRegion(region, side) {
+    var seedMap = _thRegionSeedMap(bracket, region);
+    var regionRounds = samplePath && samplePath.regions && samplePath.regions[region] ? samplePath.regions[region] : null;
+    var round2Games = regionRounds && regionRounds.round2 ? regionRounds.round2.map(function (game, idx) {
+      return renderFutureGameCard('Round of 32', idx, [game.teamA, game.teamB]);
+    }).join('') : new Array(4).fill(null).map(function (_, idx) {
+      return renderFutureGameCard('Round of 32', idx, ['TBD', 'TBD']);
+    }).join('');
+    var sweet16Games = regionRounds && regionRounds.sweet16 ? regionRounds.sweet16.map(function (game, idx) {
+      return renderFutureGameCard('Sweet 16', idx, [game.teamA, game.teamB]);
+    }).join('') : new Array(2).fill(null).map(function (_, idx) {
+      return renderFutureGameCard('Sweet 16', idx, ['TBD', 'TBD']);
+    }).join('');
+    var elite8Game = regionRounds && regionRounds.elite8
+      ? renderFutureGameCard('Elite 8', 0, [regionRounds.elite8.teamA, regionRounds.elite8.teamB])
+      : renderFutureGameCard('Elite 8', 0, ['TBD', 'TBD']);
+
+    var cols = [
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 64</div>' + renderRound64(region, seedMap) + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 32</div>' + round2Games + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Sweet 16</div>' + sweet16Games + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Elite 8</div>' + elite8Game + '</div>'
+    ];
+    if (side === 'right') cols.reverse();
+
+    return '<div class="thBracketRegion thBracketRegion--' + side + '">' +
+      '<div class="thBracketRegionHead">' + _thEsc(region) + '</div>' +
+      '<div class="thBracketRegionBracket">' + cols.join('') + '</div>' +
+    '</div>';
+  }
+
   var nationalGames = samplePath && Array.isArray(samplePath.finals) ? samplePath.finals : [];
   var finalFour = nationalGames.filter(function (g) { return g.round === 'Final 4'; });
   var titleGame = nationalGames.filter(function (g) { return g.round === 'Championship'; })[0] || null;
-  visualHtml += '<div class="thBracketPanel"><div class="thBracketPanelHead">Final Four & Title Path</div><div class="thBracketPanelBody"><div class="thBracketResultsWrap">' +
-    '<div><div class="thBracketMiniHead">Final Four</div>' +
-    (finalFour.length ? finalFour.map(function (game, idx) {
-      return renderNationalGameCard('Final 4', idx, [game.teamA, game.teamB]);
-    }).join('') : renderNationalGameCard('Final 4', 0, ['TBD', 'TBD'])) +
-    '</div><div><div class="thBracketMiniHead">Championship</div>' +
-    (titleGame ? renderNationalGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderNationalGameCard('Championship', 0, ['TBD', 'TBD'])) +
-    '<div class="thBracketInsightList" style="margin-top:10px">' +
-    '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
-    '</div></div></div></div></div>';
-  thBracketBoardEl.innerHTML = visualHtml;
+
+  thBracketBoardEl.innerHTML =
+    '<div class="thBracketFantasy">' +
+      '<div class="thBracketFantasySide thBracketFantasySide--left">' +
+        renderRegion('South', 'left') +
+        renderRegion('East', 'left') +
+      '</div>' +
+      '<div class="thBracketFantasyCenter">' +
+        '<div class="thBracketFantasyCenterTitle">Final Four</div>' +
+        (finalFour.length ? finalFour.map(function (game, idx) {
+          return renderFutureGameCard('Final 4', idx, [game.teamA, game.teamB]);
+        }).join('') : renderFutureGameCard('Final 4', 0, ['TBD', 'TBD']) + renderFutureGameCard('Final 4', 1, ['TBD', 'TBD'])) +
+        '<div class="thBracketFantasyCenterTitle" style="margin-top:16px">National Championship</div>' +
+        (titleGame ? renderFutureGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderFutureGameCard('Championship', 0, ['TBD', 'TBD'])) +
+        '<div class="thBracketInsightList" style="margin-top:10px">' +
+          '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="thBracketFantasySide thBracketFantasySide--right">' +
+        renderRegion('West', 'right') +
+        renderRegion('Midwest', 'right') +
+      '</div>' +
+    '</div>';
   thBracketBoardEl.querySelectorAll('[data-bracket-region][data-bracket-seed]').forEach(function (sel) {
     sel.addEventListener('change', function () {
       _thAssignBracketSeed(sel.getAttribute('data-bracket-region'), parseInt(sel.getAttribute('data-bracket-seed'), 10), sel.value || '');
