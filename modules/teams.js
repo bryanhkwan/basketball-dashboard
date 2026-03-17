@@ -11,6 +11,7 @@ var thBracketGateEl, thBracketWorkspaceEl, thBracketSelectEl, thBracketNameEl, t
 var thBracketTeamAddEl, thBracketSeedAddEl, thBracketRegionAddEl, thBracketImportEl, thBracketImportStatusEl;
 var thBracketBoardEl, thBracketStatusEl, thBracketResultsEl, thBracketAIOutputEl;
 var thBracketTeamCountEl, thBracketRegionCountEl, thBracketStructureEl, thBracketSimCountEl;
+var thBracketPlayInModalEl, thBracketPlayInRegionEl, thBracketPlayInSeedEl, thBracketPlayInTeamAEl, thBracketPlayInTeamBEl;
 
 // ── State (persisted across renders for compare feature) ──────────────────────
 var thCurrentTeam   = '';
@@ -33,6 +34,7 @@ var _thBracketState = { brackets: [], activeId: '', results: {} };
 var _thBracketTeamOptionsHtml = '';
 var _thBracketTeamsCache = [];
 var _thBracketTeamSet = {};
+var _thBracketPlayInTarget = null;
 
 function _thGuestDACount() {
   return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
@@ -161,6 +163,10 @@ function _thPopulateBracketTeamSelects() {
     return '<option value="' + _thEsc(t) + '">' + _thEsc(t) + '</option>';
   }).join('');
   if (thBracketTeamAddEl) thBracketTeamAddEl.innerHTML = '<option value="">-- Add a team --</option>' + _thBracketTeamOptionsHtml;
+  _thPopulatePlayInPairSelects(
+    thBracketPlayInTeamAEl ? thBracketPlayInTeamAEl.value : '',
+    thBracketPlayInTeamBEl ? thBracketPlayInTeamBEl.value : ''
+  );
 }
 
 function _thBracketSlotOptions(currentName) {
@@ -169,7 +175,63 @@ function _thBracketSlotOptions(currentName) {
   if (current && !_thBracketTeamSet[_thNormTeamName(current)]) {
     prefix = '<option value="' + _thEsc(current) + '">' + _thEsc(current) + '</option>';
   }
-  return prefix + _thBracketTeamOptionsHtml + '<option value="__PLAYIN__">Pick play-in pair...</option>';
+  return prefix + _thBracketTeamOptionsHtml;
+}
+
+function _thPopulatePlayInPairSelects(teamA, teamB) {
+  var base = '<option value="">-- Select team --</option>' + _thBracketTeamOptionsHtml;
+  if (thBracketPlayInTeamAEl) {
+    thBracketPlayInTeamAEl.innerHTML = base;
+    thBracketPlayInTeamAEl.value = teamA || '';
+  }
+  if (thBracketPlayInTeamBEl) {
+    thBracketPlayInTeamBEl.innerHTML = base;
+    thBracketPlayInTeamBEl.value = teamB || '';
+  }
+}
+
+function _thBracketSeedEntry(region, seed) {
+  var bracket = _thBracketActive();
+  if (!bracket) return null;
+  return (bracket.teams || []).find(function (item) {
+    return (item.region || '') === region && Number(item.seed) === Number(seed);
+  }) || null;
+}
+
+function _thOpenPlayInModal(region, seed) {
+  if (!thBracketPlayInModalEl) return;
+  _thBracketPlayInTarget = { region: region, seed: Number(seed) || 0 };
+  var current = _thBracketSeedEntry(region, seed);
+  var candidates = current && Array.isArray(current.candidates) ? current.candidates : [];
+  if (thBracketPlayInRegionEl) thBracketPlayInRegionEl.textContent = region || 'Region';
+  if (thBracketPlayInSeedEl) thBracketPlayInSeedEl.textContent = 'Seed ' + (seed || '--');
+  _thPopulatePlayInPairSelects(candidates[0] || '', candidates[1] || '');
+  thBracketPlayInModalEl.style.display = 'flex';
+}
+
+function _thClosePlayInModal() {
+  if (!thBracketPlayInModalEl) return;
+  thBracketPlayInModalEl.style.display = 'none';
+  _thBracketPlayInTarget = null;
+}
+
+function _thSavePlayInModal() {
+  if (!_thBracketPlayInTarget) return;
+  var teamA = thBracketPlayInTeamAEl ? String(thBracketPlayInTeamAEl.value || '').trim() : '';
+  var teamB = thBracketPlayInTeamBEl ? String(thBracketPlayInTeamBEl.value || '').trim() : '';
+  if (!teamA || !teamB) {
+    if (typeof showWarn === 'function') showWarn('Pick both teams for the play-in pair.');
+    return;
+  }
+  if (_thNormTeamName(teamA) === _thNormTeamName(teamB)) {
+    if (typeof showWarn === 'function') showWarn('Choose two different teams for the play-in pair.');
+    return;
+  }
+  _thAssignBracketSeedEntry(_thBracketPlayInTarget.region, _thBracketPlayInTarget.seed, {
+    team: teamA + ' / ' + teamB,
+    candidates: [teamA, teamB]
+  });
+  _thClosePlayInModal();
 }
 
 function _thBracketFieldStructure(bracket) {
@@ -836,9 +898,12 @@ function _thRenderBracketBoard() {
             '<span class="thBracketSeed">' + seed + '</span>' +
             '<div>' +
               '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '" data-current="' + _thEsc(current && current.team ? current.team : '') + '">' +
-                '<option value="">— Select team —</option>' +
+                '<option value="">-- Select team --</option>' +
                 _thBracketSlotOptions(current && current.team ? current.team : '') +
               '</select>' +
+              '<div class="thBracketSlotActions">' +
+                '<button type="button" class="thBracketPlayInBtn" data-playin-open="1" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' + ((current && current.candidates && current.candidates.length > 1) ? 'Edit play-in' : 'Set play-in') + '</button>' +
+              '</div>' +
               ((current && current.candidates && current.candidates.length > 1) ? '<div class="thBracketSlotMeta">Play-in: ' + _thEsc(current.candidates.join(' / ')) + '</div>' : '') +
             '</div>' +
           '</div>';
@@ -911,18 +976,12 @@ function _thRenderBracketBoard() {
       var region = sel.getAttribute('data-bracket-region') || '';
       var seed = parseInt(sel.getAttribute('data-bracket-seed'), 10) || 0;
       var value = sel.value || '';
-      if (value === '__PLAYIN__') {
-        var raw = prompt('Enter the play-in teams for this slot, like: Texas / NC State', '');
-        var candidates = _thParseTeamCandidates(raw || '');
-        if (candidates.length >= 2) {
-          _thAssignBracketSeedEntry(region, seed, { team: candidates.join(' / '), candidates: candidates });
-        } else {
-          if (typeof showWarn === 'function') showWarn('Use two valid team names separated by "/" or "or" for a play-in slot.');
-          _thRenderBracketBoard();
-        }
-        return;
-      }
       _thAssignBracketSeed(region, seed, value || '');
+    });
+    thBracketBoardEl.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-playin-open]') : null;
+      if (!btn) return;
+      _thOpenPlayInModal(btn.getAttribute('data-bracket-region') || '', parseInt(btn.getAttribute('data-bracket-seed'), 10) || 0);
     });
     thBracketBoardEl._thBracketBoardBound = true;
   }
@@ -1380,6 +1439,11 @@ function initTeamsDOMRefs() {
   thBracketStatusEl = document.getElementById('thBracketStatus');
   thBracketResultsEl = document.getElementById('thBracketResults');
   thBracketAIOutputEl = document.getElementById('thBracketAIOutput');
+  thBracketPlayInModalEl = document.getElementById('thBracketPlayInModal');
+  thBracketPlayInRegionEl = document.getElementById('thBracketPlayInRegion');
+  thBracketPlayInSeedEl = document.getElementById('thBracketPlayInSeed');
+  thBracketPlayInTeamAEl = document.getElementById('thBracketPlayInTeamA');
+  thBracketPlayInTeamBEl = document.getElementById('thBracketPlayInTeamB');
   thBracketTeamCountEl = document.getElementById('thBracketTeamCount');
   thBracketRegionCountEl = document.getElementById('thBracketRegionCount');
   thBracketStructureEl = document.getElementById('thBracketStructure');
@@ -4558,6 +4622,17 @@ function initTeamsPage() {
   if (simBtn) simBtn.addEventListener('click', _thRunBracketSimulation);
   var analyzeBtn = document.getElementById('thBracketAnalyzeBtn');
   if (analyzeBtn) analyzeBtn.addEventListener('click', _thRunBracketAIAnalysis);
+  var playInCancelBtn = document.getElementById('thBracketPlayInCancelBtn');
+  if (playInCancelBtn) playInCancelBtn.addEventListener('click', _thClosePlayInModal);
+  var playInSaveBtn = document.getElementById('thBracketPlayInSaveBtn');
+  if (playInSaveBtn) playInSaveBtn.addEventListener('click', _thSavePlayInModal);
+  if (thBracketPlayInModalEl) {
+    thBracketPlayInModalEl.addEventListener('click', function (e) {
+      if (e.target === thBracketPlayInModalEl || (e.target && e.target.getAttribute && e.target.getAttribute('data-playin-close') === '1')) {
+        _thClosePlayInModal();
+      }
+    });
+  }
 
   // Allow pressing Enter in team search select (or hitting Enter in season input)
   if (thSeasonInput) {

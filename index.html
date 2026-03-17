@@ -574,6 +574,7 @@
             <div id="tbGapBars" style="display:flex;flex-direction:column;gap:10px"></div>
             <div id="tbGapEmpty" class="hint" style="text-align:center;margin:0;opacity:.6">Add players to see team stat analysis.</div>
             <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" id="tbGapTags"></div>
+
           </div>
         </div>
       </div>
@@ -814,7 +815,7 @@
             <div class="thBracketPanel">
               <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
               <div class="thBracketPanelBody thBracketPanelBody--board">
-                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in option for TBD matchups like Texas / NC State, then run the simulation and winners will auto-advance through the tree.</div>
+                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in button inside a slot when you need to set a TBD matchup like Texas vs NC State, then run the simulation and winners will auto-advance through the tree.</div>
                 <div id="thBracketBoard" class="thBracketBoard">
                   <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
                 </div>
@@ -884,6 +885,30 @@
     </div>
   </div>
 </div>
+          <div id="thBracketPlayInModal" class="thBracketPlayInModal" style="display:none">
+            <div class="thBracketPlayInCard">
+              <div class="thBracketPlayInHead">Set Play-In Pair</div>
+              <div class="muted" style="font-size:11px">Pick the two teams in this play-in game. The model will simulate this matchup first, then carry the winner into the main bracket.</div>
+              <div class="thBracketPlayInMeta">
+                <span class="pill" id="thBracketPlayInRegion">Region</span>
+                <span class="pill" id="thBracketPlayInSeed">Seed --</span>
+              </div>
+              <div class="thBracketPlayInGrid">
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 1</label>
+                  <select id="thBracketPlayInTeamA" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 2</label>
+                  <select id="thBracketPlayInTeamB" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+              </div>
+              <div class="thBracketPlayInActions">
+                <button id="thBracketPlayInCancelBtn" class="secondary" type="button">Cancel</button>
+                <button id="thBracketPlayInSaveBtn" class="thLoadBtn" type="button">Save Play-In Pair</button>
+              </div>
+            </div>
+          </div>
 </div><!-- /pageTeams -->
 
 <!-- Methodology Page -->
