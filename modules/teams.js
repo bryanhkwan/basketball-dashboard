@@ -718,18 +718,15 @@ function _thRenderBracketBoard() {
   var regions = _thBracketRegions();
   var result = _thBracketState.results[bracket.id] || null;
   var samplePath = result && result.samplePath ? result.samplePath : null;
-  if (!bracket.teams.length) {
-    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No teams added yet. Use Add Team or Bulk Import.</div>';
-  } else {
-    function renderNationalGameCard(roundLabel, idx, slots) {
-      return '<div class="thBracketGame thBracketGame--future">' +
-        '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
-        slots.map(function (slot) {
-          return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
-        }).join('') +
-      '</div>';
-    }
-    var visualHtml = '<div class="thBracketVisual">' + regions.map(function (region) {
+  function renderNationalGameCard(roundLabel, idx, slots) {
+    return '<div class="thBracketGame thBracketGame--future">' +
+      '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
+      slots.map(function (slot) {
+        return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
+      }).join('') +
+    '</div>';
+  }
+  var visualHtml = '<div class="thBracketVisual">' + regions.map(function (region) {
       var seedMap = _thRegionSeedMap(bracket, region);
       var round1Pairs = _thFirstRoundSeedPairs();
       var regionRounds = samplePath && samplePath.regions && samplePath.regions[region] ? samplePath.regions[region] : null;
@@ -793,21 +790,20 @@ function _thRenderBracketBoard() {
         '</div>' +
       '</div>';
     }).join('') + '</div>';
-    var nationalGames = samplePath && Array.isArray(samplePath.finals) ? samplePath.finals : [];
-    var finalFour = nationalGames.filter(function (g) { return g.round === 'Final 4'; });
-    var titleGame = nationalGames.filter(function (g) { return g.round === 'Championship'; })[0] || null;
-    visualHtml += '<div class="thBracketPanel"><div class="thBracketPanelHead">Final Four & Title Path</div><div class="thBracketPanelBody"><div class="thBracketResultsWrap">' +
-      '<div><div class="thBracketMiniHead">Final Four</div>' +
-      (finalFour.length ? finalFour.map(function (game, idx) {
-        return renderNationalGameCard('Final 4', idx, [game.teamA, game.teamB]);
-      }).join('') : renderNationalGameCard('Final 4', 0, ['TBD', 'TBD'])) +
-      '</div><div><div class="thBracketMiniHead">Championship</div>' +
-      (titleGame ? renderNationalGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderNationalGameCard('Championship', 0, ['TBD', 'TBD'])) +
-      '<div class="thBracketInsightList" style="margin-top:10px">' +
-      '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
-      '</div></div></div></div></div>';
-    thBracketBoardEl.innerHTML = visualHtml;
-  }
+  var nationalGames = samplePath && Array.isArray(samplePath.finals) ? samplePath.finals : [];
+  var finalFour = nationalGames.filter(function (g) { return g.round === 'Final 4'; });
+  var titleGame = nationalGames.filter(function (g) { return g.round === 'Championship'; })[0] || null;
+  visualHtml += '<div class="thBracketPanel"><div class="thBracketPanelHead">Final Four & Title Path</div><div class="thBracketPanelBody"><div class="thBracketResultsWrap">' +
+    '<div><div class="thBracketMiniHead">Final Four</div>' +
+    (finalFour.length ? finalFour.map(function (game, idx) {
+      return renderNationalGameCard('Final 4', idx, [game.teamA, game.teamB]);
+    }).join('') : renderNationalGameCard('Final 4', 0, ['TBD', 'TBD'])) +
+    '</div><div><div class="thBracketMiniHead">Championship</div>' +
+    (titleGame ? renderNationalGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderNationalGameCard('Championship', 0, ['TBD', 'TBD'])) +
+    '<div class="thBracketInsightList" style="margin-top:10px">' +
+    '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
+    '</div></div></div></div></div>';
+  thBracketBoardEl.innerHTML = visualHtml;
   thBracketBoardEl.querySelectorAll('[data-bracket-region][data-bracket-seed]').forEach(function (sel) {
     sel.addEventListener('change', function () {
       _thAssignBracketSeed(sel.getAttribute('data-bracket-region'), parseInt(sel.getAttribute('data-bracket-seed'), 10), sel.value || '');

@@ -812,15 +812,25 @@
 
           <div class="thBracketGrid">
             <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Bracket Controls</div>
+              <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
+              <div class="thBracketPanelBody">
+                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Then run the simulation and winners will auto-advance through the tree.</div>
+                <div id="thBracketBoard" class="thBracketBoard">
+                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="thBracketPanel">
+              <div class="thBracketPanelHead">Bracket Tools</div>
               <div class="thBracketPanelBody">
                 <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
                 <div class="thBracketAddRow">
-                  <button id="thBracketBuild64Btn" class="thLoadBtn">Build Empty 64-Team Bracket</button>
+                  <button id="thBracketBuild64Btn" class="thLoadBtn">Reset to Empty 64-Team Board</button>
                   <button id="thBracketAutofillSeedsBtn" class="secondary">Auto-fill by Seed List</button>
                   <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
                 </div>
-                <div class="thBracketImportLabel">Manual slot fill</div>
+                <div class="thBracketImportLabel">Optional direct add</div>
                 <div class="thBracketAddRow">
                   <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">— Add a team —</option></select>
                   <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
@@ -842,15 +852,6 @@
                   <span class="pill">Teams: <b id="thBracketTeamCount">0</b></span>
                   <span class="pill">Regions: <b id="thBracketRegionCount">0</b></span>
                   <span class="pill">Structure: <b id="thBracketStructure">Needs power-of-two field</b></span>
-                </div>
-              </div>
-            </div>
-
-            <div class="thBracketPanel">
-              <div class="thBracketPanelHead">Playable Bracket View</div>
-              <div class="thBracketPanelBody">
-                <div id="thBracketBoard" class="thBracketBoard">
-                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
                 </div>
               </div>
             </div>
