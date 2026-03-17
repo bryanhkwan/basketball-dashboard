@@ -452,6 +452,13 @@ function portalEntryKey(it) {
   ].join('|');
 }
 
+function portalAlertDomId(key) {
+  return 'portal-entry-' + String(key || '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
 function portalFavoritePortalMatch(fav) {
   if (!fav) return null;
   var favKey = String(fav.player_key || '');
@@ -520,6 +527,7 @@ function portalAlertMarkup(alerts, opts) {
     html += '<span class="portalWatchAlertItem">' +
       '<b>' + portalEsc(fav.player_name || entry.playerName || 'Player') + '</b>' +
       '<span class="portalWatchAlertMeta">' + portalEsc((entry.status || 'Entered') + ' • ' + (entry.fromTeam || fav.team || '—')) + '</span>' +
+      '<button class="portalWatchAlertBtn" data-portal-open="' + portalEsc(alert.key) + '">Open</button>' +
     '</span>';
   });
   html += '</div>';
@@ -528,6 +536,41 @@ function portalAlertMarkup(alerts, opts) {
   }
   html += '</div>';
   return html;
+}
+
+function portalOpenAlert(alertKey) {
+  if (!alertKey) return;
+  var alert = portalWatchAlerts.find(function (it) { return it.key === alertKey; });
+  if (!alert) return;
+
+  var entryId = portalAlertDomId(alertKey);
+  var row = document.getElementById(entryId);
+  if (row) {
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('portalRowFlash');
+    setTimeout(function () { row.classList.remove('portalRowFlash'); }, 1600);
+  }
+
+  if (alert.player && typeof openProfile === 'function') {
+    openProfile(alert.player);
+    return;
+  }
+
+  if (alert.entry && alert.entry.url) {
+    window.open(alert.entry.url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+function portalWireAlertActions(root) {
+  if (!root) return;
+  root.querySelectorAll('[data-portal-open]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var key = btn.getAttribute('data-portal-open') || '';
+      portalOpenAlert(key);
+    });
+  });
 }
 
 function portalRenderWatchAlerts() {
@@ -541,6 +584,7 @@ function portalRenderWatchAlerts() {
         title: 'Watchlist Portal Hits',
         maxItems: 4
       });
+      portalWireAlertActions(portalWatchAlertWrapEl);
     } else {
       portalWatchAlertWrapEl.style.display = 'none';
       portalWatchAlertWrapEl.innerHTML = '';
@@ -554,6 +598,7 @@ function portalRenderWatchAlerts() {
         title: 'Tracked Players Now In The Portal',
         maxItems: 6
       });
+      portalWireAlertActions(favsPortalAlertWrapEl);
     } else {
       favsPortalAlertWrapEl.style.display = 'none';
       favsPortalAlertWrapEl.innerHTML = '';
@@ -1478,6 +1523,7 @@ function portalRenderTable() {
   var matched = 0;
   portalFiltered.forEach(function (it) {
     var tr = document.createElement('tr');
+    tr.id = portalAlertDomId(portalEntryKey(it));
 
     var match = portalFindPlayerMatch(it.playerName);
     if (match) matched++;

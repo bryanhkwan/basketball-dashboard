@@ -264,6 +264,13 @@
   border-color: rgba(248,113,113,.4);
   transform: none;
 }
+.portalRowFlash{
+  animation: portalRowFlash 1.6s ease;
+}
+@keyframes portalRowFlash{
+  0%{background: rgba(255,210,0,.22);}
+  100%{background: transparent;}
+}
     .portalRecTableWrap{max-height:420px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .portalRecTableWrap table{border:none;border-radius:0}
     .portalRecTableWrap th{top:0}
