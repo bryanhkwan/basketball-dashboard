@@ -977,7 +977,7 @@ function initPageNav(){
   var warRoomBtn = document.getElementById('labWarRoomBtn');
   if (warRoomBtn && !warRoomBtn._navBound) {
     warRoomBtn.addEventListener('click', function () {
-      if (warRoomBtn.disabled) {
+      if (typeof authIsGuest === 'function' && authIsGuest()) {
         var guestLoginBtn = document.getElementById('guestLoginBtn');
         if (guestLoginBtn) guestLoginBtn.click();
         return;

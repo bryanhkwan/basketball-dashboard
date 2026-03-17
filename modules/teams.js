@@ -54,10 +54,13 @@ function _thIsGuest() {
 function _thSyncWarRoomLauncher() {
   if (!thWarRoomLaunchBtnEl) return;
   var guest = _thIsGuest();
-  thWarRoomLaunchBtnEl.disabled = guest;
+  thWarRoomLaunchBtnEl.disabled = false;
+  thWarRoomLaunchBtnEl.dataset.locked = guest ? '1' : '0';
+  thWarRoomLaunchBtnEl.setAttribute('aria-disabled', guest ? 'true' : 'false');
+  thWarRoomLaunchBtnEl.title = guest ? 'Log in to open Tournament War Room.' : 'Open Tournament War Room';
   thWarRoomLaunchBtnEl.textContent = guest ? '🔒 Tournament War Room (Users Only)' : '🏆 Open Tournament War Room';
   thWarRoomLaunchBtnEl.style.opacity = guest ? '0.72' : '1';
-  thWarRoomLaunchBtnEl.style.cursor = guest ? 'not-allowed' : '';
+  thWarRoomLaunchBtnEl.style.cursor = guest ? 'pointer' : '';
   if (thWarRoomLockNoteEl) {
     thWarRoomLockNoteEl.textContent = guest
       ? 'Guest accounts can use Tournament Lab analysis, but Tournament War Room is locked until you log in.'
