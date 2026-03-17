@@ -189,6 +189,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initFavsPage();
   initSharesPage();
   if (typeof initLabPage === 'function') initLabPage();
+  if (typeof initPortalPage === 'function') initPortalPage();
 
   // Quick add widgets (roster + opponent)
   setupQuickAdd('tbQuickAddInput',  'tbQuickAddDropdown',  tbAddPlayer,  () => tbRoster);

@@ -930,7 +930,7 @@ function initPageNav(){
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.page;
       document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageFavorites, #pageCollaborate').forEach(el => {
+      document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageFavorites, #pageCollaborate').forEach(el => {
         el.style.display = 'none';
       });
       const target = document.getElementById(targetId);
@@ -938,6 +938,7 @@ function initPageNav(){
       btn.classList.add('active');
       // Refresh player table when switching back (roster icons may be stale)
       if(targetId === 'pagePlayers') renderPlayersPage();
+      if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
       // Re-render favorites cards every time that tab is opened
       if(targetId === 'pageFavorites') {
         if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();

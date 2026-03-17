@@ -1727,17 +1727,24 @@ function labRunDeepAnalysis() {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    var text = '';
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-      text = data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('');
+    if (data.error) {
+      var msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data.error);
+      console.error('[labDeepAnalysis] API error:', data.error);
+      throw new Error(msg);
     }
-    if (!text) { _labDeepOutput.innerHTML = '<div class="muted" style="padding:16px">No response from AI.</div>'; return; }
+    var parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+    var text = parts ? parts.map(function(p) { return p.text || ''; }).join('') : '';
+    if (!text) {
+      console.error('[labDeepAnalysis] Empty response. Full data:', JSON.stringify(data).slice(0, 500));
+      throw new Error('Empty response from AI — check console for details.');
+    }
     _labDeepOutput.innerHTML = labFmtDeepText(text);
     var dlBtn = document.getElementById('labDownloadBtn');
     if (dlBtn) dlBtn.style.display = '';
   })
   .catch(function(e) {
-    _labDeepOutput.innerHTML = '<div class="muted" style="padding:16px">Error: ' + e.message + '</div>';
+    console.error('[labDeepAnalysis]', e);
+    _labDeepOutput.innerHTML = '<div class="muted" style="padding:16px">\u26A0 Analysis failed: ' + e.message + '</div>';
   })
   .finally(function() {
     _labDeepBtn.disabled = false;

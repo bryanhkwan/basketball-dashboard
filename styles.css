@@ -186,6 +186,27 @@
     .tbSuggest{max-height:320px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .tbSuggest table{border:none;border-radius:0}
     .tbSuggest th{top:0}
+
+    /* Portal Fit Lab */
+    .portalRecGrid{display:grid;grid-template-columns:320px 1fr;gap:12px}
+    .portalRecGrid > *{min-width:0}
+    @media(max-width:1080px){.portalRecGrid{grid-template-columns:1fr}}
+    .portalReplaceList{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+    .portalReplaceItem{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:rgba(6,12,26,.35);cursor:pointer;transition:border-color .15s,background .15s}
+    .portalReplaceItem:hover{border-color:rgba(var(--accent-rgb),.28);background:rgba(var(--accent-rgb),.04)}
+    .portalReplaceItem input{margin-top:2px;accent-color:var(--accent)}
+    .portalReplaceText{font-size:11.5px;line-height:1.45}
+    .portalRecTableWrap{max-height:420px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
+    .portalRecTableWrap table{border:none;border-radius:0}
+    .portalRecTableWrap th{top:0}
+    .portalFitPill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:var(--good)}
+    .portalRiskText{font-size:10px;color:var(--warn);margin-top:4px}
+    .portalAIMarkdown{font-size:12px;line-height:1.6}
+    .portalAIMarkdown h4{margin:10px 0 6px;color:var(--accent);font-size:13px}
+    .portalAIBullet{margin:3px 0 0 8px}
+    .portalAIOutput{max-height:420px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    .portalAIOutput .portalAIMarkdown{padding:14px 16px;white-space:normal}
+
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     /* Comparison modal */
