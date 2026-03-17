@@ -123,6 +123,23 @@ async function favsLoad() {
 }
 
 // ── Folders ───────────────────────────────────────────────────────────────────
+function favsMarkSynced() {
+  favsState.lastSyncedAt = Date.now();
+  favsState.syncPromise = null;
+}
+
+function favsEnsureFresh(force) {
+  if (typeof authIsGuest === 'function' && authIsGuest()) return Promise.resolve([]);
+  var staleMs = force ? 0 : 45000;
+  var isFresh = favsState.loaded && favsState.lastSyncedAt && (Date.now() - favsState.lastSyncedAt) < staleMs;
+  if (isFresh) return Promise.resolve(favsState.favorites);
+  if (favsState.syncPromise) return favsState.syncPromise;
+  favsState.syncPromise = Promise.resolve()
+    .then(function () { return favsLoad(); })
+    .finally(function () { favsState.syncPromise = null; });
+  return favsState.syncPromise;
+}
+
 function favsGetFolders() {
   var seen = {}, result = [];
   // serverFolders is the authoritative list (persisted folders from DB)
