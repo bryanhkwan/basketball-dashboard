@@ -1872,9 +1872,15 @@ function applyLeagueDefaults(force){
     if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000){
       avgPayEl.value = 70000; minPayEl.value = 10000; maxPayEl.value = 300000;
     }
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000){
+      starValueEl.value = 150000;
+    }
   }else{
     if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 70000){
-      avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 150000;
+      avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 100000;
+    }
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 150000){
+      starValueEl.value = 70000;
     }
   }
 }

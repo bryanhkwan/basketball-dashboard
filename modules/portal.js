@@ -172,6 +172,37 @@ function portalSafeNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function portalFmtMoney(v) {
+  var n = portalSafeNum(v);
+  if (n === null) return '\u2014';
+  if (typeof fmtMoney === 'function') return fmtMoney(n);
+  return '$' + Math.round(n).toLocaleString();
+}
+
+function portalGetPlayerClass(player) {
+  if (!player) return '\u2014';
+  var cls = player.Class || player.Yr || player.Year || player.Experience;
+  return cls ? String(cls) : '\u2014';
+}
+
+function portalGetPlayerPerf(player) {
+  if (!player) return null;
+  var perf = portalSafeNum(player.Score);
+  if (perf === null) perf = portalSafeNum(player.PerfScore_calc);
+  return perf;
+}
+
+function portalGetPlayerValuation(player) {
+  if (!player) return null;
+  var value = portalSafeNum(player.ActualValuation_calc);
+  if (value === null) value = portalSafeNum(player.ActualValuation);
+  if (value === null) value = portalSafeNum(player.PredictedValue_calc);
+  if (value === null) value = portalSafeNum(player.PredictedValue);
+  if (value === null) value = portalSafeNum(player.Valuation);
+  if (value === null) value = portalSafeNum(player.Value);
+  return value;
+}
+
 function portalGetPlayerName(r) {
   return (r && (r.Player || r.Name || r.playerName)) ? String(r.Player || r.Name || r.playerName) : '';
 }
@@ -1597,10 +1628,21 @@ function portalRenderTable() {
     tdDate.textContent = portalFmtDate(it.date);
 
     var tdPos = document.createElement('td');
-    tdPos.textContent = it.position || '—';
+    tdPos.textContent = it.position || '\u2014';
+
+    var tdClass = document.createElement('td');
+    tdClass.textContent = portalGetPlayerClass(match);
+
+    var tdPerf = document.createElement('td');
+    var perf = portalGetPlayerPerf(match);
+    tdPerf.textContent = perf === null ? '\u2014' : portalFmtNum(perf, 1);
+
+    var tdValue = document.createElement('td');
+    var valuation = portalGetPlayerValuation(match);
+    tdValue.textContent = portalFmtMoney(valuation);
 
     var tdTeam = document.createElement('td');
-    tdTeam.textContent = it.fromTeam || '—';
+    tdTeam.textContent = it.fromTeam || '\u2014';
 
     var tdMatch = document.createElement('td');
     if (match) {
@@ -1647,6 +1689,9 @@ function portalRenderTable() {
     tr.appendChild(tdStatus);
     tr.appendChild(tdDate);
     tr.appendChild(tdPos);
+    tr.appendChild(tdClass);
+    tr.appendChild(tdPerf);
+    tr.appendChild(tdValue);
     tr.appendChild(tdTeam);
     tr.appendChild(tdMatch);
     tr.appendChild(tdProfile);

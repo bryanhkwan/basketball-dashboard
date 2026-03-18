@@ -156,7 +156,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   resetValBtn.addEventListener('click', ()=>{
     applyLeagueDefaults(true);
-    starValueEl.value = 100000;
     starPctEl.value = 0.95;
     mpModeEl.value = 'on';
     mpPctEl.value = 0.95;
