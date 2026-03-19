@@ -766,6 +766,9 @@ async function loadFromGoogleSheets(url, apiKey){
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     reloadActiveSheet();
+    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
+      window.EvalPresets.applyActiveForCurrentLeague(true);
+    }
 
     setProgress(90, 'Caching all positions…');
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -853,6 +856,9 @@ async function loadFromCBData(year) {
     }
 
     reloadActiveSheet();
+    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
+      window.EvalPresets.applyActiveForCurrentLeague(true);
+    }
     finishIfInitial();
 
     // Background enrichment for MBB — fills Height from ESPN rosters.
@@ -968,6 +974,9 @@ async function loadAllData(year) {
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     reloadActiveSheet();
+    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
+      window.EvalPresets.applyActiveForCurrentLeague(true);
+    }
     // Refresh Teams Hub team dropdown whenever data reloads
     if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     // Populate career history in background — does not block initial render
@@ -1915,6 +1924,9 @@ function switchLeague(newLeague){
   renderWeights();
   renderConfMultTable();
   reloadActiveSheet();
+  if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
+    window.EvalPresets.applyActiveForCurrentLeague(true);
+  }
 
   // Restore new league's saved rosters
   leagueRosters[newLeague].tb.forEach(r => tbRoster.push(r));

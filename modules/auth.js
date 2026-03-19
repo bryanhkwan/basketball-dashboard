@@ -58,6 +58,9 @@ async function authValidateStoredSession() {
 
 function authHandleUnauthorized(message) {
   authClear();
+  if (window.EvalPresets && typeof window.EvalPresets.resetSession === 'function') {
+    window.EvalPresets.resetSession();
+  }
   const loadingOverlay = document.getElementById('loadingOverlay');
   const welcomeOverlay = document.getElementById('welcomeOverlay');
   if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -111,6 +114,9 @@ function authStartLoading() {
 function authFinishLoading() {
   if (typeof favsLoad   === 'function') favsLoad();    // load per-user favorites after data is ready
   if (typeof sharesLoad === 'function') sharesLoad();  // load inbox + sent
+  if (window.EvalPresets && typeof window.EvalPresets.bootstrap === 'function') {
+    window.EvalPresets.bootstrap();
+  }
   const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
     _loadDataReady = true;
@@ -174,6 +180,9 @@ function _authSetupHeader() {
   }
   if (window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
     window.TeamHub.refreshTournamentHub();
+  }
+  if (window.EvalPresets && typeof window.EvalPresets.refreshUI === 'function') {
+    window.EvalPresets.refreshUI();
   }
 }
 
@@ -265,6 +274,9 @@ async function authInit() {
       notesState.dirty = false;
       notesState.loaded = false;
       authClear();
+      if (window.EvalPresets && typeof window.EvalPresets.resetSession === 'function') {
+        window.EvalPresets.resetSession();
+      }
       authShowOverlay();
       loginForm.reset();
       loginErr.textContent = '';

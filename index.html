@@ -15,6 +15,7 @@
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
   <script src="modules/data.js" defer></script>
+  <script src="modules/eval-presets.js" defer></script>
   <script src="modules/draft.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
@@ -208,6 +209,33 @@
 
     <!-- RIGHT: Controls -->
     <div class="rightstack">
+      <div class="card" id="evalPresetsCard">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px; font-weight:1000">Evaluation presets</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Save account-level MBB/WBB models for weights, valuation, and conference multipliers.</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap; align-items:flex-end">
+          <div style="flex:1 1 220px; min-width:220px">
+            <label>Preset</label><br/>
+            <select id="evalPresetSelect"></select>
+          </div>
+          <button id="evalPresetApplyBtn" class="primary">Apply</button>
+          <button id="evalPresetSaveBtn" class="secondary">Save New</button>
+          <button id="evalPresetUpdateBtn" class="secondary">Update</button>
+        </div>
+
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+          <button id="evalPresetRenameBtn" class="secondary">Rename</button>
+          <button id="evalPresetDeleteBtn" class="secondary">Delete</button>
+          <button id="evalPresetDefaultBtn" class="secondary">System Default</button>
+        </div>
+
+        <div id="evalPresetStatus" class="hint" style="margin-top:10px"></div>
+      </div>
+
       <div class="card" id="weightsCard">
         <div class="row" style="justify-content:space-between">
           <div>
