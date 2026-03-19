@@ -516,6 +516,8 @@
     .adminFeedback.success{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:var(--good)}
     .adminFeedback.error{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08);color:var(--bad)}
     .adminFeedback.info{border-color:rgba(var(--accent-rgb),.3);background:rgba(var(--accent-rgb),.08);color:var(--text)}
+    .adminTempPasswordCard{margin-bottom:14px;padding:16px 18px;border-color:rgba(var(--accent-rgb),.2);background:rgba(var(--accent-rgb),.05)}
+    .adminTempPasswordText{margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.24);border:1px dashed rgba(var(--accent-rgb),.35);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;font-weight:700;color:var(--accent);word-break:break-all}
     .adminTableWrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.1)}
     .adminTable{width:100%;border-collapse:collapse;min-width:560px}
     .adminTable th,.adminTable td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;text-align:left;vertical-align:middle}
@@ -526,6 +528,7 @@
     .adminEmptyState{padding:14px 4px 2px;color:var(--muted);font-size:12.5px}
     .adminRolePill,.adminProtectedPill{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.04em;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--text)}
     .adminRolePill.admin{background:rgba(var(--accent-rgb),.12);border-color:rgba(var(--accent-rgb),.22);color:var(--accent)}
+    .adminRolePill.warn{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.22);color:var(--warn)}
     .adminProtectedPill{color:var(--muted)}
     .adminStateCard{max-width:760px}
 

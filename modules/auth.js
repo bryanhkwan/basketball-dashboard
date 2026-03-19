@@ -8,12 +8,14 @@ var DEV_BYPASS_AUTH = false;
 var AUTH_KEY = 'ncaa_auth_token';
 var AUTH_USER_KEY = 'ncaa_auth_user';
 var AUTH_ROLE_KEY = 'ncaa_auth_role';
+var AUTH_FORCE_PW_KEY = 'ncaa_auth_force_password_change';
 var AUTH_GUEST_KEY = 'ncaa_guest_mode';
 var GUEST_AI_KEY = 'ncaa_guest_ai_uses';
 
 function authGetToken() { return localStorage.getItem(AUTH_KEY); }
 function authGetUser() { return localStorage.getItem(AUTH_USER_KEY); }
 function authGetRole() { return localStorage.getItem(AUTH_ROLE_KEY) || 'user'; }
+function authMustChangePassword() { return localStorage.getItem(AUTH_FORCE_PW_KEY) === '1'; }
 function authIsGuest() { return !authGetToken() && localStorage.getItem(AUTH_GUEST_KEY) === '1'; }
 function authIsAdmin() {
   var username = (authGetUser() || '').toLowerCase();
@@ -23,17 +25,20 @@ function authIsAdmin() {
 var LOGIN_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
 var REGISTER_URL = LOGIN_URL.replace(/\/login$/, '/register');
 var ME_URL = LOGIN_URL.replace(/\/login$/, '/me');
+var CHANGE_PASSWORD_URL = LOGIN_URL.replace(/\/login$/, '/account/change-password');
 
-function authSave(token, username, role) {
+function authSave(token, username, role, mustChangePassword) {
   localStorage.setItem(AUTH_KEY, token);
   localStorage.setItem(AUTH_USER_KEY, username || '');
   localStorage.setItem(AUTH_ROLE_KEY, role || 'user');
+  localStorage.setItem(AUTH_FORCE_PW_KEY, mustChangePassword ? '1' : '0');
 }
 
 function authClear() {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
   localStorage.removeItem(AUTH_ROLE_KEY);
+  localStorage.removeItem(AUTH_FORCE_PW_KEY);
   localStorage.removeItem(AUTH_GUEST_KEY);
 }
 
@@ -49,9 +54,26 @@ function authClearFormMessages() {
   var loginErr = document.getElementById('loginError');
   var registerErr = document.getElementById('registerError');
   var registerSuccess = document.getElementById('registerSuccess');
+  var pwChangeError = document.getElementById('pwChangeError');
   if (loginErr) loginErr.textContent = '';
   if (registerErr) registerErr.textContent = '';
   if (registerSuccess) registerSuccess.textContent = '';
+  if (pwChangeError) pwChangeError.textContent = '';
+}
+
+function authHidePasswordChangeOverlay() {
+  var overlay = document.getElementById('pwChangeOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function authShowPasswordChangeOverlay() {
+  var overlay = document.getElementById('pwChangeOverlay');
+  if (!overlay) return;
+  var err = document.getElementById('pwChangeError');
+  var form = document.getElementById('pwChangeForm');
+  if (err) err.textContent = '';
+  if (form) form.reset();
+  overlay.classList.remove('hidden');
 }
 
 async function authFetchMe() {
@@ -74,7 +96,7 @@ async function authValidateStoredSession() {
       authClear();
       return false;
     }
-    authSave(token, user.username, user.role);
+    authSave(token, user.username, user.role, !!user.must_change_password);
     return true;
   } catch (_) {
     authClear();
@@ -84,6 +106,7 @@ async function authValidateStoredSession() {
 
 function authHandleUnauthorized(message) {
   authClear();
+  authHidePasswordChangeOverlay();
   if (window.EvalPresets && typeof window.EvalPresets.resetSession === 'function') {
     window.EvalPresets.resetSession();
   }
@@ -108,6 +131,8 @@ var _loadVideoEnded = false;
 
 function authEnterGuest() {
   localStorage.removeItem(AUTH_ROLE_KEY);
+  localStorage.removeItem(AUTH_FORCE_PW_KEY);
+  authHidePasswordChangeOverlay();
   localStorage.setItem(AUTH_GUEST_KEY, '1');
   authStartLoading();
 }
@@ -229,11 +254,14 @@ function _authSetupHeader() {
   if (window.AdminPanel && typeof window.AdminPanel.refreshUI === 'function') {
     window.AdminPanel.refreshUI();
   }
+  if (!authIsGuest() && authMustChangePassword()) authShowPasswordChangeOverlay();
+  else authHidePasswordChangeOverlay();
 }
 
 function authShowOverlay() {
   authSetMode('login');
   authClearFormMessages();
+  authHidePasswordChangeOverlay();
   document.getElementById('authOverlay').classList.remove('hidden');
   var logoutBtn = document.getElementById('logoutBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
@@ -246,10 +274,13 @@ function authShowOverlay() {
 }
 
 async function authPost(url, body) {
+  var token = authGetToken();
+  var headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
   var res = await fetch(url, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(body)
   });
   var data;
@@ -264,6 +295,8 @@ async function authInit() {
   var registerForm = document.getElementById('registerForm');
   var registerErr = document.getElementById('registerError');
   var registerSuccess = document.getElementById('registerSuccess');
+  var pwChangeForm = document.getElementById('pwChangeForm');
+  var pwChangeError = document.getElementById('pwChangeError');
   var logoutBtn = document.getElementById('logoutBtn');
   var guestBtn = document.getElementById('guestBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
@@ -294,6 +327,7 @@ async function authInit() {
     guestLoginBtn.addEventListener('click', function () {
       localStorage.removeItem(AUTH_GUEST_KEY);
       localStorage.removeItem(AUTH_ROLE_KEY);
+      localStorage.removeItem(AUTH_FORCE_PW_KEY);
       var notesToggle = document.getElementById('notesToggle');
       if (notesToggle) notesToggle.style.display = 'none';
       authShowOverlay();
@@ -318,7 +352,12 @@ async function authInit() {
           || (data.user && (data.user.token || data.user.jwt))
           || '';
         if (!token) throw new Error('Login succeeded but no session token was returned.');
-        authSave(token, (data.user && data.user.username) || username, data.user && data.user.role);
+        authSave(
+          token,
+          (data.user && data.user.username) || username,
+          data.user && data.user.role,
+          !!(data.user && data.user.must_change_password)
+        );
         localStorage.removeItem(AUTH_GUEST_KEY);
         authStartLoading();
       } catch (err) {
@@ -364,6 +403,40 @@ async function authInit() {
     });
   }
 
+  if (pwChangeForm) {
+    pwChangeForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (pwChangeError) pwChangeError.textContent = '';
+
+      var newPassword = document.getElementById('pwChangeNew').value || '';
+      var confirmPassword = document.getElementById('pwChangeConfirm').value || '';
+      var btn = pwChangeForm.querySelector('button[type="submit"]');
+
+      if (newPassword.length < 8) {
+        pwChangeError.textContent = 'New password must be at least 8 characters.';
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        pwChangeError.textContent = 'Passwords do not match.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await authPost(CHANGE_PASSWORD_URL, { new_password: newPassword });
+        localStorage.setItem(AUTH_FORCE_PW_KEY, '0');
+        authHidePasswordChangeOverlay();
+        _authSetupHeader();
+      } catch (err) {
+        pwChangeError.textContent = err.message || 'Unable to change password.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save New Password';
+      }
+    });
+  }
+
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function () {
       notesSaveImmediate();
@@ -386,6 +459,7 @@ async function authInit() {
       authShowOverlay();
       if (loginForm) loginForm.reset();
       if (registerForm) registerForm.reset();
+      if (pwChangeForm) pwChangeForm.reset();
       authClearFormMessages();
     });
   }
@@ -408,6 +482,7 @@ class Auth {
   getToken() { return authGetToken(); }
   getUser() { return authGetUser(); }
   getRole() { return authGetRole(); }
+  mustChangePassword() { return authMustChangePassword(); }
   isAdmin() { return authIsAdmin(); }
   showDashboard() { return authShowDashboard(); }
   showOverlay() { return authShowOverlay(); }

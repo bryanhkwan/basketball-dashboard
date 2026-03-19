@@ -83,7 +83,29 @@
         <button type="submit" class="primary authSubmitBtn">Request Account</button>
       </form>
       <button type="button" id="backToLoginBtn" class="authGuestBtn" style="margin-top:12px">Back to Login</button>
+</div>
+</div>
+</div>
+
+<div id="pwChangeOverlay" class="authOverlay hidden">
+  <div class="authCard">
+    <div class="authLogo">🔐 Update Password</div>
+    <div class="authSub">Your password was reset by an admin. Please create a new one before continuing.</div>
+    <div class="authRequestNote">
+      Use the temporary password your admin gave you only once. As soon as you save a new password, the temporary one stops being valid.
     </div>
+    <form id="pwChangeForm" class="authForm">
+      <div class="authField">
+        <label class="authLabel">New Password</label>
+        <input type="password" id="pwChangeNew" placeholder="Enter a new password" required autocomplete="new-password">
+      </div>
+      <div class="authField">
+        <label class="authLabel">Confirm New Password</label>
+        <input type="password" id="pwChangeConfirm" placeholder="Confirm your new password" required autocomplete="new-password">
+      </div>
+      <div class="authError" id="pwChangeError"></div>
+      <button type="submit" class="primary authSubmitBtn">Save New Password</button>
+    </form>
   </div>
 </div>
 
@@ -1398,6 +1420,11 @@
 
   <div id="adminPanelWrap">
     <div id="adminFeedback" class="adminFeedback" style="display:none"></div>
+    <div id="adminTempPasswordCard" class="card adminTempPasswordCard" style="display:none">
+      <div class="mini">Temporary Password</div>
+      <div style="margin-top:6px;font-size:13px;color:var(--muted)">Share this securely with the user. They will be forced to change it on next login.</div>
+      <div id="adminTempPasswordText" class="adminTempPasswordText"></div>
+    </div>
     <div class="adminGrid">
       <section class="card adminCard">
         <div class="adminCardHead">
@@ -1436,6 +1463,7 @@
                 <th>Username</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>Password</th>
                 <th>Created</th>
                 <th style="text-align:right">Actions</th>
               </tr>

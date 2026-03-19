@@ -12,6 +12,7 @@ var adminState = {
   requests: [],
   users: [],
   feedback: null,
+  tempPassword: null,
 };
 
 var adminNavBtnEl;
@@ -19,6 +20,8 @@ var adminRefreshBtnEl;
 var adminAccessDeniedEl;
 var adminPanelWrapEl;
 var adminFeedbackEl;
+var adminTempPasswordCardEl;
+var adminTempPasswordTextEl;
 var adminRequestCountEl;
 var adminUserCountEl;
 var adminRequestBodyEl;
@@ -32,6 +35,8 @@ function adminInitRefs() {
   adminAccessDeniedEl = document.getElementById('adminAccessDenied');
   adminPanelWrapEl = document.getElementById('adminPanelWrap');
   adminFeedbackEl = document.getElementById('adminFeedback');
+  adminTempPasswordCardEl = document.getElementById('adminTempPasswordCard');
+  adminTempPasswordTextEl = document.getElementById('adminTempPasswordText');
   adminRequestCountEl = document.getElementById('adminRequestCount');
   adminUserCountEl = document.getElementById('adminUserCount');
   adminRequestBodyEl = document.getElementById('adminRequestBody');
@@ -50,6 +55,7 @@ function adminResetSession() {
   adminState.requests = [];
   adminState.users = [];
   adminState.feedback = null;
+  adminState.tempPassword = null;
   adminRender();
 }
 
@@ -78,6 +84,13 @@ function adminSetFeedback(message, tone) {
   adminFeedbackEl.style.display = '';
   adminFeedbackEl.textContent = adminState.feedback.message;
   adminFeedbackEl.className = 'adminFeedback ' + (adminState.feedback.tone || 'info');
+}
+
+function adminSetTempPassword(username, password) {
+  adminState.tempPassword = password ? {
+    username: username || '',
+    password: password
+  } : null;
 }
 
 async function adminFetch(url, opts) {
@@ -145,6 +158,9 @@ function adminRenderUsers() {
   users.forEach(function (item) {
     var tr = document.createElement('tr');
     var roleClass = (item.role || 'user') === 'admin' ? 'adminRolePill admin' : 'adminRolePill';
+    var passwordStatus = item.must_change_password
+      ? '<span class="adminRolePill warn">Reset Required</span>'
+      : '<span class="adminProtectedPill">Up to date</span>';
     var deleteCell = item.is_protected
       ? '<span class="adminProtectedPill">Protected</span>'
       : '<button type="button" class="secondary adminDeleteBtn">Delete</button>';
@@ -152,8 +168,15 @@ function adminRenderUsers() {
       '<td><b>' + (item.username || '-') + '</b></td>' +
       '<td>' + (item.email || '-') + '</td>' +
       '<td><span class="' + roleClass + '">' + ((item.role || 'user').toUpperCase()) + '</span></td>' +
+      '<td>' + passwordStatus + '</td>' +
       '<td>' + adminFormatDate(item.created_at) + '</td>' +
-      '<td style="text-align:right">' + deleteCell + '</td>';
+      '<td style="text-align:right"><div class="adminActions"><button type="button" class="secondary adminResetBtn">Reset Password</button>' + deleteCell + '</div></td>';
+    var resetBtn = tr.querySelector('.adminResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        adminResetPassword(item.id, item.username);
+      });
+    }
     var deleteBtn = tr.querySelector('.adminDeleteBtn');
     if (deleteBtn) {
       deleteBtn.addEventListener('click', function () {
@@ -174,6 +197,17 @@ function adminRender() {
   }
 
   if (adminFeedbackEl) adminSetFeedback(adminState.feedback && adminState.feedback.message, adminState.feedback && adminState.feedback.tone);
+  if (adminTempPasswordCardEl) {
+    if (adminState.tempPassword && adminState.tempPassword.password) {
+      adminTempPasswordCardEl.style.display = '';
+      if (adminTempPasswordTextEl) {
+        adminTempPasswordTextEl.textContent = (adminState.tempPassword.username ? (adminState.tempPassword.username + ': ') : '') + adminState.tempPassword.password;
+      }
+    } else {
+      adminTempPasswordCardEl.style.display = 'none';
+      if (adminTempPasswordTextEl) adminTempPasswordTextEl.textContent = '';
+    }
+  }
 
   if (!adminCanAccess()) {
     if (adminAccessDeniedEl) adminAccessDeniedEl.style.display = '';
@@ -221,6 +255,7 @@ async function adminLoad(force) {
 
 async function adminApproveRequest(id, username) {
   adminSetFeedback('Approving ' + username + '...', 'info');
+  adminSetTempPassword('', '');
   try {
     await adminFetch(ADMIN_REQUESTS_URL + '/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
     adminSetFeedback('Approved ' + username + '.', 'success');
@@ -235,6 +270,7 @@ async function adminApproveRequest(id, username) {
 async function adminRejectRequest(id, username) {
   if (!window.confirm('Reject the pending account request for ' + username + '?')) return;
   adminSetFeedback('Rejecting ' + username + '...', 'info');
+  adminSetTempPassword('', '');
   try {
     await adminFetch(ADMIN_REQUESTS_URL + '/' + encodeURIComponent(id) + '/reject', { method: 'POST' });
     adminSetFeedback('Rejected ' + username + '.', 'success');
@@ -249,6 +285,7 @@ async function adminRejectRequest(id, username) {
 async function adminDeleteUser(id, username) {
   if (!window.confirm('Delete the account for ' + username + '? This cannot be undone.')) return;
   adminSetFeedback('Deleting ' + username + '...', 'info');
+  adminSetTempPassword('', '');
   try {
     await adminFetch(ADMIN_USERS_URL + '/' + encodeURIComponent(id), { method: 'DELETE' });
     adminSetFeedback('Deleted ' + username + '.', 'success');
@@ -256,6 +293,22 @@ async function adminDeleteUser(id, username) {
     await adminLoad(true);
   } catch (err) {
     adminSetFeedback(err.message || 'Unable to delete that account.', 'error');
+    adminRender();
+  }
+}
+
+async function adminResetPassword(id, username) {
+  if (!window.confirm('Reset the password for ' + username + '? This will sign them out and force them to set a new password on next login.')) return;
+  adminSetFeedback('Resetting password for ' + username + '...', 'info');
+  adminSetTempPassword('', '');
+  try {
+    var data = await adminFetch(ADMIN_USERS_URL + '/' + encodeURIComponent(id) + '/reset-password', { method: 'POST' });
+    adminSetTempPassword(username, data.temporary_password || '');
+    adminSetFeedback('Password reset for ' + username + '. Share the temporary password securely.', 'success');
+    adminState.loaded = false;
+    await adminLoad(true);
+  } catch (err) {
+    adminSetFeedback(err.message || 'Unable to reset that password.', 'error');
     adminRender();
   }
 }
