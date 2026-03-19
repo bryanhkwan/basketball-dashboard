@@ -940,7 +940,12 @@ function tbRenderSuggestions(){
 // --- Page navigation ---
 
 function showDashboardPage(targetId, activeNavId){
+  if (window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
+    targetId = (window.DashboardPrefs.getFirstVisiblePage && window.DashboardPrefs.getFirstVisiblePage()) || 'pagePlayers';
+    activeNavId = targetId;
+  }
   var activeId = activeNavId || targetId;
+  window._dashboardCurrentPageId = targetId;
   document.querySelectorAll('.pageNavBtn').forEach(function(b){
     b.classList.toggle('active', b.dataset.page === activeId);
   });
@@ -964,6 +969,8 @@ function showDashboardPage(targetId, activeNavId){
     if(typeof favsRenderPage     === 'function') favsRenderPage();
   }
 }
+
+window._dashboardCurrentPageId = window._dashboardCurrentPageId || 'pagePlayers';
 
 function initPageNav(){
   // Buttons use data-page attribute (no IDs) — use querySelectorAll

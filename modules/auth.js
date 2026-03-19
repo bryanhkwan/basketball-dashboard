@@ -61,6 +61,9 @@ function authHandleUnauthorized(message) {
   if (window.EvalPresets && typeof window.EvalPresets.resetSession === 'function') {
     window.EvalPresets.resetSession();
   }
+  if (window.DashboardPrefs && typeof window.DashboardPrefs.resetSession === 'function') {
+    window.DashboardPrefs.resetSession();
+  }
   const loadingOverlay = document.getElementById('loadingOverlay');
   const welcomeOverlay = document.getElementById('welcomeOverlay');
   if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -116,6 +119,9 @@ function authFinishLoading() {
   if (typeof sharesLoad === 'function') sharesLoad();  // load inbox + sent
   if (window.EvalPresets && typeof window.EvalPresets.bootstrap === 'function') {
     window.EvalPresets.bootstrap();
+  }
+  if (window.DashboardPrefs && typeof window.DashboardPrefs.bootstrap === 'function') {
+    window.DashboardPrefs.bootstrap();
   }
   const loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
@@ -183,6 +189,9 @@ function _authSetupHeader() {
   }
   if (window.EvalPresets && typeof window.EvalPresets.refreshUI === 'function') {
     window.EvalPresets.refreshUI();
+  }
+  if (window.DashboardPrefs && typeof window.DashboardPrefs.refreshUI === 'function') {
+    window.DashboardPrefs.refreshUI();
   }
 }
 
@@ -276,6 +285,9 @@ async function authInit() {
       authClear();
       if (window.EvalPresets && typeof window.EvalPresets.resetSession === 'function') {
         window.EvalPresets.resetSession();
+      }
+      if (window.DashboardPrefs && typeof window.DashboardPrefs.resetSession === 'function') {
+        window.DashboardPrefs.resetSession();
       }
       authShowOverlay();
       loginForm.reset();

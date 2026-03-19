@@ -20,6 +20,7 @@
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/dashboard-prefs.js" defer></script>
   <script src="modules/portal.js" defer></script>
   <script src="modules/teams.js" defer></script>
   <script src="modules/lab.js" defer></script>
@@ -79,6 +80,7 @@
     <span id="apiUsageBadge" class="apiBadge" style="display:none"></span>
     <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
+    <button type="button" id="dashboardPrefsBtn" class="secondary" style="padding:6px 14px;font-size:12px">Customize</button>
     <button type="button" id="tourBtn" title="Take a guided tour" aria-label="Start guided tour">?</button>
   </div>
   </div>
@@ -1654,6 +1656,41 @@
   </div>
 </div>
 
+</div>
+
+<!-- Dashboard preferences modal -->
+<div class="modalBack" id="dashboardPrefsBack" style="z-index:60;display:none">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:860px;width:95%">
+    <div class="modalHead">
+      <div>
+        <div class="modalTitle">Dashboard Customization</div>
+        <div class="modalSub">Choose which tabs and Players-page controls show up for this account.</div>
+      </div>
+      <button class="close" id="dashPrefsCloseBtn">Close</button>
+    </div>
+    <div class="modalBody">
+      <div class="panel">
+        <div class="panelHead">Navigation Tabs</div>
+        <div class="panelBody">
+          <div id="dashPrefsTabs" class="dashPrefGrid"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="panelHead">Players Page Sections</div>
+        <div class="panelBody">
+          <div id="dashPrefsSections" class="dashPrefGrid"></div>
+        </div>
+      </div>
+
+      <div id="dashPrefsStatus" class="hint" style="margin-top:12px"></div>
+
+      <div class="row" style="justify-content:flex-end;gap:10px;margin-top:14px">
+        <button id="dashPrefsResetBtn" class="secondary">Reset to Default</button>
+        <button id="dashPrefsSaveBtn" class="primary">Save Preferences</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Shot hover tooltip -->
