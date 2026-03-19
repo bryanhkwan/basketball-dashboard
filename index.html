@@ -102,6 +102,17 @@
   <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
 </nav>
 
+<div id="dashboardPrefsBar" class="dashPrefsBar" style="display:none">
+  <div id="dashPrefsBarText" class="dashPrefsBarText">
+    Customize mode is on. Tap the <b>-</b> or <b>+</b> markers on tabs and page sections to preview what stays visible.
+  </div>
+  <div class="dashPrefsBarActions">
+    <button id="dashPrefsResetBtn" class="secondary">Reset to Default</button>
+    <button id="dashPrefsCancelBtn" class="secondary">Cancel</button>
+    <button id="dashPrefsSaveBtn" class="primary">Save Changes</button>
+  </div>
+</div>
+
 <div id="pagePlayers">
 <div class="wrap">
   <div class="topbar">
@@ -170,7 +181,7 @@
 
   <div id="warn" class="warnBox"></div>
 
-  <div class="grid">
+  <div class="grid" id="playersGrid">
     <!-- LEFT: Player list -->
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -210,7 +221,7 @@
     </div>
 
     <!-- RIGHT: Controls -->
-    <div class="rightstack">
+    <div class="rightstack" id="playersRightstack">
       <div class="card" id="evalPresetsCard">
         <div class="row" style="justify-content:space-between">
           <div>
@@ -377,7 +388,7 @@
 <!-- Transfer Portal Page -->
 <div id="pagePortal" style="display:none">
 <div class="wrap">
-  <div class="card">
+  <div class="card" id="portalBoardSection">
     <div class="row" style="justify-content:space-between;gap:12px;align-items:flex-end">
       <div>
         <div style="font-size:18px;font-weight:800">🚪 Transfer Portal Board</div>
@@ -442,7 +453,7 @@
     <div class="hint">Shows real transfer portal entries from live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.</div>
   </div>
 
-  <div class="card" style="margin-top:14px">
+  <div class="card" id="portalFitLabSection" style="margin-top:14px">
     <div class="row" style="justify-content:space-between;gap:12px;align-items:flex-end">
       <div>
         <div style="font-size:18px;font-weight:800">🧠 Portal Fit Lab</div>
@@ -731,7 +742,7 @@
     </div>
 
     <!-- Program Overview -->
-    <div class="thSection">
+    <div class="thSection" id="teamsOverviewSection">
       <div class="thSectionHead">📊 Program Overview</div>
       <div id="thOverview" class="card thOverviewCard">
         <div class="muted" style="padding:32px;text-align:center">Select a team above to load program analysis.</div>
@@ -739,7 +750,7 @@
     </div>
 
     <!-- Conference Threats -->
-    <div class="thSection">
+    <div class="thSection" id="teamsThreatsSection">
       <div class="thSectionHead">⚠️ Conference Threats</div>
       <div class="thSectionSub">Conference teams ranked by net efficiency. Click ⚔ to load a team as your opponent in Team Builder.</div>
       <div id="thThreats" class="card thThreatsCard">
@@ -748,7 +759,7 @@
     </div>
 
     <!-- Game Log -->
-    <div class="thSection">
+    <div class="thSection" id="teamsGameLogSection">
       <div class="thSectionHead">📅 Season Game Log</div>
       <div id="thGameLog" class="card thGameLogCard">
         <div class="muted" style="padding:24px;text-align:center">Load a team to see game results.</div>
@@ -756,7 +767,7 @@
     </div>
 
     <!-- H2H Records -->
-    <div class="thSection">
+    <div class="thSection" id="teamsH2HSection">
       <div class="thSectionHead">🆚 Head-to-Head Records</div>
       <div id="thH2H" class="card thH2HCard">
         <div class="muted" style="padding:24px;text-align:center">Load a team to see head-to-head breakdowns.</div>
@@ -764,7 +775,7 @@
     </div>
 
     <!-- Team DNA -->
-    <div class="thSection">
+    <div class="thSection" id="teamsDNASection">
       <div class="thSectionHead">🧬 Team DNA</div>
       <div class="thSectionSub">Shooting zones heatmap, scoring profile, four factors (offense vs what opponents do defensively), and auto-generated strengths &amp; weaknesses.</div>
       <div id="thDNA" class="card thDNACard">
@@ -773,7 +784,7 @@
     </div>
 
     <!-- Team Scout Report -->
-    <div class="thSection">
+    <div class="thSection" id="teamsScoutSection">
       <div class="thSectionHead">🧾 Team Scout Report</div>
       <div class="thSectionSub">Auto-generated team Strengths, Weaknesses, Tendencies, Development Areas, and Matchup Notes from ratings + four factors + scoring profile.</div>
       <div id="thScout" class="card thScoutCard">
@@ -782,7 +793,7 @@
     </div>
 
     <!-- Compare Teams -->
-    <div class="thSection">
+    <div class="thSection" id="teamsCompareSection">
       <div class="thSectionHead">⚡ Compare vs Another Team</div>
       <div class="thSectionSub">Side-by-side efficiency ratings, four factors, scoring profile, and auto-generated edge analysis. Load a primary team first.</div>
       <div class="card thCompareSearchCard">
@@ -800,7 +811,7 @@
     </div>
 
     <!-- Matchup Breakdown -->
-    <div class="thSection">
+    <div class="thSection" id="teamsMatchupSection">
       <div class="thSectionHead">🎯 Matchup Breakdown</div>
       <div class="thSectionSub">Shot-by-shot breakdown from actual games played between these two teams. Uses play-by-play data with exact court coordinates. Select an opponent above and click Compare →</div>
       <div id="thMatchup" class="card thMatchupCard">
@@ -819,7 +830,7 @@
     <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">📖 Methodology</h2>
     <p class="muted" style="font-size:13px;margin-bottom:24px">How the NCAA Scouting Dashboard calculates player value, fit scores, and team analysis.</p>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodDataSourcesSection">
       <div class="methodHead">📡 Data Sources</div>
       <div class="methodBody">
         <p><b>MBB</b> — Stats come from the <b>College Basketball Data (CBD) API</b> via a Cloudflare Worker proxy. Includes advanced metrics: BPM, WS/40, DRtg, ORtg, USG%, eFG%, TS%, A/TO, OR%. Player class is inferred from multi-season career history (2022–2026). Draft probability is available for MBB only.</p>
@@ -830,7 +841,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodPerfScoreSection">
       <div class="methodHead">🎯 PerfScore</div>
       <div class="methodBody">
         <p>PerfScore is a weighted composite of key statistical percentiles. Each stat is normalized to a 0–1 scale between your configured Min and Max, then multiplied by its weight. Higher-is-better stats (like PPG, APG) produce higher percentiles at the top; lower-is-better stats (like DRtg, TOPG) are automatically inverted.</p>
@@ -839,7 +850,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodValuationSection">
       <div class="methodHead">💰 Valuation</div>
       <div class="methodBody">
         <p>Player valuation uses an exponential curve anchored to your average pay setting. The curve is calibrated so the average player earns <em>avgPay</em> and a star-level player earns <em>starValue</em>:</p>
@@ -848,7 +859,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodPositionGroupsSection">
       <div class="methodHead">📊 Position Groups</div>
       <div class="methodBody">
         <p>Players are bucketed into two position groups for all percentile calculations:</p>
@@ -860,7 +871,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodRoleTagsSection">
       <div class="methodHead">🏷️ Role Tags</div>
       <div class="methodBody">
         <p>Role tags are archetype labels assigned based on percentile thresholds across key stats. A player can hold multiple tags simultaneously. Examples:</p>
@@ -876,7 +887,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodTeamBuilderSection">
       <div class="methodHead">🏆 Team Builder</div>
       <div class="methodBody">
         <p>The Team Builder lets you assemble a roster within budget and slot constraints:</p>
@@ -892,7 +903,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodAIScoutSection">
       <div class="methodHead">🤖 AI Scout</div>
       <div class="methodBody">
         <p>Scout AI (powered by Google Gemini) has direct access to your dashboard data through a tool-use system:</p>
@@ -909,7 +920,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodWbbDefaultsSection">
       <div class="methodHead">🏀 WBB Scoring Defaults</div>
       <div class="methodBody">
         <p>WBB uses separate default scoring weights calibrated to WBB stat distributions (which differ significantly from MBB — e.g. WBB average PPG ~12 vs MBB ~14, fewer 3-point attempts, higher turnover rates).</p>
@@ -919,7 +930,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodMonteCarloSection">
       <div class="methodHead">🎲 Monte Carlo Match Simulation</div>
       <div class="methodBody">
         <p>The Teams Hub Monte Carlo sim projects game outcomes by running thousands of score simulations from each team's adjusted efficiency ratings and pace.</p>
@@ -933,7 +944,7 @@
       </div>
     </div>
 
-    <div class="methodSection">
+    <div class="methodSection" id="methodDraftRadarSection">
       <div class="methodHead">🏀 Draft Radar</div>
       <div class="methodBody">
         <p>The Draft Radar predicts NBA draft probability from college stats using a sign-constrained elastic-net logistic regression model with <b>balanced class weights</b>, trained on <b>2,391 NCAA players</b> from the 2019–2025 drafts (326 drafted, 2,065 undrafted), sourced from the College Basketball Data API.</p>
@@ -1011,7 +1022,7 @@
       <p class="muted" style="font-size:13px">Select multiple teams to analyze common traits, archetypes, and what drives tournament success.</p>
     </div>
 
-    <div class="thSection">
+    <div class="thSection" id="labWarRoomLauncherSection">
       <div class="thSectionHead">🏆 Tournament War Room</div>
       <div class="thSectionSub">Keep the bracket lab separate from the trait-analysis page. Open War Room when you want the full fantasy-style bracket workspace.</div>
       <div class="card" style="padding:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
@@ -1024,7 +1035,7 @@
     </div>
 
     <!-- Team Picker -->
-    <div class="card labPickerCard">
+    <div class="card labPickerCard" id="labPickerSection">
       <div class="labPickerRow">
         <div class="labPickerGroup">
           <label class="labLabel">Add Teams</label>
@@ -1063,69 +1074,69 @@
     <div id="labResults" style="display:none">
 
       <!-- Overview KPIs -->
-      <div class="labSection">
+      <div class="labSection" id="labOverviewSection">
         <div class="labSectionHead">📊 Overview</div>
         <div id="labOverview" class="card labOverviewCard"></div>
       </div>
 
       <!-- Common Traits -->
-      <div class="labSection">
+      <div class="labSection" id="labCommonDNASection">
         <div class="labSectionHead">🧬 Common DNA</div>
         <div class="labSectionSub">Statistical thresholds met by the majority of selected teams. Higher % = stronger signal.</div>
         <div id="labTraits" class="card"></div>
       </div>
 
       <!-- Team Profiles Table -->
-      <div class="labSection">
+      <div class="labSection" id="labProfilesSection">
         <div class="labSectionHead">📋 Team Profiles</div>
         <div class="labSectionSub">Side-by-side comparison of key metrics across all selected teams.</div>
         <div id="labProfiles" class="card" style="overflow-x:auto"></div>
       </div>
 
       <!-- K-Means Clusters -->
-      <div class="labSection">
+      <div class="labSection" id="labClustersSection">
         <div class="labSectionHead">🔮 K-Means Clusters</div>
         <div class="labSectionSub">Teams grouped by statistical similarity using k-means clustering on z-score normalized dimensions. Distance = how far from cluster center.</div>
         <div id="labClusters" class="card"></div>
       </div>
 
       <!-- Logistic Regression -->
-      <div class="labSection">
+      <div class="labSection" id="labPredictorSection">
         <div class="labSectionHead">📈 Tournament Predictor</div>
         <div class="labSectionSub">Logistic regression trained on full D1 population — feature importances show which stats most predict tournament inclusion.</div>
         <div id="labRegression" class="card"></div>
       </div>
 
       <!-- Archetypes -->
-      <div class="labSection">
+      <div class="labSection" id="labArchetypesSection">
         <div class="labSectionHead">🏷️ Archetypes</div>
         <div class="labSectionSub">Derived from cluster assignment, regression feature importances, shot zones, and clutch performance.</div>
         <div id="labArchetypes" class="card"></div>
       </div>
 
       <!-- Shot Zones -->
-      <div class="labSection">
+      <div class="labSection" id="labShotZonesSection">
         <div class="labSectionHead">🎯 Shot Zone Profiles</div>
         <div class="labSectionSub">Paint / midrange / 3PT frequency and efficiency breakdown from team shooting data.</div>
         <div id="labShotZones" class="card" style="overflow-x:auto"></div>
       </div>
 
       <!-- Play-by-Play Tendencies -->
-      <div class="labSection">
+      <div class="labSection" id="labTendenciesSection">
         <div class="labSectionHead">📊 Play-by-Play Tendencies</div>
         <div class="labSectionSub">Shot distribution, period efficiency, and clutch performance from recent game play-by-play data.</div>
         <div id="labTendencies" class="card"></div>
       </div>
 
       <!-- Metric Distributions -->
-      <div class="labSection">
+      <div class="labSection" id="labDistributionsSection">
         <div class="labSectionHead">📐 Metric Distributions</div>
         <div class="labSectionSub">Min / P25 / Median / P75 / Max across your selected group.</div>
         <div id="labDistributions" class="card" style="overflow-x:auto"></div>
       </div>
 
       <!-- Deep Analysis -->
-      <div class="labSection">
+      <div class="labSection" id="labDeepAnalysisSection">
         <div class="labSectionHead">🤖 AI Deep Analysis</div>
         <div class="labSectionSub">AI-generated narrative identifying patterns, archetypes, and what separates these teams.</div>
         <div class="card" style="padding:16px">
@@ -1195,7 +1206,7 @@
           </div>
 
           <div class="thBracketGrid">
-            <div class="thBracketPanel">
+            <div class="thBracketPanel" id="warRoomBoardSection">
               <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
               <div class="thBracketPanelBody thBracketPanelBody--board">
                 <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in button inside a slot when you need to set a TBD matchup like Texas vs NC State, then run the simulation and winners will auto-advance through the tree.</div>
@@ -1207,7 +1218,7 @@
           </div>
 
           <div class="thBracketToolStack">
-            <div class="thBracketPanel">
+            <div class="thBracketPanel" id="warRoomToolsSection">
               <div class="thBracketPanelHead">Bracket Tools</div>
               <div class="thBracketPanelBody">
                 <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
@@ -1243,7 +1254,7 @@
               </div>
             </div>
 
-            <div class="thBracketPanel">
+            <div class="thBracketPanel" id="warRoomAnalysisSection">
               <div class="thBracketPanelHead">Simulation & Analysis</div>
               <div class="thBracketPanelBody">
                 <div class="thBracketSimRow">
@@ -1300,7 +1311,7 @@
 <!-- Favorites Page -->
 <div id="pageFavorites" style="display:none">
 <div class="wrap">
-  <div class="favsPageHeader">
+  <div class="favsPageHeader" id="favsHeaderSection">
     <div class="favsPageTitle">
       <h2>❤️ Favorites</h2>
       <p class="muted" style="font-size:13px;margin-top:3px">Your personal watchlist — saved per account, synced across devices.<span id="favsCount" style="margin-left:8px;font-size:12px;font-weight:700;color:var(--accent)"></span></p>
@@ -1314,19 +1325,23 @@
       </select>
     </div>
   </div>
-  <div id="favsPortalAlertWrap" style="display:none"></div>
-  <div id="favsFolderBar" class="favsFolderBar"></div>
-  <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
-    <input id="favsFolderInput" type="text" placeholder="Folder name…" maxlength="50">
-    <button id="favsFolderAddBtn" class="primary">Add</button>
-    <button class="secondary" id="favsFolderCancelBtn">✕</button>
+  <div id="favsToolsSection">
+    <div id="favsPortalAlertWrap" style="display:none"></div>
+    <div id="favsFolderBar" class="favsFolderBar"></div>
+    <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
+      <input id="favsFolderInput" type="text" placeholder="Folder name..." maxlength="50">
+      <button id="favsFolderAddBtn" class="primary">Add</button>
+      <button class="secondary" id="favsFolderCancelBtn">x</button>
+    </div>
+    <div id="favsBulkBar" class="favsBulkBar" style="display:none"></div>
   </div>
-  <div id="favsBulkBar" class="favsBulkBar" style="display:none"></div>
-  <div id="favsGrid" class="favsGrid"></div>
-  <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
-    <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤍</div>
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
-    <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">🤍 Favorite</b> to save them here.</div>
+  <div id="favsResultsSection">
+    <div id="favsGrid" class="favsGrid"></div>
+    <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
+      <div style="font-size:48px;margin-bottom:14px;opacity:.4">♡</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
+      <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">Favorite</b> to save them here.</div>
+    </div>
   </div>
 </div>
 </div><!-- /pageFavorites -->
@@ -1656,41 +1671,6 @@
   </div>
 </div>
 
-</div>
-
-<!-- Dashboard preferences modal -->
-<div class="modalBack" id="dashboardPrefsBack" style="z-index:60;display:none">
-  <div class="modal" role="dialog" aria-modal="true" style="max-width:860px;width:95%">
-    <div class="modalHead">
-      <div>
-        <div class="modalTitle">Dashboard Customization</div>
-        <div class="modalSub">Choose which tabs and Players-page controls show up for this account.</div>
-      </div>
-      <button class="close" id="dashPrefsCloseBtn">Close</button>
-    </div>
-    <div class="modalBody">
-      <div class="panel">
-        <div class="panelHead">Navigation Tabs</div>
-        <div class="panelBody">
-          <div id="dashPrefsTabs" class="dashPrefGrid"></div>
-        </div>
-      </div>
-
-      <div class="panel" style="margin-top:12px">
-        <div class="panelHead">Players Page Sections</div>
-        <div class="panelBody">
-          <div id="dashPrefsSections" class="dashPrefGrid"></div>
-        </div>
-      </div>
-
-      <div id="dashPrefsStatus" class="hint" style="margin-top:12px"></div>
-
-      <div class="row" style="justify-content:flex-end;gap:10px;margin-top:14px">
-        <button id="dashPrefsResetBtn" class="secondary">Reset to Default</button>
-        <button id="dashPrefsSaveBtn" class="primary">Save Preferences</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- Shot hover tooltip -->

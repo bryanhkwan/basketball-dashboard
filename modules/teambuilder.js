@@ -940,7 +940,8 @@ function tbRenderSuggestions(){
 // --- Page navigation ---
 
 function showDashboardPage(targetId, activeNavId){
-  if (window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
+  var prefsIsCustomizing = !!(window.DashboardPrefs && typeof window.DashboardPrefs.isCustomizing === 'function' && window.DashboardPrefs.isCustomizing());
+  if (!prefsIsCustomizing && window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
     targetId = (window.DashboardPrefs.getFirstVisiblePage && window.DashboardPrefs.getFirstVisiblePage()) || 'pagePlayers';
     activeNavId = targetId;
   }

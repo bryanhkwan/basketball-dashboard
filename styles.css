@@ -43,6 +43,7 @@
     button.primary:hover{filter:brightness(1.06);box-shadow:0 6px 20px rgba(0,0,0,.25)}
     button:disabled{opacity:.4;cursor:not-allowed}
     .grid{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-top:16px}
+    .grid.playersGridFull{grid-template-columns:minmax(0,1fr)}
     .grid>*{min-width:0}
     @media(max-width:1020px){.grid{grid-template-columns:1fr}}
     .card{background:var(--card);border:1px solid var(--line);border-top:2px solid rgba(var(--accent-rgb),.25);border-radius:var(--r);padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.2),0 8px 32px rgba(0,0,0,.08);transition:border-color .25s,box-shadow .25s;overflow:hidden;position:relative}
@@ -81,6 +82,7 @@
     .link{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .link:hover{opacity:.8;text-decoration:underline}
     .rightstack{display:flex;flex-direction:column;gap:16px;min-width:0}
+    .rightstack.rightstackHidden{display:none}
     .weights{max-height:300px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .weights table{border:none;border-radius:0;table-layout:fixed;width:100%}
     .weights th{top:0}
@@ -99,12 +101,22 @@
     .modalTitle{font-size:19px;font-weight:800;letter-spacing:-.3px}
     .modalSub{margin:4px 0 0;color:var(--muted);font-size:12.5px}
     .modalBody{padding:22px}
-    .dashPrefGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-    .dashPrefItem{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02);cursor:pointer}
-    .dashPrefItem input{margin-top:3px;accent-color:var(--accent)}
-    .dashPrefCopy{display:flex;flex-direction:column;gap:4px}
-    .dashPrefTitle{font-size:13px;font-weight:700;color:var(--text)}
-    .dashPrefDesc{font-size:12px;color:var(--muted);line-height:1.45}
+    .dashPrefsBar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 32px;background:rgba(255,210,0,.06);border-bottom:1px solid rgba(var(--accent-rgb),.18);position:sticky;top:calc(var(--header-h) + var(--nav-h) + 3px);z-index:24;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+    .dashPrefsBarText{font-size:12px;color:var(--text);line-height:1.5}
+    .dashPrefsBarText b{color:var(--accent)}
+    .dashPrefsBarActions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .dashPrefTarget{position:relative;transition:opacity .18s,filter .18s,background .18s,border-color .18s,box-shadow .18s}
+    .dashPrefToggle{position:absolute;top:10px;right:10px;display:none;align-items:center;justify-content:center;width:24px;height:24px;border-radius:999px;border:1px solid rgba(var(--accent-rgb),.35);background:rgba(6,12,26,.92);color:var(--accent);font-size:16px;font-weight:800;line-height:1;cursor:pointer;z-index:3;box-shadow:0 6px 16px rgba(0,0,0,.28);user-select:none}
+    .dashPrefToggle:hover{background:rgba(var(--accent-rgb),.12);border-color:rgba(var(--accent-rgb),.55)}
+    body.dashPrefsMode .dashPrefToggle{display:inline-flex}
+    body.dashPrefsMode .pageNavBtn{display:inline-flex!important}
+    body.dashPrefsMode .pageNavBtn{align-items:center}
+    body.dashPrefsMode .dashPrefTarget{pointer-events:auto}
+    .dashPrefDraftHidden{opacity:.45;filter:saturate(.45)}
+    .dashPrefDraftHidden.card{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);box-shadow:none}
+    .dashPrefDraftHidden.pageNavBtn{color:var(--muted)!important;border-bottom-color:transparent!important;background:rgba(255,255,255,.02)!important}
+    .dashPrefDraftHidden::after{content:'';position:absolute;inset:0;border-radius:inherit;background:rgba(8,12,20,.3);pointer-events:none}
+    .dashPrefLocked{opacity:.9}
     .close{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--muted);padding:8px 14px;cursor:pointer;font-weight:700;font-size:12px;transition:all .15s}
     .close:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.07);color:var(--text);transform:none;box-shadow:none}
     .profileGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
@@ -407,9 +419,10 @@
 
     /* ---------- Page Navigation ---------- */
     .pageNav{display:flex;gap:0;padding:0 32px;background:rgba(5,11,20,.92);border-bottom:1px solid var(--line);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);position:sticky;top:calc(var(--header-h) + 3px);z-index:25;flex-wrap:wrap}
-    .pageNavBtn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);border-radius:0;padding:12px 20px 10px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none;position:relative;letter-spacing:.01em}
+    .pageNavBtn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);border-radius:0;padding:12px 20px 10px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none;position:relative;letter-spacing:.01em;overflow:visible}
     .pageNavBtn:hover{background:transparent;color:var(--text);transform:none;box-shadow:none;border-bottom-color:rgba(255,255,255,.12)}
     .pageNavBtn.active{border-bottom-color:var(--accent);color:var(--accent);background:transparent;box-shadow:none}
+    .pageNavBtn .dashPrefToggle{top:4px;right:4px;width:20px;height:20px;font-size:14px}
     /* ---------- Team Builder Sub-tabs ---------- */
     .tbSubNav{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
     .tbSubBtn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);border-radius:0;padding:10px 18px 8px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none}
