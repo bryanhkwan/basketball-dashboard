@@ -987,6 +987,9 @@ async function loadAllData(year) {
     loadTeamRatings(year).then(() => {
       // Second refresh after ratings load so team search has full team list
       if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+      if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+        window.ValueLab.handleDataChange();
+      }
     }).catch(() => {});
     finishIfInitial();
 
@@ -998,6 +1001,9 @@ async function loadAllData(year) {
     // Background height loading for MBB — fetches rosters from ESPN after initial render
     if (_mbbLoadedPlayers && _mbbLoadedPlayers.length) {
       _mbbLoadHeightsBackground(_mbbLoadedPlayers, year).catch(() => {});
+    }
+    if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+      window.ValueLab.handleDataChange();
     }
 
   } catch (err) {
@@ -1941,10 +1947,16 @@ function switchLeague(newLeague){
   allRatingsData = [];
   loadTeamRatings(_currentDataSeason).then(() => {
     if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+    if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+      window.ValueLab.handleDataChange();
+    }
   }).catch(() => {});
 
   // Notify AI chat that league changed (clears stale roster context from history)
   if (typeof window._chatOnLeagueSwitch === 'function') window._chatOnLeagueSwitch(newLeague);
+  if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+    window.ValueLab.handleDataChange();
+  }
 }
 
 function switchPos(newPos){

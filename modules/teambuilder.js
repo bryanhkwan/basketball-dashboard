@@ -703,6 +703,9 @@ function tbRefresh(){
   var _pp = document.getElementById('pagePlayers');
   if(!_pp || _pp.style.display !== 'none') renderPlayersPage();
   h2hRefresh();
+  if(window.ValueLab && typeof window.ValueLab.handleRosterChange === 'function') {
+    window.ValueLab.handleRosterChange();
+  }
 }
 
 function tbScheduleRefresh(delayMs){
@@ -950,7 +953,7 @@ function showDashboardPage(targetId, activeNavId){
   document.querySelectorAll('.pageNavBtn').forEach(function(b){
     b.classList.toggle('active', b.dataset.page === activeId);
   });
-  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate, #pageAdmin').forEach(function(el) {
+  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageTeams, #pageValueLab, #pageMethodology, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate, #pageAdmin').forEach(function(el) {
     el.style.display = 'none';
   });
   var target = document.getElementById(targetId);
@@ -958,6 +961,9 @@ function showDashboardPage(targetId, activeNavId){
 
   if(targetId === 'pagePlayers') renderPlayersPage();
   if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
+  if(targetId === 'pageValueLab' && window.ValueLab && typeof window.ValueLab.refresh === 'function') {
+    window.ValueLab.refresh();
+  }
   if(targetId === 'pageLab' && window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
     window.TeamHub.refreshTournamentLauncher();
   }
@@ -984,6 +990,18 @@ function initPageNav(){
       showDashboardPage(targetId);
     });
   });
+
+  var tbValueLabBtn = document.getElementById('tbValueLabBtn');
+  if (tbValueLabBtn && !tbValueLabBtn._navBound) {
+    tbValueLabBtn.addEventListener('click', function () {
+      if (window.ValueLab && typeof window.ValueLab.openScenario === 'function') {
+        window.ValueLab.openScenario();
+      } else {
+        showDashboardPage('pageValueLab');
+      }
+    });
+    tbValueLabBtn._navBound = true;
+  }
 
   var warRoomBtn = document.getElementById('labWarRoomBtn');
   if (warRoomBtn && !warRoomBtn._navBound) {

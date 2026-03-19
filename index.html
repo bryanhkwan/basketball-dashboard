@@ -25,6 +25,7 @@
   <script src="modules/portal.js" defer></script>
   <script src="modules/teams.js" defer></script>
   <script src="modules/lab.js" defer></script>
+  <script src="modules/value-lab.js" defer></script>
   <script src="modules/chat.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="app.js" defer></script>
@@ -151,6 +152,7 @@
   <button class="pageNavBtn" data-page="pagePortal">🚪 Transfer Portal</button>
   <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
+  <button class="pageNavBtn" data-page="pageValueLab">Value Lab</button>
   <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
   <button class="pageNavBtn" data-page="pageLab">🔬 Tournament Lab</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites <span id="favsPortalBadge" class="sharesNavBadge" style="display:none">0</span></button>
@@ -617,6 +619,7 @@
             <span id="tbWeakThreshLabel" style="font-size:12px;font-weight:700;color:var(--bad);min-width:30px">40th</span>
           </div>
         </div>
+        <div style="align-self:end"><button id="tbValueLabBtn" class="secondary" style="padding:7px 12px;font-size:12px">Evaluate in Value Lab</button></div>
         <div style="align-self:end"><button id="tbClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear roster</button></div>
       </div>
     </div>
@@ -793,6 +796,7 @@
           <input id="thSeason" type="number" value="2026" min="2020" max="2030" class="thSeasonInput">
         </div>
         <button id="thLoadBtn" class="thLoadBtn">Load Team →</button>
+        <button id="thValueLabBtn" class="secondary" type="button">Open in Value Lab</button>
       </div>
       <div id="thLoading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0"></div>
     </div>
@@ -878,6 +882,108 @@
   </div>
 </div>
 </div><!-- /pageTeams -->
+
+<!-- Value Lab Page -->
+<div id="pageValueLab" style="display:none">
+<div class="wrap">
+  <div class="valueLabPage">
+    <div class="valueLabHeader">
+      <div>
+        <h2 class="valueLabTitle">Value Lab</h2>
+        <p class="muted valueLabSub">Value Lab sits above Team Hub and Team Builder: use it to evaluate actual team spend, what-if scenario rosters, or saved snapshots through one investment lens.</p>
+      </div>
+      <div class="valueLabHeaderActions">
+        <button id="valueLabOpenTeamHubBtn" type="button" class="secondary">Open Team Hub</button>
+        <button id="valueLabOpenTeamBuilderBtn" type="button" class="secondary">Open Team Builder</button>
+      </div>
+    </div>
+
+    <div class="card valueLabControlsCard" id="valueLabControlsSection">
+      <div class="valueLabControlGrid">
+        <div>
+          <label>Source type</label>
+          <select id="valueLabModeSelect" class="valueLabSourceSelect"></select>
+        </div>
+        <div>
+          <label>Actual team</label>
+          <select id="valueLabActualTeamSelect" class="valueLabSourceSelect"></select>
+        </div>
+        <div>
+          <label>Saved snapshot</label>
+          <select id="valueLabSourceSelect" class="valueLabSourceSelect"></select>
+        </div>
+        <div>
+          <label>Snapshot name</label>
+          <input id="valueLabSnapshotName" type="text" placeholder="Toledo 2026 value view">
+        </div>
+      </div>
+      <div class="valueLabControlActions">
+        <button id="valueLabUseTeamHubBtn" type="button" class="secondary">Use Team Hub Team</button>
+        <button id="valueLabUseLiveBtn" type="button" class="secondary">Use Current Scenario</button>
+        <button id="valueLabSaveBtn" type="button" class="primary">Save Snapshot</button>
+        <button id="valueLabDeleteBtn" type="button" class="secondary">Delete Snapshot</button>
+      </div>
+      <div class="valueLabMetaRow">
+        <div id="valueLabSourceMeta" class="muted" style="font-size:12px">Snapshots are saved locally for this browser in Phase 1.5.</div>
+        <div id="valueLabSourceStatus" class="valueLabStatus"></div>
+      </div>
+      <div class="hint">Save Snapshot captures whichever source is active right now — an actual team, your current scenario roster, or an already-saved view — so you can revisit that investment lens later without rebuilding it from scratch.</div>
+    </div>
+
+    <div class="thSection" id="valueLabKpisSection">
+      <div class="thSectionHead">Executive Summary</div>
+      <div id="valueLabKpis" class="kpis valueLabKpis"></div>
+    </div>
+
+    <div class="valueLabTopGrid">
+      <div class="card" id="valueLabInsightsSection">
+        <div class="valueLabSectionTitle">Roster Investment Readout</div>
+        <div id="valueLabInsights" class="valueLabInsights"></div>
+      </div>
+
+      <div class="card" id="valueLabOutcomeSection">
+        <div class="valueLabSectionTitle">Outcome vs Spend</div>
+        <div id="valueLabOutcome" class="valueLabOutcome"></div>
+      </div>
+    </div>
+
+    <div class="valueLabChartGrid" id="valueLabChartsSection">
+      <div class="card">
+        <div class="valueLabSectionTitle">Spend vs Perf</div>
+        <div id="valueLabScatter" class="valueLabScatter"></div>
+      </div>
+      <div class="card">
+        <div class="valueLabSectionTitle">Spend Breakdown</div>
+        <div id="valueLabBreakdowns" class="valueLabBreakdowns"></div>
+      </div>
+    </div>
+
+    <div class="thSection" id="valueLabRosterSection">
+      <div class="thSectionHead">Player ROI Board</div>
+      <div class="thSectionSub">Biggest roster bets, expected perf at that pay band, and which players are beating or missing the model's price expectation.</div>
+      <div class="scrollY">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Team</th>
+              <th>Pos</th>
+              <th>Class</th>
+              <th class="playersPerfHead">Perf</th>
+              <th>Value</th>
+              <th>Expected Perf</th>
+              <th>Surplus</th>
+              <th>ROI Call</th>
+            </tr>
+          </thead>
+          <tbody id="valueLabRosterBody"></tbody>
+        </table>
+      </div>
+      <div id="valueLabRosterEmpty" class="hint" style="text-align:center;padding:20px;margin:0">Choose an actual team, pull in your Team Builder scenario, or load a snapshot to evaluate the roster here.</div>
+    </div>
+  </div>
+</div>
+</div><!-- /pageValueLab -->
 
 <!-- Methodology Page -->
 <div id="pageMethodology" style="display:none">

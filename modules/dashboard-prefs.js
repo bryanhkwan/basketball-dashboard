@@ -8,6 +8,7 @@ var DASH_PREF_PAGE_IDS = [
   'pagePortal',
   'pageTeamBuilder',
   'pageTeams',
+  'pageValueLab',
   'pageMethodology',
   'pageLab',
   'pageWarRoom',
@@ -18,6 +19,7 @@ var DASH_PREF_TAB_OPTIONS = [
   { pageId: 'pagePortal', label: 'Transfer Portal', desc: 'Hide the portal board tab from the top navigation.' },
   { pageId: 'pageTeamBuilder', label: 'Team Builder', desc: 'Hide roster construction tools from the main nav.' },
   { pageId: 'pageTeams', label: 'Teams', desc: 'Hide the team scouting hub tab.' },
+  { pageId: 'pageValueLab', label: 'Value Lab', desc: 'Hide the roster investment and ROI page.' },
   { pageId: 'pageMethodology', label: 'Methodology', desc: 'Hide the methodology / explainer page.' },
   { pageId: 'pageLab', label: 'Tournament Lab', desc: 'Hide Tournament Lab and its War Room entry path.' },
   { pageId: 'pageFavorites', label: 'Favorites', desc: 'Hide the favorites page tab.' },
@@ -48,6 +50,14 @@ var DASH_PREF_SECTION_OPTIONS = {
     { id: 'teamsScoutSection', label: 'Team Scout Report', desc: 'Show or hide the scout report section.' },
     { id: 'teamsCompareSection', label: 'Compare Teams', desc: 'Show or hide the compare-teams section.' },
     { id: 'teamsMatchupSection', label: 'Matchup Breakdown', desc: 'Show or hide matchup shot-chart analysis.' }
+  ],
+  pageValueLab: [
+    { id: 'valueLabControlsSection', label: 'Source Controls', desc: 'Show or hide Value Lab source and snapshot controls.' },
+    { id: 'valueLabKpisSection', label: 'Executive Summary', desc: 'Show or hide Value Lab KPI cards.' },
+    { id: 'valueLabInsightsSection', label: 'Investment Readout', desc: 'Show or hide roster investment insights.' },
+    { id: 'valueLabOutcomeSection', label: 'Outcome vs Spend', desc: 'Show or hide the wins versus spend section.' },
+    { id: 'valueLabChartsSection', label: 'Charts', desc: 'Show or hide Value Lab charts and spend breakdowns.' },
+    { id: 'valueLabRosterSection', label: 'Player ROI Board', desc: 'Show or hide the per-player ROI table.' }
   ],
   pageMethodology: [
     { id: 'methodDataSourcesSection', label: 'Data Sources', desc: 'Show or hide the data sources explainer.' },

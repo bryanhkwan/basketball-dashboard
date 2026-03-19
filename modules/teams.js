@@ -4,7 +4,7 @@
 //               teambuilder.js (oppRoster, oppRefresh)
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-var thTeamSearch, thSeasonInput, thLoadBtn;
+var thTeamSearch, thSeasonInput, thLoadBtn, thValueLabBtn;
 var thOverviewEl, thThreatsEl, thGameLogEl, thH2HEl;
 var thLoadingEl;
 var thBracketGateEl, thBracketWorkspaceEl, thBracketSelectEl, thBracketNameEl, thBracketSeasonEl;
@@ -1789,6 +1789,7 @@ function initTeamsDOMRefs() {
   thTeamSearch  = document.getElementById('thTeamSearch');
   thSeasonInput = document.getElementById('thSeason');
   thLoadBtn     = document.getElementById('thLoadBtn');
+  thValueLabBtn = document.getElementById('thValueLabBtn');
   thOverviewEl  = document.getElementById('thOverview');
   thThreatsEl   = document.getElementById('thThreats');
   thGameLogEl   = document.getElementById('thGameLog');
@@ -4947,6 +4948,20 @@ function initTeamsPage() {
       thLoadTeam(team, season);
     });
   }
+  if (thValueLabBtn) {
+    thValueLabBtn.addEventListener('click', function () {
+      var team = thCurrentTeam || (thTeamSearch ? thTeamSearch.value : '');
+      if (!team) {
+        if (typeof showWarn === 'function') showWarn('Select or load a team first, then open Value Lab.');
+        return;
+      }
+      if (window.ValueLab && typeof window.ValueLab.openActualTeam === 'function') {
+        window.ValueLab.openActualTeam(team);
+      } else if (typeof showDashboardPage === 'function') {
+        showDashboardPage('pageValueLab');
+      }
+    });
+  }
 
   // Compare button
   const thCompareBtn = document.getElementById('thCompareBtn');
@@ -5023,6 +5038,8 @@ class TeamHub {
   refreshTeamList()             { return thRefreshTeamList(); }
   loadTeam(name, season)        { return thLoadTeam(name, season); }
   loadOpponent(teamName)        { return thLoadOpponent(teamName); }
+  getCurrentTeam()              { return thCurrentTeam; }
+  getCurrentSeason()            { return thCurrentSeason; }
   refreshTournamentHub()        { return _thScheduleBracketWorkspaceRender(); }
   refreshTournamentLauncher()   { return _thSyncWarRoomLauncher(); }
 }

@@ -191,6 +191,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initFavsPage();
   initSharesPage();
   if (typeof initLabPage === 'function') initLabPage();
+  if (typeof initValueLabPage === 'function') initValueLabPage();
   if (typeof initPortalPage === 'function') initPortalPage();
 
   // Quick add widgets (roster + opponent)
