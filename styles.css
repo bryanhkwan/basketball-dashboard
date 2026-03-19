@@ -74,6 +74,10 @@
     tr{transition:background .12s}
     tbody tr:nth-child(even) td{background:rgba(255,255,255,.012)}
     tr:hover td{background:rgba(var(--accent-rgb),.025)!important}
+    th.playersPerfHead{color:var(--accent);background:linear-gradient(180deg,rgba(var(--accent-rgb),.14),rgba(5,11,20,.98));}
+    td.playersPerfCell{background:rgba(var(--accent-rgb),.08);color:var(--accent);font-weight:800}
+    tbody tr:nth-child(even) td.playersPerfCell{background:rgba(var(--accent-rgb),.11)}
+    tr:hover td.playersPerfCell{background:rgba(var(--accent-rgb),.18)!important}
     .statLink{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .statLink:hover{opacity:.8}
     a,.statLink{color:var(--accent)!important}
@@ -423,6 +427,7 @@
     .pageNavBtn:hover{background:transparent;color:var(--text);transform:none;box-shadow:none;border-bottom-color:rgba(255,255,255,.12)}
     .pageNavBtn.active{border-bottom-color:var(--accent);color:var(--accent);background:transparent;box-shadow:none}
     .pageNavBtn .dashPrefToggle{top:4px;right:4px;width:20px;height:20px;font-size:14px}
+    #adminNavBtn[data-admin-hidden="1"]{display:none!important}
     /* ---------- Team Builder Sub-tabs ---------- */
     .tbSubNav{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
     .tbSubBtn{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);border-radius:0;padding:10px 18px 8px;cursor:pointer;font-size:12.5px;font-weight:700;transition:all .2s;box-shadow:none}
@@ -482,7 +487,7 @@
     /* ---------- Auth Overlay ---------- */
     .authOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:#030810;background-image:radial-gradient(ellipse 50% 40% at 50% 30%,rgba(255,210,0,.04) 0%,transparent 60%),radial-gradient(ellipse 60% 45% at 50% -5%,rgba(0,35,75,.25) 0%,transparent 55%)}
     .authOverlay.hidden{display:none}
-    .authCard{background:rgba(8,16,30,.95);border:1px solid rgba(255,255,255,.06);border-top:3px solid var(--accent);border-radius:16px;padding:44px 40px 38px;width:100%;max-width:400px;box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 80px rgba(255,210,0,.02);animation:fadeUp .35s ease-out both}
+    .authCard{background:rgba(8,16,30,.95);border:1px solid rgba(255,255,255,.06);border-top:3px solid var(--accent);border-radius:16px;padding:44px 40px 38px;width:100%;max-width:430px;box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 80px rgba(255,210,0,.02);animation:fadeUp .35s ease-out both}
     .authLogo{font-size:26px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;margin-bottom:8px}
     .authSub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:32px;opacity:.7}
     .authForm{display:flex;flex-direction:column;gap:16px}
@@ -490,12 +495,39 @@
     .authLabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     .authField input{width:100%}
     .authError{min-height:20px;font-size:12px;color:var(--bad);font-weight:500;text-align:center;line-height:1.4;margin-top:-4px}
+    .authSuccess{min-height:20px;font-size:12px;color:var(--good);font-weight:600;text-align:center;line-height:1.4;margin-top:-8px}
     .authSubmitBtn{width:100%;padding:12px;font-size:14px}
     .authDivider{display:flex;align-items:center;gap:12px;margin:4px 0;color:var(--muted);font-size:11px}
     .authDivider::before,.authDivider::after{content:'';flex:1;height:1px;background:var(--line)}
     .authGuestBtn{width:100%;padding:11px;font-size:13px;font-weight:600;background:transparent;border:1px solid rgba(255,255,255,.08);color:var(--muted);border-radius:8px;cursor:pointer;transition:all .18s;box-shadow:none}
     .authGuestBtn:hover{border-color:rgba(var(--accent-rgb),.25);color:var(--accent);background:rgba(var(--accent-rgb),.04);transform:none;box-shadow:none}
     .authGuestNote{text-align:center;font-size:11px;color:var(--muted);margin-top:10px;opacity:.5}
+    .authLinkBtn{width:100%;margin-top:12px;padding:0;background:none;border:none;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer}
+    .authLinkBtn:hover{text-decoration:underline}
+    .authRequestNote{margin-bottom:18px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);color:var(--muted);font-size:12px;line-height:1.55}
+
+    /* ---------- Admin ---------- */
+    .adminHero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+    .adminGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+    .adminCard{padding:18px}
+    .adminCardHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .adminCountPill{display:inline-flex;align-items:center;justify-content:center;min-width:24px;padding:2px 8px;border-radius:999px;background:rgba(var(--accent-rgb),.12);color:var(--accent);font-size:11px;font-weight:800;vertical-align:middle}
+    .adminFeedback{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);font-size:12.5px;font-weight:600}
+    .adminFeedback.success{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:var(--good)}
+    .adminFeedback.error{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08);color:var(--bad)}
+    .adminFeedback.info{border-color:rgba(var(--accent-rgb),.3);background:rgba(var(--accent-rgb),.08);color:var(--text)}
+    .adminTableWrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.1)}
+    .adminTable{width:100%;border-collapse:collapse;min-width:560px}
+    .adminTable th,.adminTable td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12.5px;text-align:left;vertical-align:middle}
+    .adminTable th{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:rgba(255,255,255,.03)}
+    .adminTable tbody tr:hover{background:rgba(255,255,255,.025)}
+    .adminActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+    .adminActions button,.adminTable td .adminDeleteBtn{padding:7px 11px;font-size:11px}
+    .adminEmptyState{padding:14px 4px 2px;color:var(--muted);font-size:12.5px}
+    .adminRolePill,.adminProtectedPill{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.04em;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--text)}
+    .adminRolePill.admin{background:rgba(var(--accent-rgb),.12);border-color:rgba(var(--accent-rgb),.22);color:var(--accent)}
+    .adminProtectedPill{color:var(--muted)}
+    .adminStateCard{max-width:760px}
 
     /* ---- League toggle switch (header) ---- */
     .leagueSwitch{display:flex;align-items:center;gap:8px}

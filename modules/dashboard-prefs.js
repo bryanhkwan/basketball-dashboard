@@ -359,7 +359,7 @@ function dashPrefsRenderNavTargets(effectivePrefs) {
 
   document.querySelectorAll('.pageNavBtn').forEach(function (btn) {
     var pageId = btn.dataset.page || '';
-    var canHide = pageId && pageId !== 'pagePlayers';
+    var canHide = pageId && pageId !== 'pagePlayers' && DASH_PREF_TAB_OPTIONS.some(function (item) { return item.pageId === pageId; });
     var hidden = hiddenTabs.indexOf(pageId) >= 0;
 
     btn.classList.toggle('dashPrefLocked', !canHide);

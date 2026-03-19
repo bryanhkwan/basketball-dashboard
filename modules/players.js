@@ -21,9 +21,6 @@ const LIST_COLS = [
   {key:'Score', label:'Perf'},
   {key:'FitScore_calc', label:'Fit'},
   {key:'ActualValuation_calc', label:'Model $'},
-  {key:'ActualValuation', label:'Actual $'},
-  {key:'ValueDelta_calc', label:'Δ$'},
-  {key:'_sched_diff', label:'SoS'},
   {key:'_draft_prob', label:'Draft'},
 ];
 
@@ -64,7 +61,6 @@ function renderPlayers(){
 function renderPlayersPage(){
   const colsToShow = LIST_COLS.filter(c => {
     if(c.key === '_opp_add') return typeof oppAddPlayer !== 'undefined';
-    if(c.key === '_sched_diff') return typeof league !== 'undefined' && league === 'MBB';
     if(c.key === '_draft_prob') return typeof league !== 'undefined' && league === 'MBB' && typeof draftBadgeHtml === 'function';
     if(c.wbbOnly) return typeof league !== 'undefined' && league === 'WBB';
     return true;
@@ -75,6 +71,7 @@ function renderPlayersPage(){
     colsToShow.forEach(c => {
       const th = document.createElement('th');
       th.textContent = c.label;
+      if(c.key === 'Score') th.classList.add('playersPerfHead');
       th.addEventListener('click', ()=>{
         if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
         else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
@@ -102,27 +99,22 @@ function renderPlayersPage(){
     const _rk = tbPlayerKey(r);
     colsToShow.forEach(c => {
       const td = document.createElement('td');
+      if(c.key === 'Score') td.classList.add('playersPerfCell');
       let v = r[c.key];
-      if(c.key === 'ActualValuation_calc' || c.key === 'ActualValuation' || c.key === 'ValueDelta_calc'){
-        const n = safeNum(v);
-        if(!Number.isFinite(n)) v = '—';
-        else if(c.key === 'ValueDelta_calc') v = (n>=0?'+':'') + fmtMoney(n).replace('$','');
-        else v = fmtMoney(n);
-      }
       if(c.key === '_tb_add'){
         const onRoster = _rosterKeySet.has(_rk);
         if(onRoster){
-          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">✓</span>`;
+          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">&#10003;</span>`;
         } else {
-          td.innerHTML = `<span class="tbAddBtn" title="Add to roster">＋</span>`;
+          td.innerHTML = `<span class="tbAddBtn" title="Add to roster">&#65291;</span>`;
           td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); tbAddPlayer(r); });
         }
       }else if(c.key === '_opp_add'){
         const onOpp = _oppKeySet.has(_rk);
         if(onOpp){
-          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already in opponent">✓</span>`;
+          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already in opponent">&#10003;</span>`;
         } else {
-          td.innerHTML = `<span class="tbAddBtn" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">⚔</span>`;
+          td.innerHTML = `<span class="tbAddBtn" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">&#9876;</span>`;
           td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); if(typeof oppAddPlayer !== 'undefined') oppAddPlayer(r); });
         }
       }else if(c.key === 'Player'){
@@ -135,32 +127,21 @@ function renderPlayersPage(){
           td.style.color = cm > 1 ? 'var(--good)' : 'var(--bad)';
           td.style.fontWeight = '700';
         } else {
-          td.textContent = Number.isFinite(cm) ? cm.toFixed(2) : '—';
+          td.textContent = Number.isFinite(cm) ? cm.toFixed(2) : '\u2014';
         }
       }else if(c.key === 'Height'){
         const h = Number(r.Height);
         if(Number.isFinite(h) && h > 0) td.textContent = Math.floor(h/12) + "'" + (h%12) + '"';
-        else td.textContent = r.Height || '—';
+        else td.textContent = r.Height || '\u2014';
         td.style.color = 'var(--muted)';
       }else if(c.key === 'Score' && Number.isFinite(Number(r.Score))){
         td.textContent = Number(r.Score).toFixed(2);
       }else if(c.key === 'FitScore_calc'){
-        td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
+        td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '\u2014';
       }else if(c.key === 'ActualValuation_calc'){
-        td.textContent = fmtMoney(r.ActualValuation_calc);      }else if(c.key === '_sched_diff'){
-        const tRat = (typeof teamRatings !== 'undefined') ? teamRatings[(r.Team||'').toLowerCase()] : null;
-        if(!tRat){
-          td.textContent = '—';
-          td.style.color = 'var(--muted)';
-        } else {
-          const sos = tRat.sos;
-          td.textContent = Number.isFinite(sos) ? (sos >= 0 ? '+' : '') + sos.toFixed(1) : '—';
-          if(Number.isFinite(sos)){
-            td.style.fontWeight = '600';
-            td.style.color = sos >= 2 ? 'var(--bad)' : sos >= 0 ? 'var(--warn)' : sos >= -2 ? 'var(--muted)' : 'var(--good)';
-            td.title = `Schedule difficulty (SoS): ${sos >= 2 ? 'Very Hard' : sos >= 0 ? 'Hard' : sos >= -2 ? 'Average' : 'Easy'}`;
-          }
-        }      }else if(c.key === '_draft_prob'){
+        const modelValue = safeNum(r.ActualValuation_calc);
+        td.textContent = Number.isFinite(modelValue) ? fmtMoney(modelValue) : '\u2014';
+      }else if(c.key === '_draft_prob'){
         if(typeof draftBadgeHtml === 'function'){
           td.innerHTML = draftBadgeHtml(r);
           td.style.textAlign = 'center';

@@ -21,6 +21,7 @@
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
   <script src="modules/dashboard-prefs.js" defer></script>
+  <script src="modules/admin.js" defer></script>
   <script src="modules/portal.js" defer></script>
   <script src="modules/teams.js" defer></script>
   <script src="modules/lab.js" defer></script>
@@ -34,23 +35,55 @@
 <div id="authOverlay" class="authOverlay">
   <div class="authCard">
     <div class="authLogo">🏀 NCAA Scouting</div>
-    <div class="authSub">Sign in to your account</div>
 
-    <form id="loginForm" class="authForm">
-      <div class="authField">
-        <label class="authLabel">Username</label>
-        <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+    <div id="authLoginView">
+      <div class="authSub">Sign in to your account</div>
+      <form id="loginForm" class="authForm">
+        <div class="authField">
+          <label class="authLabel">Username</label>
+          <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
+        </div>
+        <div class="authError" id="loginError"></div>
+        <button type="submit" class="primary authSubmitBtn">Login</button>
+      </form>
+      <div class="authDivider"><span>or</span></div>
+      <button type="button" id="guestBtn" class="authGuestBtn">Continue as Guest</button>
+      <p class="authGuestNote">Explore the model freely · 10 free AI messages · no saving</p>
+      <button type="button" id="showCreateAccountBtn" class="authLinkBtn">Create account</button>
+    </div>
+
+    <div id="authRegisterView" style="display:none">
+      <div class="authSub">Request an approved account</div>
+      <div class="authRequestNote">
+        This is specifically for UToledo Athletics members. New accounts must be approved by an admin before you can log in. If you are just looking around, please use the guest account instead.
       </div>
-      <div class="authField">
-        <label class="authLabel">Password</label>
-        <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
-      </div>
-      <div class="authError" id="loginError"></div>
-      <button type="submit" class="primary authSubmitBtn">Login</button>
-    </form>
-    <div class="authDivider"><span>or</span></div>
-    <button type="button" id="guestBtn" class="authGuestBtn">Continue as Guest</button>
-    <p class="authGuestNote">Explore the model freely · 10 free AI messages · no saving</p>
+      <form id="registerForm" class="authForm">
+        <div class="authField">
+          <label class="authLabel">Username</label>
+          <input type="text" id="registerUsername" placeholder="Choose a username" required autocomplete="username">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Email <span class="muted" style="font-size:10px;text-transform:none">(optional)</span></label>
+          <input type="email" id="registerEmail" placeholder="name@utoledo.edu" autocomplete="email">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Password</label>
+          <input type="password" id="registerPassword" placeholder="Create a password" required autocomplete="new-password">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Confirm Password</label>
+          <input type="password" id="registerPasswordConfirm" placeholder="Confirm password" required autocomplete="new-password">
+        </div>
+        <div class="authError" id="registerError"></div>
+        <div class="authSuccess" id="registerSuccess"></div>
+        <button type="submit" class="primary authSubmitBtn">Request Account</button>
+      </form>
+      <button type="button" id="backToLoginBtn" class="authGuestBtn" style="margin-top:12px">Back to Login</button>
+    </div>
   </div>
 </div>
 
@@ -100,6 +133,7 @@
   <button class="pageNavBtn" data-page="pageLab">🔬 Tournament Lab</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites <span id="favsPortalBadge" class="sharesNavBadge" style="display:none">0</span></button>
   <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
+  <button class="pageNavBtn" id="adminNavBtn" data-page="pageAdmin" style="display:none">🛡️ Admin</button>
 </nav>
 
 <div id="dashboardPrefsBar" class="dashPrefsBar" style="display:none">
@@ -1345,6 +1379,76 @@
   </div>
 </div>
 </div><!-- /pageFavorites -->
+
+<!-- Admin Page -->
+<div id="pageAdmin" style="display:none">
+<div class="wrap">
+  <div class="adminHero">
+    <div>
+      <h2 style="margin:0">🛡️ Admin</h2>
+      <p class="muted" style="margin:6px 0 0;font-size:13px">Approve UToledo account requests and manage dashboard users.</p>
+    </div>
+    <button id="adminRefreshBtn" class="secondary">Refresh</button>
+  </div>
+
+  <div id="adminAccessDenied" class="card adminStateCard" style="display:none">
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">Admin access required</div>
+    <div class="muted" style="font-size:13px;line-height:1.6">Only the approved <b>utdata</b> admin account can view account requests and manage users.</div>
+  </div>
+
+  <div id="adminPanelWrap">
+    <div id="adminFeedback" class="adminFeedback" style="display:none"></div>
+    <div class="adminGrid">
+      <section class="card adminCard">
+        <div class="adminCardHead">
+          <div>
+            <div class="mini">Pending Requests</div>
+            <h3 style="margin:4px 0 0">Approve New Accounts <span id="adminRequestCount" class="adminCountPill">0</span></h3>
+          </div>
+        </div>
+        <div class="adminTableWrap">
+          <table class="adminTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Requested</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminRequestBody"></tbody>
+          </table>
+        </div>
+        <div id="adminRequestEmpty" class="adminEmptyState" style="display:none">No pending account requests right now.</div>
+      </section>
+
+      <section class="card adminCard">
+        <div class="adminCardHead">
+          <div>
+            <div class="mini">Existing Users</div>
+            <h3 style="margin:4px 0 0">Manage Accounts <span id="adminUserCount" class="adminCountPill">0</span></h3>
+          </div>
+        </div>
+        <div class="adminTableWrap">
+          <table class="adminTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Created</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+        <div id="adminUsersEmpty" class="adminEmptyState" style="display:none">No users found.</div>
+      </section>
+    </div>
+  </div>
+</div>
+</div><!-- /pageAdmin -->
 
 <!-- Collaborate Page -->
 <div id="pageCollaborate" style="display:none">

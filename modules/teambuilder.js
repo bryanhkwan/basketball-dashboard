@@ -950,7 +950,7 @@ function showDashboardPage(targetId, activeNavId){
   document.querySelectorAll('.pageNavBtn').forEach(function(b){
     b.classList.toggle('active', b.dataset.page === activeId);
   });
-  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate').forEach(function(el) {
+  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate, #pageAdmin').forEach(function(el) {
     el.style.display = 'none';
   });
   var target = document.getElementById(targetId);
@@ -968,6 +968,9 @@ function showDashboardPage(targetId, activeNavId){
     if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
     if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
     if(typeof favsRenderPage     === 'function') favsRenderPage();
+  }
+  if(targetId === 'pageAdmin' && window.AdminPanel && typeof window.AdminPanel.load === 'function') {
+    window.AdminPanel.load();
   }
 }
 
