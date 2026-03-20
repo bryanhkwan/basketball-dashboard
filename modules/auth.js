@@ -116,6 +116,9 @@ function authHandleUnauthorized(message) {
   if (window.AdminPanel && typeof window.AdminPanel.resetSession === 'function') {
     window.AdminPanel.resetSession();
   }
+  if (window.ValueLab && typeof window.ValueLab.resetSession === 'function') {
+    window.ValueLab.resetSession();
+  }
   var loadingOverlay = document.getElementById('loadingOverlay');
   var welcomeOverlay = document.getElementById('welcomeOverlay');
   if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -455,6 +458,9 @@ async function authInit() {
       }
       if (window.AdminPanel && typeof window.AdminPanel.resetSession === 'function') {
         window.AdminPanel.resetSession();
+      }
+      if (window.ValueLab && typeof window.ValueLab.resetSession === 'function') {
+        window.ValueLab.resetSession();
       }
       authShowOverlay();
       if (loginForm) loginForm.reset();

@@ -4852,9 +4852,8 @@ function thLoadOpponent(teamName) {
   if (typeof clearWarn === 'function') clearWarn();
 
   // Navigate to Team Builder → Opponent tab
-  const tbNavBtn  = document.querySelector('.pageNavBtn[data-page="pageTeamBuilder"]');
   const oppSubBtn = document.querySelector('.tbSubBtn[data-sub="tbSubOpponent"]');
-  if (tbNavBtn)  tbNavBtn.click();
+  if (typeof showDashboardPage === 'function') showDashboardPage('pageTeamBuilder', 'pageTeams');
   setTimeout(() => { if (oppSubBtn) oppSubBtn.click(); }, 80);
 }
 

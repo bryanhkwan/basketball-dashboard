@@ -17,7 +17,6 @@ var DASH_PREF_PAGE_IDS = [
 ];
 var DASH_PREF_TAB_OPTIONS = [
   { pageId: 'pagePortal', label: 'Transfer Portal', desc: 'Hide the portal board tab from the top navigation.' },
-  { pageId: 'pageTeamBuilder', label: 'Team Builder', desc: 'Hide roster construction tools from the main nav.' },
   { pageId: 'pageTeams', label: 'Teams', desc: 'Hide the team scouting hub tab.' },
   { pageId: 'pageValueLab', label: 'Value Lab', desc: 'Hide the roster investment and ROI page.' },
   { pageId: 'pageMethodology', label: 'Methodology', desc: 'Hide the methodology / explainer page.' },
@@ -52,7 +51,7 @@ var DASH_PREF_SECTION_OPTIONS = {
     { id: 'teamsMatchupSection', label: 'Matchup Breakdown', desc: 'Show or hide matchup shot-chart analysis.' }
   ],
   pageValueLab: [
-    { id: 'valueLabControlsSection', label: 'Source Controls', desc: 'Show or hide Value Lab source and snapshot controls.' },
+    { id: 'valueLabControlsSection', label: 'Case Controls', desc: 'Show or hide Value Lab case management and import controls.' },
     { id: 'valueLabKpisSection', label: 'Executive Summary', desc: 'Show or hide Value Lab KPI cards.' },
     { id: 'valueLabInsightsSection', label: 'Investment Readout', desc: 'Show or hide roster investment insights.' },
     { id: 'valueLabOutcomeSection', label: 'Outcome vs Spend', desc: 'Show or hide the wins versus spend section.' },
@@ -240,6 +239,7 @@ function dashPrefsIsPageVisible(pageId, prefs) {
   prefs = dashPrefsNormalize(prefs || dashPrefsState.prefs || dashPrefsDefault());
   if (!pageId || pageId === 'pagePlayers') return true;
   if (pageId === 'pageWarRoom') return dashPrefsIsPageVisible('pageLab', prefs);
+  if (pageId === 'pageTeamBuilder') return dashPrefsIsPageVisible('pageTeams', prefs);
   return prefs.hiddenTabs.indexOf(pageId) === -1;
 }
 

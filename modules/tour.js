@@ -74,10 +74,12 @@
       page: 'pagePlayers'
     },
     {
-      target: '.pageNavBtn[data-page="pageTeamBuilder"]',
+      target: '#thOpenBuilderBtn',
       title: '📋 Team Builder',
-      body: 'Build and manage rosters, analyze stat gaps, compare teams head-to-head, and scout opponents — all in one place. Click <b>Next</b> to explore its features.',
+      body: 'Team Builder now lives under Team Hub so the scouting workflow stays cleaner. Use this launcher to open the roster workspace, then click <b>Next</b> to explore its features.',
       position: 'bottom'
+      ,
+      page: 'pageTeams'
     },
     {
       target: '#tbQuickAddInput',

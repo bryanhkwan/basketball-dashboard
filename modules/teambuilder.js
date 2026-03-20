@@ -1003,6 +1003,22 @@ function initPageNav(){
     tbValueLabBtn._navBound = true;
   }
 
+  var thOpenBuilderBtn = document.getElementById('thOpenBuilderBtn');
+  if (thOpenBuilderBtn && !thOpenBuilderBtn._navBound) {
+    thOpenBuilderBtn.addEventListener('click', function () {
+      showDashboardPage('pageTeamBuilder', 'pageTeams');
+    });
+    thOpenBuilderBtn._navBound = true;
+  }
+
+  var tbBackToTeamsBtn = document.getElementById('tbBackToTeamsBtn');
+  if (tbBackToTeamsBtn && !tbBackToTeamsBtn._navBound) {
+    tbBackToTeamsBtn.addEventListener('click', function () {
+      showDashboardPage('pageTeams', 'pageTeams');
+    });
+    tbBackToTeamsBtn._navBound = true;
+  }
+
   var warRoomBtn = document.getElementById('labWarRoomBtn');
   if (warRoomBtn && !warRoomBtn._navBound) {
     warRoomBtn.addEventListener('click', function () {

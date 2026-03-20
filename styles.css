@@ -3849,15 +3849,27 @@
 .valueLabTitle { font-size: 24px; font-weight: 800; letter-spacing: -.4px; }
 .valueLabSub { max-width: 780px; font-size: 13px; }
 .valueLabControlsCard { padding: 18px 20px; }
-.valueLabControlGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.valueLabControlGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .valueLabControlGrid > div { min-width: 0; }
 .valueLabSourceSelect { width: 100%; }
+.valueLabQuickAddWrap { position: relative; }
+.valueLabQuickAddDropdown { left: 0; right: 0; top: calc(100% + 6px); }
+.valueLabSpendInput, #valueLabBudgetInput { width: 100%; min-width: 96px; }
+.valueLabDeltaGood { color: var(--good); font-weight: 700; }
+.valueLabDeltaWarn { color: var(--warn); font-weight: 700; }
+.valueLabDeltaBad { color: var(--bad); font-weight: 700; }
 .valueLabControlActions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .valueLabMetaRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .valueLabStatus { min-height: 18px; font-size: 12px; font-weight: 700; color: var(--muted); }
 .valueLabStatus.good { color: var(--good); }
 .valueLabStatus.warn { color: var(--warn); }
 .valueLabStatus.bad { color: var(--bad); }
+.valueLabPortalWatch { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.valueLabPortalPill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.03); font-size: 11px; color: var(--text); }
+.valueLabPortalPill b { color: var(--accent); }
+.valueLabPortalPill small { color: var(--muted); font-size: 10px; }
+.valueLabPortalPill--warn { border-color: rgba(251,191,36,.24); }
+.valueLabPortalPill--good { border-color: rgba(52,211,153,.24); }
 .valueLabTopGrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 16px; }
 .valueLabChartGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .valueLabSectionTitle { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 14px; }
