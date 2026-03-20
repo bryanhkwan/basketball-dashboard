@@ -3899,7 +3899,7 @@
 .valueLabBarTrack { position: relative; height: 8px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.05); }
 .valueLabBarFill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, rgba(var(--accent-rgb), .95), rgba(var(--accent-rgb), .42)); }
 .valueLabBarMeta { font-size: 10.5px; color: var(--muted); }
-.valueLabRoiTag { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .25px; border: 1px solid var(--line); }
+.valueLabRoiTag { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .25px; border: 1px solid var(--line); cursor: help; }
 .valueLabRoiTag--good { background: rgba(52,211,153,.10); border-color: rgba(52,211,153,.28); color: var(--good); }
 .valueLabRoiTag--warn { background: rgba(251,191,36,.10); border-color: rgba(251,191,36,.28); color: var(--warn); }
 .valueLabRoiTag--bad { background: rgba(248,113,113,.10); border-color: rgba(248,113,113,.28); color: var(--bad); }

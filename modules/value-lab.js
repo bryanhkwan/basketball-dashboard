@@ -702,6 +702,28 @@ function valueLabRoiCall(player, richSpendCutoff) {
   return { label: 'Fair', tone: 'neutral' };
 }
 
+function valueLabRoiTooltipText(row) {
+  if (!row) return 'ROI Call: quick value verdict based on performance versus expected return at this price tier.';
+  var surplus = valueLabNum(row.surplus);
+  var suffix = Number.isFinite(surplus)
+    ? (' Current surplus: ' + (surplus >= 0 ? '+' : '') + surplus.toFixed(1) + ' Perf versus expected return.')
+    : '';
+  switch (String(row.roiLabel || '')) {
+    case 'Steal':
+      return 'Steal: this player is outperforming the expected return for this spend tier by 6 or more Perf points.' + suffix;
+    case 'Premium worth it':
+      return 'Premium worth it: this is an expensive/top-tier spend, but the player is still outperforming that premium price by 6 or more Perf points.' + suffix;
+    case 'Value':
+      return 'Value: this player is beating the expected return for this spend tier by at least 2.5 Perf points.' + suffix;
+    case 'Rich':
+      return 'Rich: the contract looks a little expensive right now, with performance 2.5 to 5.9 Perf points below expected return.' + suffix;
+    case 'Overpay':
+      return 'Overpay: the contract is materially overpriced right now, with performance 6 or more Perf points below expected return.' + suffix;
+    default:
+      return 'Fair: this player is performing roughly in line with the expected return for this spend tier.' + suffix;
+  }
+}
+
 function valueLabEmptyMessage(bundle) {
   bundle = bundle || valueLabGetSourceBundle();
   if (bundle.mode === 'actualTeam') {
@@ -1372,7 +1394,7 @@ function valueLabRenderRosterTable(analysis) {
       '<td>' + valueLabFmtMoney(row.valuation) + '</td>' +
       '<td>' + (Number.isFinite(row.expectedPerf) ? row.expectedPerf.toFixed(1) : '—') + '</td>' +
       '<td style="color:' + surplusTone + ';font-weight:800">' + surplusText + '</td>' +
-      '<td><span class="valueLabRoiTag valueLabRoiTag--' + row.roiTone + '">' + row.roiLabel + '</span></td>';
+      '<td><span class="valueLabRoiTag valueLabRoiTag--' + row.roiTone + '" title="' + valueLabEsc(valueLabRoiTooltipText(row)) + '" aria-label="' + valueLabEsc(valueLabRoiTooltipText(row)) + '">' + row.roiLabel + '</span></td>';
     var link = tr.querySelector('.valueLabPlayerLink');
     if (link) {
       link.addEventListener('click', function () {
@@ -2304,7 +2326,7 @@ function valueLabRenderRosterTable(analysis) {
       '<td class="' + valueLabDeltaToneClass(row) + '">' + deltaText + '</td>' +
       '<td>' + (Number.isFinite(row.expectedPerf) ? row.expectedPerf.toFixed(1) : '—') + '</td>' +
       '<td style="font-weight:800;color:' + (row.roiTone === 'good' ? 'var(--good)' : row.roiTone === 'bad' ? 'var(--bad)' : row.roiTone === 'warn' ? 'var(--warn)' : 'var(--muted)') + '">' + surplusText + '</td>' +
-      '<td><span class="valueLabRoiTag valueLabRoiTag--' + row.roiTone + '">' + row.roiLabel + '</span></td>' +
+      '<td><span class="valueLabRoiTag valueLabRoiTag--' + row.roiTone + '" title="' + valueLabEsc(valueLabRoiTooltipText(row)) + '" aria-label="' + valueLabEsc(valueLabRoiTooltipText(row)) + '">' + row.roiLabel + '</span></td>' +
       '<td><button class="tbRemoveBtn valueLabRemoveBtn" type="button">✕</button></td>';
     var link = tr.querySelector('.valueLabPlayerLink');
     if (link) link.addEventListener('click', function () { if (typeof openProfile === 'function') openProfile(row); });
