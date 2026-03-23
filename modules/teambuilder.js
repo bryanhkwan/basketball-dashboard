@@ -958,6 +958,9 @@ function showDashboardPage(targetId, activeNavId){
   });
   var target = document.getElementById(targetId);
   if(target) target.style.display = '';
+  if (targetId !== 'pagePlayers' && window._app && typeof window._app.setPlayersSettingsOpen === 'function') {
+    window._app.setPlayersSettingsOpen(false);
+  }
 
   if(targetId === 'pagePlayers') renderPlayersPage();
   if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();

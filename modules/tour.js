@@ -110,6 +110,17 @@
     lastRouteKey = nextRouteKey;
   }
 
+  function ensureStepWorkspace(step) {
+    if (!step || !step.target) return;
+    var target = document.querySelector(step.target);
+    if (!target) return;
+    if (target.closest && target.closest('#playersRightstack')) {
+      if (window._app && typeof window._app.setPlayersSettingsOpen === 'function') {
+        window._app.setPlayersSettingsOpen(true);
+      }
+    }
+  }
+
   function positionElements() {
     if (!active || !highlightEl || !tooltipEl) return;
     var currentSteps = getActiveSteps();
@@ -187,6 +198,7 @@
     var step = currentSteps[index];
 
     switchPage(step);
+    ensureStepWorkspace(step);
 
     var target = document.querySelector(step.target);
     if (!target) {

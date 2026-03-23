@@ -111,7 +111,7 @@ var dashPrefsState = {
 };
 
 var dashPrefsBtnEl, dashPrefsBarEl, dashPrefsBarTextEl, dashPrefsSaveBtnEl, dashPrefsResetBtnEl, dashPrefsCancelBtnEl;
-var dashPrefsPlayersGridEl, dashPrefsPlayersRightstackEl;
+var dashPrefsPlayersGridEl, dashPrefsPlayersRightstackEl, dashPrefsPlayersSettingsToggleEl;
 var DASH_PREFS_GUEST_KEY = '_guestDashboardPrefs';
 
 function dashPrefsClone(value) {
@@ -434,6 +434,11 @@ function dashPrefsSyncPlayersLayout(customizing, visibleCount) {
   if (dashPrefsPlayersRightstackEl) {
     dashPrefsPlayersRightstackEl.classList.toggle('rightstackHidden', !customizing && visibleCount === 0);
   }
+  if (typeof setPlayersSettingsAvailable === 'function') {
+    setPlayersSettingsAvailable(customizing || visibleCount > 0);
+  } else if (dashPrefsPlayersSettingsToggleEl) {
+    dashPrefsPlayersSettingsToggleEl.style.display = (customizing || visibleCount > 0) ? '' : 'none';
+  }
 }
 
 function dashPrefsSyncTeamBuilderSubtabs() {
@@ -626,6 +631,7 @@ function initDashboardPrefs() {
   dashPrefsCancelBtnEl = document.getElementById('dashPrefsCancelBtn');
   dashPrefsPlayersGridEl = document.getElementById('playersGrid');
   dashPrefsPlayersRightstackEl = document.getElementById('playersRightstack');
+  dashPrefsPlayersSettingsToggleEl = document.getElementById('playersSettingsToggleBtn');
 
   if (dashPrefsBtnEl && !dashPrefsBtnEl._bound) {
     dashPrefsBtnEl.addEventListener('click', dashPrefsToggleMode);

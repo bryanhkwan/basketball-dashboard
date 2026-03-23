@@ -64,6 +64,31 @@ window.addEventListener('error', (e) => {
   box.textContent = `JS Error: ${e.message}`;
 });
 
+var playersSettingsToggleBtnEl = null;
+var playersSettingsDockEl = null;
+var playersSettingsDrawerEl = null;
+var playersSettingsBackdropEl = null;
+var playersSettingsCloseBtnEl = null;
+
+function setPlayersSettingsOpen(open) {
+  if (!playersSettingsDockEl || !playersSettingsToggleBtnEl || !playersSettingsDrawerEl || !playersSettingsBackdropEl) return;
+  var nextOpen = !!open;
+  playersSettingsDockEl.classList.toggle('playersSettingsDockOpen', nextOpen);
+  playersSettingsDrawerEl.classList.toggle('isOpen', nextOpen);
+  playersSettingsBackdropEl.classList.toggle('isOpen', nextOpen);
+  playersSettingsToggleBtnEl.classList.toggle('isActive', nextOpen);
+  playersSettingsDrawerEl.setAttribute('aria-hidden', nextOpen ? 'false' : 'true');
+  document.body.classList.toggle('playersSettingsOpen', nextOpen);
+  playersSettingsToggleBtnEl.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+}
+
+function setPlayersSettingsAvailable(hasVisibleSections) {
+  if (!playersSettingsToggleBtnEl) return;
+  var available = !!hasVisibleSections;
+  playersSettingsToggleBtnEl.style.display = available ? '' : 'none';
+  if (!available) setPlayersSettingsOpen(false);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   const sheetEl = document.getElementById('activeSheet');
   if(sheetEl && (sheetEl.textContent||'').trim() === '—') sheetEl.textContent = 'Ready (upload workbook)';
@@ -166,6 +191,35 @@ window.addEventListener('DOMContentLoaded', () => {
   showSelectedOnlyEl.addEventListener('change', renderWeights);
   advancedDirEl.addEventListener('change', renderWeights);
 
+  playersSettingsToggleBtnEl = document.getElementById('playersSettingsToggleBtn');
+  playersSettingsDockEl = document.getElementById('playersRightstack');
+  playersSettingsDrawerEl = document.getElementById('playersSettingsDrawer');
+  playersSettingsBackdropEl = document.getElementById('playersSettingsBackdrop');
+  playersSettingsCloseBtnEl = document.getElementById('playersSettingsCloseBtn');
+  if (playersSettingsToggleBtnEl && playersSettingsDockEl && playersSettingsDrawerEl && playersSettingsBackdropEl) {
+    setPlayersSettingsOpen(false);
+    playersSettingsToggleBtnEl.addEventListener('click', () => {
+      setPlayersSettingsOpen(!playersSettingsDrawerEl.classList.contains('isOpen'));
+    });
+    playersSettingsBackdropEl.addEventListener('click', () => setPlayersSettingsOpen(false));
+    if (playersSettingsCloseBtnEl) playersSettingsCloseBtnEl.addEventListener('click', () => setPlayersSettingsOpen(false));
+    document.addEventListener('pointerdown', (event) => {
+      if (!playersSettingsDrawerEl.classList.contains('isOpen')) return;
+      var target = event.target;
+      if (!target) return;
+      if (playersSettingsDrawerEl.contains(target)) return;
+      if (playersSettingsToggleBtnEl.contains(target)) return;
+      setPlayersSettingsOpen(false);
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && playersSettingsDrawerEl.classList.contains('isOpen')) {
+        setPlayersSettingsOpen(false);
+      }
+    });
+  }
+
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
     if(!el) return;
     el.addEventListener('input', ()=>{ if(wb) requestComputeAll(120); });
@@ -238,6 +292,8 @@ window._app = {
   statPercentile,
   barColor,
   getInvertForStat,
+  setPlayersSettingsOpen,
+  setPlayersSettingsAvailable,
   // Teams Hub / ratings
   get teamRatings()      { return teamRatings; },
   get allRatingsData()   { return allRatingsData; },
