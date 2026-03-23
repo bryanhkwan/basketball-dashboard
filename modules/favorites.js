@@ -10,6 +10,12 @@ function _devFavsWrite(arr) { localStorage.setItem('_devFavs', JSON.stringify(ar
 function _devFavFoldersStore() { try { return JSON.parse(localStorage.getItem('_devFavFolders') || '[]'); } catch (_) { return []; } }
 function _devFavFoldersWrite(arr) { localStorage.setItem('_devFavFolders', JSON.stringify(arr)); }
 
+function favsRefreshPortalAlerts() {
+  if (window.TransferPortal && typeof window.TransferPortal.refreshWatchAlerts === 'function') {
+    window.TransferPortal.refreshWatchAlerts();
+  }
+}
+
 async function _favsFetchDev(path, opts) {
   var method = ((opts && opts.method) || 'GET').toUpperCase();
   // ── Folders sub-resource ──────────────────────────────────────────────────
@@ -62,7 +68,8 @@ async function _favsFetchDev(path, opts) {
 // They persist across tab switches until explicitly deleted.
 // serverFolders: persisted folder names loaded from / saved to the backend.
 // Replaces the old in-memory pendingFolders array.
-var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [] };
+var favsState = { favorites: [], loaded: false, activeFolder: '', serverFolders: [], selectedKeys: new Set(), pendingFolders: [], lastSyncedAt: 0, syncPromise: null };
+var _favsRenderTimer = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function favsFetch(path, opts) {
@@ -73,7 +80,11 @@ async function favsFetch(path, opts) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(FAVS_BASE + path, Object.assign({ credentials: 'include', headers: headers }, opts));
-  if (res.status === 401) return null;   // not logged in — silent
+  if (res.status === 401) {
+    var unauthorized = new Error('Unauthorized');
+    unauthorized.code = 'UNAUTHORIZED';
+    throw unauthorized;
+  }
   if (!res.ok) {
     const err = await res.json().catch(function() { return {}; });
     throw new Error(err.message || err.error || ('Error ' + res.status));
@@ -91,17 +102,44 @@ async function favsLoad() {
     // folders array is included in the same response
     favsState.serverFolders = Array.isArray(data.folders) ? data.folders : [];
     favsState.loaded = true;
+    favsMarkSynced();
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
     if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer)
       favsUpdateModalBtn(_currentProfilePlayer);
     favsUpdateTableHearts();
   } catch (e) {
+    if (e && e.code === 'UNAUTHORIZED') {
+      favsState.loaded = false;
+      favsState.lastSyncedAt = 0;
+      if (typeof authHandleUnauthorized === 'function') {
+        authHandleUnauthorized('Your session expired. Please log in again to sync favorites.');
+      }
+      return;
+    }
     console.warn('[Favorites] load error:', e);
   }
 }
 
 // ── Folders ───────────────────────────────────────────────────────────────────
+function favsMarkSynced() {
+  favsState.lastSyncedAt = Date.now();
+  favsState.syncPromise = null;
+}
+
+function favsEnsureFresh(force) {
+  if (typeof authIsGuest === 'function' && authIsGuest()) return Promise.resolve([]);
+  var staleMs = force ? 0 : 45000;
+  var isFresh = favsState.loaded && favsState.lastSyncedAt && (Date.now() - favsState.lastSyncedAt) < staleMs;
+  if (isFresh) return Promise.resolve(favsState.favorites);
+  if (favsState.syncPromise) return favsState.syncPromise;
+  favsState.syncPromise = Promise.resolve()
+    .then(function () { return favsLoad(); })
+    .finally(function () { favsState.syncPromise = null; });
+  return favsState.syncPromise;
+}
+
 function favsGetFolders() {
   var seen = {}, result = [];
   // serverFolders is the authoritative list (persisted folders from DB)
@@ -129,6 +167,7 @@ async function favsSetFolder(playerKey, folderName) {
     if (fav) fav.folder = folderName;
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
   } catch (e) { console.warn('[Favorites] setFolder error:', e); }
 }
 
@@ -229,6 +268,7 @@ async function favsHeart(r) {
       favsRenderFolderBar();
       favsRenderPage();
       favsUpdateTableHearts();
+      favsRefreshPortalAlerts();
     } catch (e) { console.warn('[Favorites] unheart error:', e); }
   } else {
     // ── Add ──
@@ -258,6 +298,7 @@ async function favsHeart(r) {
         favsRenderFolderBar();
         favsRenderPage();
         favsUpdateTableHearts();
+        favsRefreshPortalAlerts();
       }
     } catch (e) { console.warn('[Favorites] heart error:', e); }
   }
@@ -362,6 +403,7 @@ function _favsRenderBulkBar() {
     favsState.selectedKeys.clear();
     favsRenderFolderBar();
     favsRenderPage();
+    favsRefreshPortalAlerts();
   };
 }
 
@@ -503,6 +545,13 @@ function favsRenderPage() {
 
 // ── Init (search / filter / folder create event listeners) ───────────────────
 function initFavsPage() {
+  if (!window.__favsVisibilityBound) {
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) favsEnsureFresh(false);
+    });
+    window.addEventListener('focus', function () { favsEnsureFresh(false); });
+    window.__favsVisibilityBound = true;
+  }
   var searchEl  = document.getElementById('favsSearch');
   var lgEl      = document.getElementById('favsLeagueFilter');
   var addBtn    = document.getElementById('favsFolderAddBtn');
@@ -510,7 +559,13 @@ function initFavsPage() {
   var inp       = document.getElementById('favsFolderInput');
   var createRow = document.getElementById('favsFolderCreateRow');
 
-  if (searchEl) searchEl.addEventListener('input',  favsRenderPage);
+  if (searchEl) searchEl.addEventListener('input', function () {
+    if (_favsRenderTimer) clearTimeout(_favsRenderTimer);
+    _favsRenderTimer = setTimeout(function () {
+      _favsRenderTimer = null;
+      favsRenderPage();
+    }, 120);
+  });
   if (lgEl)     lgEl.addEventListener    ('change', favsRenderPage);
 
   function _doCreate() {
@@ -537,6 +592,7 @@ function initFavsPage() {
 
   favsRenderFolderBar();
   favsRenderPage();
+  favsRefreshPortalAlerts();
 }
 
-window.FavoritesManager = { favsLoad, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, favsRenderFolderBar, favsGetFolders, favsSetFolder, initFavsPage };
+window.FavoritesManager = { favsLoad, favsEnsureFresh, favsHeart, favsIsHearted, favsUpdateModalBtn, favsRenderPage, favsRenderFolderBar, favsGetFolders, favsSetFolder, initFavsPage };

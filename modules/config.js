@@ -8,6 +8,91 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const clamp01 = (x) => clamp(x, 0, 1);
 const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
 const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+const _scriptLoadPromises = Object.create(null);
+const DASHBOARD_SEASON_OPTIONS = [
+  { value: '2022', label: '2021-2022' },
+  { value: '2023', label: '2022-2023' },
+  { value: '2024', label: '2023-2024' },
+  { value: '2025', label: '2024-2025' },
+  { value: '2026', label: '2025-2026' },
+];
+
+function normalizeDashboardSeason(value, fallback){
+  var fb = String(fallback || '2026');
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return fb;
+  var labelMatch = raw.match(/^(\d{4})\s*-\s*(\d{4})$/);
+  if (labelMatch) return labelMatch[2];
+  var year = parseInt(raw, 10);
+  return Number.isFinite(year) ? String(year) : fb;
+}
+
+function getDashboardSelectedSeason(fallback){
+  var el = document.getElementById('cbdSeason');
+  return normalizeDashboardSeason(el && el.value, fallback || '2026');
+}
+
+function loadScriptOnce(key, urls, opts){
+  opts = opts || {};
+  const test = typeof opts.test === 'function' ? opts.test : function(){ return false; };
+  const timeoutMs = Number(opts.timeoutMs) || 10000;
+  const srcs = Array.isArray(urls) ? urls.slice() : [urls];
+  if(test()) return Promise.resolve(test());
+  if(_scriptLoadPromises[key]) return _scriptLoadPromises[key];
+
+  _scriptLoadPromises[key] = new Promise((resolve, reject) => {
+    function tryNext(idx){
+      if(test()) { resolve(test()); return; }
+      if(idx >= srcs.length){
+        delete _scriptLoadPromises[key];
+        reject(new Error(opts.errorMessage || ('Failed to load script: ' + key)));
+        return;
+      }
+
+      const s = document.createElement('script');
+      let done = false;
+      const timer = window.setTimeout(() => {
+        if(done) return;
+        done = true;
+        s.remove();
+        tryNext(idx + 1);
+      }, timeoutMs);
+
+      function cleanup(){
+        window.clearTimeout(timer);
+        s.onload = null;
+        s.onerror = null;
+      }
+
+      s.src = srcs[idx];
+      s.async = true;
+      s.defer = true;
+      s.dataset.loaderKey = key;
+      s.onload = function(){
+        if(done) return;
+        done = true;
+        cleanup();
+        if(test()) resolve(test());
+        else {
+          s.remove();
+          tryNext(idx + 1);
+        }
+      };
+      s.onerror = function(){
+        if(done) return;
+        done = true;
+        cleanup();
+        s.remove();
+        tryNext(idx + 1);
+      };
+      document.head.appendChild(s);
+    }
+
+    tryNext(0);
+  });
+
+  return _scriptLoadPromises[key];
+}
 
 // Convert Google Sheets AOA (array-of-arrays) into row objects using header row.
 function aoaToObjects(aoa){
@@ -138,6 +223,35 @@ const BIG_DEFAULTS = [
   {stat:'TOPG', w:5, min:3.5, max:0.5, dir:'lower'},
 ];
 
+// WBB-specific scoring defaults — only stats genuinely available from ESPN byathlete.
+// BPM, WS/40, DRtg, OR%, DR% excluded — not available or not calculable for WBB.
+// USG% is approximated from player volume (FGA+FTA+TOV) vs estimated team possession-actions.
+// Ranges calibrated to WBB distributions.
+const WBB_GUARD_DEFAULTS = [
+  {stat:'PPG',   w:14, min:0,    max:25,   dir:'higher'},
+  {stat:'eFG%',  w:13, min:0.35, max:0.60, dir:'higher'},
+  {stat:'3P%',   w:9,  min:0.25, max:0.40, dir:'higher'},
+  {stat:'FT%',   w:6,  min:0.60, max:0.90, dir:'higher'},
+  {stat:'APG',   w:13, min:0.5,  max:6.0,  dir:'higher'},
+  {stat:'A/TO',  w:11, min:0.5,  max:2.5,  dir:'higher'},
+  {stat:'SPG',   w:11, min:0.3,  max:2.5,  dir:'higher'},
+  {stat:'RPG',   w:6,  min:1.0,  max:6.0,  dir:'higher'},
+  {stat:'TOPG',  w:11, min:3.0,  max:0.5,  dir:'lower'},
+  {stat:'USG%',  w:6,  min:12,   max:30,   dir:'higher'},
+];
+
+const WBB_BIG_DEFAULTS = [
+  {stat:'PPG',   w:12, min:0,    max:20,   dir:'higher'},
+  {stat:'eFG%',  w:14, min:0.40, max:0.65, dir:'higher'},
+  {stat:'FT%',   w:6,  min:0.55, max:0.85, dir:'higher'},
+  {stat:'RPG',   w:20, min:2,    max:12,   dir:'higher'},
+  {stat:'BPG',   w:16, min:0.2,  max:3.0,  dir:'higher'},
+  {stat:'SPG',   w:8,  min:0.2,  max:1.5,  dir:'higher'},
+  {stat:'A/TO',  w:8,  min:0.3,  max:2.0,  dir:'higher'},
+  {stat:'TOPG',  w:8,  min:3.0,  max:0.5,  dir:'lower'},
+  {stat:'USG%',  w:8,  min:12,   max:28,   dir:'higher'},
+];
+
 const ROLE_DESCRIPTIONS = {
   "Shooter": "Elite perimeter threat. Strong 3P% that bends the defense and creates spacing.",
   "Efficient": "Scores with high efficiency (shot quality + finishing). Converts possessions into points at an above-average rate.",
@@ -158,6 +272,7 @@ const ROLE_DESCRIPTIONS = {
 };
 
 const STAT_GLOSSARY = {
+  'Height': 'Player height (feet and inches). Sourced from ESPN roster data for WBB players.',
   'G': 'Games Played. Number of games a player appeared in during the season.',
   'MP': 'Minutes Per Game. Average minutes played per game. Used to derive the minutes multiplier in valuation — higher MP signals a larger role.',
   'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',

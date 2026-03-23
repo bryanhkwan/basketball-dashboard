@@ -5,19 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>NCAA Scouting Dashboard (MBB/WBB)</title>
 
-  <!-- XLSX: try CDN, fallback to local file next to this HTML -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <script>
-    (function(){
-      if (window.XLSX) return;
-      const s = document.createElement('script');
-      s.src = './xlsx.full.min.js';  // place xlsx.full.min.js in the same folder as this HTML
-      s.onload = () => console.log('Loaded local xlsx.full.min.js');
-      s.onerror = () => console.warn('Failed to load local xlsx.full.min.js');
-      document.head.appendChild(s);
-    })();
-  </script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -28,12 +15,21 @@
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
   <script src="modules/data.js" defer></script>
+  <script src="modules/eval-presets.js" defer></script>
+  <script src="modules/draft.js" defer></script>
   <script src="modules/players.js" defer></script>
   <script src="modules/profile.js" defer></script>
   <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/dashboard-prefs.js" defer></script>
+  <script src="modules/admin.js" defer></script>
+  <script src="modules/portal.js" defer></script>
   <script src="modules/teams.js" defer></script>
+  <script src="modules/lab.js" defer></script>
+  <script src="modules/value-lab.js" defer></script>
   <script src="modules/chat.js" defer></script>
+  <script src="modules/help-content.js" defer></script>
   <script src="modules/tour.js" defer></script>
+  <script src="modules/help.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -41,24 +37,78 @@
 <!-- Auth Overlay -->
 <div id="authOverlay" class="authOverlay">
   <div class="authCard">
-    <div class="authLogo">🏀 NCAA Scouting</div>
-    <div class="authSub">Sign in to your account</div>
+    <div class="authLogo">NCAA Scouting</div>
 
-    <form id="loginForm" class="authForm">
+    <div id="authLoginView">
+      <div class="authSub">Sign in to your account</div>
+      <form id="loginForm" class="authForm">
+        <div class="authField">
+          <label class="authLabel">Username</label>
+          <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
+        </div>
+        <div class="authError" id="loginError"></div>
+        <button type="submit" class="primary authSubmitBtn">Login</button>
+      </form>
+      <div class="authDivider"><span>or</span></div>
+      <button type="button" id="guestBtn" class="authGuestBtn">Continue as Guest</button>
+      <p class="authGuestNote">Explore the model freely · 10 free AI messages · no saving</p>
+      <button type="button" id="showCreateAccountBtn" class="authLinkBtn">Create account</button>
+    </div>
+
+    <div id="authRegisterView" style="display:none">
+      <div class="authSub">Request an approved account</div>
+      <div class="authRequestNote">
+        This is specifically for UToledo Athletics members. New accounts must be approved by an admin before you can log in. If you are just looking around, please use the guest account instead.
+      </div>
+      <form id="registerForm" class="authForm">
+        <div class="authField">
+          <label class="authLabel">Username</label>
+          <input type="text" id="registerUsername" placeholder="Choose a username" required autocomplete="username">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Email <span class="muted" style="font-size:10px;text-transform:none">(optional)</span></label>
+          <input type="email" id="registerEmail" placeholder="name@utoledo.edu" autocomplete="email">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Password</label>
+          <input type="password" id="registerPassword" placeholder="Create a password" required autocomplete="new-password">
+        </div>
+        <div class="authField">
+          <label class="authLabel">Confirm Password</label>
+          <input type="password" id="registerPasswordConfirm" placeholder="Confirm password" required autocomplete="new-password">
+        </div>
+        <div class="authError" id="registerError"></div>
+        <div class="authSuccess" id="registerSuccess"></div>
+        <button type="submit" class="primary authSubmitBtn">Request Account</button>
+      </form>
+      <button type="button" id="backToLoginBtn" class="authGuestBtn" style="margin-top:12px">Back to Login</button>
+</div>
+</div>
+</div>
+
+<div id="pwChangeOverlay" class="authOverlay hidden">
+  <div class="authCard">
+    <div class="authLogo">Update Password</div>
+    <div class="authSub">Your password was reset by an admin. Please create a new one before continuing.</div>
+    <div class="authRequestNote">
+      Use the temporary password your admin gave you only once. As soon as you save a new password, the temporary one stops being valid.
+    </div>
+    <form id="pwChangeForm" class="authForm">
       <div class="authField">
-        <label class="authLabel">Username</label>
-        <input type="text" id="loginUsername" placeholder="Enter username" required autocomplete="username">
+        <label class="authLabel">New Password</label>
+        <input type="password" id="pwChangeNew" placeholder="Enter a new password" required autocomplete="new-password">
       </div>
       <div class="authField">
-        <label class="authLabel">Password</label>
-        <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
+        <label class="authLabel">Confirm New Password</label>
+        <input type="password" id="pwChangeConfirm" placeholder="Confirm your new password" required autocomplete="new-password">
       </div>
-      <div class="authError" id="loginError"></div>
-      <button type="submit" class="primary authSubmitBtn">Login</button>
+      <div class="authError" id="pwChangeError"></div>
+      <button type="submit" class="primary authSubmitBtn">Save New Password</button>
     </form>
-    <div class="authDivider"><span>or</span></div>
-    <button type="button" id="guestBtn" class="authGuestBtn">Continue as Guest</button>
-    <p class="authGuestNote">Explore the model freely · 10 free AI messages · no saving</p>
   </div>
 </div>
 
@@ -74,7 +124,7 @@
 
 <header>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-  <h1>🏀 NCAA Scouting Dashboard</h1>
+  <h1>NCAA Scouting Dashboard</h1>
   <div style="display:flex;align-items:center;gap:16px">
     <div class="leagueSwitch" id="leagueSwitch" title="Switch league">
       <span class="lsLabel active" id="lsLabelMBB">MBB</span>
@@ -88,24 +138,38 @@
     <span id="apiUsageBadge" class="apiBadge" style="display:none"></span>
     <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
-    <button type="button" id="tourBtn" title="Take a guided tour" aria-label="Start guided tour">?</button>
+    <button type="button" id="dashboardPrefsBtn" class="secondary" style="padding:6px 14px;font-size:12px">Customize</button>
+    <button type="button" id="tourBtn" title="Open help for this page" aria-label="Open help for this page">?</button>
   </div>
   </div>
   <p class="sub">
     Click a player to open their full stat profile with percentiles, archetypes, and fit score.
-    Uses: <b>Men Data</b> and <b>Women Data</b> sheets with position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
+    Uses CBD, ESPN, worker-backed portal feeds, and position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
   </p>
 </header>
 
 <!-- Page Navigation -->
 <nav class="pageNav">
-  <button class="pageNavBtn active" data-page="pagePlayers">🏀 Players</button>
-  <button class="pageNavBtn" data-page="pageTeamBuilder">📋 Team Builder</button>
-  <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
-  <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
-  <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites</button>
-  <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
+  <button class="pageNavBtn active" data-page="pagePlayers">Players</button>
+  <button class="pageNavBtn" data-page="pagePortal">Transfer Portal</button>
+  <button class="pageNavBtn" data-page="pageTeams">Teams</button>
+  <button class="pageNavBtn" data-page="pageValueLab">Value Lab</button>
+  <button class="pageNavBtn" data-page="pageLab">Tournament Lab</button>
+  <button class="pageNavBtn" data-page="pageFavorites">Favorites <span id="favsPortalBadge" class="sharesNavBadge" style="display:none">0</span></button>
+  <button class="pageNavBtn" data-page="pageCollaborate">Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
+  <button class="pageNavBtn" id="adminNavBtn" data-page="pageAdmin" style="display:none">Admin</button>
 </nav>
+
+<div id="dashboardPrefsBar" class="dashPrefsBar" style="display:none">
+  <div id="dashPrefsBarText" class="dashPrefsBarText">
+    Customize mode is on. Tap the <b>-</b> or <b>+</b> markers on tabs and page sections to preview what stays visible.
+  </div>
+  <div class="dashPrefsBarActions">
+    <button id="dashPrefsResetBtn" class="secondary">Reset to Default</button>
+    <button id="dashPrefsCancelBtn" class="secondary">Cancel</button>
+    <button id="dashPrefsSaveBtn" class="primary">Save Changes</button>
+  </div>
+</div>
 
 <div id="pagePlayers">
 <div class="wrap">
@@ -114,11 +178,17 @@
       <div>
         <label>Season</label>
         <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-          <input id="cbdSeason" type="number" value="2026" min="2010" max="2035"
-            style="width:74px;padding:4px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(0,8,20,.5);color:#e2e8f0;text-align:center"
-            title="MBB season year">
+          <select id="cbdSeason"
+            style="width:136px;padding:4px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(0,8,20,.5);color:#e2e8f0;text-align:center"
+            title="Dashboard season for both MBB and WBB">
+            <option value="2022">2021-2022</option>
+            <option value="2023">2022-2023</option>
+            <option value="2024">2023-2024</option>
+            <option value="2025">2024-2025</option>
+            <option value="2026" selected>2025-2026</option>
+          </select>
         </div>
-        <div class="hint">MBB: Live API &middot; WBB: Google Sheets</div>
+        <div class="hint">MBB: CBD API &middot; WBB: ESPN + worker cache</div>
       </div>
       <div>
         <label>API key</label><br/>
@@ -169,7 +239,7 @@
 
   <div id="warn" class="warnBox"></div>
 
-  <div class="grid">
+  <div class="grid" id="playersGrid">
     <!-- LEFT: Player list -->
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -209,7 +279,34 @@
     </div>
 
     <!-- RIGHT: Controls -->
-    <div class="rightstack">
+    <div class="rightstack" id="playersRightstack">
+      <div class="card" id="evalPresetsCard">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div style="font-size:13px; font-weight:1000">Evaluation presets</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">Save account-level MBB/WBB models for weights, valuation, and conference multipliers.</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap; align-items:flex-end">
+          <div style="flex:1 1 220px; min-width:220px">
+            <label>Preset</label><br/>
+            <select id="evalPresetSelect"></select>
+          </div>
+          <button id="evalPresetApplyBtn" class="primary">Apply</button>
+          <button id="evalPresetSaveBtn" class="secondary">Save New</button>
+          <button id="evalPresetUpdateBtn" class="secondary">Update</button>
+        </div>
+
+        <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap">
+          <button id="evalPresetRenameBtn" class="secondary">Rename</button>
+          <button id="evalPresetDeleteBtn" class="secondary">Delete</button>
+          <button id="evalPresetDefaultBtn" class="secondary">System Default</button>
+        </div>
+
+        <div id="evalPresetStatus" class="hint" style="margin-top:10px"></div>
+      </div>
+
       <div class="card" id="weightsCard">
         <div class="row" style="justify-content:space-between">
           <div>
@@ -278,7 +375,7 @@
         <div class="row" style="margin-top:10px">
           <div>
             <label>Star value ($)</label><br/>
-            <input id="starValue" type="number" step="5000" value="100000">
+            <input id="starValue" type="number" step="5000" value="150000">
           </div>
           <div>
             <label>Star percentile (PerfScore)</label><br/>
@@ -346,15 +443,160 @@
 </div>
 </div><!-- /pagePlayers -->
 
+<!-- Transfer Portal Page -->
+<div id="pagePortal" style="display:none">
+<div class="wrap">
+  <div class="card" id="portalBoardSection">
+    <div class="row" style="justify-content:space-between;gap:12px;align-items:flex-end">
+      <div>
+        <div style="font-size:18px;font-weight:800">Transfer Portal Board</div>
+        <div id="portalBoardSubtitle" class="muted" style="font-size:12px;margin-top:4px">Live transfer intel feed with player-name matching to your loaded player pool.</div>
+      </div>
+      <div class="row" style="gap:8px">
+        <div>
+          <label>Search</label><br/>
+          <input id="portalSearchInput" type="text" placeholder="Player / team / keyword" style="width:220px">
+        </div>
+        <div>
+          <label>Status</label><br/>
+          <select id="portalStatusFilter" style="width:160px">
+            <option value="entries" selected>Entered + Expected</option>
+            <option value="entered">Entered only</option>
+            <option value="expected">Expected only</option>
+            <option value="all">All statuses</option>
+          </select>
+        </div>
+        <div id="portalSnapshotWrap" style="align-self:end;min-width:210px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input id="portalUseSnapshot" type="checkbox" checked>
+            <span id="portalSnapshotLabel">Auto-merge local 247 snapshot</span>
+          </label>
+        </div>
+        <div style="align-self:end">
+          <button id="portalRefreshBtn" class="primary">Refresh board</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="justify-content:space-between;margin-top:10px;gap:8px;flex-wrap:wrap">
+      <span class="pill">Entries: <b id="portalCount">—</b></span>
+      <span class="pill">Matched to loaded players: <b id="portalMatchedCount">—</b></span>
+      <span class="pill">Source: <b>Portal Feed</b></span>
+      <span class="pill" id="portalStatus">Idle</span>
+    </div>
+
+    <div id="portalWatchAlertWrap" style="display:none"></div>
+
+    <div style="margin-top:12px" class="scrollY">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:16%">Player</th>
+            <th style="width:10%">Status</th>
+            <th style="width:10%">Date</th>
+            <th style="width:6%">Pos</th>
+            <th style="width:7%">Class</th>
+            <th style="width:8%">Perf</th>
+            <th style="width:11%">Value</th>
+            <th style="width:13%">Team</th>
+            <th style="width:8%">Match</th>
+            <th style="width:5%">Profile</th>
+            <th style="width:6%">Source</th>
+          </tr>
+        </thead>
+        <tbody id="portalTableBody"></tbody>
+      </table>
+    </div>
+    <div id="portalEmpty" class="hint" style="text-align:center;padding:20px;display:none">No portal entries found for current filters.</div>
+    <div id="portalBoardHint" class="hint">Shows real transfer portal entries from live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.</div>
+  </div>
+
+  <div class="card" id="portalFitLabSection" style="margin-top:14px">
+    <div class="row" style="justify-content:space-between;gap:12px;align-items:flex-end">
+      <div>
+        <div style="font-size:18px;font-weight:800">Portal Fit Lab</div>
+        <div id="portalFitSubtitle" class="muted" style="font-size:12px;margin-top:4px">Select your team, pick the player you know is leaving, and find the best portal upgrades for that spot — before it's official.</div>
+      </div>
+      <div class="row" style="gap:8px;align-items:flex-end">
+        <div>
+          <label>Team</label><br/>
+          <select id="portalRecTeam" style="width:240px">
+            <option value="">- Select team -</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button id="portalRecRefreshTeam" class="secondary" style="display:none">Load team profile</button>
+          <button id="portalRecRunBtn" class="primary">Recommend targets</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="portalRecTeamSummary" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+      <span class="muted">Select a team to load profile.</span>
+    </div>
+
+    <div class="portalRecGrid" style="margin-top:12px">
+      <div class="panel">
+        <div class="panelHead">Who's Leaving?</div>
+        <div class="panelBody">
+          <div class="muted" style="font-size:11px;margin-bottom:8px">Click all the players heading out. We'll find upgrades that fill every gap they leave behind.</div>
+          <div id="portalReplaceList" class="portalReplaceList"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead">Recommended Portal Targets</div>
+        <div class="panelBody" style="padding:0">
+          <div id="portalRecContext" class="portalRecContext" style="display:none"></div>
+          <div class="portalRecTableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:5%">#</th>
+                  <th style="width:20%">Player</th>
+                  <th style="width:13%">Team</th>
+                  <th style="width:8%">Pos</th>
+                  <th style="width:10%">Fit</th>
+                  <th style="width:10%">Upgrade Δ</th>
+                  <th style="width:24%">Why</th>
+                  <th style="width:10%">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="portalRecBody"></tbody>
+            </table>
+          </div>
+          <div id="portalRecEmpty" class="hint" style="text-align:center;padding:20px;margin:0;opacity:.75">Load a team and click Recommend targets to generate rankings.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="panelHead">AI Pick Analysis (Gemini 2.5 Flash Lite)</div>
+      <div class="panelBody">
+        <div class="row" style="justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+          <div id="portalAISubtitle" class="muted" style="font-size:12px">Deep analysis using player stats, game logs, and team context from the dashboard data stack. Covers all selected departures.</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button id="portalAIDownloadBtn" class="secondary">Download PDF</button>
+            <button id="portalAIAnalyzeBtn" class="primary">Analyze picks</button>
+          </div>
+        </div>
+        <div id="portalAIStatus" class="muted" style="font-size:11px;margin-bottom:8px"></div>
+        <div id="portalAIOutput" class="thDeepOutput portalAIOutput" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /pagePortal -->
+
 <!-- Team Builder Page -->
 <div id="pageTeamBuilder" style="display:none">
 <div class="wrap tbSection">
 
   <!-- Sub-tab Navigation -->
   <div class="tbSubNav">
-    <button class="tbSubBtn active" data-sub="tbSubMyTeam">🏀 My Team</button>
-    <button class="tbSubBtn" data-sub="tbSubH2H">⚔️ Head-to-Head</button>
-    <button class="tbSubBtn" data-sub="tbSubOpponent">🎯 Opponent</button>
+    <button class="tbSubBtn active" data-sub="tbSubMyTeam">My Team</button>
+    <button class="tbSubBtn" data-sub="tbSubH2H">Head-to-Head</button>
+    <button class="tbSubBtn" data-sub="tbSubOpponent">Opponent</button>
   </div>
 
   <!-- My Team Sub-section -->
@@ -362,10 +604,11 @@
   <div class="card">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:15px;font-weight:800">🏀 Team Builder <span id="tbLeagueBadge" style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(0,62,126,.4);border:1px solid rgba(0,62,126,.6);margin-left:6px;font-weight:700"></span></div>
+        <div style="font-size:15px;font-weight:800">Team Builder <span id="tbLeagueBadge" style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(0,62,126,.4);border:1px solid rgba(0,62,126,.6);margin-left:6px;font-weight:700"></span></div>
         <div class="muted" style="font-size:12px;margin-top:4px">Add players from the table above, analyze gaps, and get recommendations.</div>
       </div>
       <div class="row" style="gap:8px;flex-wrap:wrap">
+        <div style="align-self:end"><button id="tbBackToTeamsBtn" class="secondary" style="padding:7px 12px;font-size:12px">← Back to Team Hub</button></div>
         <div><label>Budget</label><br/><input id="tbBudget" type="number" step="10000" value="500000" style="width:100px"></div>
         <div><label>Player cap</label><br/><input id="tbPlayerCap" type="number" step="5000" value="150000" style="width:90px"></div>
         <div><label>Max roster</label><br/><input id="tbMaxRoster" type="number" step="1" min="1" max="25" value="13" style="width:60px"></div>
@@ -377,13 +620,14 @@
             <span id="tbWeakThreshLabel" style="font-size:12px;font-weight:700;color:var(--bad);min-width:30px">40th</span>
           </div>
         </div>
+        <div style="align-self:end"><button id="tbValueLabBtn" class="secondary" style="padding:7px 12px;font-size:12px">Evaluate in Value Lab</button></div>
         <div style="align-self:end"><button id="tbClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear roster</button></div>
       </div>
     </div>
 
     <!-- Quick-add search widget -->
     <div class="tbQuickAddWrap" style="margin-top:12px">
-      <input id="tbQuickAddInput" type="text" placeholder="🔍 Quick-add player to roster…" class="tbQuickAddInput" autocomplete="off">
+      <input id="tbQuickAddInput" type="text" placeholder="Quick-add player to roster…" class="tbQuickAddInput" autocomplete="off">
       <div id="tbQuickAddDropdown" class="tbQuickAddDropdown" style="display:none"></div>
     </div>
 
@@ -396,7 +640,7 @@
       <span class="pill" id="tbPosNote" style="display:none;border-color:rgba(251,191,36,.3);color:var(--warn)"></span>
     </div>
     <div id="tbRebalanceSection" style="display:none" class="tbRebalanceCard">
-      <div style="font-size:11.5px;font-weight:700;margin-bottom:4px">⚖️ Roster rebalance suggestion</div>
+      <div style="font-size:11.5px;font-weight:700;margin-bottom:4px">Roster rebalance suggestion</div>
       <div id="tbRebalanceInfo" style="font-size:11.5px;line-height:1.5;color:var(--muted)"></div>
     </div>
 
@@ -414,7 +658,7 @@
             </div>
             <div id="tbRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Click <b>＋</b> on any player row above to add them to your roster.</div>
             <div id="tbWeakestSection" class="tbReplaceSection" style="display:none">
-              <div style="font-size:11.5px;font-weight:700;margin-bottom:6px">🔄 Suggested swaps <span id="tbWeakCount" style="font-weight:500;color:var(--muted)"></span></div>
+              <div style="font-size:11.5px;font-weight:700;margin-bottom:6px">Suggested swaps <span id="tbWeakCount" style="font-weight:500;color:var(--muted)"></span></div>
               <div id="tbWeakestInfo" style="display:flex;flex-direction:column;gap:10px"></div>
             </div>
           </div>
@@ -426,6 +670,7 @@
             <div id="tbGapBars" style="display:flex;flex-direction:column;gap:10px"></div>
             <div id="tbGapEmpty" class="hint" style="text-align:center;margin:0;opacity:.6">Add players to see team stat analysis.</div>
             <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" id="tbGapTags"></div>
+
           </div>
         </div>
       </div>
@@ -452,7 +697,7 @@
   <div class="card">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:15px;font-weight:800">⚔️ Head-to-Head Analysis</div>
+        <div style="font-size:15px;font-weight:800">Head-to-Head Analysis</div>
         <div class="muted" style="font-size:12px;margin-top:4px">Compare your team vs. opponent across key stat categories.</div>
       </div>
     </div>
@@ -468,7 +713,7 @@
   <div class="card">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:15px;font-weight:800">🎯 Opponent Builder</div>
+        <div style="font-size:15px;font-weight:800">Opponent Builder</div>
         <div class="muted" style="font-size:12px;margin-top:4px">Build your opponent's roster to analyze match-up gaps.</div>
       </div>
       <div><button id="oppClear" class="secondary" style="padding:7px 12px;font-size:12px">Clear opponent</button></div>
@@ -476,7 +721,7 @@
 
     <!-- Quick-add for opponent -->
     <div class="tbQuickAddWrap" style="margin-top:12px">
-      <input id="oppQuickAddInput" type="text" placeholder="🔍 Search player to add to opponent…" class="tbQuickAddInput" autocomplete="off">
+      <input id="oppQuickAddInput" type="text" placeholder="Search player to add to opponent…" class="tbQuickAddInput" autocomplete="off">
       <div id="oppQuickAddDropdown" class="tbQuickAddDropdown" style="display:none"></div>
     </div>
 
@@ -498,7 +743,7 @@
                 <tbody id="oppRosterBody"></tbody>
               </table>
             </div>
-            <div id="oppRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Use search above or click <b>⚔</b> in the Players tab to add opponent players.</div>
+            <div id="oppRosterEmpty" class="hint" style="text-align:center;padding:24px;margin:0;opacity:.6">Use search above or use the opponent action in the Players tab to add opponent players.</div>
           </div>
         </div>
 
@@ -537,7 +782,7 @@
 <div class="wrap">
   <div class="thPage">
     <div class="thHeader">
-      <h2 class="thTitle">🏟️ Team Hub</h2>
+      <h2 class="thTitle">Team Hub</h2>
       <p class="muted" style="font-size:13px">Program analysis, conference threats, game log, and head-to-head records.</p>
     </div>
 
@@ -552,37 +797,39 @@
           <input id="thSeason" type="number" value="2026" min="2020" max="2030" class="thSeasonInput">
         </div>
         <button id="thLoadBtn" class="thLoadBtn">Load Team →</button>
+        <button id="thOpenBuilderBtn" class="secondary" type="button">Open Team Builder</button>
+        <button id="thValueLabBtn" class="secondary" type="button">Open in Value Lab</button>
       </div>
       <div id="thLoading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0"></div>
     </div>
 
     <!-- Program Overview -->
-    <div class="thSection">
-      <div class="thSectionHead">📊 Program Overview</div>
+    <div class="thSection" id="teamsOverviewSection">
+      <div class="thSectionHead">Program Overview</div>
       <div id="thOverview" class="card thOverviewCard">
         <div class="muted" style="padding:32px;text-align:center">Select a team above to load program analysis.</div>
       </div>
     </div>
 
     <!-- Conference Threats -->
-    <div class="thSection">
-      <div class="thSectionHead">⚠️ Conference Threats</div>
-      <div class="thSectionSub">Conference teams ranked by net efficiency. Click ⚔ to load a team as your opponent in Team Builder.</div>
+    <div class="thSection" id="teamsThreatsSection">
+      <div class="thSectionHead">Conference Threats</div>
+      <div class="thSectionSub">Conference teams ranked by net efficiency. Use the opponent action to load a team into Team Builder.</div>
       <div id="thThreats" class="card thThreatsCard">
         <div class="muted" style="padding:24px;text-align:center">Load a team to see conference standings.</div>
       </div>
     </div>
 
     <!-- Game Log -->
-    <div class="thSection">
-      <div class="thSectionHead">📅 Season Game Log</div>
+    <div class="thSection" id="teamsGameLogSection">
+      <div class="thSectionHead">Season Game Log</div>
       <div id="thGameLog" class="card thGameLogCard">
         <div class="muted" style="padding:24px;text-align:center">Load a team to see game results.</div>
       </div>
     </div>
 
     <!-- H2H Records -->
-    <div class="thSection">
+    <div class="thSection" id="teamsH2HSection">
       <div class="thSectionHead">🆚 Head-to-Head Records</div>
       <div id="thH2H" class="card thH2HCard">
         <div class="muted" style="padding:24px;text-align:center">Load a team to see head-to-head breakdowns.</div>
@@ -590,8 +837,8 @@
     </div>
 
     <!-- Team DNA -->
-    <div class="thSection">
-      <div class="thSectionHead">🧬 Team DNA</div>
+    <div class="thSection" id="teamsDNASection">
+      <div class="thSectionHead">Team DNA</div>
       <div class="thSectionSub">Shooting zones heatmap, scoring profile, four factors (offense vs what opponents do defensively), and auto-generated strengths &amp; weaknesses.</div>
       <div id="thDNA" class="card thDNACard">
         <div class="muted" style="padding:32px;text-align:center">Load a team to see their DNA.</div>
@@ -599,8 +846,8 @@
     </div>
 
     <!-- Team Scout Report -->
-    <div class="thSection">
-      <div class="thSectionHead">🧾 Team Scout Report</div>
+    <div class="thSection" id="teamsScoutSection">
+      <div class="thSectionHead">Team Scout Report</div>
       <div class="thSectionSub">Auto-generated team Strengths, Weaknesses, Tendencies, Development Areas, and Matchup Notes from ratings + four factors + scoring profile.</div>
       <div id="thScout" class="card thScoutCard">
         <div class="muted" style="padding:32px;text-align:center">Load a team to generate team scouting analysis.</div>
@@ -608,8 +855,8 @@
     </div>
 
     <!-- Compare Teams -->
-    <div class="thSection">
-      <div class="thSectionHead">⚡ Compare vs Another Team</div>
+    <div class="thSection" id="teamsCompareSection">
+      <div class="thSectionHead">Compare vs Another Team</div>
       <div class="thSectionSub">Side-by-side efficiency ratings, four factors, scoring profile, and auto-generated edge analysis. Load a primary team first.</div>
       <div class="card thCompareSearchCard">
         <div class="thSearchRow">
@@ -626,112 +873,590 @@
     </div>
 
     <!-- Matchup Breakdown -->
-    <div class="thSection">
-      <div class="thSectionHead">🎯 Matchup Breakdown</div>
+    <div class="thSection" id="teamsMatchupSection">
+      <div class="thSectionHead">Matchup Breakdown</div>
       <div class="thSectionSub">Shot-by-shot breakdown from actual games played between these two teams. Uses play-by-play data with exact court coordinates. Select an opponent above and click Compare →</div>
       <div id="thMatchup" class="card thMatchupCard">
         <div class="muted" style="padding:32px;text-align:center">Load a primary team, then select an opponent and click Compare →</div>
       </div>
     </div>
+
   </div>
 </div>
 </div><!-- /pageTeams -->
+
+<!-- Value Lab Page -->
+<div id="pageValueLab" style="display:none">
+<div class="wrap">
+  <div class="valueLabPage">
+    <div class="valueLabHeader">
+      <div>
+        <h2 class="valueLabTitle">Value Lab</h2>
+        <p class="muted valueLabSub">Value Lab is its own investment workspace. Build named cases here, add players manually, or copy in a roster from Team Hub / Team Builder as a starting point without keeping a live link.</p>
+      </div>
+      <div class="valueLabHeaderActions">
+        <button id="valueLabOpenTeamHubBtn" type="button" class="secondary">Open Team Hub</button>
+        <button id="valueLabOpenTeamBuilderBtn" type="button" class="secondary">Open Team Builder</button>
+      </div>
+    </div>
+
+    <div class="card valueLabControlsCard" id="valueLabControlsSection">
+      <div class="valueLabControlGrid valueLabCaseGrid">
+        <div>
+          <label>Saved case</label>
+          <select id="valueLabCaseSelect" class="valueLabSourceSelect"></select>
+        </div>
+        <div>
+          <label>Case name</label>
+          <input id="valueLabCaseName" type="text" placeholder="Toledo 2026 value case">
+        </div>
+        <div class="valueLabQuickAddWrap">
+          <label>Quick add player</label>
+          <input id="valueLabQuickAddInput" type="text" placeholder="Search player names">
+          <div id="valueLabQuickAddDropdown" class="tbQuickAddDropdown valueLabQuickAddDropdown" style="display:none"></div>
+        </div>
+        <div>
+          <label>Import full team</label>
+          <select id="valueLabTeamImportSelect" class="valueLabSourceSelect"></select>
+        </div>
+        <div>
+          <label>Case budget</label>
+          <input id="valueLabBudgetInput" type="number" min="0" step="1000" placeholder="1800000">
+        </div>
+      </div>
+      <div class="valueLabControlActions">
+        <button id="valueLabNewCaseBtn" type="button" class="secondary">New Case</button>
+        <button id="valueLabDuplicateBtn" type="button" class="secondary">Duplicate Case</button>
+        <button id="valueLabSaveBtn" type="button" class="primary">Save Case</button>
+        <button id="valueLabDeleteBtn" type="button" class="secondary">Delete Case</button>
+        <button id="valueLabClearCaseBtn" type="button" class="secondary">Clear Roster</button>
+      </div>
+      <div class="valueLabControlActions">
+        <button id="valueLabImportHubBtn" type="button" class="secondary">Import Team Hub Team</button>
+        <button id="valueLabImportBuilderBtn" type="button" class="secondary">Import Team Builder Roster</button>
+        <button id="valueLabImportTeamBtn" type="button" class="secondary">Import Selected Team</button>
+      </div>
+      <div class="valueLabMetaRow">
+        <div id="valueLabSourceMeta" class="muted" style="font-size:12px">Cases save to your account when you're logged in, or locally in this browser for guest mode.</div>
+        <div id="valueLabSourceStatus" class="valueLabStatus"></div>
+      </div>
+      <div class="hint">Each Value Lab case is independent once imported. Use Team Hub / Team Builder as copy-in shortcuts, or build your own roster manually with quick add and team import.</div>
+    </div>
+
+    <div class="thSection" id="valueLabKpisSection">
+      <div class="thSectionHead">Executive Summary</div>
+      <div id="valueLabKpis" class="kpis valueLabKpis"></div>
+    </div>
+
+    <div class="valueLabTopGrid">
+      <div class="card" id="valueLabInsightsSection">
+        <div class="valueLabSectionTitle">Roster Investment Readout</div>
+        <div id="valueLabInsights" class="valueLabInsights"></div>
+      </div>
+
+      <div class="card" id="valueLabOutcomeSection">
+        <div class="valueLabSectionTitle">Outcome vs Spend</div>
+        <div id="valueLabOutcome" class="valueLabOutcome"></div>
+      </div>
+    </div>
+
+    <div class="card" id="valueLabAISection">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="valueLabSectionTitle" style="margin-bottom:6px">Director AI Brief</div>
+          <div class="muted" style="font-size:12px;max-width:760px">Gemini 2.5 Flash Lite reviews contract efficiency, budget health, projected outcome, and portal value targets so the deputy-director lens stays focused on bang-for-buck decisions.</div>
+        </div>
+        <div class="valueLabHeaderActions">
+          <button id="valueLabAIRunBtn" type="button" class="primary">Run Director Brief</button>
+        </div>
+      </div>
+      <div id="valueLabPortalWatch" class="valueLabPortalWatch"></div>
+      <div id="valueLabAIStatus" class="muted" style="font-size:11px;margin-top:10px"></div>
+      <div id="valueLabAIOutput" class="thDeepOutput" style="display:none;margin-top:10px"></div>
+    </div>
+
+    <div class="valueLabChartGrid" id="valueLabChartsSection">
+      <div class="card">
+        <div class="valueLabSectionTitle">Spend vs Perf</div>
+        <div id="valueLabScatter" class="valueLabScatter"></div>
+      </div>
+      <div class="card">
+        <div class="valueLabSectionTitle">Spend Breakdown</div>
+        <div id="valueLabBreakdowns" class="valueLabBreakdowns"></div>
+      </div>
+    </div>
+
+    <div class="thSection" id="valueLabRosterSection">
+      <div class="thSectionHead">Player ROI Board</div>
+      <div class="thSectionSub">Track model value versus actual contract spend, budget pressure, and which players are beating or missing the expected return at their real cost.</div>
+      <div class="scrollY">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Team</th>
+              <th>Pos</th>
+              <th>Class</th>
+              <th class="playersPerfHead">Perf</th>
+              <th>Model Value</th>
+              <th>Actual Spend</th>
+              <th>Delta</th>
+              <th>Expected Perf</th>
+              <th>Surplus</th>
+              <th>ROI Call</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="valueLabRosterBody"></tbody>
+        </table>
+      </div>
+      <div id="valueLabRosterEmpty" class="hint" style="text-align:center;padding:20px;margin:0">Create a Value Lab case, then add players manually or import a roster to evaluate the investment picture here.</div>
+    </div>
+  </div>
+</div>
+</div><!-- /pageValueLab -->
+
 
 <!-- Methodology Page -->
 <div id="pageMethodology" style="display:none">
 <div class="wrap">
   <div class="methodologyPage">
-    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">📖 Methodology</h2>
-    <p class="muted" style="font-size:13px;margin-bottom:24px">How the NCAA Scouting Dashboard calculates player value, fit scores, and team analysis.</p>
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Methodology</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:24px">This page is the deep reference for how the dashboard turns raw data into scouting, portal, value, and tournament outputs. Use the Help drawer for the short page-level version.</p>
 
-    <div class="methodSection">
-      <div class="methodHead">🎯 PerfScore</div>
+    <div class="methodSection" id="methodDataSourcesSection">
+      <div class="methodHead">Data Sources</div>
       <div class="methodBody">
-        <p>PerfScore is a weighted composite of key statistical percentiles. Each stat is normalized to a 0–1 scale between your configured Min and Max, then multiplied by its weight. Higher-is-better stats (like PPG, APG) produce higher percentiles at the top; lower-is-better stats (like DRtg, TOPG) are automatically inverted.</p>
-        <p style="margin-top:10px"><b>Formula:</b> PerfScore = Σ(weight × normalized_stat) / Σ(weight)</p>
-        <p style="margin-top:10px">Percentiles are computed within the selected position group (Guards or Bigs) and league (MBB or WBB). Players are only compared to peers in the same group.</p>
+        <p><b>MBB</b> - Player stats come from the <b>College Basketball Data (CBD) API</b> through the worker. The dashboard keeps CBD as the source of truth for MBB performance data, while ESPN is used only as a supplement for roster bio details like height when a clean match is available.</p>
+        <p style="margin-top:10px"><b>WBB</b> - Player stats come from ESPN's WBB by-athlete endpoints, with conference mapping, team context, and roster enrichment layered on top. Historical seasons are supported through the season picker, but older ESPN roster coverage can be thinner than current-season coverage.</p>
+        <p style="margin-top:10px"><b>Derived WBB metrics</b> - eFG%, TS%, and A/TO are derived from the available box-score data. Stats ESPN does not provide cleanly for WBB, like BPM or WS/40, are removed from WBB scoring rather than fabricated.</p>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">The dashboard intentionally prefers stable primary data for player performance, then adds worker- or ESPN-based enrichment only where it improves context without replacing the core stat source.</p>
       </div>
     </div>
 
-    <div class="methodSection">
-      <div class="methodHead">💰 Valuation</div>
+    <div class="methodSection" id="methodPerfScoreSection">
+      <div class="methodHead">PerfScore</div>
       <div class="methodBody">
-        <p>Player valuation uses an exponential curve anchored to your average pay setting. The curve is calibrated so the average player earns <em>avgPay</em> and a star-level player earns <em>starValue</em>:</p>
-        <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf − avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay × exp(k × (PerfScore − avgPerf)))</p>
-        <p style="margin-top:10px">A <b>minutes multiplier</b> (<code>min(1, sqrt(MP / MP_p))</code>) is then applied to reduce inflation for low-minutes players. If the <b>Conference Multiplier</b> is enabled, PerfScore is boosted/reduced by the conference strength factor before valuation — MAC = 1.00 is the baseline.</p>
+        <p>PerfScore is the main player evaluation score. Each active stat is normalized between your configured Min and Max, weighted by your selected stat weight, then rolled into one composite score.</p>
+        <p style="margin-top:10px"><b>Formula:</b> PerfScore = sum(weight x normalized stat) / sum(active weights)</p>
+        <p style="margin-top:10px">Higher-is-better stats, like points or assists, reward strong raw values. Lower-is-better stats, like turnovers, are inverted automatically so a better underlying performance still scores higher.</p>
+        <p style="margin-top:10px">PerfScore is always calculated inside the current league and position bucket, so guards are only compared with guards and bigs are only compared with bigs.</p>
       </div>
     </div>
 
-    <div class="methodSection">
-      <div class="methodHead">📊 Position Groups</div>
+    <div class="methodSection" id="methodValuationSection">
+      <div class="methodHead">Valuation</div>
       <div class="methodBody">
-        <p>Players are bucketed into two position groups for all percentile calculations:</p>
+        <p>Player valuation converts PerfScore into a market-style dollar estimate using an exponential curve anchored to your chosen <b>Average Pay</b> and <b>Star Value</b>.</p>
+        <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf - avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay x exp(k x (PerfScore - avgPerf)))</p>
+        <p style="margin-top:10px">A minutes adjustment keeps tiny-sample or low-minute players from inflating too easily, and the conference multiplier can optionally move valuations up or down based on league context before the market curve is applied.</p>
+        <p style="margin-top:10px">Evaluation presets simply save these choices - weights, min/max settings, valuation anchors, and conference multipliers - so different staff users can bring their own lens without changing the system default.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodPositionGroupsSection">
+      <div class="methodHead">Position Groups</div>
+      <div class="methodBody">
+        <p>For percentile calculations, the dashboard buckets players into two broad role groups:</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Guards</b> — Positions: G, G-F</li>
-          <li><b>Bigs</b> — Positions: F, C, F-C, C-F</li>
+          <li><b>Guards</b> - G, G-F</li>
+          <li><b>Bigs</b> - F, C, F-C, C-F</li>
         </ul>
-        <p style="margin-top:10px">Guards are never compared to Bigs, and vice versa. Switch between groups using the Guards / Bigs tab in the Players page. The Team Builder analyzes gaps for whichever position groups exist on your roster.</p>
+        <p style="margin-top:10px">This keeps comparison logic more honest. A guard is not graded against a rim-protecting center, and a big is not graded against a primary ball handler.</p>
       </div>
     </div>
 
-    <div class="methodSection">
-      <div class="methodHead">🏷️ Role Tags</div>
+    <div class="methodSection" id="methodRoleTagsSection">
+      <div class="methodHead">Role Tags and Similarity</div>
       <div class="methodBody">
-        <p>Role tags are archetype labels assigned based on percentile thresholds across key stats. A player can hold multiple tags simultaneously. Examples:</p>
+        <p>Role tags are shorthand labels built from percentile thresholds across the core stats. Players can carry multiple tags at once if their profile supports it.</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Elite Scorer</b> — PPG ≥ 80th percentile</li>
-          <li><b>Floor General</b> — APG ≥ 75th, A/TO ≥ 70th</li>
-          <li><b>3-and-D</b> — 3P% ≥ 65th, SPG ≥ 60th</li>
-          <li><b>Rim Anchor</b> — BPG ≥ 70th, RPG ≥ 65th (Bigs)</li>
-          <li><b>Stretch Big</b> — 3P% ≥ 60th (Bigs)</li>
-          <li><b>High Usage</b> — USG% ≥ 75th</li>
+          <li><b>Elite Scorer</b> - high scoring percentile</li>
+          <li><b>Floor General</b> - passing and ball-security profile</li>
+          <li><b>3-and-D</b> - perimeter shooting plus defensive activity</li>
+          <li><b>Rim Anchor</b> - rim protection and glass impact</li>
+          <li><b>Stretch Big</b> - frontcourt shooting gravity</li>
         </ul>
-        <p style="margin-top:10px">Tags appear in player profiles and drive the similar-player matching algorithm.</p>
+        <p style="margin-top:10px">These tags make profiles easier to scan and also help the dashboard group similar player types more intelligently.</p>
       </div>
     </div>
 
-    <div class="methodSection">
-      <div class="methodHead">🏆 Team Builder</div>
+    <div class="methodSection" id="methodTeamBuilderSection">
+      <div class="methodHead">Team Hub and Team Builder</div>
       <div class="methodBody">
-        <p>The Team Builder lets you assemble a roster within budget and slot constraints:</p>
-        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Budget</b> — Total NIL budget across all players</li>
-          <li><b>Player cap</b> — Maximum per-player valuation</li>
-          <li><b>Max roster</b> — Maximum roster size</li>
-          <li><b>Guards / Bigs targets</b> — Position slot targets for balance</li>
-          <li><b>Weak below</b> — Percentile threshold for flagging swap candidates</li>
-        </ul>
-        <p style="margin-top:10px">The <b>Team Stat Profile</b> shows your roster's average percentile across key categories. Red (weak) areas signal recruiting gaps. The <b>Recommended Fits</b> panel surfaces players who address your weakest categories within budget.</p>
-        <p style="margin-top:10px">Use the <b>⚔️ Head-to-Head</b> sub-tab to compare your team vs. an opponent stat-by-stat, and the <b>🎯 Opponent</b> sub-tab to build and scout your next opponent.</p>
+        <p><b>Team Hub</b> is the real-team workspace. It uses actual team ratings, four factors, schedule context, and matchup data to scout a real roster or opponent.</p>
+        <p style="margin-top:10px"><b>Team Builder</b> is the hypothetical workspace that now lives under Team Hub. It applies budget, player-cap, and roster-balance constraints so staff can build scenarios without overwriting the real-team view.</p>
+        <p style="margin-top:10px">The recommended-fit logic in Team Builder is driven by the weakest percentile categories on the built roster, so the tool is solving gaps rather than just listing the highest-rated players.</p>
+        <p style="margin-top:10px">Head-to-Head and Opponent Builder extend that scenario workflow by comparing category edges and letting staff build the other side of the matchup directly.</p>
       </div>
     </div>
 
-    <div class="methodSection">
-      <div class="methodHead">🤖 AI Scout</div>
+    <div class="methodSection" id="methodPortalSection">
+      <div class="methodHead">Transfer Portal</div>
       <div class="methodBody">
-        <p>Scout AI (powered by Google Gemini) has direct access to your dashboard data through a tool-use system:</p>
+        <p>The Transfer Portal page is a scouting board, not just a raw feed. On the <b>MBB</b> side, the worker can merge normalized portal data from <b>247Sports</b> and <b>On3</b> with backend caching. On the <b>WBB</b> side, the live portal source currently comes from <b>On3</b>.</p>
+        <p style="margin-top:10px">Portal entrants are matched back to the loaded player pool with normalized name and team logic so the board can surface class, Perf, valuation, and profile links whenever a confident match exists.</p>
+        <p style="margin-top:10px">Portal Fit Lab ranks replacement targets by team context, outgoing-player needs, category priorities, and player value/performance. The goal is to answer "who best solves this actual roster problem?" rather than only "who is the best player in the portal?" The WBB board currently uses the On3 source only, while the MBB board can merge On3 with the cached 247 workflow.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodValueLabSection">
+      <div class="methodHead">Value Lab</div>
+      <div class="methodBody">
+        <p>Value Lab is an independent case-based investment workspace. Each case has its own roster, budget, actual contract entries, and saved business readout.</p>
+        <p style="margin-top:10px"><b>Model Value</b> is the dashboard's internal estimate. <b>Actual Spend</b> is the real contract number you enter. If a contract is unknown, planning math falls back to model value so the case still works before every deal is final.</p>
+        <p style="margin-top:10px"><b>ROI Call</b> compares player performance against the expected return for that spend tier. The labels run from <b>Steal</b> and <b>Premium worth it</b> on the positive side to <b>Rich</b> and <b>Overpay</b> on the negative side.</p>
+        <p style="margin-top:10px"><b>Outcome vs Spend</b> looks for a dominant real-team context when it can, then maps roster Perf back into projected team strength and schedule wins so the business side can see what that spend profile is likely buying.</p>
+        <p style="margin-top:10px">Portal Value Watch extends the same lens to available portal options, highlighting players who look attractive from a bang-for-buck perspective.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodAIScoutSection">
+      <div class="methodHead">AI Workflows</div>
+      <div class="methodBody">
+        <p>AI is used as an interpretation layer on top of dashboard data, not as a replacement for the underlying calculations.</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>get_top_players</b> — Query the full player database by position, stat, value</li>
-          <li><b>get_player_profile</b> — Get a specific player's full stat profile and percentiles</li>
-          <li><b>get_team_roster</b> — View current roster details and budget status</li>
-          <li><b>add_players_to_roster / remove_player_from_roster / swap_roster_player</b> — Roster management (requires confirmation)</li>
-          <li><b>add_players_to_opponent</b> — Add players to the opponent builder</li>
-          <li><b>compare_players</b> — Open a visual side-by-side stat comparison</li>
-          <li><b>web_search</b> — Search the web for NIL values, injury news, transfer portal updates</li>
+          <li><b>Scout AI</b> can query players, rosters, team context, and approved tool actions inside the dashboard.</li>
+          <li><b>Portal AI</b> explains target boards and replacement fits after the portal model has already ranked the options.</li>
+          <li><b>Director AI Brief</b> in Value Lab uses Gemini 2.5 Flash Lite and focuses on contract efficiency, budget health, projected outcome, and portal value opportunities.</li>
+          <li><b>War Room AI</b> explains bracket simulation outputs after the tournament model finishes running.</li>
         </ul>
-        <p style="margin-top:10px">For valuation and current-event questions, AI runs a dual-source pipeline: dashboard data first, then web search for real-world market context. All roster-modifying actions require your explicit approval.</p>
+        <p style="margin-top:10px">The dashboard's preferred order is numbers first, AI second: the model produces the metrics, then Gemini turns those metrics into clearer staff-facing recommendations.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodWbbDefaultsSection">
+      <div class="methodHead">WBB Defaults</div>
+      <div class="methodBody">
+        <p>WBB uses its own default weights and min/max ranges because the stat environment is different from MBB. The scoring model is not a direct copy-paste from the men's side.</p>
+        <p style="margin-top:10px"><b>Guards</b> lean more heavily on playmaking efficiency, defensive activity, and balanced shooting context. <b>Bigs</b> lean more heavily on rebounding, rim impact, and efficient frontcourt finishing.</p>
+        <p style="margin-top:10px">Draft Radar remains MBB-only. WBB player evaluation still uses the same dashboard structure, but not every MBB-specific downstream model is carried over.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodMonteCarloSection">
+      <div class="methodHead">Simulation Stack</div>
+      <div class="methodBody">
+        <p><b>Teams Hub Monte Carlo</b> runs single-game simulations from adjusted team strength, pace, matchup effects, recency form, and team-specific volatility. Regulation ties trigger overtime logic instead of ending as ties.</p>
+        <p style="margin-top:10px"><b>Tournament War Room</b> uses a related bracket model, but applies it across the full field: play-ins resolve first, then each round is simulated repeatedly to estimate champion odds, Final Four odds, region winners, and common upsets.</p>
+        <p style="margin-top:10px">The bracket model blends baseline offensive and defensive strength with four-factor matchup adjustments, recent form, and team-level volatility, then repeats the tournament thousands of times to measure advancement probabilities instead of pretending one path is certain.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodDraftRadarSection">
+      <div class="methodHead">Draft Radar</div>
+      <div class="methodBody">
+        <p>Draft Radar predicts MBB draft probability from college production using a sign-constrained elastic-net logistic regression model trained on recent draft classes and their undrafted comparison pool.</p>
+        <p style="margin-top:10px">The strongest signals in the model come from conference tier, WS/40, class/age signal, rim-protection indicators, rebounding, and shooting efficiency. The system intentionally favors recall so likely draftable profiles are not missed too easily.</p>
+        <p style="margin-top:10px">It is still a college-stat model, not a full NBA scouting stack. Physical tools, combine performance, team need, international context, and long-term projection all sit outside this model.</p>
       </div>
     </div>
   </div>
 </div>
 </div><!-- /pageMethodology -->
 
+
+<!-- Tournament Lab Page -->
+<div id="pageLab" style="display:none">
+<div class="wrap">
+  <div class="labPage">
+    <div class="labHeader">
+      <h2 class="labTitle">Tournament Lab</h2>
+      <p class="muted" style="font-size:13px">Select multiple teams to analyze common traits, archetypes, and what drives tournament success.</p>
+    </div>
+
+    <div class="thSection" id="labWarRoomLauncherSection">
+      <div class="thSectionHead">Tournament War Room</div>
+      <div class="thSectionSub">Keep the bracket lab separate from the trait-analysis page. Open War Room when you want the full fantasy-style bracket workspace.</div>
+      <div class="card" style="padding:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:var(--fg)">Bracket workspace</div>
+          <div id="labWarRoomLockNote" class="muted" style="font-size:12px;margin-top:6px">Logged-in users can build brackets, run full-field sims, and generate AI scouting reports.</div>
+        </div>
+        <button id="labWarRoomBtn" class="thLoadBtn" type="button">Open Tournament War Room</button>
+      </div>
+    </div>
+
+    <!-- Team Picker -->
+    <div class="card labPickerCard" id="labPickerSection">
+      <div class="labPickerRow">
+        <div class="labPickerGroup">
+          <label class="labLabel">Add Teams</label>
+          <div class="labSearchWrap">
+            <input id="labTeamInput" type="text" class="labTeamInput" placeholder="Type a team name…" autocomplete="off">
+            <div id="labTeamDropdown" class="labDropdown" style="display:none"></div>
+          </div>
+        </div>
+        <button id="labRunBtn" class="labRunBtn" disabled>Run Analysis →</button>
+      </div>
+      <div id="labPills" class="labPills"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <div id="labPickerNote" class="muted" style="font-size:11px">Add at least 2 teams to run analysis.</div>
+        <button id="labPasteToggle" class="labPasteToggleBtn">Paste a list</button>
+      </div>
+      <!-- Paste list panel (hidden by default) -->
+      <div id="labPastePanel" style="display:none;margin-top:12px">
+        <label class="labLabel" style="margin-bottom:4px;display:block">Paste team names (one per line, or comma/bullet separated):</label>
+        <textarea id="labPasteInput" class="labPasteArea" placeholder="e.g.&#10;Duke&#10;Kansas&#10;Houston&#10;UConn&#10;&#10;Or comma-separated: Duke, Kansas, Houston"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <button id="labPasteApplyBtn" class="labRunBtn" style="font-size:12px;padding:6px 14px">Add Matched Teams</button>
+          <button id="labPasteClearBtn" class="labPasteToggleBtn">Clear</button>
+          <span id="labPasteStatus" class="muted" style="font-size:11px"></span>
+        </div>
+        <div id="labPastePreview" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="labLoading" style="display:none;text-align:center;padding:32px">
+      <div class="labSpinner"></div>
+      <div class="muted" style="margin-top:12px;font-size:12px" id="labLoadingText">Fetching team data…</div>
+    </div>
+
+    <!-- Results Container -->
+    <div id="labResults" style="display:none">
+
+      <!-- Overview KPIs -->
+      <div class="labSection" id="labOverviewSection">
+        <div class="labSectionHead">Overview</div>
+        <div id="labOverview" class="card labOverviewCard"></div>
+      </div>
+
+      <!-- Common Traits -->
+      <div class="labSection" id="labCommonDNASection">
+        <div class="labSectionHead">Common DNA</div>
+        <div class="labSectionSub">Statistical thresholds met by the majority of selected teams. Higher % = stronger signal.</div>
+        <div id="labTraits" class="card"></div>
+      </div>
+
+      <!-- Team Profiles Table -->
+      <div class="labSection" id="labProfilesSection">
+        <div class="labSectionHead">Team Profiles</div>
+        <div class="labSectionSub">Side-by-side comparison of key metrics across all selected teams.</div>
+        <div id="labProfiles" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- K-Means Clusters -->
+      <div class="labSection" id="labClustersSection">
+        <div class="labSectionHead">K-Means Clusters</div>
+        <div class="labSectionSub">Teams grouped by statistical similarity using k-means clustering on z-score normalized dimensions. Distance = how far from cluster center.</div>
+        <div id="labClusters" class="card"></div>
+      </div>
+
+      <!-- Logistic Regression -->
+      <div class="labSection" id="labPredictorSection">
+        <div class="labSectionHead">Tournament Predictor</div>
+        <div class="labSectionSub">Logistic regression trained on full D1 population — feature importances show which stats most predict tournament inclusion.</div>
+        <div id="labRegression" class="card"></div>
+      </div>
+
+      <!-- Archetypes -->
+      <div class="labSection" id="labArchetypesSection">
+        <div class="labSectionHead">Archetypes</div>
+        <div class="labSectionSub">Derived from cluster assignment, regression feature importances, shot zones, and clutch performance.</div>
+        <div id="labArchetypes" class="card"></div>
+      </div>
+
+      <!-- Shot Zones -->
+      <div class="labSection" id="labShotZonesSection">
+        <div class="labSectionHead">Shot Zone Profiles</div>
+        <div class="labSectionSub">Paint / midrange / 3PT frequency and efficiency breakdown from team shooting data.</div>
+        <div id="labShotZones" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Play-by-Play Tendencies -->
+      <div class="labSection" id="labTendenciesSection">
+        <div class="labSectionHead">Play-by-Play Tendencies</div>
+        <div class="labSectionSub">Shot distribution, period efficiency, and clutch performance from recent game play-by-play data.</div>
+        <div id="labTendencies" class="card"></div>
+      </div>
+
+      <!-- Metric Distributions -->
+      <div class="labSection" id="labDistributionsSection">
+        <div class="labSectionHead">Metric Distributions</div>
+        <div class="labSectionSub">Min / P25 / Median / P75 / Max across your selected group.</div>
+        <div id="labDistributions" class="card" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Deep Analysis -->
+      <div class="labSection" id="labDeepAnalysisSection">
+        <div class="labSectionHead">AI Deep Analysis</div>
+        <div class="labSectionSub">AI-generated narrative identifying patterns, archetypes, and what separates these teams.</div>
+        <div class="card" style="padding:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+            <button id="labDeepBtn" class="labRunBtn" style="flex:1;min-width:180px">Run AI Deep Analysis →</button>
+            <!-- Model toggle -->
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="lsLabel active" id="labModelLblLite" style="font-size:10.5px">2.5 Lite</span>
+              <label class="leagueSwitch" style="margin:0 2px">
+                <input type="checkbox" id="labModelSwitchInput">
+                <span class="leagueSwitchTrack"></span>
+              </label>
+              <span class="lsLabel" id="labModelLblHeavy" style="font-size:10.5px">Pro</span>
+            </div>
+            <!-- Download PDF button (hidden until analysis runs) -->
+            <button id="labDownloadBtn" class="labPasteToggleBtn" style="display:none">⬇ Download PDF</button>
+          </div>
+          <div id="labDeepOutput" style="margin-top:4px"></div>
+        </div>
+      </div>
+
+    </div><!-- /labResults -->
+  </div>
+</div>
+</div><!-- /pageLab -->
+
+<!-- Tournament War Room Page -->
+<div id="pageWarRoom" style="display:none">
+<div class="wrap">
+  <div class="labPage">
+    <div class="labHeader">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2 class="labTitle">Tournament War Room</h2>
+          <p class="muted" style="font-size:13px">Dedicated bracket workspace for saved fields, simulations, and AI bracket analysis.</p>
+        </div>
+        <button id="warRoomBackBtn" class="secondary" type="button">← Back to Tournament Lab</button>
+      </div>
+    </div>
+
+    <div class="thSection">
+      <div class="thSectionHead">Tournament War Room</div>
+      <div class="thSectionSub">Build and save tournament brackets, run Monte Carlo simulations across the full field, and generate a bracket-level AI scouting report. This workspace is available only for logged-in users.</div>
+      <div id="thBracketGate" class="card thBracketGate" style="display:none"></div>
+      <div id="thBracketWorkspace" style="display:none">
+        <div class="card thBracketShell">
+          <div class="thBracketTopbar">
+            <div class="thBracketManager">
+              <div class="thSearchGroup">
+                <label class="thLabel">Saved bracket</label>
+                <select id="thBracketSelect" class="thTeamSelect"><option value="">— Select bracket —</option></select>
+              </div>
+              <button id="thBracketNewBtn" class="secondary">+ New</button>
+              <button id="thBracketDuplicateBtn" class="secondary">Duplicate</button>
+              <button id="thBracketDeleteBtn" class="secondary">Delete</button>
+            </div>
+            <div class="thBracketMeta">
+              <div class="thSearchGroup">
+                <label class="thLabel">Bracket name</label>
+                <input id="thBracketName" type="text" class="thSeasonInput" placeholder="2026 NCAA Tournament">
+              </div>
+              <div class="thSearchGroup">
+                <label class="thLabel">Season</label>
+                <input id="thBracketSeason" type="number" value="2026" min="2020" max="2035" class="thSeasonInput">
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketGrid">
+            <div class="thBracketPanel" id="warRoomBoardSection">
+              <div class="thBracketPanelHead">Fantasy-Style Bracket Board</div>
+              <div class="thBracketPanelBody thBracketPanelBody--board">
+                <div class="muted" style="font-size:11px;margin-bottom:10px">Use the dropdown in each first-round slot to place teams directly into the bracket. Use the play-in button inside a slot when you need to set a TBD matchup like Texas vs NC State, then run the simulation and winners will auto-advance through the tree.</div>
+                <div id="thBracketBoard" class="thBracketBoard">
+                  <div class="muted" style="padding:24px;text-align:center">Create a bracket and start adding teams.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="thBracketToolStack">
+            <div class="thBracketPanel" id="warRoomToolsSection">
+              <div class="thBracketPanelHead">Bracket Tools</div>
+              <div class="thBracketPanelBody">
+                <div class="thBracketImportLabel" style="margin-top:0">Quick setup</div>
+                <div class="thBracketAddRow">
+                  <button id="thBracketBuild64Btn" class="thLoadBtn">Reset to Empty 64-Team Board</button>
+                  <button id="thBracketPreset2026Btn" class="secondary">Load ESPN 2026 Preset</button>
+                  <button id="thBracketAutofillSeedsBtn" class="secondary">Auto-fill by Seed List</button>
+                  <button id="thBracketClearTeamsBtn" class="secondary">Clear Field</button>
+                </div>
+                <div class="thBracketImportLabel">Optional direct add</div>
+                <div class="thBracketAddRow">
+                  <select id="thBracketTeamAdd" class="thTeamSelect"><option value="">-- Add a team --</option></select>
+                  <input id="thBracketSeedAdd" type="number" min="1" max="16" value="1" class="thSeasonInput" style="max-width:92px">
+                  <select id="thBracketRegionAdd" class="thTeamSelect" style="max-width:150px">
+                    <option value="South">South</option>
+                    <option value="East">East</option>
+                    <option value="West">West</option>
+                    <option value="Midwest">Midwest</option>
+                  </select>
+                  <button id="thBracketAddBtn" class="thLoadBtn">Add Team</button>
+                </div>
+                <div class="thBracketImportLabel">Smart import from ESPN / copied PDF text</div>
+                <textarea id="thBracketImport" class="thBracketImport" placeholder="Paste copied bracket text here. Examples it should recognize:&#10;1 Duke&#10;16 Siena&#10;8 Ohio State&#10;9 TCU&#10;or lines like: 1 | Duke | South"></textarea>
+                <div class="thBracketImportActions">
+                  <button id="thBracketImportBtn" class="secondary">Smart Import</button>
+                  <span id="thBracketImportStatus" class="muted" style="font-size:11px"></span>
+                </div>
+                <div class="thBracketSummaryRow">
+                  <span class="pill">Teams: <b id="thBracketTeamCount">0</b></span>
+                  <span class="pill">Regions: <b id="thBracketRegionCount">0</b></span>
+                  <span class="pill">Structure: <b id="thBracketStructure">Needs power-of-two field</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="thBracketPanel" id="warRoomAnalysisSection">
+              <div class="thBracketPanelHead">Simulation & Analysis</div>
+              <div class="thBracketPanelBody">
+                <div class="thBracketSimRow">
+                  <div class="thBracketSimControls">
+                    <select id="thBracketSimCount" class="thMCSelect">
+                      <option value="1000">1,000 sims</option>
+                      <option value="5000" selected>5,000 sims</option>
+                      <option value="10000">10,000 sims</option>
+                      <option value="25000">25,000 sims</option>
+                    </select>
+                    <button id="thBracketSimBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)">Simulate Bracket</button>
+                    <button id="thBracketAnalyzeBtn" class="thDeepBtn">Gemini Bracket Analysis</button>
+                    <button id="thBracketPdfBtn" class="secondary" type="button">View / Export PDF</button>
+                  </div>
+                  <div id="thBracketStatus" class="muted" style="font-size:11px"></div>
+                </div>
+                <div id="thBracketResults" class="thDeepOutput" style="display:none"></div>
+                <div id="thBracketAIOutput" class="thDeepOutput" style="display:none"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+          <div id="thBracketPlayInModal" class="thBracketPlayInModal" style="display:none">
+            <div class="thBracketPlayInCard">
+              <div class="thBracketPlayInHead">Set Play-In Pair</div>
+              <div class="muted" style="font-size:11px">Pick the two teams in this play-in game. The model will simulate this matchup first, then carry the winner into the main bracket.</div>
+              <div class="thBracketPlayInMeta">
+                <span class="pill" id="thBracketPlayInRegion">Region</span>
+                <span class="pill" id="thBracketPlayInSeed">Seed --</span>
+              </div>
+              <div class="thBracketPlayInGrid">
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 1</label>
+                  <select id="thBracketPlayInTeamA" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+                <div class="thSearchGroup">
+                  <label class="thLabel">Team 2</label>
+                  <select id="thBracketPlayInTeamB" class="thTeamSelect"><option value="">-- Select team --</option></select>
+                </div>
+              </div>
+              <div class="thBracketPlayInActions">
+                <button id="thBracketPlayInCancelBtn" class="secondary" type="button">Cancel</button>
+                <button id="thBracketPlayInSaveBtn" class="thLoadBtn" type="button">Save Play-In Pair</button>
+              </div>
+            </div>
+          </div>
+
+</div>
+</div><!-- /pageWarRoom -->
+
 <!-- Favorites Page -->
 <div id="pageFavorites" style="display:none">
 <div class="wrap">
-  <div class="favsPageHeader">
+  <div class="favsPageHeader" id="favsHeaderSection">
     <div class="favsPageTitle">
-      <h2>❤️ Favorites</h2>
+      <h2>Favorites</h2>
       <p class="muted" style="font-size:13px;margin-top:3px">Your personal watchlist — saved per account, synced across devices.<span id="favsCount" style="margin-left:8px;font-size:12px;font-weight:700;color:var(--accent)"></span></p>
     </div>
     <div class="favsPageControls">
@@ -743,21 +1468,102 @@
       </select>
     </div>
   </div>
-  <div id="favsFolderBar" class="favsFolderBar"></div>
-  <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
-    <input id="favsFolderInput" type="text" placeholder="Folder name…" maxlength="50">
-    <button id="favsFolderAddBtn" class="primary">Add</button>
-    <button class="secondary" id="favsFolderCancelBtn">✕</button>
+  <div id="favsToolsSection">
+    <div id="favsPortalAlertWrap" style="display:none"></div>
+    <div id="favsFolderBar" class="favsFolderBar"></div>
+    <div id="favsFolderCreateRow" class="favsFolderCreateRow" style="display:none">
+      <input id="favsFolderInput" type="text" placeholder="Folder name..." maxlength="50">
+      <button id="favsFolderAddBtn" class="primary">Add</button>
+      <button class="secondary" id="favsFolderCancelBtn">x</button>
+    </div>
+    <div id="favsBulkBar" class="favsBulkBar" style="display:none"></div>
   </div>
-  <div id="favsBulkBar" class="favsBulkBar" style="display:none"></div>
-  <div id="favsGrid" class="favsGrid"></div>
-  <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
-    <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤍</div>
-    <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
-    <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">🤍 Favorite</b> to save them here.</div>
+  <div id="favsResultsSection">
+    <div id="favsGrid" class="favsGrid"></div>
+    <div id="favsEmpty" style="display:none;text-align:center;padding:72px 20px">
+      <div style="font-size:48px;margin-bottom:14px;opacity:.4">Saved players</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text)">No favorites yet</div>
+      <div style="font-size:13px;color:var(--muted)">Open any player profile and click <b style="color:var(--text)">Favorite</b> to save them here.</div>
+    </div>
   </div>
 </div>
 </div><!-- /pageFavorites -->
+
+<!-- Admin Page -->
+<div id="pageAdmin" style="display:none">
+<div class="wrap">
+  <div class="adminHero">
+    <div>
+      <h2 style="margin:0">Admin</h2>
+      <p class="muted" style="margin:6px 0 0;font-size:13px">Approve UToledo account requests and manage dashboard users.</p>
+    </div>
+    <button id="adminRefreshBtn" class="secondary">Refresh</button>
+  </div>
+
+  <div id="adminAccessDenied" class="card adminStateCard" style="display:none">
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">Admin access required</div>
+    <div class="muted" style="font-size:13px;line-height:1.6">Only the approved <b>utdata</b> admin account can view account requests and manage users.</div>
+  </div>
+
+  <div id="adminPanelWrap">
+    <div id="adminFeedback" class="adminFeedback" style="display:none"></div>
+    <div id="adminTempPasswordCard" class="card adminTempPasswordCard" style="display:none">
+      <div class="mini">Temporary Password</div>
+      <div style="margin-top:6px;font-size:13px;color:var(--muted)">Share this securely with the user. They will be forced to change it on next login.</div>
+      <div id="adminTempPasswordText" class="adminTempPasswordText"></div>
+    </div>
+    <div class="adminGrid">
+      <section class="card adminCard">
+        <div class="adminCardHead">
+          <div>
+            <div class="mini">Pending Requests</div>
+            <h3 style="margin:4px 0 0">Approve New Accounts <span id="adminRequestCount" class="adminCountPill">0</span></h3>
+          </div>
+        </div>
+        <div class="adminTableWrap">
+          <table class="adminTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Requested</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminRequestBody"></tbody>
+          </table>
+        </div>
+        <div id="adminRequestEmpty" class="adminEmptyState" style="display:none">No pending account requests right now.</div>
+      </section>
+
+      <section class="card adminCard">
+        <div class="adminCardHead">
+          <div>
+            <div class="mini">Existing Users</div>
+            <h3 style="margin:4px 0 0">Manage Accounts <span id="adminUserCount" class="adminCountPill">0</span></h3>
+          </div>
+        </div>
+        <div class="adminTableWrap">
+          <table class="adminTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Password</th>
+                <th>Created</th>
+                <th style="text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+        <div id="adminUsersEmpty" class="adminEmptyState" style="display:none">No users found.</div>
+      </section>
+    </div>
+  </div>
+</div>
+</div><!-- /pageAdmin -->
 
 <!-- Collaborate Page -->
 <div id="pageCollaborate" style="display:none">
@@ -765,8 +1571,8 @@
   <!-- Sidebar -->
   <div id="chatSidebar" class="chatSidebar">
     <div class="chatSidebarHeader">
-      <span class="chatSidebarTitle">💬 Messages</span>
-      <button id="chatNewBtn" class="chatNewBtn" title="New conversation">✏️</button>
+      <span class="chatSidebarTitle">Messages</span>
+      <button id="chatNewBtn" class="chatNewBtn" title="New conversation">New</button>
     </div>
     <div class="chatSearchWrap">
       <input id="chatConvSearch" type="text" class="chatConvSearch" placeholder="Search conversations…">
@@ -776,9 +1582,9 @@
   <!-- Main -->
   <div id="chatMain" class="chatMain">
     <div id="chatEmpty" class="chatEmpty">
-      <div class="chatEmptyIcon">💬</div>
+      <div class="chatEmptyIcon">Inbox</div>
       <div class="chatEmptyTitle">No conversation selected</div>
-      <div class="chatEmptyHint">Pick one from the left, or hit ✏️ to start a new one.</div>
+      <div class="chatEmptyHint">Pick one from the left, or click New to start a conversation.</div>
     </div>
     <div id="chatHeader" class="chatHeader" style="display:none"></div>
     <div id="chatMessages" class="chatMessages" style="display:none"></div>
@@ -786,7 +1592,7 @@
       <div id="chatReplyBar" class="chatReplyBar" style="display:none"></div>
       <div id="chatAttachBar" class="chatAttachBar" style="display:none"></div>
       <div class="chatComposerRow">
-        <button id="chatAttachBtn" class="chatAttachBtn" title="Attach player pick">🏀</button>
+        <button id="chatAttachBtn" class="chatAttachBtn" title="Attach player pick">Attach</button>
         <textarea id="chatInput" class="chatInput" placeholder="Message…" rows="1"></textarea>
         <button id="chatSendBtn" class="chatSendBtn">Send</button>
       </div>
@@ -800,7 +1606,7 @@
   <div class="shareModal">
     <div class="shareModalHeader">
       <div>
-        <div class="shareModalTitle">🏀 Send Player Pick</div>
+        <div class="shareModalTitle">Send Player Pick</div>
         <div id="chatSendPickName" class="shareModalSubtitle"></div>
       </div>
       <button class="close" id="chatSendPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
@@ -826,7 +1632,7 @@
   <div class="shareModal" style="max-width:520px;max-height:85vh;overflow-y:auto">
     <div class="shareModalHeader">
       <div>
-        <div class="shareModalTitle">📋 Send Player Package</div>
+        <div class="shareModalTitle">Send Player Package</div>
         <div id="chatBulkPickTitle" class="shareModalSubtitle"></div>
       </div>
       <button class="close" id="chatBulkPickCancel" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
@@ -855,7 +1661,7 @@
 <div id="chatNewModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
   <div class="shareModal" style="max-width:420px">
     <div class="shareModalHeader">
-      <div class="shareModalTitle">💬 New Conversation</div>
+      <div class="shareModalTitle">New Conversation</div>
       <button class="close" id="chatNewCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
     <div class="shareModalField">
@@ -893,7 +1699,7 @@
 <div id="chatManageModalBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
   <div class="shareModal" style="max-width:420px;max-height:80vh;overflow-y:auto">
     <div class="shareModalHeader">
-      <div class="shareModalTitle">⚙️ Manage Group</div>
+      <div class="shareModalTitle">Manage Group</div>
       <button class="close" id="chatManageCancelBtn" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
     <div class="shareModalField">
@@ -920,7 +1726,7 @@
 <div id="chatPickerBack" style="display:none;position:fixed;inset:0;background:rgba(0,5,20,.82);backdrop-filter:blur(6px);z-index:1200;align-items:center;justify-content:center">
   <div class="shareModal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
     <div class="shareModalHeader" style="padding:16px 18px;border-bottom:1px solid var(--line);flex-shrink:0">
-      <div class="shareModalTitle">🏀 Attach Player</div>
+      <div class="shareModalTitle">Attach Player</div>
       <button class="close" id="chatPickerClose" style="box-shadow:none;background:none;color:var(--muted);padding:4px 8px;font-size:18px">✕</button>
     </div>
     <div style="padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
@@ -941,16 +1747,16 @@
         <div id="mRecruitBadge" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:12px"></div>
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
-        <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">⚔️ Compare</button>
-        <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📝 Notes</button>
-        <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">🤍 Favorite</button>
-        <button class="secondary" id="mShareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">📤 Send</button>
+        <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Compare</button>
+        <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Notes</button>
+        <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Favorite</button>
+        <button class="secondary" id="mShareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Send</button>
         <a id="mLearnMore" href="#" target="_blank" rel="noopener noreferrer" class="learnMoreBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Learn More</a>
         <button class="close" id="mClose">Close</button>
       </div>
     </div>
 
-    <!-- Scout Notes Drawer (toggled by 📝 Notes button) -->
+    <!-- Scout Notes Drawer (toggled by Notes button) -->
     <div id="mNotesDrawer" style="display:none;border-bottom:1px solid var(--line);background:rgba(0,15,40,.5);padding:12px 20px;gap:10px;flex-direction:column">
       <textarea id="mScoutNotes" placeholder="Add your scouting notes for this player…"
         style="width:100%;height:110px;resize:vertical;background:rgba(0,10,28,.6);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.6;outline:none;transition:border-color .2s,box-shadow .2s"></textarea>
@@ -1019,33 +1825,47 @@
       </div>
 
       <div style="margin-top:12px" class="panel">
-        <div class="panelHead">📅 Career History</div>
+        <div class="panelHead">Career History</div>
         <div id="mCareer" style="padding:0;overflow-x:auto"></div>
       </div>
 
+      <div id="mGameLogPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">Game Log</div>
+        <div class="panelBody" id="mGameLog" style="padding-bottom:8px;overflow-x:auto">
+          <div class="muted" style="font-size:12px">Open a player to view their game log.</div>
+        </div>
+      </div>
+
       <div id="mTeamContextPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">🏫 Team Context</div>
+        <div class="panelHead">Team Context</div>
         <div class="panelBody" id="mTeamContext" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Loading…</div>
         </div>
       </div>
 
       <div id="mShootingPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">🎯 Shooting Zones</div>
+        <div class="panelHead">Shooting Zones</div>
         <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Loading…</div>
         </div>
       </div>
 
+      <div id="mDraftPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">Draft Radar</div>
+        <div class="panelBody" id="mDraftRadar" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Open a player to view draft projection.</div>
+        </div>
+      </div>
+
       <div id="mScoutPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">🔍 Scout Report</div>
+        <div class="panelHead">Scout Report</div>
         <div class="panelBody" id="mScoutReport" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Open a player to view their scout report.</div>
         </div>
       </div>
 
       <div id="mShotChartPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">📍 Shot Chart</div>
+        <div class="panelHead">Shot Chart</div>
         <div class="panelBody" id="mShotChart" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Open a player to load their shot chart.</div>
         </div>
@@ -1079,7 +1899,7 @@
 <div class="modalBack" id="compareBack" style="z-index:55">
   <div class="modal" role="dialog" style="max-width:860px;width:95%">
     <div class="modalHead">
-      <div id="cmpHeader"><b>⚔️ Player Comparison</b></div>
+      <div id="cmpHeader"><b>Player Comparison</b></div>
       <button class="close" id="cmpClose">Close</button>
     </div>
     <div class="modalBody" id="cmpBody" style="max-height:75vh;overflow-y:auto"></div>
@@ -1115,10 +1935,10 @@
 </div>
 
 <!-- Notes -->
-<button class="notesToggle" id="notesToggle" title="My Notes">📝</button>
+<button class="notesToggle" id="notesToggle" title="My Notes">Notes</button>
 <div class="notesPanel hidden" id="notesPanel">
   <div class="notesHeader">
-    <b>📝 My Notes</b>
+    <b>My Notes</b>
     <div style="display:flex;gap:6px;align-items:center">
       <button type="button" class="secondary" id="notesNew" style="padding:4px 12px;font-size:11px;box-shadow:none">+ New</button>
       <button type="button" class="close" id="notesClose" style="font-size:16px;padding:4px 8px">✕</button>
@@ -1135,17 +1955,17 @@
 </div>
 
 <!-- AI Chat -->
-<button class="aiToggle" id="aiToggle" title="Ask AI Assistant">🤖</button>
+<button class="aiToggle" id="aiToggle" title="Ask AI Assistant">AI</button>
 <div class="aiPanel hidden" id="aiPanel">
   <div class="aiHeader">
-    <b>🤖 Scout AI</b>
+    <b>Scout AI</b>
     <div style="display:flex;gap:6px">
       <button class="secondary" id="aiClearChat" style="padding:4px 10px;font-size:10px;box-shadow:none">Clear</button>
       <button class="close" id="aiClose" style="font-size:16px;padding:4px 8px">✕</button>
     </div>
   </div>
   <div class="aiMessages" id="aiMessages">
-    <div class="aiMsg ai">Hey Coach! 👋 I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Add all Toledo players"</b> → loads into your roster<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br><br>I can <b>build game prep</b> 🏆:<br>• <b>"Add Toledo against Bowling Green"</b> → Toledo to my roster, BG to opponent<br>• <b>"Add all Bowling Green to opponent"</b> → opponent roster builder<br>• <b>"Show head-to-head vs Bowling Green"</b> → stat comparison by category<br>• <b>"Scout Akron's roster"</b> → loads opponent + shows match-up gaps<br><br>I can also <b>search the web</b> 🌐:<br>• <b>"Is Brandon Benjamin worth $200K?"</b> → stats + opinion + web intel<br>• <b>"Any injury news on Player X?"</b> → live Google search<br>• <b>"What's the latest on the transfer portal?"</b> → recruiting news<br><br>Every action I propose, you can ✅ approve or ❌ reject.</div>
+    <div class="aiMsg ai">Hey Coach! I'm <b>Scout AI</b> — your interactive recruiting assistant.<br><br>I can <b>control your dashboard</b>:<br>• <b>"Find a shooter big under $80K"</b> → searches data<br>• <b>"Compare Player A vs Player B"</b> → visual side-by-side<br>• <b>"Add all Toledo players"</b> → loads into your roster<br>• <b>"Swap Chris Riddle for a better guard"</b> → smart trades<br><br>I can <b>build game prep</b>:<br>• <b>"Add Toledo against Bowling Green"</b> → Toledo to my roster, BG to opponent<br>• <b>"Add all Bowling Green to opponent"</b> → opponent roster builder<br>• <b>"Show head-to-head vs Bowling Green"</b> → stat comparison by category<br>• <b>"Scout Akron's roster"</b> → loads opponent + shows match-up gaps<br><br>I can also <b>search the web</b>:<br>• <b>"Is Brandon Benjamin worth $200K?"</b> → stats + opinion + web intel<br>• <b>"Any injury news on Player X?"</b> → live Google search<br>• <b>"What's the latest on the transfer portal?"</b> → recruiting news<br><br>Every action I propose, you can approve or reject.</div>
   </div>
   <div id="aiQuickActions" style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-top:1px solid var(--line)">
     <button class="aiQuickBtn" data-q="Analyze my current roster and suggest improvements">Analyze roster</button>

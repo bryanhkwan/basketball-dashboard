@@ -23,6 +23,7 @@ var h2hBars;
 var _tbBatchMode = false;
 var _cachedAllPlayers = null;
 var _cachedAllPlayersLg = '';
+var _tbRefreshTimer = null;
 
 function initTeamBuilderDOMRefs(){
   tbBudgetEl = document.getElementById('tbBudget');
@@ -59,6 +60,7 @@ function initTeamBuilderDOMRefs(){
 function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
 
 function tbPlayerLeague(r){
+  if(r && r._league) return r._league;
   for(const [key, arr] of Object.entries(tbAllComputed)){
     if(arr.some(x => tbPlayerKey(x) === tbPlayerKey(r))){
       return key.startsWith('MBB') ? 'MBB' : 'WBB';
@@ -87,6 +89,7 @@ function tbGetAllPlayers(forLeague){
       const pk = tbPlayerKey(r);
       if(seen.has(pk)) return;
       seen.add(pk);
+      r._league = lg;
       if(!(r.Position||r.Pos||'').toString().trim()){
         r._tbPosGroup = posLabel;
       }
@@ -528,6 +531,10 @@ function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
 // --- tbRefresh (main roster refresh) ---
 
 function tbRefresh(){
+  if(_tbRefreshTimer){
+    clearTimeout(_tbRefreshTimer);
+    _tbRefreshTimer = null;
+  }
   const maxR = Number(tbMaxRosterEl.value) || 13;
   const budget = Number(tbBudgetEl.value) || 0;
   const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
@@ -696,6 +703,17 @@ function tbRefresh(){
   var _pp = document.getElementById('pagePlayers');
   if(!_pp || _pp.style.display !== 'none') renderPlayersPage();
   h2hRefresh();
+  if(window.ValueLab && typeof window.ValueLab.handleRosterChange === 'function') {
+    window.ValueLab.handleRosterChange();
+  }
+}
+
+function tbScheduleRefresh(delayMs){
+  if(_tbRefreshTimer) clearTimeout(_tbRefreshTimer);
+  _tbRefreshTimer = setTimeout(function(){
+    _tbRefreshTimer = null;
+    tbRefresh();
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 90);
 }
 
 // --- Roster render ---
@@ -924,27 +942,106 @@ function tbRenderSuggestions(){
 
 // --- Page navigation ---
 
+function showDashboardPage(targetId, activeNavId){
+  var prefsIsCustomizing = !!(window.DashboardPrefs && typeof window.DashboardPrefs.isCustomizing === 'function' && window.DashboardPrefs.isCustomizing());
+  if (!prefsIsCustomizing && window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
+    targetId = (window.DashboardPrefs.getFirstVisiblePage && window.DashboardPrefs.getFirstVisiblePage()) || 'pagePlayers';
+    activeNavId = targetId;
+  }
+  var activeId = activeNavId || targetId;
+  window._dashboardCurrentPageId = targetId;
+  document.querySelectorAll('.pageNavBtn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.page === activeId);
+  });
+  document.querySelectorAll('#pagePlayers, #pagePortal, #pageTeamBuilder, #pageTeams, #pageValueLab, #pageMethodology, #pageLab, #pageWarRoom, #pageFavorites, #pageCollaborate, #pageAdmin').forEach(function(el) {
+    el.style.display = 'none';
+  });
+  var target = document.getElementById(targetId);
+  if(target) target.style.display = '';
+
+  if(targetId === 'pagePlayers') renderPlayersPage();
+  if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
+  if(targetId === 'pageValueLab' && window.ValueLab && typeof window.ValueLab.refresh === 'function') {
+    window.ValueLab.refresh();
+  }
+  if(targetId === 'pageLab' && window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
+    window.TeamHub.refreshTournamentLauncher();
+  }
+  if(targetId === 'pageWarRoom' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
+    requestAnimationFrame(function(){ window.TeamHub.refreshTournamentHub(); });
+  }
+  if(targetId === 'pageFavorites') {
+    if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
+    if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
+    if(typeof favsRenderPage     === 'function') favsRenderPage();
+  }
+  if(targetId === 'pageAdmin' && window.AdminPanel && typeof window.AdminPanel.load === 'function') {
+    window.AdminPanel.load();
+  }
+  if(window.HelpPanel && typeof window.HelpPanel.refreshCurrentPage === 'function') {
+    window.HelpPanel.refreshCurrentPage();
+  }
+}
+
+window._dashboardCurrentPageId = window._dashboardCurrentPageId || 'pagePlayers';
+
 function initPageNav(){
   // Buttons use data-page attribute (no IDs) — use querySelectorAll
   document.querySelectorAll('.pageNavBtn').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.page;
-      document.querySelectorAll('.pageNavBtn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('#pagePlayers, #pageTeamBuilder, #pageMethodology, #pageTeams, #pageFavorites, #pageCollaborate').forEach(el => {
-        el.style.display = 'none';
-      });
-      const target = document.getElementById(targetId);
-      if(target) target.style.display = '';
-      btn.classList.add('active');
-      // Refresh player table when switching back (roster icons may be stale)
-      if(targetId === 'pagePlayers') renderPlayersPage();
-      // Re-render favorites cards every time that tab is opened
-      if(targetId === 'pageFavorites') {
-        if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
-        if(typeof favsRenderPage     === 'function') favsRenderPage();
-      }
+      showDashboardPage(targetId);
     });
   });
+
+  var tbValueLabBtn = document.getElementById('tbValueLabBtn');
+  if (tbValueLabBtn && !tbValueLabBtn._navBound) {
+    tbValueLabBtn.addEventListener('click', function () {
+      if (window.ValueLab && typeof window.ValueLab.openScenario === 'function') {
+        window.ValueLab.openScenario();
+      } else {
+        showDashboardPage('pageValueLab');
+      }
+    });
+    tbValueLabBtn._navBound = true;
+  }
+
+  var thOpenBuilderBtn = document.getElementById('thOpenBuilderBtn');
+  if (thOpenBuilderBtn && !thOpenBuilderBtn._navBound) {
+    thOpenBuilderBtn.addEventListener('click', function () {
+      showDashboardPage('pageTeamBuilder', 'pageTeams');
+    });
+    thOpenBuilderBtn._navBound = true;
+  }
+
+  var tbBackToTeamsBtn = document.getElementById('tbBackToTeamsBtn');
+  if (tbBackToTeamsBtn && !tbBackToTeamsBtn._navBound) {
+    tbBackToTeamsBtn.addEventListener('click', function () {
+      showDashboardPage('pageTeams', 'pageTeams');
+    });
+    tbBackToTeamsBtn._navBound = true;
+  }
+
+  var warRoomBtn = document.getElementById('labWarRoomBtn');
+  if (warRoomBtn && !warRoomBtn._navBound) {
+    warRoomBtn.addEventListener('click', function () {
+      if (typeof authIsGuest === 'function' && authIsGuest()) {
+        var guestLoginBtn = document.getElementById('guestLoginBtn');
+        if (guestLoginBtn) guestLoginBtn.click();
+        return;
+      }
+      showDashboardPage('pageWarRoom', 'pageLab');
+    });
+    warRoomBtn._navBound = true;
+  }
+
+  var warRoomBackBtn = document.getElementById('warRoomBackBtn');
+  if (warRoomBackBtn && !warRoomBackBtn._navBound) {
+    warRoomBackBtn.addEventListener('click', function () {
+      showDashboardPage('pageLab', 'pageLab');
+    });
+    warRoomBackBtn._navBound = true;
+  }
   // Initial state is already set correctly in HTML (pagePlayers visible, others hidden)
 }
 
@@ -1040,6 +1137,7 @@ class TeamBuilder {
   tbAddPlayer(r){ return tbAddPlayer(r); }
   tbRemovePlayer(idx){ return tbRemovePlayer(idx); }
   tbRefresh(){ return tbRefresh(); }
+  tbScheduleRefresh(delayMs){ return tbScheduleRefresh(delayMs); }
   tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl){ return tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl); }
   h2hRefresh(){ return h2hRefresh(); }
   oppAddPlayer(r){ return oppAddPlayer(r); }
@@ -1047,6 +1145,7 @@ class TeamBuilder {
   oppRefresh(){ return oppRefresh(); }
   setupQuickAdd(inputId, dropdownId, addFn, getRoster){ return setupQuickAdd(inputId, dropdownId, addFn, getRoster); }
   initPageNav(){ return initPageNav(); }
+  showDashboardPage(targetId, activeNavId){ return showDashboardPage(targetId, activeNavId); }
   initTbSubNav(){ return initTbSubNav(); }
   pctToGrade(pct){ return pctToGrade(pct); }
   getHeadToHead(){ return getHeadToHead(); }

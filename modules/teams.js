@@ -4,9 +4,15 @@
 //               teambuilder.js (oppRoster, oppRefresh)
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-var thTeamSearch, thSeasonInput, thLoadBtn;
+var thTeamSearch, thSeasonInput, thLoadBtn, thValueLabBtn;
 var thOverviewEl, thThreatsEl, thGameLogEl, thH2HEl;
 var thLoadingEl;
+var thBracketGateEl, thBracketWorkspaceEl, thBracketSelectEl, thBracketNameEl, thBracketSeasonEl;
+var thBracketTeamAddEl, thBracketSeedAddEl, thBracketRegionAddEl, thBracketImportEl, thBracketImportStatusEl;
+var thBracketBoardEl, thBracketStatusEl, thBracketResultsEl, thBracketAIOutputEl;
+var thBracketTeamCountEl, thBracketRegionCountEl, thBracketStructureEl, thBracketSimCountEl;
+var thBracketPlayInModalEl, thBracketPlayInRegionEl, thBracketPlayInSeedEl, thBracketPlayInTeamAEl, thBracketPlayInTeamBEl;
+var thWarRoomLaunchBtnEl, thWarRoomLockNoteEl;
 
 // ── State (persisted across renders for compare feature) ──────────────────────
 var thCurrentTeam   = '';
@@ -16,9 +22,94 @@ var _thCurrentStats = null;
 var thCurrentCompareTeam = '';
 var _thCompareStats = null;
 var _thLastMatchupCtx = null;
+var _thLastMatchupShots = null;
+var _thRecentTournamentCtx = null;
+var _thTournamentIntelCtx = null;
+var _thTeamIntelCache = {};
+var _thDeepShotIntelCtx = null;
+var _thWbbConfStandingsCache = {};
 var _thDeepUseHeavyModel = (localStorage.getItem('thDeepModel') === 'heavy');
 var _TH_GUEST_DA_LIMIT = 3;
 var _TH_GUEST_DA_KEY = 'thGuestDACount';
+var _thBracketState = { brackets: [], activeId: '', results: {} };
+var _thBracketTeamOptionsHtml = '';
+var _thBracketTeamsCache = [];
+var _thBracketTeamSet = {};
+var _thBracketTeamSourceRef = null;
+var _thBracketPlayInTarget = null;
+var _thBracketRenderFrame = 0;
+var _thBracketJsPdfPromise = null;
+var _TH_2026_ESPN_PRESET = {
+  name: '2026 ESPN Men\'s Bracket',
+  season: '2026',
+  source: 'ESPN Men\'s Tournament Challenge bracket field (March 17, 2026)',
+  entries: [
+    { region: 'East', seed: 1, team: 'Duke' },
+    { region: 'East', seed: 2, team: 'UConn' },
+    { region: 'East', seed: 3, team: 'Michigan St' },
+    { region: 'East', seed: 4, team: 'Kansas' },
+    { region: 'East', seed: 5, team: 'St John\'s' },
+    { region: 'East', seed: 6, team: 'Louisville' },
+    { region: 'East', seed: 7, team: 'UCLA' },
+    { region: 'East', seed: 8, team: 'Ohio State' },
+    { region: 'East', seed: 9, team: 'TCU' },
+    { region: 'East', seed: 10, team: 'UCF' },
+    { region: 'East', seed: 11, team: 'South Florida' },
+    { region: 'East', seed: 12, team: 'Northern Iowa' },
+    { region: 'East', seed: 13, team: 'CA Baptist' },
+    { region: 'East', seed: 14, team: 'N Dakota St' },
+    { region: 'East', seed: 15, team: 'Furman' },
+    { region: 'East', seed: 16, team: 'Siena' },
+    { region: 'South', seed: 1, team: 'Florida' },
+    { region: 'South', seed: 2, team: 'Houston' },
+    { region: 'South', seed: 3, team: 'Illinois' },
+    { region: 'South', seed: 4, team: 'Nebraska' },
+    { region: 'South', seed: 5, team: 'Vanderbilt' },
+    { region: 'South', seed: 6, team: 'North Carolina' },
+    { region: 'South', seed: 7, team: 'Saint Mary\'s' },
+    { region: 'South', seed: 8, team: 'Clemson' },
+    { region: 'South', seed: 9, team: 'Iowa' },
+    { region: 'South', seed: 10, team: 'Texas A&M' },
+    { region: 'South', seed: 11, team: 'VCU' },
+    { region: 'South', seed: 12, team: 'McNeese' },
+    { region: 'South', seed: 13, team: 'Troy' },
+    { region: 'South', seed: 14, team: 'Penn' },
+    { region: 'South', seed: 15, team: 'Idaho' },
+    { region: 'South', seed: 16, candidates: ['Prairie View A&M', 'Lehigh'] },
+    { region: 'West', seed: 1, team: 'Arizona' },
+    { region: 'West', seed: 2, team: 'Purdue' },
+    { region: 'West', seed: 3, team: 'Gonzaga' },
+    { region: 'West', seed: 4, team: 'Arkansas' },
+    { region: 'West', seed: 5, team: 'Wisconsin' },
+    { region: 'West', seed: 6, team: 'BYU' },
+    { region: 'West', seed: 7, team: 'Miami' },
+    { region: 'West', seed: 8, team: 'Villanova' },
+    { region: 'West', seed: 9, team: 'Utah State' },
+    { region: 'West', seed: 10, team: 'Missouri' },
+    { region: 'West', seed: 11, candidates: ['Texas', 'NC State'] },
+    { region: 'West', seed: 12, team: 'High Point' },
+    { region: 'West', seed: 13, team: 'Hawai\'i' },
+    { region: 'West', seed: 14, team: 'Kennesaw St' },
+    { region: 'West', seed: 15, team: 'Queens' },
+    { region: 'West', seed: 16, team: 'Long Island' },
+    { region: 'Midwest', seed: 1, team: 'Michigan' },
+    { region: 'Midwest', seed: 2, team: 'Iowa State' },
+    { region: 'Midwest', seed: 3, team: 'Virginia' },
+    { region: 'Midwest', seed: 4, team: 'Alabama' },
+    { region: 'Midwest', seed: 5, team: 'Texas Tech' },
+    { region: 'Midwest', seed: 6, team: 'Tennessee' },
+    { region: 'Midwest', seed: 7, team: 'Kentucky' },
+    { region: 'Midwest', seed: 8, team: 'Georgia' },
+    { region: 'Midwest', seed: 9, team: 'Saint Louis' },
+    { region: 'Midwest', seed: 10, team: 'Santa Clara' },
+    { region: 'Midwest', seed: 11, candidates: ['Miami (OH)', 'SMU'] },
+    { region: 'Midwest', seed: 12, team: 'Akron' },
+    { region: 'Midwest', seed: 13, team: 'Hofstra' },
+    { region: 'Midwest', seed: 14, team: 'Wright St' },
+    { region: 'Midwest', seed: 15, team: 'Tennessee St' },
+    { region: 'Midwest', seed: 16, candidates: ['UMBC', 'Howard'] }
+  ]
+};
 
 function _thGuestDACount() {
   return parseInt(localStorage.getItem(_TH_GUEST_DA_KEY) || '0', 10);
@@ -32,11 +123,1654 @@ function _thIsGuest() {
   return typeof authIsGuest === 'function' && authIsGuest();
 }
 
+function _thSyncWarRoomLauncher() {
+  if (!thWarRoomLaunchBtnEl) return;
+  var guest = _thIsGuest();
+  thWarRoomLaunchBtnEl.disabled = false;
+  thWarRoomLaunchBtnEl.dataset.locked = guest ? '1' : '0';
+  thWarRoomLaunchBtnEl.setAttribute('aria-disabled', guest ? 'true' : 'false');
+  thWarRoomLaunchBtnEl.title = guest ? 'Log in to open Tournament War Room.' : 'Open Tournament War Room';
+  thWarRoomLaunchBtnEl.textContent = guest ? 'Tournament War Room (Users Only)' : 'Open Tournament War Room';
+  thWarRoomLaunchBtnEl.style.opacity = guest ? '0.72' : '1';
+  thWarRoomLaunchBtnEl.style.cursor = guest ? 'pointer' : '';
+  if (thWarRoomLockNoteEl) {
+    thWarRoomLockNoteEl.textContent = guest
+      ? 'Guest accounts can use Tournament Lab analysis, but Tournament War Room is locked until you log in.'
+      : 'Open the dedicated bracket workspace for saved fields, simulations, and AI scouting reports.';
+  }
+}
+
+function _thBracketStorageKey() {
+  var user = 'guest';
+  try {
+    if (!_thIsGuest() && typeof authGetUser === 'function') user = authGetUser() || user;
+  } catch (_) {}
+  user = String(user || 'guest').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  return 'th_tournament_brackets_' + user;
+}
+
+function _thEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _thBracketId() {
+  return 'br_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function _thBracketRegions() {
+  return ['South', 'East', 'West', 'Midwest'];
+}
+
+function _thDefaultBracket() {
+  return {
+    id: _thBracketId(),
+    name: 'New Tournament Bracket',
+    season: String(thSeasonInput && thSeasonInput.value ? thSeasonInput.value : '2026'),
+    teams: [],
+    createdAt: new Date().toISOString()
+  };
+}
+
+function _thBracketActive() {
+  return _thBracketState.brackets.find(function (b) { return b.id === _thBracketState.activeId; }) || null;
+}
+
+function _thSaveBracketState() {
+  if (_thIsGuest()) return;
+  try {
+    localStorage.setItem(_thBracketStorageKey(), JSON.stringify(_thBracketState));
+  } catch (_) {}
+}
+
+function _thLoadBracketState() {
+  if (_thIsGuest()) {
+    _thBracketState = { brackets: [], activeId: '', results: {} };
+    return;
+  }
+  try {
+    var raw = localStorage.getItem(_thBracketStorageKey()) || '';
+    if (!raw) {
+      _thBracketState = { brackets: [_thDefaultBracket()], activeId: '', results: {} };
+      _thBracketState.activeId = _thBracketState.brackets[0].id;
+      _thSaveBracketState();
+      return;
+    }
+    var parsed = JSON.parse(raw);
+    _thBracketState = {
+      brackets: Array.isArray(parsed.brackets) ? parsed.brackets : [],
+      activeId: parsed.activeId || '',
+      results: parsed.results && typeof parsed.results === 'object' ? parsed.results : {}
+    };
+    if (!_thBracketState.brackets.length) {
+      _thBracketState.brackets = [_thDefaultBracket()];
+    }
+    if (!_thBracketActive()) _thBracketState.activeId = _thBracketState.brackets[0].id;
+  } catch (_) {
+    _thBracketState = { brackets: [_thDefaultBracket()], activeId: '', results: {} };
+    _thBracketState.activeId = _thBracketState.brackets[0].id;
+  }
+}
+
+function _thBracketAllTeams() {
+  var players = typeof tbGetAllPlayers === 'function' ? (tbGetAllPlayers('MBB') || []) : [];
+  if (_thBracketTeamSourceRef === players && _thBracketTeamsCache.length) {
+    return _thBracketTeamsCache.slice();
+  }
+  _thBracketTeamSourceRef = players;
+  _thBracketTeamsCache = [...new Set(
+    players
+      .map(function (p) { return p.Team || ''; })
+      .filter(Boolean)
+  )].sort();
+  return _thBracketTeamsCache.slice();
+}
+
+function _thResolvePresetTeamName(rawTeam, teamMap) {
+  var knownMap = teamMap || {};
+  var raw = String(rawTeam || '').trim();
+  if (!raw) return '';
+  var exact = knownMap[_thNormTeamName(raw)];
+  if (exact) return exact;
+
+  var aliasMap = {
+    'miami': ['Miami', 'Miami (FL)', 'Miami FL'],
+    'st johns': ['St John\'s', 'Saint John\'s'],
+    'michigan st': ['Michigan St', 'Michigan State'],
+    'ca baptist': ['CA Baptist', 'California Baptist'],
+    'n dakota st': ['N Dakota St', 'North Dakota State', 'North Dakota St'],
+    'saint marys': ['Saint Mary\'s', 'Saint Mary\'s CA', 'Saint Marys'],
+    'hawaii': ['Hawai\'i', 'Hawaii'],
+    'kennesaw st': ['Kennesaw St', 'Kennesaw State'],
+    'saint louis': ['Saint Louis', 'Saint Louis Billikens', 'St Louis'],
+    'miami oh': ['Miami (OH)', 'Miami OH', 'Miami-Ohio'],
+    'wright st': ['Wright St', 'Wright State'],
+    'tennessee st': ['Tennessee St', 'Tennessee State'],
+    'long island': ['Long Island', 'LIU'],
+    'prairie view am': ['Prairie View A&M', 'Prairie View', 'Prairie View AM'],
+    'nc state': ['NC State', 'NCSU'],
+    'south florida': ['South Florida', 'USF']
+  };
+  var aliasKey = _thNormTeamName(raw);
+  var aliases = aliasMap[aliasKey] || [];
+  for (var i = 0; i < aliases.length; i++) {
+    var match = knownMap[_thNormTeamName(aliases[i])];
+    if (match) return match;
+  }
+
+  var tokens = aliasKey.split(' ').filter(Boolean);
+  var bestScore = 0;
+  var bestTeam = '';
+  Object.keys(knownMap).forEach(function (key) {
+    var score = 0;
+    tokens.forEach(function (token) {
+      if (key.indexOf(token) >= 0) score += 1;
+    });
+    if (score > bestScore && score >= Math.max(2, tokens.length - 1)) {
+      bestScore = score;
+      bestTeam = knownMap[key];
+    }
+  });
+  return bestTeam || raw;
+}
+
+function _thParseTeamCandidates(raw) {
+  var text = String(raw || '').trim();
+  if (!text) return [];
+  text = text.replace(/^(winner\s+of|play-?in\s+winner\s*:?|first four\s*:?|tbd\s*:?|either\s+)/i, '').trim();
+  var knownTeams = _thBracketAllTeams();
+  var byNorm = {};
+  knownTeams.forEach(function (team) { byNorm[_thNormTeamName(team)] = team; });
+
+  if (byNorm[_thNormTeamName(text)]) return [byNorm[_thNormTeamName(text)]];
+
+  var parts = text
+    .split(/\s*\/\s*|\s+or\s+|\s*\|\s*/i)
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean);
+
+  var out = [];
+  parts.forEach(function (part) {
+    var match = byNorm[_thNormTeamName(part)];
+    if (match && out.indexOf(match) === -1) out.push(match);
+  });
+  return out;
+}
+
+function _thPopulateBracketTeamSelects() {
+  var teams = _thBracketAllTeams();
+  _thBracketTeamSet = {};
+  teams.forEach(function (team) { _thBracketTeamSet[_thNormTeamName(team)] = true; });
+  _thBracketTeamOptionsHtml = teams.map(function (t) {
+    return '<option value="' + _thEsc(t) + '">' + _thEsc(t) + '</option>';
+  }).join('');
+  if (thBracketTeamAddEl) thBracketTeamAddEl.innerHTML = '<option value="">-- Add a team --</option>' + _thBracketTeamOptionsHtml;
+  _thPopulatePlayInPairSelects(
+    thBracketPlayInTeamAEl ? thBracketPlayInTeamAEl.value : '',
+    thBracketPlayInTeamBEl ? thBracketPlayInTeamBEl.value : ''
+  );
+}
+
+function _thBracketSlotOptions(currentName) {
+  var current = String(currentName || '').trim();
+  var prefix = '';
+  if (current && !_thBracketTeamSet[_thNormTeamName(current)]) {
+    prefix = '<option value="' + _thEsc(current) + '">' + _thEsc(current) + '</option>';
+  }
+  return prefix + _thBracketTeamOptionsHtml;
+}
+
+function _thBracketSelectInitialMarkup(region, seed, currentName) {
+  var current = String(currentName || '').trim();
+  return '<select class="thBracketSlotSelect" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '" data-current="' + _thEsc(current) + '">' +
+    '<option value="">-- Select team --</option>' +
+    (current ? ('<option value="' + _thEsc(current) + '" selected>' + _thEsc(current) + '</option>') : '') +
+  '</select>';
+}
+
+function _thHydrateBracketSelect(sel) {
+  if (!sel || sel.dataset.hydrated === '1') return;
+  var current = sel.getAttribute('data-current') || '';
+  sel.innerHTML = '<option value="">-- Select team --</option>' + _thBracketSlotOptions(current);
+  if (current) sel.value = current;
+  sel.dataset.hydrated = '1';
+}
+
+function _thPopulatePlayInPairSelects(teamA, teamB) {
+  var base = '<option value="">-- Select team --</option>' + _thBracketTeamOptionsHtml;
+  if (thBracketPlayInTeamAEl) {
+    thBracketPlayInTeamAEl.innerHTML = base;
+    thBracketPlayInTeamAEl.value = teamA || '';
+  }
+  if (thBracketPlayInTeamBEl) {
+    thBracketPlayInTeamBEl.innerHTML = base;
+    thBracketPlayInTeamBEl.value = teamB || '';
+  }
+}
+
+function _thBracketSeedEntry(region, seed) {
+  var bracket = _thBracketActive();
+  if (!bracket) return null;
+  return (bracket.teams || []).find(function (item) {
+    return (item.region || '') === region && Number(item.seed) === Number(seed);
+  }) || null;
+}
+
+function _thOpenPlayInModal(region, seed) {
+  if (!thBracketPlayInModalEl) return;
+  _thBracketPlayInTarget = { region: region, seed: Number(seed) || 0 };
+  var current = _thBracketSeedEntry(region, seed);
+  var candidates = current && Array.isArray(current.candidates) ? current.candidates : [];
+  if (thBracketPlayInRegionEl) thBracketPlayInRegionEl.textContent = region || 'Region';
+  if (thBracketPlayInSeedEl) thBracketPlayInSeedEl.textContent = 'Seed ' + (seed || '--');
+  _thPopulatePlayInPairSelects(candidates[0] || '', candidates[1] || '');
+  thBracketPlayInModalEl.style.display = 'flex';
+}
+
+function _thClosePlayInModal() {
+  if (!thBracketPlayInModalEl) return;
+  thBracketPlayInModalEl.style.display = 'none';
+  _thBracketPlayInTarget = null;
+}
+
+function _thSavePlayInModal() {
+  if (!_thBracketPlayInTarget) return;
+  var teamA = thBracketPlayInTeamAEl ? String(thBracketPlayInTeamAEl.value || '').trim() : '';
+  var teamB = thBracketPlayInTeamBEl ? String(thBracketPlayInTeamBEl.value || '').trim() : '';
+  if (!teamA || !teamB) {
+    if (typeof showWarn === 'function') showWarn('Pick both teams for the play-in pair.');
+    return;
+  }
+  if (_thNormTeamName(teamA) === _thNormTeamName(teamB)) {
+    if (typeof showWarn === 'function') showWarn('Choose two different teams for the play-in pair.');
+    return;
+  }
+  _thAssignBracketSeedEntry(_thBracketPlayInTarget.region, _thBracketPlayInTarget.seed, {
+    team: teamA + ' / ' + teamB,
+    candidates: [teamA, teamB]
+  });
+  _thClosePlayInModal();
+}
+
+function _thBracketFieldStructure(bracket) {
+  var teams = bracket && Array.isArray(bracket.teams) ? bracket.teams : [];
+  var total = teams.length;
+  var byRegion = {};
+  teams.forEach(function (item) {
+    var region = item.region || 'Unassigned';
+    byRegion[region] = (byRegion[region] || 0) + 1;
+  });
+  var counts = Object.keys(byRegion).map(function (k) { return byRegion[k]; });
+  var isPowerOfTwo = total > 1 && (total & (total - 1)) === 0;
+  var balanced = counts.length ? counts.every(function (c) { return c === counts[0]; }) : false;
+  if (!total) return 'No teams added';
+  if (counts.length === 4 && counts[0] === 16) return '64-team regional bracket';
+  if (isPowerOfTwo && balanced) return total + '-team balanced field';
+  if (isPowerOfTwo) return total + '-team custom field';
+  return 'Needs power-of-two field';
+}
+
+function _thRoundLabel(teamCount) {
+  if (teamCount === 64) return 'Round of 64';
+  if (teamCount === 32) return 'Round of 32';
+  if (teamCount === 16) return 'Sweet 16';
+  if (teamCount === 8) return 'Elite 8';
+  if (teamCount === 4) return 'Final 4';
+  if (teamCount === 2) return 'Championship';
+  return 'Round of ' + teamCount;
+}
+
+function _thBracketRoundLabels(totalTeams) {
+  var out = [];
+  var n = totalTeams;
+  while (n >= 2) {
+    out.push(_thRoundLabel(n));
+    n = n / 2;
+  }
+  out.push('Champion');
+  return out;
+}
+
+function _thNormalizeBracketName(name) {
+  return String(name || '').trim() || 'Tournament Bracket';
+}
+
+function _thBracketSeedPairs(size) {
+  if (size <= 1) return [1];
+  var prev = _thBracketSeedPairs(size / 2);
+  var out = [];
+  prev.forEach(function (seed) {
+    out.push(seed);
+    out.push(size + 1 - seed);
+  });
+  return out;
+}
+
+function _thFirstRoundSeedPairs() {
+  return [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
+}
+
+function _thBuildBracketPairings(entries) {
+  var ordered = (entries || []).slice().sort(function (a, b) {
+    var sa = Number(a.seed) || 99;
+    var sb = Number(b.seed) || 99;
+    if (sa !== sb) return sa - sb;
+    return String(a.team || '').localeCompare(String(b.team || ''));
+  });
+  var n = ordered.length;
+  if (n < 2 || (n & (n - 1)) !== 0) return [];
+  var pairSeeds = _thBracketSeedPairs(n);
+  var bySeed = {};
+  ordered.forEach(function (item, idx) {
+    var key = Number(item.seed) || (idx + 1);
+    if (!bySeed[key]) bySeed[key] = [];
+    bySeed[key].push(item);
+  });
+  var slotOrder = [];
+  pairSeeds.forEach(function (seed) {
+    if (bySeed[seed] && bySeed[seed].length) slotOrder.push(bySeed[seed].shift());
+  });
+  ordered.forEach(function (item) {
+    if (slotOrder.indexOf(item) === -1) slotOrder.push(item);
+  });
+  var pairs = [];
+  for (var i = 0; i < slotOrder.length; i += 2) {
+    if (slotOrder[i + 1]) pairs.push([slotOrder[i], slotOrder[i + 1]]);
+  }
+  return pairs;
+}
+
+function _thRegionSeedMap(bracket, region) {
+  var map = {};
+  (bracket && bracket.teams || []).forEach(function (item) {
+    if ((item.region || '') !== region) return;
+    map[Number(item.seed) || 0] = item;
+  });
+  return map;
+}
+
+function _thBracketTeamStats(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  return (typeof teamStatsCache !== 'undefined' && teamStatsCache[key]) ? teamStatsCache[key] : null;
+}
+
+function _thBracketTeamGames(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  var cached = (typeof teamGamesCache !== 'undefined' && teamGamesCache[key]) ? teamGamesCache[key] : null;
+  return cached && Array.isArray(cached.games) ? cached.games.slice() : [];
+}
+
+function _thClamp(v, lo, hi) {
+  if (!Number.isFinite(v)) return lo;
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function _thStdDev(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return null;
+  var mean = arr.reduce(function (s, x) { return s + x; }, 0) / arr.length;
+  var variance = arr.reduce(function (s, x) { return s + Math.pow(x - mean, 2); }, 0) / arr.length;
+  return Math.sqrt(Math.max(0, variance));
+}
+
+function _thTeamGameMetrics(teamName, season) {
+  var games = _thBracketTeamGames(teamName, season).filter(function (g) {
+    return Number.isFinite(Number(g.homePoints)) && Number.isFinite(Number(g.awayPoints));
+  }).sort(function (a, b) {
+    return new Date(a.startDate || a.date || 0) - new Date(b.startDate || b.date || 0);
+  });
+  if (!games.length) {
+    return {
+      seasonMargin: 0,
+      recentMargin: 0,
+      seasonWinPct: 0.5,
+      recentWinPct: 0.5,
+      scoreSd: 11,
+      recentScoreSd: 11,
+      postseasonMargin: 0,
+      postseasonWinPct: 0.5
+    };
+  }
+
+  var teamKey = String(teamName || '').toLowerCase();
+  var rows = games.map(function (g) {
+    var isHome = String(g.homeTeam || '').toLowerCase() === teamKey;
+    var teamPts = Number(isHome ? g.homePoints : g.awayPoints);
+    var oppPts = Number(isHome ? g.awayPoints : g.homePoints);
+    var meta = String((g.seasonType || '') + ' ' + (g.notes || '') + ' ' + (g.title || '') + ' ' + (g.label || '')).toLowerCase();
+    return {
+      teamPts: teamPts,
+      oppPts: oppPts,
+      margin: teamPts - oppPts,
+      win: teamPts > oppPts ? 1 : 0,
+      postseason: /post|tournament|semifinal|quarterfinal|championship|ncaa/.test(meta)
+    };
+  });
+  var recent10 = rows.slice(-10);
+  var recent5 = rows.slice(-5);
+  var post = rows.filter(function (r) { return r.postseason; }).slice(-5);
+
+  function avg(arr, key) {
+    if (!arr.length) return 0;
+    return arr.reduce(function (s, x) { return s + (x[key] || 0); }, 0) / arr.length;
+  }
+
+  return {
+    seasonMargin: avg(rows, 'margin'),
+    recentMargin: avg(recent10.length ? recent10 : rows, 'margin'),
+    seasonWinPct: avg(rows, 'win'),
+    recentWinPct: avg(recent10.length ? recent10 : rows, 'win'),
+    scoreSd: _thStdDev(rows.map(function (r) { return r.teamPts; })) || 11,
+    recentScoreSd: _thStdDev((recent5.length ? recent5 : rows).map(function (r) { return r.teamPts; })) || 11,
+    postseasonMargin: post.length ? avg(post, 'margin') : avg(recent5.length ? recent5 : rows, 'margin'),
+    postseasonWinPct: post.length ? avg(post, 'win') : avg(recent5.length ? recent5 : rows, 'win')
+  };
+}
+
+function _thGetStat(obj, path, fallback) {
+  try {
+    var cur = obj;
+    for (var i = 0; i < path.length; i++) {
+      cur = cur ? cur[path[i]] : null;
+    }
+    var num = Number(cur);
+    return Number.isFinite(num) ? num : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function _thComputeMatchupAdjustment(statsA, statsB) {
+  if (!statsA || !statsB) return { a: 0, b: 0, details: [] };
+  var aTs = statsA.teamStats || {};
+  var aOs = statsA.opponentStats || {};
+  var bTs = statsB.teamStats || {};
+  var bOs = statsB.opponentStats || {};
+  var aFf = aTs.fourFactors || {};
+  var aFfDef = aOs.fourFactors || {};
+  var bFf = bTs.fourFactors || {};
+  var bFfDef = bOs.fourFactors || {};
+  var a = 0, b = 0;
+  var details = [];
+
+  function addEdge(label, edgeA, edgeB, scale) {
+    a += edgeA * scale;
+    b += edgeB * scale;
+    details.push({ label: label, a: +(edgeA * scale).toFixed(2), b: +(edgeB * scale).toFixed(2) });
+  }
+
+  addEdge(
+    'eFG matchup',
+    ((_thGetStat(aFf, ['effectiveFieldGoalPct'], 50) - _thGetStat(bFfDef, ['effectiveFieldGoalPct'], 50)) / 10),
+    ((_thGetStat(bFf, ['effectiveFieldGoalPct'], 50) - _thGetStat(aFfDef, ['effectiveFieldGoalPct'], 50)) / 10),
+    1.8
+  );
+  addEdge(
+    'Turnover matchup',
+    ((_thGetStat(bFfDef, ['turnoverRatio'], 0.18) - _thGetStat(aFf, ['turnoverRatio'], 0.18)) * 100),
+    ((_thGetStat(aFfDef, ['turnoverRatio'], 0.18) - _thGetStat(bFf, ['turnoverRatio'], 0.18)) * 100),
+    0.24
+  );
+  addEdge(
+    'Rebounding matchup',
+    ((_thGetStat(aFf, ['offensiveReboundPct'], 28) - _thGetStat(bFfDef, ['offensiveReboundPct'], 28)) / 10),
+    ((_thGetStat(bFf, ['offensiveReboundPct'], 28) - _thGetStat(aFfDef, ['offensiveReboundPct'], 28)) / 10),
+    1.15
+  );
+  addEdge(
+    'FT rate matchup',
+    ((_thGetStat(aFf, ['freeThrowRate'], 28) - _thGetStat(bFfDef, ['freeThrowRate'], 28)) / 12),
+    ((_thGetStat(bFf, ['freeThrowRate'], 28) - _thGetStat(aFfDef, ['freeThrowRate'], 28)) / 12),
+    0.9
+  );
+
+  var a3Pct = _thGetStat(aTs, ['threePointFieldGoals', 'pct'], null);
+  var b3Def = _thGetStat(bOs, ['threePointFieldGoals', 'pct'], null);
+  var b3Pct = _thGetStat(bTs, ['threePointFieldGoals', 'pct'], null);
+  var a3Def = _thGetStat(aOs, ['threePointFieldGoals', 'pct'], null);
+  if (a3Pct !== null && b3Def !== null && b3Pct !== null && a3Def !== null) {
+    addEdge('3PT style', (a3Pct - b3Def) / 10, (b3Pct - a3Def) / 10, 0.8);
+  }
+
+  var aPaint = _thGetStat(aTs, ['points', 'inPaint'], null);
+  var bPaintAllow = _thGetStat(bOs, ['points', 'inPaint'], null);
+  var bPaint = _thGetStat(bTs, ['points', 'inPaint'], null);
+  var aPaintAllow = _thGetStat(aOs, ['points', 'inPaint'], null);
+  if (aPaint !== null && bPaintAllow !== null && bPaint !== null && aPaintAllow !== null) {
+    addEdge('Paint pressure', (aPaint - bPaintAllow) / 18, (bPaint - aPaintAllow) / 18, 0.75);
+  }
+
+  return {
+    a: _thClamp(a, -5.5, 5.5),
+    b: _thClamp(b, -5.5, 5.5),
+    details: details
+  };
+}
+
+function _thComputeRecencyAdjustment(teamName, season, ratingObj) {
+  var metrics = _thTeamGameMetrics(teamName, season);
+  var seasonStrength = ratingObj && Number.isFinite(+ratingObj.adjEM) ? +ratingObj.adjEM : 0;
+  var recentSignal = (metrics.recentMargin - metrics.seasonMargin) * 0.32;
+  var winSignal = (metrics.recentWinPct - metrics.seasonWinPct) * 5.2;
+  var postSignal = (metrics.postseasonMargin - metrics.seasonMargin) * 0.18 + (metrics.postseasonWinPct - metrics.seasonWinPct) * 3.5;
+  var shrink = seasonStrength > 20 ? 0.85 : seasonStrength < -5 ? 0.75 : 0.8;
+  return _thClamp((recentSignal + winSignal + postSignal) * shrink, -4.5, 4.5);
+}
+
+function _thComputeTeamVolatility(teamName, season) {
+  var metrics = _thTeamGameMetrics(teamName, season);
+  var raw = metrics.scoreSd * 0.65 + metrics.recentScoreSd * 0.35;
+  if (metrics.recentWinPct >= 0.8 && metrics.recentMargin >= 8) raw -= 0.6;
+  if (metrics.recentWinPct <= 0.4 || metrics.recentMargin <= -2) raw += 0.5;
+  return _thClamp(raw, 7.5, 15.5);
+}
+
+async function _thPrepareBracketContexts(bracket) {
+  if (!bracket || !Array.isArray(bracket.teams)) return;
+  var season = bracket.season || '2026';
+  var seen = {};
+  var names = [];
+  bracket.teams.forEach(function (entry) {
+    var pool = Array.isArray(entry && entry.candidates) && entry.candidates.length
+      ? entry.candidates
+      : [entry && entry.team];
+    pool.forEach(function (name) {
+      var clean = String(name || '').trim();
+      if (!clean) return;
+      var key = clean.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      names.push(clean);
+    });
+  });
+  await Promise.all(names.map(function (name) {
+    return Promise.all([
+      typeof loadTeamStats === 'function' ? loadTeamStats(name, season).catch(function () { return null; }) : Promise.resolve(null),
+      typeof loadGamesForTeam === 'function' ? loadGamesForTeam(name, season).catch(function () { return null; }) : Promise.resolve(null)
+    ]);
+  }));
+}
+
+function _thTeamPaceForBracket(teamName, season) {
+  var key = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  if (typeof teamStatsCache !== 'undefined' && teamStatsCache[key] && Number.isFinite(+teamStatsCache[key].pace)) {
+    return +teamStatsCache[key].pace;
+  }
+  return 68;
+}
+
+function _thBracketTeamRating(teamName, season) {
+  var key = String(teamName || '').toLowerCase();
+  var rating = teamRatings[key] || null;
+  var statKey = (String(teamName || '') + ':' + String(season || '2026')).toLowerCase();
+  var stats = (typeof teamStatsCache !== 'undefined' && teamStatsCache[statKey]) ? teamStatsCache[statKey] : null;
+  return _thFallbackRating(teamName, rating, stats, season);
+}
+
+function _thSimResolvedTeams(teamA, teamB, season) {
+  var ratA = _thBracketTeamRating(teamA.team, season);
+  var ratB = _thBracketTeamRating(teamB.team, season);
+  if (!ratA || !ratB) return null;
+  var statsA = _thBracketTeamStats(teamA.team, season);
+  var statsB = _thBracketTeamStats(teamB.team, season);
+  var recA = _thComputeRecencyAdjustment(teamA.team, season, ratA);
+  var recB = _thComputeRecencyAdjustment(teamB.team, season, ratB);
+  var matchup = _thComputeMatchupAdjustment(statsA, statsB);
+  var paceA = _thTeamPaceForBracket(teamA.team, season);
+  var paceB = _thTeamPaceForBracket(teamB.team, season);
+  var pace = _thClamp((paceA * 0.45) + (paceB * 0.45) + 6.8 * 0.10, 61, 75);
+  var eOA = ((+ratA.adjO + +ratB.adjD) / 2) + recA + matchup.a;
+  var eOB = ((+ratB.adjO + +ratA.adjD) / 2) + recB + matchup.b;
+  var sdA = _thComputeTeamVolatility(teamA.team, season);
+  var sdB = _thComputeTeamVolatility(teamB.team, season);
+
+  function randn() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  var scoreA = Math.round((eOA / 100) * pace + randn() * sdA);
+  var scoreB = Math.round((eOB / 100) * pace + randn() * sdB);
+  scoreA = Math.max(45, scoreA);
+  scoreB = Math.max(45, scoreB);
+  while (scoreA === scoreB) {
+    scoreA += Math.max(1, Math.round(randn() * 3 + 4));
+    scoreB += Math.max(1, Math.round(randn() * 3 + 4));
+  }
+
+  var winner = scoreA > scoreB ? teamA : teamB;
+  var loser = scoreA > scoreB ? teamB : teamA;
+  return {
+    winner: winner,
+    loser: loser,
+    scoreA: scoreA,
+    scoreB: scoreB,
+    upset: (Number(winner.seed) || 99) > (Number(loser.seed) || 99),
+    margin: Math.abs(scoreA - scoreB),
+    model: {
+      pace: +pace.toFixed(1),
+      adjA: +eOA.toFixed(2),
+      adjB: +eOB.toFixed(2),
+      recencyA: +recA.toFixed(2),
+      recencyB: +recB.toFixed(2),
+      matchupA: +matchup.a.toFixed(2),
+      matchupB: +matchup.b.toFixed(2),
+      sdA: +sdA.toFixed(2),
+      sdB: +sdB.toFixed(2)
+    }
+  };
+}
+
+function _thResolvePlayInEntry(teamEntry, season) {
+  if (!teamEntry) return null;
+  var candidates = Array.isArray(teamEntry.candidates) ? teamEntry.candidates.slice() : [];
+  if (!candidates.length) return teamEntry;
+  if (candidates.length === 1) {
+    return Object.assign({}, teamEntry, { team: candidates[0], candidates: [candidates[0]] });
+  }
+  var left = { team: candidates[0], seed: teamEntry.seed, region: teamEntry.region };
+  var right = { team: candidates[1], seed: teamEntry.seed, region: teamEntry.region };
+  var playIn = _thSimResolvedTeams(left, right, season);
+  if (!playIn) return Object.assign({}, teamEntry, { team: candidates[0] });
+  return Object.assign({}, teamEntry, {
+    team: playIn.winner.team,
+    candidates: candidates,
+    playIn: {
+      teamA: left.team,
+      teamB: right.team,
+      winner: playIn.winner.team,
+      scoreA: playIn.scoreA,
+      scoreB: playIn.scoreB
+    }
+  });
+}
+
+function _thSimSingleGame(teamA, teamB, season) {
+  var resolvedA = _thResolvePlayInEntry(teamA, season);
+  var resolvedB = _thResolvePlayInEntry(teamB, season);
+  if (!resolvedA || !resolvedB) return null;
+  var result = _thSimResolvedTeams(resolvedA, resolvedB, season);
+  if (!result) return null;
+  result.resolvedA = resolvedA;
+  result.resolvedB = resolvedB;
+  return result;
+}
+
+function _thRecordRoundAdvancement(summary, teamName, label) {
+  if (!summary.rounds[teamName]) summary.rounds[teamName] = {};
+  summary.rounds[teamName][label] = (summary.rounds[teamName][label] || 0) + 1;
+}
+
+function _thCommitBracketMutation(bracket, opts) {
+  if (!bracket) return;
+  delete _thBracketState.results[bracket.id];
+  if (!(opts && opts.skipSave)) _thSaveBracketState();
+  if (!(opts && opts.deferRender)) {
+    _thRenderBracketBoard();
+    _thRenderBracketResults();
+  }
+}
+
+function _thSimBracketOnce(bracket) {
+  var season = bracket.season || '2026';
+  var totalTeams = bracket.teams.length;
+  var labels = _thBracketRoundLabels(totalTeams);
+  var rounds = labels.slice(0, labels.length - 1);
+  var summary = { rounds: {}, games: [], champion: null, finalists: [], regionWinners: [], upsetCount: 0 };
+  var regions = {};
+  bracket.teams.forEach(function (team) {
+    var region = team.region || 'Field';
+    if (!regions[region]) regions[region] = [];
+    regions[region].push(team);
+    _thRecordRoundAdvancement(summary, team.team, rounds[0]);
+  });
+
+  var regionalWinners = [];
+  Object.keys(regions).sort().forEach(function (region) {
+    var current = _thBuildBracketPairings(regions[region]).map(function (pair) { return pair.slice(); });
+    var roundIdx = 0;
+    while (current.length) {
+      var next = [];
+      current.forEach(function (pair) {
+        var result = _thSimSingleGame(pair[0], pair[1], season);
+        if (!result) return;
+        if (result.upset) summary.upsetCount += 1;
+        summary.games.push({
+          round: rounds[Math.min(roundIdx, rounds.length - 1)],
+          region: region,
+          teamA: pair[0].team,
+          teamB: pair[1].team,
+          winner: result.winner.team,
+          loser: result.loser.team,
+          margin: result.margin,
+          upset: result.upset
+        });
+        next.push(result.winner);
+      });
+      if (next.length === 1) {
+        regionalWinners.push(next[0]);
+        summary.regionWinners.push({ region: region, team: next[0].team });
+        break;
+      }
+      if (roundIdx + 1 < rounds.length) {
+        next.forEach(function (team) { _thRecordRoundAdvancement(summary, team.team, rounds[roundIdx + 1]); });
+      }
+      current = [];
+      for (var i = 0; i < next.length; i += 2) {
+        if (next[i + 1]) current.push([next[i], next[i + 1]]);
+      }
+      roundIdx += 1;
+    }
+  });
+
+  var finalPool = regionalWinners.slice();
+  if (!finalPool.length) return summary;
+  if (finalPool.length > 1 && rounds.indexOf('Final 4') >= 0) {
+    finalPool.forEach(function (team) { _thRecordRoundAdvancement(summary, team.team, 'Final 4'); });
+  }
+  while (finalPool.length > 1) {
+    var nextPool = [];
+    for (var fp = 0; fp < finalPool.length; fp += 2) {
+      if (!finalPool[fp + 1]) {
+        nextPool.push(finalPool[fp]);
+        continue;
+      }
+      var finalsGame = _thSimSingleGame(finalPool[fp], finalPool[fp + 1], season);
+      if (!finalsGame) continue;
+      summary.games.push({
+        round: finalPool.length === 2 ? 'Championship' : 'Final 4',
+        region: 'National',
+        teamA: finalPool[fp].team,
+        teamB: finalPool[fp + 1].team,
+        winner: finalsGame.winner.team,
+        loser: finalsGame.loser.team,
+        margin: finalsGame.margin,
+        upset: finalsGame.upset
+      });
+      nextPool.push(finalsGame.winner);
+      if (finalPool.length === 2) {
+        summary.finalists = [finalPool[fp].team, finalPool[fp + 1].team];
+      }
+    }
+    if (nextPool.length === 1) {
+      summary.champion = nextPool[0].team;
+      _thRecordRoundAdvancement(summary, nextPool[0].team, 'Champion');
+      break;
+    }
+    nextPool.forEach(function (team) {
+      if (nextPool.length === 2) _thRecordRoundAdvancement(summary, team.team, 'Championship');
+    });
+    finalPool = nextPool;
+  }
+
+  return summary;
+}
+
+async function _thAggregateBracketSims(bracket, sims, onProgress) {
+  var total = sims || 5000;
+  var labels = _thBracketRoundLabels(bracket.teams.length);
+  var roundCounts = {};
+  var championCounts = {};
+  var finalistCounts = {};
+  var regionWinnerCounts = {};
+  var upsetMap = {};
+  var totalUpsets = 0;
+  var samplePath = null;
+  var chunkSize = total >= 10000 ? 250 : 100;
+  for (var i = 0; i < total; i++) {
+    var sim = _thSimBracketOnce(bracket);
+    if (!samplePath) {
+      samplePath = { regions: {} };
+      (sim.games || []).forEach(function (game) {
+        if (game.region === 'National') return;
+        if (!samplePath.regions[game.region]) samplePath.regions[game.region] = { round2: [], sweet16: [], elite8: null };
+        if (game.round === 'Round of 32') samplePath.regions[game.region].round2.push({ teamA: game.teamA, teamB: game.teamB, winner: game.winner });
+        if (game.round === 'Sweet 16') samplePath.regions[game.region].sweet16.push({ teamA: game.teamA, teamB: game.teamB, winner: game.winner });
+        if (game.round === 'Elite 8') samplePath.regions[game.region].elite8 = { teamA: game.teamA, teamB: game.teamB, winner: game.winner };
+      });
+      samplePath.finals = (sim.games || []).filter(function (game) { return game.region === 'National'; });
+      samplePath.champion = sim.champion || null;
+    }
+    totalUpsets += sim.upsetCount || 0;
+    Object.keys(sim.rounds || {}).forEach(function (team) {
+      if (!roundCounts[team]) roundCounts[team] = {};
+      Object.keys(sim.rounds[team]).forEach(function (label) {
+        roundCounts[team][label] = (roundCounts[team][label] || 0) + sim.rounds[team][label];
+      });
+    });
+    if (sim.champion) championCounts[sim.champion] = (championCounts[sim.champion] || 0) + 1;
+    (sim.finalists || []).forEach(function (team) {
+      finalistCounts[team] = (finalistCounts[team] || 0) + 1;
+    });
+    (sim.regionWinners || []).forEach(function (item) {
+      var key = item.region + '|' + item.team;
+      regionWinnerCounts[key] = (regionWinnerCounts[key] || 0) + 1;
+    });
+    (sim.games || []).forEach(function (game) {
+      if (!game.upset) return;
+      var upsetKey = game.winner + ' over ' + game.loser;
+      upsetMap[upsetKey] = (upsetMap[upsetKey] || 0) + 1;
+    });
+    if ((i + 1) % chunkSize === 0 || i === total - 1) {
+      if (typeof onProgress === 'function') onProgress(i + 1, total);
+      if (i < total - 1) {
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+      }
+    }
+  }
+
+  var teamRows = bracket.teams.map(function (team) {
+    var counts = roundCounts[team.team] || {};
+    return {
+      team: team.team,
+      seed: team.seed,
+      region: team.region,
+      championPct: +(((championCounts[team.team] || 0) / total) * 100).toFixed(1),
+      finalistPct: +(((finalistCounts[team.team] || 0) / total) * 100).toFixed(1),
+      finalFourPct: +(((counts['Final 4'] || 0) / total) * 100).toFixed(1),
+      eliteEightPct: +(((counts['Elite 8'] || 0) / total) * 100).toFixed(1),
+      sweetSixteenPct: +(((counts['Sweet 16'] || 0) / total) * 100).toFixed(1),
+      round32Pct: +(((counts['Round of 32'] || 0) / total) * 100).toFixed(1),
+      reached: counts
+    };
+  }).sort(function (a, b) {
+    if (b.championPct !== a.championPct) return b.championPct - a.championPct;
+    if (b.finalFourPct !== a.finalFourPct) return b.finalFourPct - a.finalFourPct;
+    return String(a.team).localeCompare(String(b.team));
+  });
+
+  var regionRows = Object.keys(regionWinnerCounts).map(function (key) {
+    var parts = key.split('|');
+    return {
+      region: parts[0],
+      team: parts[1],
+      pct: +((regionWinnerCounts[key] / total) * 100).toFixed(1)
+    };
+  }).sort(function (a, b) { return b.pct - a.pct; });
+
+  var upsetRows = Object.keys(upsetMap).map(function (key) {
+    return { label: key, pct: +((upsetMap[key] / total) * 100).toFixed(1) };
+  }).sort(function (a, b) { return b.pct - a.pct; }).slice(0, 10);
+
+  return {
+    simulations: total,
+    bracketName: bracket.name,
+    season: bracket.season,
+    totalTeams: bracket.teams.length,
+    labels: labels,
+    samplePath: samplePath,
+    methodology: {
+      baseline: 'Adjusted offense/defense blended against opponent profile',
+      recency: 'Last 10 games and recent postseason results nudge team strength',
+      matchup: 'Four-factor and scoring-profile interactions adjust expected efficiency',
+      volatility: 'Team-specific scoring volatility estimated from full-season and recent game logs'
+    },
+    teams: teamRows,
+    regions: regionRows,
+    upsets: upsetRows,
+    avgUpsetsPerSim: +((totalUpsets / total) || 0).toFixed(2),
+    championFavorite: teamRows[0] || null
+  };
+}
+
+function _thRenderBracketManager() {
+  if (!thBracketSelectEl) return;
+  var active = _thBracketActive();
+  thBracketSelectEl.innerHTML = _thBracketState.brackets.map(function (b) {
+    return '<option value="' + _thEsc(b.id) + '"' + (active && active.id === b.id ? ' selected' : '') + '>' + _thEsc(b.name) + '</option>';
+  }).join('');
+  if (active) {
+    if (thBracketNameEl) thBracketNameEl.value = active.name || '';
+    if (thBracketSeasonEl) thBracketSeasonEl.value = active.season || '2026';
+  }
+}
+
+function _thRenderBracketBoard() {
+  if (!thBracketBoardEl) return;
+  var bracket = _thBracketActive();
+  if (!bracket) {
+    thBracketBoardEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Create a bracket to get started.</div>';
+    return;
+  }
+  var regions = _thBracketRegions();
+  var result = _thBracketState.results[bracket.id] || null;
+  var samplePath = result && result.samplePath ? result.samplePath : null;
+
+  function renderFutureGameCard(roundLabel, idx, slots) {
+    return '<div class="thBracketGame thBracketGame--future">' +
+      '<div class="thBracketGameHead">' + _thEsc(roundLabel + ' · Game ' + (idx + 1)) + '</div>' +
+      slots.map(function (slot) {
+        return '<div class="thBracketSlot"><span class="thBracketSeed">•</span><div><div class="thBracketSlotTeam">' + _thEsc(slot || 'TBD') + '</div><div class="thBracketSlotMeta">Awaiting winner</div></div></div>';
+      }).join('') +
+    '</div>';
+  }
+
+  function renderRound64(region, seedMap) {
+    return _thFirstRoundSeedPairs().map(function (pair, idx) {
+      return '<div class="thBracketGame">' +
+        '<div class="thBracketGameHead">Round of 64 · Game ' + (idx + 1) + '</div>' +
+        pair.map(function (seed) {
+          var current = seedMap[seed] || null;
+          return '<div class="thBracketSlot">' +
+            '<span class="thBracketSeed">' + seed + '</span>' +
+            '<div>' +
+              _thBracketSelectInitialMarkup(region, seed, current && current.team ? current.team : '') +
+              '<div class="thBracketSlotActions">' +
+                '<button type="button" class="thBracketPlayInBtn" data-playin-open="1" data-bracket-region="' + _thEsc(region) + '" data-bracket-seed="' + seed + '">' + ((current && current.candidates && current.candidates.length > 1) ? 'Edit play-in' : 'Set play-in') + '</button>' +
+              '</div>' +
+              ((current && current.candidates && current.candidates.length > 1) ? '<div class="thBracketSlotMeta">Play-in: ' + _thEsc(current.candidates.join(' / ')) + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }).join('');
+  }
+
+  function renderRegion(region, side) {
+    var seedMap = _thRegionSeedMap(bracket, region);
+    var regionRounds = samplePath && samplePath.regions && samplePath.regions[region] ? samplePath.regions[region] : null;
+    var round2Games = regionRounds && regionRounds.round2 ? regionRounds.round2.map(function (game, idx) {
+      return renderFutureGameCard('Round of 32', idx, [game.teamA, game.teamB]);
+    }).join('') : new Array(4).fill(null).map(function (_, idx) {
+      return renderFutureGameCard('Round of 32', idx, ['TBD', 'TBD']);
+    }).join('');
+    var sweet16Games = regionRounds && regionRounds.sweet16 ? regionRounds.sweet16.map(function (game, idx) {
+      return renderFutureGameCard('Sweet 16', idx, [game.teamA, game.teamB]);
+    }).join('') : new Array(2).fill(null).map(function (_, idx) {
+      return renderFutureGameCard('Sweet 16', idx, ['TBD', 'TBD']);
+    }).join('');
+    var elite8Game = regionRounds && regionRounds.elite8
+      ? renderFutureGameCard('Elite 8', 0, [regionRounds.elite8.teamA, regionRounds.elite8.teamB])
+      : renderFutureGameCard('Elite 8', 0, ['TBD', 'TBD']);
+
+    var cols = [
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 64</div>' + renderRound64(region, seedMap) + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Round of 32</div>' + round2Games + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Sweet 16</div>' + sweet16Games + '</div>',
+      '<div class="thBracketRoundCol"><div class="thBracketRoundTitle">Elite 8</div>' + elite8Game + '</div>'
+    ];
+    if (side === 'right') cols.reverse();
+
+    return '<div class="thBracketRegion thBracketRegion--' + side + '">' +
+      '<div class="thBracketRegionHead">' + _thEsc(region) + '</div>' +
+      '<div class="thBracketRegionBracket">' + cols.join('') + '</div>' +
+    '</div>';
+  }
+
+  var nationalGames = samplePath && Array.isArray(samplePath.finals) ? samplePath.finals : [];
+  var finalFour = nationalGames.filter(function (g) { return g.round === 'Final 4'; });
+  var titleGame = nationalGames.filter(function (g) { return g.round === 'Championship'; })[0] || null;
+
+  thBracketBoardEl.innerHTML =
+    '<div class="thBracketFantasy">' +
+      '<div class="thBracketFantasySide thBracketFantasySide--left">' +
+        renderRegion('East', 'left') +
+        renderRegion('South', 'left') +
+      '</div>' +
+      '<div class="thBracketFantasyCenter">' +
+        '<div class="thBracketFantasyCenterTitle">Final Four</div>' +
+        (finalFour.length ? finalFour.map(function (game, idx) {
+          return renderFutureGameCard('Final 4', idx, [game.teamA, game.teamB]);
+        }).join('') : renderFutureGameCard('Final 4', 0, ['TBD', 'TBD']) + renderFutureGameCard('Final 4', 1, ['TBD', 'TBD'])) +
+        '<div class="thBracketFantasyCenterTitle" style="margin-top:16px">National Championship</div>' +
+        (titleGame ? renderFutureGameCard('Championship', 0, [titleGame.teamA, titleGame.teamB]) : renderFutureGameCard('Championship', 0, ['TBD', 'TBD'])) +
+        '<div class="thBracketInsightList" style="margin-top:10px">' +
+          '<div class="thBracketInsightItem"><b>Sample champion path:</b> ' + _thEsc(samplePath && samplePath.champion ? samplePath.champion : 'Run simulation to project the title path.') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="thBracketFantasySide thBracketFantasySide--right">' +
+        renderRegion('West', 'right') +
+        renderRegion('Midwest', 'right') +
+      '</div>' +
+    '</div>';
+  if (!thBracketBoardEl._thBracketBoardBound) {
+    thBracketBoardEl.addEventListener('pointerdown', function (e) {
+      var sel = e.target && e.target.closest ? e.target.closest('.thBracketSlotSelect') : null;
+      if (sel) _thHydrateBracketSelect(sel);
+    });
+    thBracketBoardEl.addEventListener('focusin', function (e) {
+      var sel = e.target && e.target.closest ? e.target.closest('.thBracketSlotSelect') : null;
+      if (sel) _thHydrateBracketSelect(sel);
+    });
+    thBracketBoardEl.addEventListener('change', function (e) {
+      var sel = e.target && e.target.closest ? e.target.closest('[data-bracket-region][data-bracket-seed]') : null;
+      if (!sel) return;
+      var region = sel.getAttribute('data-bracket-region') || '';
+      var seed = parseInt(sel.getAttribute('data-bracket-seed'), 10) || 0;
+      var value = sel.value || '';
+      _thAssignBracketSeed(region, seed, value || '');
+    });
+    thBracketBoardEl.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-playin-open]') : null;
+      if (!btn) return;
+      _thOpenPlayInModal(btn.getAttribute('data-bracket-region') || '', parseInt(btn.getAttribute('data-bracket-seed'), 10) || 0);
+    });
+    thBracketBoardEl._thBracketBoardBound = true;
+  }
+  var groups = {};
+  bracket.teams.forEach(function (item) {
+    var region = item.region || 'Unassigned';
+    groups[region] = true;
+  });
+  if (thBracketTeamCountEl) thBracketTeamCountEl.textContent = String(bracket.teams.length);
+  if (thBracketRegionCountEl) thBracketRegionCountEl.textContent = String(Object.keys(groups).length);
+  if (thBracketStructureEl) thBracketStructureEl.textContent = _thBracketFieldStructure(bracket);
+}
+
+function _thRenderBracketResults() {
+  if (!thBracketResultsEl) return;
+  var active = _thBracketActive();
+  if (!active) {
+    thBracketResultsEl.style.display = 'none';
+    thBracketResultsEl.innerHTML = '';
+    return;
+  }
+  var result = _thBracketState.results[active.id];
+  if (!result) {
+    thBracketResultsEl.style.display = 'none';
+    thBracketResultsEl.innerHTML = '';
+    return;
+  }
+  var topTeams = result.teams.slice(0, 12);
+  var insightRows = [];
+  if (result.championFavorite) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Model favorite:</b> ' + _thEsc(result.championFavorite.team) + ' wins the title in <b>' + result.championFavorite.championPct + '%</b> of sims.</div>');
+  }
+  if (result.upsets[0]) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Most common upset:</b> ' + _thEsc(result.upsets[0].label) + ' in <b>' + result.upsets[0].pct + '%</b> of simulations.</div>');
+  }
+  insightRows.push('<div class="thBracketInsightItem"><b>Bracket chaos level:</b> field averages <b>' + result.avgUpsetsPerSim + '</b> upsets per simulated tournament.</div>');
+  if (result.methodology) {
+    insightRows.push('<div class="thBracketInsightItem"><b>Method:</b> ' + _thEsc(result.methodology.baseline) + '; ' + _thEsc(result.methodology.matchup) + '; ' + _thEsc(result.methodology.recency) + '; ' + _thEsc(result.methodology.volatility) + '.</div>');
+  }
+
+  thBracketResultsEl.style.display = 'block';
+  thBracketResultsEl.innerHTML =
+    '<div class="thBracketStatGrid">' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.simulations.toLocaleString() + '</div><div class="thBracketStatLbl">Simulations</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.totalTeams + '</div><div class="thBracketStatLbl">Teams In Field</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + (result.championFavorite ? _thEsc(result.championFavorite.team) : '—') + '</div><div class="thBracketStatLbl">Top Champion Pick</div></div>' +
+      '<div class="thBracketStatCard"><div class="thBracketStatVal">' + result.avgUpsetsPerSim + '</div><div class="thBracketStatLbl">Avg Upsets / Bracket</div></div>' +
+    '</div>' +
+    '<div class="thBracketResultsWrap">' +
+      '<div>' +
+        '<div class="thBracketMiniHead">Champion & Final Four Odds</div>' +
+        '<table class="thBracketTable"><thead><tr><th>Team</th><th>Seed</th><th>Region</th><th>Champion</th><th>Final 4</th></tr></thead><tbody>' +
+          topTeams.map(function (row) {
+            return '<tr><td>' + _thEsc(row.team) + '</td><td>' + _thEsc(row.seed) + '</td><td>' + _thEsc(row.region) + '</td><td>' + row.championPct + '%</td><td>' + row.finalFourPct + '%</td></tr>';
+          }).join('') +
+        '</tbody></table>' +
+      '</div>' +
+      '<div>' +
+        '<div class="thBracketMiniHead">War Room Notes</div>' +
+        '<div class="thBracketInsightList">' + insightRows.join('') + '</div>' +
+        '<div class="thBracketMiniHead" style="margin-top:12px">Region Winner Leaders</div>' +
+        '<table class="thBracketTable"><thead><tr><th>Region</th><th>Team</th><th>Win %</th></tr></thead><tbody>' +
+          result.regions.slice(0, 8).map(function (row) {
+            return '<tr><td>' + _thEsc(row.region) + '</td><td>' + _thEsc(row.team) + '</td><td>' + row.pct + '%</td></tr>';
+          }).join('') +
+        '</tbody></table>' +
+      '</div>' +
+    '</div>';
+}
+
+function _thRenderBracketWorkspace() {
+  var guest = _thIsGuest();
+  _thSyncWarRoomLauncher();
+  if (thBracketGateEl) {
+    thBracketGateEl.style.display = guest ? '' : 'none';
+    thBracketGateEl.innerHTML = guest
+      ? '<div style="font-size:16px;font-weight:800;color:var(--fg);margin-bottom:6px">Tournament War Room is user-only</div><div class="muted" style="font-size:12px;max-width:560px;margin:0 auto 10px">Log in to save tournament brackets, simulate the full field, and run Gemini 3 Flash bracket analysis.</div><button class="thLoadBtn" onclick="document.getElementById(\'guestLoginBtn\').click()">Login to unlock</button>'
+      : '';
+  }
+  if (thBracketWorkspaceEl) thBracketWorkspaceEl.style.display = guest ? 'none' : '';
+  if (guest) return;
+  _thLoadBracketState();
+  _thPopulateBracketTeamSelects();
+  _thRenderBracketManager();
+  _thRenderBracketBoard();
+  _thRenderBracketResults();
+}
+
+function _thScheduleBracketWorkspaceRender() {
+  if (_thBracketRenderFrame) cancelAnimationFrame(_thBracketRenderFrame);
+  _thBracketRenderFrame = requestAnimationFrame(function () {
+    _thBracketRenderFrame = 0;
+    var warRoomPage = document.getElementById('pageWarRoom');
+    if (warRoomPage && warRoomPage.style.display === 'none') return;
+    _thRenderBracketWorkspace();
+  });
+}
+
+function _thCommitBracketMeta() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.name = _thNormalizeBracketName(thBracketNameEl ? thBracketNameEl.value : bracket.name);
+  bracket.season = String(thBracketSeasonEl && thBracketSeasonEl.value ? thBracketSeasonEl.value : bracket.season || '2026');
+  _thSaveBracketState();
+  _thRenderBracketManager();
+}
+
+function _thCreateBracket() {
+  var bracket = _thDefaultBracket();
+  _thBracketState.brackets.unshift(bracket);
+  _thBracketState.activeId = bracket.id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thDuplicateBracket() {
+  var active = _thBracketActive();
+  if (!active) return;
+  var copy = JSON.parse(JSON.stringify(active));
+  copy.id = _thBracketId();
+  copy.name = active.name + ' Copy';
+  copy.createdAt = new Date().toISOString();
+  copy.teams.forEach(function (team) { team.id = _thBracketId(); });
+  _thBracketState.brackets.unshift(copy);
+  _thBracketState.activeId = copy.id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thDeleteBracket() {
+  var active = _thBracketActive();
+  if (!active) return;
+  if (!confirm('Delete "' + active.name + '"?')) return;
+  _thBracketState.brackets = _thBracketState.brackets.filter(function (b) { return b.id !== active.id; });
+  delete _thBracketState.results[active.id];
+  if (!_thBracketState.brackets.length) _thBracketState.brackets.push(_thDefaultBracket());
+  _thBracketState.activeId = _thBracketState.brackets[0].id;
+  _thSaveBracketState();
+  _thRenderBracketWorkspace();
+}
+
+function _thAddBracketTeam(teamName, seed, region) {
+  var bracket = _thBracketActive();
+  if (!bracket || !teamName) return;
+  if (bracket.teams.some(function (item) { return String(item.team).toLowerCase() === String(teamName).toLowerCase(); })) {
+    if (typeof showWarn === 'function') showWarn(teamName + ' is already in this bracket.');
+    return;
+  }
+  bracket.teams.push({
+    id: _thBracketId(),
+    team: teamName,
+    seed: Math.max(1, Math.min(16, parseInt(seed, 10) || 1)),
+    region: region || 'South'
+  });
+  _thCommitBracketMutation(bracket);
+}
+
+function _thRemoveBracketTeam(id) {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.teams = bracket.teams.filter(function (item) { return item.id !== id; });
+  _thCommitBracketMutation(bracket);
+}
+
+function _thAssignBracketSeed(region, seed, teamName, opts) {
+  return _thAssignBracketSeedEntry(region, seed, { team: teamName }, opts);
+}
+
+function _thAssignBracketSeedEntry(region, seed, entry, opts) {
+  var bracket = _thBracketActive();
+  if (!bracket || !region || !seed) return;
+  entry = entry || {};
+  var teamName = entry.team || '';
+  bracket.teams = bracket.teams.filter(function (item) {
+    if ((item.region || '') === region && Number(item.seed) === Number(seed)) return false;
+    if (teamName && String(item.team).toLowerCase() === String(teamName).toLowerCase()) return false;
+    if (Array.isArray(entry.candidates) && entry.candidates.length && Array.isArray(item.candidates)) {
+      return !item.candidates.some(function (c) { return entry.candidates.indexOf(c) >= 0; });
+    }
+    if (Array.isArray(entry.candidates) && entry.candidates.length && item.team) {
+      return !entry.candidates.some(function (c) { return String(c).toLowerCase() === String(item.team).toLowerCase(); });
+    }
+    return true;
+  });
+  if (teamName) {
+    bracket.teams.push({
+      id: _thBracketId(),
+      team: teamName,
+      seed: seed,
+      region: region,
+      candidates: Array.isArray(entry.candidates) ? entry.candidates.slice() : undefined
+    });
+  }
+  _thCommitBracketMutation(bracket, opts);
+}
+
+function _thBuildEmpty64Bracket() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  bracket.teams = [];
+  _thCommitBracketMutation(bracket);
+  if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Empty 64-slot bracket ready. Use the slot selectors or smart import.';
+}
+
+function _thClearBracketTeams() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  if (!confirm('Clear every team from this bracket?')) return;
+  bracket.teams = [];
+  _thCommitBracketMutation(bracket);
+}
+
+function _thImportBracketTeams() {
+  var bracket = _thBracketActive();
+  if (!bracket || !thBracketImportEl) return;
+  var lines = String(thBracketImportEl.value || '').split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+  var knownTeams = _thBracketAllTeams();
+  var teamMap = {};
+  knownTeams.forEach(function (team) { teamMap[_thNormTeamName(team)] = team; });
+  var added = 0;
+  var failed = [];
+  var currentRegion = _thBracketRegions()[0];
+  var seedCounters = { South: 0, East: 0, West: 0, Midwest: 0 };
+
+  lines.forEach(function (line) {
+    var normalizedLine = line.replace(/\s+/g, ' ').trim();
+    var regionMatch = normalizedLine.match(/^(South|East|West|Midwest)\b/i);
+    if (regionMatch) {
+      currentRegion = regionMatch[1].charAt(0).toUpperCase() + regionMatch[1].slice(1).toLowerCase();
+      return;
+    }
+
+    var parts = line.split('|').map(function (x) { return x.trim(); }).filter(Boolean);
+    var seed = null;
+    var region = currentRegion;
+    var rawTeam = '';
+
+    if (parts.length >= 3) {
+      seed = parseInt(parts[0], 10) || null;
+      rawTeam = parts[1];
+      region = parts[2] || region;
+    } else {
+      var m = normalizedLine.match(/^(\d{1,2})\s+(.+)$/);
+      if (m) {
+        seed = parseInt(m[1], 10) || null;
+        rawTeam = m[2].replace(/\s+\d{1,2}\s+.+$/, '').trim();
+      } else {
+        rawTeam = normalizedLine;
+      }
+    }
+
+    var match = teamMap[_thNormTeamName(rawTeam)];
+    var candidateList = [];
+    if (!match) candidateList = _thParseTeamCandidates(rawTeam);
+    if (!match && candidateList.length < 2) {
+      failed.push(rawTeam);
+      return;
+    }
+    if (!seed) {
+      seedCounters[region] = (seedCounters[region] || 0) + 1;
+      seed = Math.min(16, seedCounters[region]);
+    } else {
+      seedCounters[region] = Math.max(seedCounters[region] || 0, seed);
+    }
+    if (match) {
+      _thAssignBracketSeed(region, seed, match, { deferRender: true, skipSave: true });
+    } else {
+      _thAssignBracketSeedEntry(region, seed, {
+        team: candidateList.join(' / '),
+        candidates: candidateList
+      }, { deferRender: true, skipSave: true });
+    }
+    added += 1;
+  });
+  _thCommitBracketMutation(bracket);
+  if (thBracketImportStatusEl) {
+    thBracketImportStatusEl.textContent = added + ' added' + (failed.length ? ' · Unmatched: ' + failed.slice(0, 4).join(', ') + (failed.length > 4 ? '…' : '') : '');
+  }
+}
+
+function _thAutofillBracketBySeedList() {
+  var bracket = _thBracketActive();
+  if (!bracket) return;
+  var knownTeams = _thBracketAllTeams();
+  if (!knownTeams.length) return;
+  var byRating = knownTeams.map(function (team) {
+    var rating = _thBracketTeamRating(team, bracket.season || '2026');
+    return { team: team, adjEM: rating && Number.isFinite(+rating.adjEM) ? +rating.adjEM : -999 };
+  }).sort(function (a, b) { return b.adjEM - a.adjEM; });
+  var regions = _thBracketRegions();
+  var used = {};
+  bracket.teams = [];
+  for (var r = 0; r < regions.length; r++) {
+    for (var seed = 1; seed <= 16; seed++) {
+      var idx = r * 16 + (seed - 1);
+      var row = byRating[idx];
+      if (!row || used[row.team]) continue;
+      used[row.team] = true;
+      bracket.teams.push({ id: _thBracketId(), team: row.team, seed: seed, region: regions[r] });
+    }
+  }
+  _thCommitBracketMutation(bracket);
+  if (thBracketImportStatusEl) thBracketImportStatusEl.textContent = 'Auto-filled a 64-team bracket using current model order.';
+}
+
+function _thLoadEspn2026Preset() {
+  var bracket = _thBracketActive();
+  if (!bracket) {
+    _thCreateBracket();
+    bracket = _thBracketActive();
+  }
+  if (!bracket) return;
+  if (bracket.teams && bracket.teams.length && !confirm('Replace the current field with the ESPN 2026 preset?')) return;
+
+  var teamMap = {};
+  _thBracketAllTeams().forEach(function (team) { teamMap[_thNormTeamName(team)] = team; });
+  var unresolved = [];
+  bracket.name = _TH_2026_ESPN_PRESET.name;
+  bracket.season = _TH_2026_ESPN_PRESET.season;
+  bracket.teams = [];
+
+  _TH_2026_ESPN_PRESET.entries.forEach(function (entry) {
+    if (Array.isArray(entry.candidates) && entry.candidates.length) {
+      var resolvedCandidates = entry.candidates.map(function (candidate) {
+        return _thResolvePresetTeamName(candidate, teamMap);
+      });
+      resolvedCandidates.forEach(function (candidate, idx) {
+        if (!teamMap[_thNormTeamName(candidate)]) unresolved.push(entry.candidates[idx]);
+      });
+      bracket.teams.push({
+        id: _thBracketId(),
+        team: resolvedCandidates.join(' / '),
+        seed: entry.seed,
+        region: entry.region,
+        candidates: resolvedCandidates
+      });
+      return;
+    }
+
+    var resolvedTeam = _thResolvePresetTeamName(entry.team, teamMap);
+    if (!teamMap[_thNormTeamName(resolvedTeam)]) unresolved.push(entry.team);
+    bracket.teams.push({
+      id: _thBracketId(),
+      team: resolvedTeam,
+      seed: entry.seed,
+      region: entry.region
+    });
+  });
+
+  _thCommitBracketMutation(bracket);
+  _thRenderBracketManager();
+  if (thBracketImportStatusEl) {
+    thBracketImportStatusEl.textContent = 'Loaded ESPN 2026 preset (' + bracket.teams.length + ' slots).' +
+      (unresolved.length ? ' Check unmatched names: ' + unresolved.slice(0, 4).join(', ') + (unresolved.length > 4 ? '…' : '') : '');
+  }
+}
+
+function _thEnsureBracketJsPdf() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!_thBracketJsPdfPromise) {
+    _thBracketJsPdfPromise = loadScriptOnce(
+      'jspdf',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      {
+        timeoutMs: 12000,
+        test: function () { return window.jspdf && window.jspdf.jsPDF; },
+        errorMessage: 'jsPDF failed to load.'
+      }
+    );
+  }
+  return _thBracketJsPdfPromise;
+}
+
+function _thPdfFileName(name) {
+  return String(name || 'tournament-war-room')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') + '.pdf';
+}
+
+async function _thOpenBracketPdfReport() {
+  var bracket = _thBracketActive();
+  var result = bracket ? _thBracketState.results[bracket.id] : null;
+  if (!bracket || !result) {
+    if (typeof showWarn === 'function') showWarn('Run a bracket simulation before exporting the War Room PDF.');
+    return;
+  }
+
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Building PDF preview...';
+  try {
+    var JsPDF = await _thEnsureBracketJsPdf();
+    var doc = new JsPDF({ unit: 'pt', format: 'letter' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 42;
+    var y = margin;
+
+    function ensureSpace(height) {
+      if (y + height <= pageH - margin) return;
+      doc.addPage();
+      y = margin;
+    }
+    function addTitle(text, size) {
+      ensureSpace((size || 18) + 16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(size || 18);
+      doc.text(text, margin, y);
+      y += (size || 18) + 10;
+    }
+    function addBody(text, opts) {
+      opts = opts || {};
+      var fontSize = opts.fontSize || 10;
+      var lineHeight = opts.lineHeight || 13;
+      var indent = opts.indent || 0;
+      var maxWidth = pageW - (margin * 2) - indent;
+      var raw = Array.isArray(text) ? text.join('\n') : String(text || '');
+      var lines = doc.splitTextToSize(raw, maxWidth);
+      ensureSpace(lines.length * lineHeight + 4);
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      doc.text(lines, margin + indent, y);
+      y += lines.length * lineHeight + (opts.gap != null ? opts.gap : 6);
+    }
+    function addSection(title, lines) {
+      addTitle(title, 13);
+      (lines || []).forEach(function (line) {
+        addBody(line, { fontSize: 10, lineHeight: 13 });
+      });
+      y += 4;
+    }
+
+    var exportedAt = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
+    var champion = result.championFavorite ? result.championFavorite.team + ' (' + result.championFavorite.championPct + '% title odds)' : 'No favorite available';
+    var topTeams = result.teams.slice(0, 12);
+    var regionLeaders = result.regions.slice(0, 8);
+    var upsets = result.upsets.slice(0, 8);
+    var methodology = result.methodology || {};
+    var aiRaw = thBracketAIOutputEl && thBracketAIOutputEl.dataset ? (thBracketAIOutputEl.dataset.lastRaw || '') : '';
+
+    doc.setProperties({
+      title: bracket.name + ' War Room Report',
+      subject: 'Tournament War Room simulation report',
+      author: 'NCAA Scouting Dashboard'
+    });
+
+    addTitle(bracket.name || 'Tournament War Room', 20);
+    addBody('Season: ' + (bracket.season || '2026') + '   •   Source preset: ' + (_TH_2026_ESPN_PRESET.source || 'Custom field'), { fontSize: 11, lineHeight: 14 });
+    addBody('Exported: ' + exportedAt, { fontSize: 9, lineHeight: 12, gap: 10 });
+
+    addSection('Simulation Snapshot', [
+      'Simulations: ' + result.simulations.toLocaleString(),
+      'Teams in field: ' + result.totalTeams,
+      'Model favorite: ' + champion,
+      'Average upsets per bracket: ' + result.avgUpsetsPerSim,
+      'Sample champion path: ' + ((result.samplePath && result.samplePath.champion) || 'Not available')
+    ]);
+
+    addSection('Champion and Final Four Odds', topTeams.map(function (row, idx) {
+      return (idx + 1) + '. ' + row.team + ' — Seed ' + row.seed + ' (' + row.region + '), Champion ' + row.championPct + '%, Final Four ' + row.finalFourPct + '%';
+    }));
+
+    addSection('Region Winner Leaders', regionLeaders.length ? regionLeaders.map(function (row) {
+      return row.region + ': ' + row.team + ' (' + row.pct + '%)';
+    }) : ['No region results available yet.']);
+
+    addSection('Most Common Upsets', upsets.length ? upsets.map(function (row, idx) {
+      return (idx + 1) + '. ' + row.label + ' — ' + row.pct + '%';
+    }) : ['No upset patterns available yet.']);
+
+    addSection('Methodology', [
+      'Baseline: ' + (methodology.baseline || 'Adjusted offense/defense blended against opponent profile'),
+      'Matchup: ' + (methodology.matchup || 'Four-factor and scoring-profile interactions adjust expected efficiency'),
+      'Recency: ' + (methodology.recency || 'Last 10 games and recent postseason results nudge team strength'),
+      'Volatility: ' + (methodology.volatility || 'Team-specific scoring volatility estimated from full-season and recent game logs')
+    ]);
+
+    addSection('Gemini Analysis', aiRaw
+      ? aiRaw.split(/\r?\n/).map(function (line) {
+          return line.replace(/^##\s*/, '').replace(/^###\s*/, '').trim();
+        }).filter(Boolean)
+      : ['Run Gemini Bracket Analysis to include the narrative scouting report in this PDF.']);
+
+    var blobUrl = doc.output('bloburl');
+    var preview = window.open(blobUrl, '_blank');
+    if (!preview) {
+      doc.save(_thPdfFileName((bracket.name || 'tournament-war-room') + '-report'));
+      if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF downloaded';
+      return;
+    }
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF preview opened in a new tab';
+  } catch (e) {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'PDF export failed';
+    if (typeof showWarn === 'function') showWarn('War Room PDF export failed: ' + (e && e.message ? e.message : e));
+  }
+}
+
+async function _thRunBracketSimulation() {
+  var bracket = _thBracketActive();
+  if (!bracket || !thBracketResultsEl) return;
+  var total = bracket.teams.length;
+  if (total < 2 || (total & (total - 1)) !== 0) {
+    if (typeof showWarn === 'function') showWarn('Bracket simulation needs a power-of-two field (4, 8, 16, 32, 64…).');
+    return;
+  }
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Running tournament simulations...';
+  thBracketResultsEl.style.display = 'block';
+  thBracketResultsEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Running full-bracket Monte Carlo simulations...</div>';
+  if (thBracketAIOutputEl) {
+    thBracketAIOutputEl.style.display = 'none';
+    thBracketAIOutputEl.innerHTML = '';
+    if (thBracketAIOutputEl.dataset) delete thBracketAIOutputEl.dataset.lastRaw;
+  }
+  var nSims = thBracketSimCountEl ? (parseInt(thBracketSimCountEl.value, 10) || 5000) : 5000;
+  try {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Loading team contexts and recent form...';
+    await _thPrepareBracketContexts(bracket);
+    var result = await _thAggregateBracketSims(bracket, nSims, function (done, totalSims) {
+      if (thBracketStatusEl) thBracketStatusEl.textContent = 'Running tournament simulations... ' + done.toLocaleString() + ' / ' + totalSims.toLocaleString();
+    });
+    _thBracketState.results[bracket.id] = result;
+    _thSaveBracketState();
+    _thRenderBracketBoard();
+    _thRenderBracketResults();
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation complete - ' + nSims.toLocaleString() + ' runs';
+
+  } catch (e) {
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Simulation failed';
+    thBracketResultsEl.innerHTML = '<div class="thMCError">Simulation failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';
+  }
+}
+
+async function _thRunBracketAIAnalysis() {
+  var bracket = _thBracketActive();
+  var result = bracket ? _thBracketState.results[bracket.id] : null;
+  if (!bracket || !result || !thBracketAIOutputEl) {
+    if (typeof showWarn === 'function') showWarn('Run the bracket simulation first.');
+    return;
+  }
+  if (_thIsGuest()) {
+    if (typeof showWarn === 'function') showWarn('Tournament War Room is available only to logged-in users.');
+    return;
+  }
+  if (thBracketStatusEl) thBracketStatusEl.textContent = 'Sending simulation context to Gemini 3 Flash...';
+  thBracketAIOutputEl.style.display = 'block';
+  thBracketAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Generating bracket-level analysis...</div>';
+
+  var payload = {
+    bracket: {
+      name: bracket.name,
+      season: bracket.season,
+      teamCount: bracket.teams.length,
+      field: bracket.teams
+    },
+    simulation: {
+      simulations: result.simulations,
+      methodology: result.methodology,
+      samplePath: result.samplePath,
+      championOdds: result.teams.slice(0, 12).map(function (row) {
+        return {
+          team: row.team,
+          seed: row.seed,
+          region: row.region,
+          championPct: row.championPct,
+          finalFourPct: row.finalFourPct,
+          eliteEightPct: row.eliteEightPct,
+          sweetSixteenPct: row.sweetSixteenPct
+        };
+      }),
+      regionLeaders: result.regions.slice(0, 8),
+      upsetLeaders: result.upsets.slice(0, 8),
+      avgUpsetsPerSim: result.avgUpsetsPerSim
+    }
+  };
+
+  var systemInstruction = {
+    parts: [{ text: 'You are an expert NCAA tournament strategist. Analyze only the provided bracket structure and simulation outputs. Be sharp, specific, and actionable for coaching staffs and front-office decision makers. Use markdown with ## headers and concise bullets.' }]
+  };
+  var prompt =
+    'Analyze this NCAA tournament bracket simulation and produce a war-room report.\n\n' +
+    'Use these exact sections:\n' +
+    '## Title Favorite\n' +
+    '## Final Four Outlook\n' +
+    '## Best Value Teams\n' +
+    '## Upset Watch\n' +
+    '## Region By Region\n' +
+    '## Most Likely Finals Paths\n' +
+    '## Model Risk Notes\n' +
+    '## Recommendation\n\n' +
+    'Explain where the model is confident, where the bracket is volatile, which teams appear underseeded or dangerous relative to seed, and how the simulation methodology likely shaped the results. Keep it grounded in the simulation data only.\n\n' +
+    '```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+
+  try {
+    var res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-3-flash-preview',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: systemInstruction,
+        generationConfig: { temperature: 0.6, maxOutputTokens: 5000 }
+      })
+    });
+    var data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    var text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    var joined = text.map(function (p) { return p.text || ''; }).join('\n').trim();
+    thBracketAIOutputEl.innerHTML = _thFmtDeepText(joined || 'No analysis returned.');
+    thBracketAIOutputEl.dataset.lastRaw = joined || 'No analysis returned.';
+    thBracketAIOutputEl.dataset.bracketName = bracket.name || '';
+    thBracketAIOutputEl.dataset.bracketSeason = bracket.season || '';
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Gemini bracket analysis ready';
+  } catch (e) {
+    thBracketAIOutputEl.innerHTML = '<div class="thMCError">Bracket analysis failed: ' + _thEsc(e && e.message ? e.message : e) + '</div>';
+    if (thBracketAIOutputEl.dataset) delete thBracketAIOutputEl.dataset.lastRaw;
+    if (thBracketStatusEl) thBracketStatusEl.textContent = 'Bracket analysis failed';
+  }
+}
+
 // ── Model toggle (exact same structure as MBB/WBB league toggle) ─────────────
 function thSetDeepModel(heavy) {
   // Guests cannot use the Pro model
   if (heavy && _thIsGuest()) {
-    if (typeof showWarn === 'function') showWarn('🔒 Pro model requires login. Guest users can only use 2.5 Lite.');
+    if (typeof showWarn === 'function') showWarn('Pro model requires login. Guest users can only use 2.5 Lite.');
     var cb2 = document.getElementById('thModelSwitchInput');
     if (cb2) cb2.checked = false;
     return;
@@ -55,11 +1789,37 @@ function initTeamsDOMRefs() {
   thTeamSearch  = document.getElementById('thTeamSearch');
   thSeasonInput = document.getElementById('thSeason');
   thLoadBtn     = document.getElementById('thLoadBtn');
+  thValueLabBtn = document.getElementById('thValueLabBtn');
   thOverviewEl  = document.getElementById('thOverview');
   thThreatsEl   = document.getElementById('thThreats');
   thGameLogEl   = document.getElementById('thGameLog');
   thH2HEl       = document.getElementById('thH2H');
   thLoadingEl   = document.getElementById('thLoading');
+  thBracketGateEl = document.getElementById('thBracketGate');
+  thBracketWorkspaceEl = document.getElementById('thBracketWorkspace');
+  thBracketSelectEl = document.getElementById('thBracketSelect');
+  thBracketNameEl = document.getElementById('thBracketName');
+  thBracketSeasonEl = document.getElementById('thBracketSeason');
+  thBracketTeamAddEl = document.getElementById('thBracketTeamAdd');
+  thBracketSeedAddEl = document.getElementById('thBracketSeedAdd');
+  thBracketRegionAddEl = document.getElementById('thBracketRegionAdd');
+  thBracketImportEl = document.getElementById('thBracketImport');
+  thBracketImportStatusEl = document.getElementById('thBracketImportStatus');
+  thBracketBoardEl = document.getElementById('thBracketBoard');
+  thBracketStatusEl = document.getElementById('thBracketStatus');
+  thBracketResultsEl = document.getElementById('thBracketResults');
+  thBracketAIOutputEl = document.getElementById('thBracketAIOutput');
+  thBracketPlayInModalEl = document.getElementById('thBracketPlayInModal');
+  thBracketPlayInRegionEl = document.getElementById('thBracketPlayInRegion');
+  thBracketPlayInSeedEl = document.getElementById('thBracketPlayInSeed');
+  thBracketPlayInTeamAEl = document.getElementById('thBracketPlayInTeamA');
+  thBracketPlayInTeamBEl = document.getElementById('thBracketPlayInTeamB');
+  thWarRoomLaunchBtnEl = document.getElementById('labWarRoomBtn');
+  thWarRoomLockNoteEl = document.getElementById('labWarRoomLockNote');
+  thBracketTeamCountEl = document.getElementById('thBracketTeamCount');
+  thBracketRegionCountEl = document.getElementById('thBracketRegionCount');
+  thBracketStructureEl = document.getElementById('thBracketStructure');
+  thBracketSimCountEl = document.getElementById('thBracketSimCount');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -88,10 +1848,110 @@ function _thLoading(msg) {
   }
 }
 
+function _thNormTeamName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\b(university|college|of|the|at)\b/g, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _thFindWbbConferenceForTeam(teamName) {
+  if (!teamName || typeof tbGetAllPlayers !== 'function') return '';
+  const tKey = _thNormTeamName(teamName);
+  const sample = tbGetAllPlayers('WBB').find(p => _thNormTeamName(p.Team) === tKey && p.Conference);
+  return sample ? String(sample.Conference).trim() : '';
+}
+
+async function _thBuildWbbConferenceStandings(confName, season) {
+  const conf = String(confName || '').trim();
+  const yr = String(season || thCurrentSeason || '2026');
+  if (!conf || typeof tbGetAllPlayers !== 'function' || typeof loadGamesForTeam !== 'function') return null;
+  const cacheKey = (conf + ':' + yr).toLowerCase();
+  if (_thWbbConfStandingsCache[cacheKey] !== undefined) return _thWbbConfStandingsCache[cacheKey];
+
+  const confKey = conf.toLowerCase();
+  const confTeams = [...new Set(
+    tbGetAllPlayers('WBB')
+      .filter(p => String(p.Conference || '').trim().toLowerCase() === confKey)
+      .map(p => p.Team)
+      .filter(Boolean)
+  )];
+  if (!confTeams.length) {
+    _thWbbConfStandingsCache[cacheKey] = null;
+    return null;
+  }
+
+  const normSet = new Set(confTeams.map(_thNormTeamName));
+  const gamesByTeam = await Promise.all(confTeams.map(t => loadGamesForTeam(t, yr).catch(() => null)));
+
+  const rows = confTeams.map((team, idx) => {
+    const tNorm = _thNormTeamName(team);
+    const gd = gamesByTeam[idx] || null;
+    const games = gd && gd.games ? gd.games : [];
+    let confW = 0, confL = 0, overallW = 0, overallL = 0;
+
+    games.forEach(g => {
+      const hn = _thNormTeamName(g.homeTeam);
+      const an = _thNormTeamName(g.awayTeam);
+      const isHome = hn === tNorm;
+      const isAway = an === tNorm;
+      if (!isHome && !isAway) return;
+
+      const ts = Number(isHome ? g.homePoints : g.awayPoints);
+      const os = Number(isHome ? g.awayPoints : g.homePoints);
+      if (!Number.isFinite(ts) || !Number.isFinite(os)) return;
+
+      const won = ts > os;
+      if (won) overallW++; else overallL++;
+
+      const oppNorm = isHome ? an : hn;
+      if (normSet.has(oppNorm)) {
+        if (won) confW++; else confL++;
+      }
+    });
+
+    const confGames = confW + confL;
+    const overallGames = overallW + overallL;
+    return {
+      team: team,
+      confW: confW,
+      confL: confL,
+      confPct: confGames ? (confW / confGames) : 0,
+      overallW: overallW,
+      overallL: overallL,
+      overallPct: overallGames ? (overallW / overallGames) : 0,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (b.confPct !== a.confPct) return b.confPct - a.confPct;
+    if (b.confW !== a.confW) return b.confW - a.confW;
+    if (b.overallPct !== a.overallPct) return b.overallPct - a.overallPct;
+    if (b.overallW !== a.overallW) return b.overallW - a.overallW;
+    return String(a.team || '').localeCompare(String(b.team || ''));
+  });
+
+  const out = {};
+  rows.forEach((r, i) => {
+    out[_thNormTeamName(r.team)] = Object.assign({ rank: i + 1 }, r);
+  });
+
+  _thWbbConfStandingsCache[cacheKey] = out;
+  return out;
+}
+
 // ── Render: Program Overview ──────────────────────────────────────────────────
-function thRenderOverview(teamData, gamesData) {
+function thRenderOverview(teamData, gamesData, statsData) {
   if (!thOverviewEl) return;
-  if (!teamData) {
+  // For WBB, teamData from ratings may be null — allow rendering with fallback
+  const isWBB = (typeof league !== 'undefined' && league === 'WBB');
+  if (!teamData && !isWBB) {
+    thOverviewEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Select a team to view program analysis.</div>';
+    return;
+  }
+  if (!teamData && isWBB && !thCurrentTeam) {
     thOverviewEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center">Select a team to view program analysis.</div>';
     return;
   }
@@ -99,12 +1959,12 @@ function thRenderOverview(teamData, gamesData) {
   // Derive W-L record from games
   const games = (gamesData && gamesData.games) ? gamesData.games : [];
   let wins = 0, losses = 0, confW = 0, confL = 0;
+  const tnForRecord = (teamData && teamData.team) ? teamData.team.toLowerCase() : (thCurrentTeam || '').toLowerCase();
   games.forEach(g => {
     const hn = (g.homeTeam || '').toLowerCase();
     const an = (g.awayTeam || '').toLowerCase();
-    const tn = (teamData.team || '').toLowerCase();
-    const isHome = hn === tn;
-    const isAway = an === tn;
+    const isHome = hn === tnForRecord;
+    const isAway = an === tnForRecord;
     if (!isHome && !isAway) return;
     const ts = isHome ? g.homePoints : g.awayPoints;
     const os = isHome ? g.awayPoints : g.homePoints;
@@ -118,14 +1978,33 @@ function thRenderOverview(teamData, gamesData) {
   const recordStr = hasRecord ? `${wins}–${losses}` : '—';
   const confRecord = (confW + confL) > 0 ? `${confW}–${confL} conf` : '';
 
+  // Conference standing from ESPN (WBB) or game log (MBB)
+  const standing = statsData && statsData.conferenceStanding;
+  let confStandingStr = confRecord;
+  if (standing && (standing.confWins != null || standing.confLosses != null)) {
+    const cw = standing.confWins != null ? standing.confWins : '?';
+    const cl = standing.confLosses != null ? standing.confLosses : '?';
+    const rankPart = standing.confRank ? ` · #${standing.confRank} in conf` : '';
+    confStandingStr = `${cw}–${cl} conf${rankPart}`;
+  }
+
   const adjOs = allRatingsData.map(x => x.adjO).filter(Number.isFinite).sort((a,b)=>a-b);
   const adjDs = allRatingsData.map(x => x.adjD).filter(Number.isFinite).sort((a,b)=>a-b);
-  const oPct  = _thPctOf(adjOs, teamData.adjO);
-  const dPct  = teamData.adjD != null ? (100 - _thPctOf(adjDs, teamData.adjD)) : null;
-  const adjEM = Number.isFinite(teamData.adjEM) ? teamData.adjEM : null;
+  const oPct  = teamData ? _thPctOf(adjOs, teamData.adjO) : null;
+  const dPct  = (teamData && teamData.adjD != null) ? (100 - _thPctOf(adjDs, teamData.adjD)) : null;
+  const adjEM = (teamData && Number.isFinite(teamData.adjEM)) ? teamData.adjEM : null;
   const emStr = adjEM != null ? ((adjEM >= 0 ? '+' : '') + _thFmt(adjEM)) : '—';
-  const rankStr  = teamData.rank ? '#' + teamData.rank : '—';
-  const rankColor = teamData.rank ? (teamData.rank <= 10 ? 'var(--good)' : teamData.rank <= 25 ? 'var(--accent)' : teamData.rank <= 50 ? 'var(--warn)' : 'var(--muted)') : 'var(--muted)';
+  const rankStr  = (teamData && teamData.rank) ? '#' + teamData.rank : '—';
+  const rankColor = (teamData && teamData.rank) ? (teamData.rank <= 10 ? 'var(--good)' : teamData.rank <= 25 ? 'var(--accent)' : teamData.rank <= 50 ? 'var(--warn)' : 'var(--muted)') : 'var(--muted)';
+  const displayName = (teamData && teamData.team) ? teamData.team : thCurrentTeam;
+  // For WBB (no ratings), try to find conference from player pool
+  let displayConf = (teamData && teamData.conference) ? teamData.conference : '';
+  if (!displayConf && isWBB && thCurrentTeam && typeof tbGetAllPlayers === 'function') {
+    const sample = tbGetAllPlayers().find(p => (p.Team || '').toLowerCase() === thCurrentTeam.toLowerCase());
+    displayConf = (sample && sample.Conference) ? sample.Conference : '';
+  }
+  if (!displayConf) displayConf = '—';
+  const displaySeason = thSeasonInput ? thSeasonInput.value : '2026';
 
   // Style-of-play assessments (only O/D based — tempo unavailable)
   const styleLines = [];
@@ -144,60 +2023,128 @@ function thRenderOverview(teamData, gamesData) {
     else if (adjEM <= -10) styleLines.push('📉 Negative net efficiency');
   }
 
+  // WBB ESPN-based stats panel (when no Barttorvik ratings)
+  const wbbStatsHtml = isWBB && statsData && statsData.teamStats ? (() => {
+    const ts = statsData.teamStats;
+    const ff = ts.fourFactors || {};
+    const ppg = ts.points && statsData.games ? (ts.points.total / statsData.games).toFixed(1) : '—';
+    const efg = ff.effectiveFieldGoalPct != null ? ff.effectiveFieldGoalPct.toFixed(1) + '%' : '—';
+    const tovR = ff.turnoverRatio != null ? (ff.turnoverRatio * 100).toFixed(1) + '%' : '—';
+    const orebP = ff.offensiveReboundPct != null ? ff.offensiveReboundPct.toFixed(1) + '%' : '—';
+    const ftr = ff.freeThrowRate != null ? ff.freeThrowRate.toFixed(1) + '%' : '—';
+    return `
+      <div class="thRatCard"><div class="thRatVal">${ppg}</div><div class="thRatLabel">PPG</div><div class="thRatPct">points/game</div></div>
+      <div class="thRatCard"><div class="thRatVal">${efg}</div><div class="thRatLabel">eFG%</div><div class="thRatPct">eff. FG rate</div></div>
+      <div class="thRatCard"><div class="thRatVal">${orebP}</div><div class="thRatLabel">OREB%</div><div class="thRatPct">off. rebounding</div></div>
+      <div class="thRatCard"><div class="thRatVal">${tovR}</div><div class="thRatLabel">TOV%</div><div class="thRatPct">turnover rate</div></div>
+      <div class="thRatCard"><div class="thRatVal">${ftr}</div><div class="thRatLabel">FT Rate</div><div class="thRatPct">FTM/FGA</div></div>`;
+  })() : `
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${_thGrade(oPct)}">${teamData ? _thFmt(teamData.adjO) : '—'}</div>
+        <div class="thRatLabel">Adj. Offense</div>
+        <div class="thRatPct">${oPct != null ? oPct+'th %ile' : ''}</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${_thGrade(dPct)}">${teamData ? _thFmt(teamData.adjD) : '—'}</div>
+        <div class="thRatLabel">Adj. Defense</div>
+        <div class="thRatPct">${dPct != null ? dPct+'th %ile' : ''}</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${adjEM!=null&&adjEM>=0?'var(--good)':adjEM!=null?'var(--bad)':'var(--muted)'}">${emStr}</div>
+        <div class="thRatLabel">Net Efficiency</div>
+        <div class="thRatPct">net rating</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal" style="color:${rankColor};font-size:20px">${rankStr}</div>
+        <div class="thRatLabel">Natl Rank</div>
+        <div class="thRatPct">by net efficiency</div>
+      </div>
+      <div class="thRatCard">
+        <div class="thRatVal">${teamData ? _thFmt(teamData.srs) : '—'}</div>
+        <div class="thRatLabel">SRS Rating</div>
+        <div class="thRatPct">simple rating</div>
+      </div>`;
+
   thOverviewEl.innerHTML = `
     <div class="thHeroCard">
       <div class="thHeroLeft">
-        <div class="thTeamName">${teamData.team}</div>
-        <div class="thConf">${teamData.conference || '—'} · Season ${thSeasonInput ? thSeasonInput.value : '2026'}</div>
-        <div class="thRecord">${recordStr}${confRecord ? ' · ' + confRecord : ''}</div>
+        <div class="thTeamName">${displayName}</div>
+        <div class="thConf">${displayConf} · Season ${displaySeason}</div>
+        <div class="thRecord">${recordStr}${confStandingStr ? ' · ' + confStandingStr : ''}</div>
         ${styleLines.length ? `<div class="thStyleLines">${styleLines.map(s=>`<span class="thStyleTag">${s}</span>`).join('')}</div>` : ''}
       </div>
       <div class="thRatingsGrid">
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${_thGrade(oPct)}">${_thFmt(teamData.adjO)}</div>
-          <div class="thRatLabel">Adj. Offense</div>
-          <div class="thRatPct">${oPct != null ? oPct+'th %ile' : ''}</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${_thGrade(dPct)}">${_thFmt(teamData.adjD)}</div>
-          <div class="thRatLabel">Adj. Defense</div>
-          <div class="thRatPct">${dPct != null ? dPct+'th %ile' : ''}</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${adjEM!=null&&adjEM>=0?'var(--good)':adjEM!=null?'var(--bad)':'var(--muted)'}">${emStr}</div>
-          <div class="thRatLabel">Net Efficiency</div>
-          <div class="thRatPct">net rating</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal" style="color:${rankColor};font-size:20px">${rankStr}</div>
-          <div class="thRatLabel">Natl Rank</div>
-          <div class="thRatPct">by net efficiency</div>
-        </div>
-        <div class="thRatCard">
-          <div class="thRatVal">${_thFmt(teamData.srs)}</div>
-          <div class="thRatLabel">SRS Rating</div>
-          <div class="thRatPct">simple rating</div>
-        </div>
+        ${wbbStatsHtml}
       </div>
     </div>`;
 }
 
 // ── Render: Conference Threats ────────────────────────────────────────────────
-function thRenderThreats(teamData, gamesData) {
+function thRenderThreats(teamData, gamesData, wbbStandings) {
   if (!thThreatsEl) return;
-  if (!teamData) {
+  const isWBB = (typeof league !== 'undefined' && league === 'WBB');
+  if (!teamData && !isWBB) {
     thThreatsEl.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Select a team to view threats.</div>';
     return;
   }
 
-  const conf = teamData.conference;
+  let conf = teamData && teamData.conference ? teamData.conference : '';
+  if (!conf && isWBB && thCurrentTeam) {
+    conf = _thFindWbbConferenceForTeam(thCurrentTeam);
+  }
+
+  const effectiveTeamData = teamData || { team: thCurrentTeam, conference: conf, season: +(thSeasonInput ? thSeasonInput.value : '2026'), adjEM: null };
   // Filter to the same season as teamData to avoid showing duplicate historical rows
-  const targetSeason = teamData.season || +(thSeasonInput ? thSeasonInput.value : '2026');
+  const targetSeason = effectiveTeamData.season || +(thSeasonInput ? thSeasonInput.value : '2026');
   const confTeams = allRatingsData
     .filter(t => t.conference === conf && +t.season === +targetSeason)
     .sort((a, b) => (b.adjEM || 0) - (a.adjEM || 0));
 
-  if (!confTeams.length) {
+  let fallbackTeams = [];
+  if (!confTeams.length && isWBB && conf && typeof tbGetAllPlayers === 'function') {
+    const confKey = String(conf).trim().toLowerCase();
+    const inConf = tbGetAllPlayers('WBB').filter(p => String(p.Conference || '').trim().toLowerCase() === confKey);
+    const byTeam = {};
+    inConf.forEach(p => {
+      const t = p.Team || '';
+      if (!t) return;
+      if (!byTeam[t]) byTeam[t] = [];
+      byTeam[t].push(p);
+    });
+    fallbackTeams = Object.keys(byTeam).map(t => {
+      const arr = byTeam[t];
+      const top = arr
+        .map(p => safeNum(p.PerfScore))
+        .filter(Number.isFinite)
+        .sort((a,b) => b-a)
+        .slice(0, 8);
+      const avgTop = top.length ? +(top.reduce((s,v)=>s+v,0) / top.length).toFixed(1) : null;
+      const key = t.toLowerCase();
+      const known = teamRatings[key] || null;
+      const adjEM = (known && Number.isFinite(+known.adjEM)) ? +known.adjEM : avgTop;
+      return {
+        team: t,
+        conference: conf,
+        season: +targetSeason,
+        adjEM: adjEM,
+        srs: null,
+      };
+    }).sort((a,b) => (b.adjEM || 0) - (a.adjEM || 0));
+  }
+
+  let listTeams = confTeams.length ? confTeams : fallbackTeams;
+  if (isWBB && wbbStandings) {
+    listTeams = listTeams.slice().sort((a, b) => {
+      const sa = wbbStandings[_thNormTeamName(a.team)] || null;
+      const sb = wbbStandings[_thNormTeamName(b.team)] || null;
+      if (sa && sb) return sa.rank - sb.rank;
+      if (sa) return -1;
+      if (sb) return 1;
+      return (b.adjEM || 0) - (a.adjEM || 0);
+    });
+  }
+
+  if (!listTeams.length) {
     thThreatsEl.innerHTML = `<div class="muted" style="padding:16px;text-align:center">No conference data for ${conf || 'unknown conference'}.</div>`;
     return;
   }
@@ -208,7 +2155,7 @@ function thRenderThreats(teamData, gamesData) {
   games.forEach(g => {
     const hn = (g.homeTeam || '').toLowerCase();
     const an = (g.awayTeam || '').toLowerCase();
-    const tn = (teamData.team || '').toLowerCase();
+    const tn = (effectiveTeamData.team || '').toLowerCase();
     const isHome = hn === tn;
     const isAway = an === tn;
     if (!isHome && !isAway) return;
@@ -225,25 +2172,26 @@ function thRenderThreats(teamData, gamesData) {
       <span>#</span><span>Team</span><span>AdjEM</span><span>SRS</span><span>H2H</span><span></span>
     </div>`;
 
-  confTeams.forEach((t, i) => {
-    const isUs = (t.team || '').toLowerCase() === (teamData.team || '').toLowerCase();
+  listTeams.forEach((t, i) => {
+    const sRow = isWBB && wbbStandings ? (wbbStandings[_thNormTeamName(t.team)] || null) : null;
+    const isUs = (t.team || '').toLowerCase() === (effectiveTeamData.team || '').toLowerCase();
     const rec = Object.entries(h2hMap).find(([k]) => k.toLowerCase() === (t.team||'').toLowerCase());
     const h2h = rec ? rec[1] : null;
     const h2hStr = h2h ? `${h2h.w}–${h2h.l}` : isUs ? '—' : '';
     const h2hColor = h2h ? (h2h.w > h2h.l ? 'var(--good)' : h2h.w < h2h.l ? 'var(--bad)' : 'var(--warn)') : 'var(--muted)';
     const emColor = (t.adjEM||0) >= 0 ? 'var(--good)' : 'var(--bad)';
-    const isThreat = !isUs && (t.adjEM || 0) > (teamData.adjEM || 0) && (!h2h || h2h.l >= h2h.w);
+    const isThreat = !isUs && (t.adjEM || 0) > (effectiveTeamData.adjEM || 0) && (!h2h || h2h.l >= h2h.w);
     const escapedName = (t.team || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     html += `<div class="thThreatRow${isUs ? ' thThreatUs' : isThreat ? ' thThreatDanger' : ''}">
-      <span class="thThreatRank">${i + 1}</span>
+      <span class="thThreatRank">${sRow ? sRow.rank : (i + 1)}</span>
       <span class="thThreatName">
         ${t.team || '—'}
         ${isUs ? '<span class="thYouBadge">you</span>' : ''}
         ${isThreat ? '<span class="thDangerBadge">⚠ threat</span>' : ''}
       </span>
       <span style="color:${emColor};font-weight:700">${(t.adjEM||0)>=0?'+':''}${_thFmt(t.adjEM)}</span>
-      <span style="color:var(--muted)">${_thFmt(t.srs)}</span>
+      <span style="color:var(--muted)">${sRow ? (sRow.confW + '–' + sRow.confL) : _thFmt(t.srs)}</span>
       <span style="color:${h2hColor};font-weight:700">${h2hStr}</span>
       <span>${!isUs ? `<button class="secondary thOppBtn" onclick="thLoadOpponent('${escapedName}')" title="Load ${t.team} as opponent">⚔</button>` : ''}</span>
     </div>`;
@@ -261,7 +2209,7 @@ function thRenderGameLog(teamData, gamesData) {
     return;
   }
 
-  const tn = (teamData ? teamData.team : '').toLowerCase();
+  const tn = (teamData ? teamData.team : thCurrentTeam || '').toLowerCase();
   const games = gamesData.games.slice().sort((a, b) =>
     new Date(a.startDate || a.date || 0) - new Date(b.startDate || b.date || 0)
   );
@@ -310,7 +2258,7 @@ function thRenderH2H(teamData, gamesData) {
     return;
   }
 
-  const tn = (teamData ? teamData.team : '').toLowerCase();
+  const tn = (teamData ? teamData.team : thCurrentTeam || '').toLowerCase();
   const oppMap = {};
 
   gamesData.games.forEach(g => {
@@ -378,14 +2326,32 @@ function thRenderDNA(teamData, statsData, shootingData) {
   const os = s ? s.opponentStats : null;
   const g  = (s && s.games) || 1;
 
-  const ppg       = ts ? +(ts.points.total / g).toFixed(1)                                    : null;
-  const oppg      = os ? +(os.points.total / g).toFixed(1)                                    : null;
-  const paintPct  = ts ? Math.round(ts.points.inPaint / ts.points.total * 100)                : null;
-  const fbPct     = ts ? Math.round(ts.points.fastBreak / ts.points.total * 100)              : null;
-  const topPct    = ts ? Math.round(ts.points.offTurnovers / ts.points.total * 100)           : null;
-  const threeTend = ts ? Math.round(ts.threePointFieldGoals.attempted / ts.fieldGoals.attempted * 100) : null;
-  const astRate   = ts ? Math.round(ts.assists / ts.fieldGoals.made * 100)                    : null;
+  function pctOf(part, total) {
+    const p = Number(part), t = Number(total);
+    return (Number.isFinite(p) && Number.isFinite(t) && t > 0) ? Math.round(p / t * 100) : null;
+  }
+  const ppg       = ts ? +(ts.points.total / g).toFixed(1) : null;
+  const oppg      = os ? +(os.points.total / g).toFixed(1) : null;
+  const paintPct  = ts ? pctOf(ts.points && ts.points.inPaint, ts.points && ts.points.total) : null;
+  let fbPct       = ts ? pctOf(ts.points && ts.points.fastBreak, ts.points && ts.points.total) : null;
+  let topPct      = ts ? pctOf(ts.points && ts.points.offTurnovers, ts.points && ts.points.total) : null;
+  const threeTend = ts ? pctOf(ts.threePointFieldGoals && ts.threePointFieldGoals.attempted, ts.fieldGoals && ts.fieldGoals.attempted) : null;
+  const astRate   = ts ? pctOf(ts.assists, ts.fieldGoals && ts.fieldGoals.made) : null;
   const pace      = s  ? s.pace : null;
+
+  // WBB fallback: estimate paint share from derived shooting zones when ESPN paint points are unavailable/zero.
+  let paintPctResolved = paintPct;
+  if (typeof league !== 'undefined' && league === 'WBB' && ts && ts.points && Number(ts.points.total) > 0 && shootingData) {
+    if (paintPctResolved == null || paintPctResolved === 0) {
+      const rimMade = Number((shootingData.dunks && shootingData.dunks.made) || 0)
+        + Number((shootingData.tipIns && shootingData.tipIns.made) || 0)
+        + Number((shootingData.layups && shootingData.layups.made) || 0);
+      paintPctResolved = pctOf(rimMade * 2, ts.points.total);
+    }
+    // ESPN WBB often omits these; suppress misleading 0% when source is effectively missing.
+    if (fbPct === 0) fbPct = null;
+    if (topPct === 0) topPct = null;
+  }
 
   const ff  = ts ? ts.fourFactors : null;
   const ofs = os ? os.fourFactors : null;
@@ -393,10 +2359,11 @@ function thRenderDNA(teamData, statsData, shootingData) {
   const offTov  = ff  ? Math.round(ff.turnoverRatio * 100) : null;
   const offOreb = ff  ? ff.offensiveReboundPct             : null;
   const offFtr  = ff  ? ff.freeThrowRate                   : null;
-  const defEfg  = ofs ? ofs.effectiveFieldGoalPct          : null;
-  const defTov  = ofs ? Math.round(ofs.turnoverRatio * 100) : null;
-  const defOreb = ofs ? ofs.offensiveReboundPct             : null;
-  const defFtr  = ofs ? ofs.freeThrowRate                   : null;
+  const defFallback = shootingData && shootingData.defenseFourFactors ? shootingData.defenseFourFactors : null;
+  const defEfg  = ofs ? ofs.effectiveFieldGoalPct           : (defFallback ? defFallback.effectiveFieldGoalPct : null);
+  const defTov  = ofs ? Math.round(ofs.turnoverRatio * 100) : (defFallback && Number.isFinite(defFallback.turnoverRatio) ? Math.round(defFallback.turnoverRatio * 100) : null);
+  const defOreb = ofs ? ofs.offensiveReboundPct             : (defFallback ? defFallback.offensiveReboundPct : null);
+  const defFtr  = ofs ? ofs.freeThrowRate                   : (defFallback ? defFallback.freeThrowRate : null);
 
   // Auto-generate insights from the numbers
   const insights = [];
@@ -426,9 +2393,9 @@ function thRenderDNA(teamData, statsData, shootingData) {
     if (defOreb <= 24) insights.push({ type: 'strength', text: `Excellent defensive rebounding — holding opponents to ${defOreb}% OReb rate. Boxes out well.` });
     else if (defOreb >= 35) insights.push({ type: 'weakness', text: `Gets out-rebounded — opponents grab ${defOreb}% of their own misses, generating second-chance points.` });
   }
-  if (paintPct != null) {
-    if (paintPct >= 48) insights.push({ type: 'style', text: `Inside-out attack — ${paintPct}% of points in the paint. Forces opponents to commit to interior defense.` });
-    else if (paintPct <= 34) insights.push({ type: 'style', text: `Perimeter-oriented offense — only ${paintPct}% of points come from the paint. Very jump-shot dependent.` });
+  if (paintPctResolved != null) {
+    if (paintPctResolved >= 48) insights.push({ type: 'style', text: `Inside-out attack — ${paintPctResolved}% of points in the paint. Forces opponents to commit to interior defense.` });
+    else if (paintPctResolved <= 34) insights.push({ type: 'style', text: `Perimeter-oriented offense — only ${paintPctResolved}% of points come from the paint. Very jump-shot dependent.` });
   }
   if (threeTend != null) {
     if (threeTend >= 48) insights.push({ type: 'style', text: `Heavy three-point volume — ${threeTend}% of FGA are 3s. Live-or-die by the three style.` });
@@ -478,7 +2445,7 @@ function thRenderDNA(teamData, statsData, shootingData) {
     ppg       != null ? `<div class="thProfRow"><span class="thProfLabel">Points / game</span><span class="thProfVal">${ppg}</span></div>` : '',
     oppg      != null ? `<div class="thProfRow"><span class="thProfLabel">Opp Pts / game</span><span class="thProfVal">${oppg}</span></div>` : '',
     pace      != null ? `<div class="thProfRow"><span class="thProfLabel" title="Estimated possessions per 40 min game">Pace</span><span class="thProfVal">${pace} poss/g</span></div>` : '',
-    paintPct  != null ? `<div class="thProfRow"><span class="thProfLabel">Paint scoring</span><span class="thProfVal">${paintPct}% of pts</span></div>` : '',
+    paintPctResolved  != null ? `<div class="thProfRow"><span class="thProfLabel">Paint scoring</span><span class="thProfVal">${paintPctResolved}% of pts</span></div>` : '',
     fbPct     != null ? `<div class="thProfRow"><span class="thProfLabel">Fast break pts</span><span class="thProfVal">${fbPct}% of pts</span></div>` : '',
     topPct    != null ? `<div class="thProfRow"><span class="thProfLabel">Pts off TOs</span><span class="thProfVal">${topPct}% of pts</span></div>` : '',
     threeTend != null ? `<div class="thProfRow"><span class="thProfLabel" title="3-point attempts as % of all FGA">3PT tendency</span><span class="thProfVal">${threeTend}% of FGA</span></div>` : '',
@@ -497,18 +2464,18 @@ function thRenderDNA(teamData, statsData, shootingData) {
   el.innerHTML = `
     <div class="thDNAGrid">
       <div class="thDNALeft">
-        <div class="thDNASectionLabel">🏀 Team Shooting Zones</div>
+        <div class="thDNASectionLabel">Team Shooting Zones</div>
         ${heatmapHtml}
       </div>
       <div class="thDNARight">
-        <div class="thDNASectionLabel">📊 Scoring Profile</div>
+        <div class="thDNASectionLabel">Scoring Profile</div>
         <div class="thProfCard">${profHtml || '<div class="muted">Stats unavailable</div>'}</div>
         <div style="height:16px"></div>
         ${ff4Html}
       </div>
     </div>
     <div class="thDNAInsights">
-      <div class="thDNASectionLabel">🔍 Strengths &amp; Weaknesses Analysis</div>
+      <div class="thDNASectionLabel">Strengths &amp; Weaknesses Analysis</div>
       <div class="thInsightsGrid">${insightsHtml}</div>
     </div>`;
 }
@@ -753,6 +2720,9 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   var sdB = opts.sdB != null ? +opts.sdB : 11;
   // Correlation between team scoring deviations (0 = independent, 0..1)
   var rho = opts.rho != null ? Math.max(0, Math.min(1, +opts.rho)) : 0;
+  // Overtime modeling
+  var enableOT = opts.enableOT !== false;
+  var maxOTPeriods = opts.maxOTPeriods != null ? Math.max(1, Math.min(6, +opts.maxOTPeriods)) : 3;
 
   function randn() {
     var u = 0, v = 0;
@@ -762,12 +2732,43 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
   }
 
   var aWins = 0, bWins = 0, ties = 0, totalMarginA = 0;
+  var regTies = 0, otGames = 0, otAWins = 0, otBWins = 0;
   var margins = [], scoresA = [], scoresB = [];
   var buckets = {};
 
   // Cholesky decomposition for correlated normals:
   // zA = u; zB = rho*u + sqrt(1-rho^2)*v
   var rhoFactor = Math.sqrt(Math.max(0, 1 - rho * rho));
+
+  // OT setup (5-minute period approximation)
+  var otPace = Math.max(5, Math.min(12, gamePace * 0.125));
+  var otExpA = (eOA / 100) * otPace;
+  var otExpB = (eOB / 100) * otPace;
+  var otSdA = opts.otSdA != null ? +opts.otSdA : Math.max(2.5, Math.min(6.5, sdA * Math.sqrt(5 / 40)));
+  var otSdB = opts.otSdB != null ? +opts.otSdB : Math.max(2.5, Math.min(6.5, sdB * Math.sqrt(5 / 40)));
+
+  function resolveOvertime(rA0, rB0) {
+    var rA = rA0, rB = rB0;
+    var periods = 0;
+    while (rA === rB && periods < maxOTPeriods) {
+      var ou = randn(), ov = randn();
+      var otNoiseA = ou * otSdA;
+      var otNoiseB = (rho * ou + rhoFactor * ov) * otSdB;
+      var addA = Math.max(0, Math.round(otExpA + otNoiseA));
+      var addB = Math.max(0, Math.round(otExpB + otNoiseB));
+      rA += addA;
+      rB += addB;
+      periods++;
+    }
+    if (rA === rB) {
+      // Very rare fallback to avoid unresolved ties in simulation output
+      var edge = (otExpA - otExpB) / 1.5;
+      var pA = 1 / (1 + Math.exp(-edge));
+      if (Math.random() < pA) rA += 1;
+      else rB += 1;
+    }
+    return { rA: rA, rB: rB, periods: periods };
+  }
 
   for (var i = 0; i < nSims; i++) {
     var u = randn(), v = randn();
@@ -776,6 +2777,17 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     var ptsA = (eOA / 100) * gamePace + noiseA;
     var ptsB = (eOB / 100) * gamePace + noiseB;
     var rA = Math.round(ptsA), rB = Math.round(ptsB);
+
+    if (enableOT && rA === rB) {
+      regTies++;
+      otGames++;
+      var ot = resolveOvertime(rA, rB);
+      rA = ot.rA;
+      rB = ot.rB;
+      if (rA > rB) otAWins++;
+      else if (rB > rA) otBWins++;
+    }
+
     scoresA.push(rA); scoresB.push(rB);
     var margin = rA - rB;
     margins.push(margin);
@@ -816,7 +2828,12 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     aWinPct: +(aWins / nSims * 100).toFixed(1),
     bWinPct: +(bWins / nSims * 100).toFixed(1),
     tiePct: +(ties / nSims * 100).toFixed(1),
+    regulationTiePct: +(regTies / nSims * 100).toFixed(1),
+    otRate: +(otGames / nSims * 100).toFixed(1),
+    aWinInOTPct: +(otGames ? (otAWins / otGames * 100) : 0).toFixed(1),
+    bWinInOTPct: +(otGames ? (otBWins / otGames * 100) : 0).toFixed(1),
     aWins: aWins, bWins: bWins, ties: ties,
+    regulationTies: regTies, otGames: otGames,
     avgMargin: +mean.toFixed(1),
     medianMargin: median,
     stdDev: +sd.toFixed(1),
@@ -830,9 +2847,55 @@ function thRunMonteCarlo(ratA, ratB, statsA, statsB, nSims, opts) {
     buckets: buckets,
     // Store params used
     _sdA: sdA, _sdB: sdB, _rho: rho, _pace: gamePace,
+    _enableOT: enableOT, _otPace: otPace, _otSdA: otSdA, _otSdB: otSdB, _maxOTPeriods: maxOTPeriods,
   };
   _thLastMonteCarlo = result;
   return result;
+}
+
+function _thEstimateOppPpgFromGames(teamName, season) {
+  try {
+    const key = (String(teamName || '') + ':' + String(season || thCurrentSeason || '2026')).toLowerCase();
+    const gd = (typeof teamGamesCache !== 'undefined') ? teamGamesCache[key] : null;
+    const games = gd && gd.games ? gd.games : [];
+    if (!games.length) return null;
+    const tn = String(teamName || '').toLowerCase();
+    let sum = 0, n = 0;
+    games.forEach(g => {
+      const hn = String(g.homeTeam || '').toLowerCase();
+      const an = String(g.awayTeam || '').toLowerCase();
+      const hp = Number(g.homePoints), ap = Number(g.awayPoints);
+      if (!Number.isFinite(hp) || !Number.isFinite(ap)) return;
+      if (hn === tn) { sum += ap; n++; }
+      else if (an === tn) { sum += hp; n++; }
+    });
+    return n ? (sum / n) : null;
+  } catch (_) { return null; }
+}
+
+function _thFallbackRating(teamName, ratingObj, statsObj, season) {
+  if (ratingObj && Number.isFinite(+ratingObj.adjO) && Number.isFinite(+ratingObj.adjD)) return ratingObj;
+  if (!statsObj || !statsObj.teamStats || !statsObj.teamStats.points) return null;
+
+  const g = Number(statsObj.games) || 1;
+  const pace = Number(statsObj.pace) || 68;
+  const ppg = Number(statsObj.teamStats.points.total) / g;
+  let oppg = null;
+  if (statsObj.opponentStats && statsObj.opponentStats.points && Number.isFinite(Number(statsObj.opponentStats.points.total))) {
+    oppg = Number(statsObj.opponentStats.points.total) / g;
+  }
+  if (!Number.isFinite(oppg)) oppg = _thEstimateOppPpgFromGames(teamName, season);
+  if (!Number.isFinite(oppg)) oppg = ppg; // neutral fallback when opponent scoring is unavailable
+
+  const adjO = +(ppg / Math.max(1, pace) * 100).toFixed(1);
+  const adjD = +(oppg / Math.max(1, pace) * 100).toFixed(1);
+  return {
+    team: teamName,
+    adjO: adjO,
+    adjD: adjD,
+    adjEM: +(adjO - adjD).toFixed(1),
+    _derived: true,
+  };
 }
 
 // ── MC Sensitivity Analysis — how win% shifts with parameter tweaks ──────────
@@ -872,8 +2935,8 @@ function thRunMonteCarloUI() {
 
   var aName = thCurrentTeam;
   var bName = thCurrentCompareTeam;
-  var ratA = teamRatings[(aName || '').toLowerCase()] || null;
-  var ratB = teamRatings[(bName || '').toLowerCase()] || null;
+  var ratA = _thFallbackRating(aName, teamRatings[(aName || '').toLowerCase()] || null, _thCurrentStats, thCurrentSeason);
+  var ratB = _thFallbackRating(bName, teamRatings[(bName || '').toLowerCase()] || null, _thCompareStats, thCurrentSeason);
 
   var runCountEl = document.getElementById('thMCRunCount');
   var nSims = runCountEl ? parseInt(runCountEl.value, 10) || 10000 : 10000;
@@ -906,7 +2969,7 @@ function thRunMonteCarloUI() {
         '</div>' +
       '</div>' +
       '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName, sens) + '</div>';
-    if (btn) { btn.disabled = false; btn.textContent = '🎲 Run Simulation'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Run Simulation'; }
   }, 30);
 }
 
@@ -925,6 +2988,7 @@ function _thBuildMCSummary(mc, aName, bName) {
   var closeNote = '';
   if (mc.closeGamePct >= 40) closeNote = '<br>⏱ <strong>High close-game probability (' + mc.closeGamePct + '%)</strong> — late-game execution and free-throw shooting will be critical.';
   else if (mc.closeGamePct >= 25) closeNote = '<br>⏱ Moderate chance of a close finish (' + mc.closeGamePct + '%) — prepare end-of-game sets.';
+  if (mc.otRate >= 3) closeNote += '<br>🕐 <strong>Overtime probability: ' + mc.otRate + '%</strong> — prep late-game foul/ATO packages and OT rotation plans.';
 
   return '<div class="thMCSummary">' +
     '<div class="thMCSummaryIcon">📋</div>' +
@@ -1049,6 +3113,17 @@ function _thBuildMCGamePlan(mc, aName, bName, ratA, ratB) {
     items.push({icon:'📊', text:blower + ' has a ' + blowPct + '% chance of winning by 10+. The underdog should keep the game within striking distance through halftime.'});
   }
 
+  // Tournament timing / timeout guidance (if available)
+  var intel = _thTournamentIntelCtx && _thTournamentIntelCtx[bName];
+  if (intel && intel.timeoutGuidance) {
+    var tw = (intel.timeoutGuidance.recommendedWhen || [])[0];
+    if (tw) {
+      items.push({icon:'⏸️', text:'Timeout timing vs ' + bName + ': watch ' + tw.phase + ' (avg segment edge +' + tw.avgEdge + '). ' + tw.note});
+    } else if (intel.timeoutGuidance.baselineRule) {
+      items.push({icon:'⏸️', text:'Timeout timing vs ' + bName + ': ' + intel.timeoutGuidance.baselineRule});
+    }
+  }
+
   // Free throws
   items.push({icon:'🏀', text:'In projected close games, free-throw shooting is decisive. Identify your best FT shooters for late-game possessions.'});
 
@@ -1093,6 +3168,41 @@ function _thBuildMCSensitivity(mc, aName, bName, sens) {
   '</div>';
 }
 
+function _thBuildMCRecentPBP(aName, bName) {
+  const ctx = _thRecentTournamentCtx;
+  if (!ctx) return '';
+
+  function teamCard(name, color) {
+    const d = ctx[name];
+    if (!d) return '';
+    const sp = d.shotProfile || {};
+    const dt = d.date ? String(d.date).slice(0, 10) : '—';
+    const scoreTxt = (d.score && d.score.for != null && d.score.against != null)
+      ? (d.score.for + '–' + d.score.against)
+      : '—';
+    const rimTxt = sp.rim && sp.rim.att ? (sp.rim.pct + '% (' + sp.rim.made + '/' + sp.rim.att + ')') : '—';
+    const midTxt = sp.jumper && sp.jumper.att ? (sp.jumper.pct + '% (' + sp.jumper.made + '/' + sp.jumper.att + ')') : '—';
+    const threeTxt = sp.three_pointer && sp.three_pointer.att ? (sp.three_pointer.pct + '% (' + sp.three_pointer.made + '/' + sp.three_pointer.att + ')') : '—';
+    return '<div class="thMCRecentCard">' +
+      '<div class="thMCRecentTeam" style="color:' + color + '">' + name + '</div>' +
+      '<div class="thMCRecentMeta">Latest tournament game: ' + dt + ' vs ' + (d.opponent || '—') + '</div>' +
+      '<div class="thMCRecentMeta">Score: ' + scoreTxt + (d.gameNotes ? ' · ' + d.gameNotes : '') + '</div>' +
+      '<div class="thMCRecentMeta">FG: ' + (sp.fgPct != null ? (sp.fgPct + '%') : '—') + ' · FGA: ' + (sp.fga != null ? sp.fga : '—') + ' · FTA shots: ' + (sp.fta != null ? sp.fta : '—') + '</div>' +
+      '<div class="thMCRecentMeta">Rim: ' + rimTxt + ' · Mid: ' + midTxt + ' · 3PT: ' + threeTxt + '</div>' +
+    '</div>';
+  }
+
+  const aCard = teamCard(aName, 'var(--accent)');
+  const bCard = teamCard(bName, 'var(--warn)');
+  if (!aCard && !bCard) return '';
+
+  return '<div class="thMCSection">' +
+    '<div class="thMCSectionHead">📼 Latest Tournament PBP Snapshot</div>' +
+    '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Used alongside season baselines for prep context.</div>' +
+    '<div class="thMCRecentWrap">' + aCard + bCard + '</div>' +
+  '</div>';
+}
+
 function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
   if (!mc) return '<div class="thMCError">Insufficient data for simulation (need adjusted efficiency ratings for both teams).</div>';
 
@@ -1120,6 +3230,7 @@ function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
   var paramsNote = mc.nSims.toLocaleString() + ' sims · SD: ' + mc._sdA + '/' + mc._sdB + ' pts';
   if (mc._rho > 0) paramsNote += ' · ρ=' + mc._rho.toFixed(2);
   paramsNote += ' · Pace: ' + mc._pace.toFixed(0);
+  if (mc._enableOT) paramsNote += ' · OT: ' + mc.otRate + '% (OT SD ' + mc._otSdA.toFixed(1) + '/' + mc._otSdB.toFixed(1) + ', max ' + mc._maxOTPeriods + ')';
 
   return '<div class="thMCResult">' +
     // ── Win probability ──────────────────────────────────────────────
@@ -1157,6 +3268,7 @@ function _thRenderMonteCarloHTML(mc, aName, bName, sens) {
     '<div class="thMCHistTitle">Score Margin Distribution</div>' +
     '<div class="thMCHist">' + histHtml + '</div>' +
     '<div class="thMCNote">' + paramsNote + '</div>' +
+    _thBuildMCRecentPBP(aName, bName) +
     // ── Coach-friendly sections ──
     _thBuildMCSummary(mc, aName, bName) +
     _thBuildMCMatchups(aName, bName) +
@@ -1181,12 +3293,11 @@ async function thRunDeepAnalysis() {
     if (_thDeepUseHeavyModel) thSetDeepModel(false);
     var usedCount = _thGuestDACount();
     if (usedCount >= _TH_GUEST_DA_LIMIT) {
-      if (typeof showWarn === 'function') showWarn('🔒 Guest limit reached (' + _TH_GUEST_DA_LIMIT + '/' + _TH_GUEST_DA_LIMIT + ' Deep Analysis runs used). Log in for unlimited access.');
+      if (typeof showWarn === 'function') showWarn('Guest limit reached (' + _TH_GUEST_DA_LIMIT + '/' + _TH_GUEST_DA_LIMIT + ' Deep Analysis runs used). Log in for unlimited access.');
       var lockedOutput = document.getElementById('thDeepOutput');
       if (lockedOutput) {
         lockedOutput.style.display = 'block';
         lockedOutput.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--muted)">' +
-          '<div style="font-size:32px;margin-bottom:8px">🔒</div>' +
           '<div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px">Guest Limit Reached</div>' +
           '<div style="font-size:12px">You\'ve used all ' + _TH_GUEST_DA_LIMIT + ' free Deep Analysis runs.<br>Log in for unlimited access and the Pro model.</div>' +
         '</div>';
@@ -1248,6 +3359,8 @@ async function thRunDeepAnalysis() {
     teamA: teamSnapshot(aName, ratA, _thCurrentStats),
     teamB: teamSnapshot(bName, ratB, _thCompareStats),
     matchupShots: _thLastMatchupCtx,
+    recentTournamentShots: _thRecentTournamentCtx,
+    tournamentIntel: _thTournamentIntelCtx,
   };
 
   const systemInstruction = {
@@ -1320,14 +3433,23 @@ async function thRunDeepAnalysis() {
     `## ${bName} \u2014 Strengths\n` +
     `## ${bName} \u2014 Weaknesses\n` +
     `## ${bName} \u2014 Tendencies\n` +
+    `## Shot Chart Intel \u2014 ${bName} Season Profile\n` +
+    `(Use full-season play-by-play-derived shot chart trends and where their misses cluster.)\n` +
+    `## Shot Chart Intel \u2014 ${bName} Recent MAC Tournament (Quarterfinal + Semifinal)\n` +
+    `(Show how their recent tournament shot profile differs from season baseline.)\n` +
+    `## Where ${bName} Misses Most (Exploit Map)\n` +
+    `(Name the miss-heavy zones and exactly how ${aName} should force those looks.)\n` +
     `## Head-to-Head Matchup Notes\n` +
     `(How to guard each team, how each defends, mismatches to exploit)\n` +
     `## How to Beat ${bName}\n` +
     `(Using their season record, loss patterns, and which teams beat them \u2014 identify the exact blueprint ${aName} should follow. Be very specific and actionable for a tournament game.)\n` +
     `## Game Plan: Offensive Keys (5 items for each team)\n` +
     `## Game Plan: Defensive Keys (5 items for each team)\n` +
+    `## Timeout Strategy vs ${bName}\n` +
+    `(Recommend exact timeout trigger moments using tournament trends, period/phase patterns, and momentum-risk windows.)\n` +
     `## In-Game Adjustment Triggers (3 specific situations)\n` +
     `## Data Confidence & Red Flags\n\n` +
+    `Use both season-long metrics and tournament play-by-play context provided in the JSON. Weight recent tournament tendencies as short-term form, but do not ignore season baselines. For ${bName}, explicitly use full-season PBP-derived trends, season shot chart profile, and recent MAC tournament shot chart profile.\n\n` +
     `All analysis must be grounded in this structured data only:${oppGameNote}\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
   try {
@@ -1347,6 +3469,7 @@ async function thRunDeepAnalysis() {
     const rawText = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!rawText) throw new Error('Empty response from AI.');
     if (status) status.textContent = '';
+    var deepChartsHtml = _thBuildDeepShotReportHTML(aName, bName);
     output.innerHTML =
       '<div class="thDeepHeader">' +
         '<span class="thDeepIcon">\uD83E\uDDE0</span>' +
@@ -1358,8 +3481,10 @@ async function thRunDeepAnalysis() {
         '</div>' +
       '</div>' +
       '<div class="thDeepBody">' +
+        deepChartsHtml +
         _thFmtDeepText(rawText) +
       '</div>';
+    thInitShotChart('thDeepOutput');
     output.dataset.lastRaw = rawText;
     output.dataset.aName   = aName;
     output.dataset.bName   = bName;
@@ -1785,7 +3910,7 @@ function thRenderCompare(teamA, ratA, statsA, teamB, ratB, statsB) {
       </div>` : ''}
     </div>
     <div class="thEdgeSection">
-      <div class="thDNASectionLabel">🏆 Edge Analysis</div>
+      <div class="thDNASectionLabel">Edge Analysis</div>
       <div class="thEdgeList">${edgeHtml}</div>
     </div>`;
 }
@@ -1805,6 +3930,9 @@ async function thLoadCompare() {
   ]);
   thCurrentCompareTeam = compareTeam;
   _thCompareStats = statsB || null;
+  _thRecentTournamentCtx = await _thLoadRecentTournamentCtx(thCurrentTeam, compareTeam, thCurrentSeason);
+  _thTournamentIntelCtx = await _thLoadTournamentIntelCtx(thCurrentTeam, compareTeam, thCurrentSeason);
+  _thDeepShotIntelCtx = await _thLoadDeepShotIntelForTeam(compareTeam, thCurrentSeason);
   const ratA = teamRatings[(thCurrentTeam||'').toLowerCase()] || null;
   const ratB = teamRatings[(compareTeam||'').toLowerCase()] || null;
   thRenderCompare(thCurrentTeam, ratA, _thCurrentStats, compareTeam, ratB, statsB);
@@ -1813,41 +3941,87 @@ async function thLoadCompare() {
 }
 
 // ── _thShotToSVG — transform full-court coordinates to SVG half-court ─────────
-// Full court origin: x=0–940, y=0–500. Left basket (75,250), right basket (875,250).
-// SVG half court: viewBox 0 0 400 455. Basket at (200, 415).
-function _thShotToSVG(shot, attacksLeft) {
-  const dx = attacksLeft ? (shot.x - 75) : (875 - shot.x);  // depth from basket
-  const dy = shot.y - 250;                                    // offset from lane center
+// Full court origin: x=0–940, y=0–500. SVG half court: viewBox 0 0 400 455. Basket at (200, 415).
+// basketX: actual full-court x of the attacking basket (adaptive; defaults to 75 for MBB).
+function _thShotToSVG(shot, attacksLeft, basketX) {
+  if (basketX == null) basketX = attacksLeft ? 75 : 865;
+  const dx = attacksLeft ? (shot.x - basketX) : (basketX - shot.x);  // depth from basket
+  const dy = shot.y - 250;                                             // offset from lane center
   return {
     x: Math.round(200 + dy * 0.76),
     y: Math.round(415 - dx * 1.025),
   };
 }
 
+// Normalize source shot coordinates into full-court space expected by _thShotToSVG.
+// Supports both:
+// 1) Full-court: x 0..940, y 0..500
+// 2) ESPN compact: x 0..50 (lateral), y 0..25 or 0..47 (depth)
+function _thNormalizeShotForCourt(shot, compactMode) {
+  const sx = Number(shot && shot.x);
+  const sy = Number(shot && shot.y);
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
+    return { x: 0, y: 0 };
+  }
+  if (!compactMode) {
+    return { x: sx, y: sy };
+  }
+
+  // Default compact ESPN mapping: x~0..50 lateral, y~0..94 depth.
+  const depthScale = compactMode === 'espn-compact' ? 10 : (940 / 47);
+  // ESPN compact -> full-court: lateral maps to y-axis, depth maps to x-axis.
+  const fx = sy * depthScale;
+  const fy = sx * 10;
+  return {
+    x: Math.max(0, Math.min(940, fx)),
+    y: Math.max(0, Math.min(500, fy)),
+  };
+}
+
 // ── _th_buildShotChartSVG — SVG court with dots for made/missed shots ─────────
 function _escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 function _th_buildShotChartSVG(shots, teamName, color) {
-  // Detect which basket this team attacks (avg x of rim shots)
-  const rimShots = shots.filter(s => s.range === 'rim');
+  // Detect compact ESPN coordinate scale so WBB and MBB plot consistently.
+  const maxAbsX = shots.reduce((m, s) => Math.max(m, Math.abs(Number(s && s.x) || 0)), 0);
+  const maxAbsY = shots.reduce((m, s) => Math.max(m, Math.abs(Number(s && s.y) || 0)), 0);
+  let compactMode = null;
+  if (maxAbsX <= 60 && maxAbsY <= 120) {
+    compactMode = 'espn-compact';
+  }
+
+  const normShots = shots.map(s => {
+    const c = _thNormalizeShotForCourt(s, compactMode);
+    return Object.assign({}, s, { x: c.x, y: c.y });
+  });
+
+  // Detect which basket this team attacks and compute actual basket x position.
+  // Using rim shots only on the dominant side so mixed full-season data doesn't confuse the calc.
+  const rimShots = normShots.filter(s => s.range === 'rim');
   const avgX = rimShots.length
     ? rimShots.reduce((s, p) => s + p.x, 0) / rimShots.length
     : 470;
   const attacksLeft = avgX < 470;
+  const activeRim = rimShots.filter(s => attacksLeft ? s.x < 470 : s.x >= 470);
+  const basketX = activeRim.length
+    ? Math.round(activeRim.reduce((s, p) => s + p.x, 0) / activeRim.length)
+    : (attacksLeft ? 75 : 865);
 
   const W = 400, H = 455;
   const tW = 'rgba(255,255,255,0.35)';
   const tD = 'rgba(255,255,255,0.20)';
   const bX = 200, bY = 415, pL = 148, pR = 252, pT = 265, ftY = 265, ftR = 52;
-  const cX1 = 50, cX2 = 350, cY = 325;
+  // 3pt ellipse: rx=167 (lateral), ry=213 (depth) centered at basket (bX, bY).
+  // Derived from transform scale: 20.75ft * 1.025px/unit ≈ 213px vertical; 22ft * 0.76 ≈ 167px lateral.
+  const arc3L = bX - 167, arc3R = bX + 167, arc3T = bY - 213; // 33, 367, 202
 
   // Range colors
   const rangeColor = { rim: 'rgba(34,197,94,0.9)', jumper: 'rgba(99,179,237,0.9)', three_pointer: 'rgba(251,146,60,0.9)' };
   const rangeMissColor = { rim: 'rgba(34,197,94,0.4)', jumper: 'rgba(99,179,237,0.4)', three_pointer: 'rgba(251,146,60,0.4)' };
 
   let dots = '';
-  shots.forEach(shot => {
+  normShots.forEach(shot => {
     if (shot.range === 'free_throw') return;
-    const { x, y } = _thShotToSVG(shot, attacksLeft);
+    const { x, y } = _thShotToSVG(shot, attacksLeft, basketX);
     if (x < 0 || x > W || y < -20 || y > H + 20) return; // outside visible area
     const c  = shot.made ? (rangeColor[shot.range] || 'rgba(200,200,200,0.8)') : (rangeMissColor[shot.range] || 'rgba(200,200,200,0.35)');
     const da = `class="shot-dot" data-player="${_escAttr(shot.shooter)}" data-zone="${shot.range}" data-made="${shot.made?'1':'0'}" data-period="${shot.period||''}" data-clock="${_escAttr(shot.clock||'')}"`;
@@ -1868,7 +4042,7 @@ function _th_buildShotChartSVG(shots, teamName, color) {
 
   // Build zone stats for labels
   const zoneStats = {};
-  shots.forEach(s => {
+  normShots.forEach(s => {
     if (s.range === 'free_throw') return;
     if (!zoneStats[s.range]) zoneStats[s.range] = { made: 0, att: 0 };
     zoneStats[s.range].att++;
@@ -1885,7 +4059,7 @@ function _th_buildShotChartSVG(shots, teamName, color) {
   };
 
   const ftZ = zoneStats['free_throw'];
-  const ftStats = shots.filter(s => s.range === 'free_throw');
+  const ftStats = normShots.filter(s => s.range === 'free_throw');
   const ftMade = ftStats.filter(s => s.made).length;
   const ftAtt  = ftStats.length;
 
@@ -1900,15 +4074,15 @@ function _th_buildShotChartSVG(shots, teamName, color) {
       <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 0 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5" stroke-dasharray="4 4"/>
       <path d="M ${pL} ${ftY} A ${ftR} ${ftR} 0 0 1 ${pR} ${ftY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
       <circle cx="${bX}" cy="${bY}" r="28" fill="none" stroke="${tW}" stroke-width="1.5"/>
-      <line x1="${cX1}" y1="440" x2="${cX1}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
-      <line x1="${cX2}" y1="440" x2="${cX2}" y2="${cY}" stroke="${tW}" stroke-width="1.5"/>
-      <path d="M ${cX1} ${cY} A 187 187 0 0 0 ${cX2} ${cY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${arc3L}" y1="440" x2="${arc3L}" y2="${bY}" stroke="${tW}" stroke-width="1.5"/>
+      <line x1="${arc3R}" y1="440" x2="${arc3R}" y2="${bY}" stroke="${tW}" stroke-width="1.5"/>
+      <path d="M ${arc3L} ${bY} A 167 213 0 0 1 ${bX} ${arc3T} A 167 213 0 0 1 ${arc3R} ${bY}" fill="none" stroke="${tW}" stroke-width="1.5"/>
       <line x1="${bX-20}" y1="${bY-28}" x2="${bX+20}" y2="${bY-28}" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
       <circle cx="${bX}" cy="${bY}" r="12" fill="none" stroke="rgba(255,175,40,0.85)" stroke-width="2.5"/>
       ${dots}
-      ${zoneLbl('three_pointer', 200, 115)}
-      ${zoneLbl('jumper', 110, 300)}
-      ${zoneLbl('rim', 200, 395)}
+      ${zoneLbl('three_pointer', 200, 148)}
+      ${zoneLbl('jumper', 110, 310)}
+      ${zoneLbl('rim', 200, 438)}
     </svg>
     <div class="thShotStats">
       <span class="thShotStat" style="color:rgba(34,197,94,0.9)">● Rim ${zoneStats.rim ? Math.round(zoneStats.rim.made/zoneStats.rim.att*100)+'%' : '—'}</span>
@@ -1975,6 +4149,372 @@ function thInitShotChart(containerId) {
   thInitShotFilter(containerId);
 }
 
+// ── Recent tournament context — latest game PBP snapshot per team ───────────
+async function _thLoadRecentTournamentTeamCtx(teamName, season) {
+  if (!teamName) return null;
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const candidates = games
+    .filter(g => {
+      const hn = (g.homeTeam || '').toLowerCase();
+      const an = (g.awayTeam || '').toLowerCase();
+      const involvesTeam = hn === tn || an === tn;
+      if (!involvesTeam) return false;
+      const isFinal = (g.status || '').toLowerCase() === 'final';
+      const isTournament = g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || ''));
+      return isFinal && isTournament;
+    })
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+  if (!candidates.length) return null;
+
+  const selected = candidates.find(g => String(g.startDate || '').slice(0, 10) === todayIso) || candidates[0];
+  if (!selected || !selected.id) return null;
+
+  const allShots = typeof loadPlaysForGame === 'function'
+    ? await loadPlaysForGame(selected.id)
+    : [];
+  const shots = (allShots || []).filter(s => (s.team || '').toLowerCase() === tn);
+  const fgaShots = shots.filter(s => s.range !== 'free_throw');
+  const madeFga = fgaShots.filter(s => !!s.made).length;
+
+  function zoneAgg(range) {
+    const z = fgaShots.filter(s => s.range === range);
+    const made = z.filter(s => !!s.made).length;
+    const att = z.length;
+    return { made, att, pct: att ? Math.round(made / att * 100) : null };
+  }
+
+  const isHome = (selected.homeTeam || '').toLowerCase() === tn;
+  const ptsFor = isHome ? selected.homePoints : selected.awayPoints;
+  const ptsAgainst = isHome ? selected.awayPoints : selected.homePoints;
+  const opp = isHome ? (selected.awayTeam || '') : (selected.homeTeam || '');
+
+  return {
+    team: teamName,
+    gameId: selected.id,
+    date: selected.startDate || null,
+    opponent: opp,
+    gameType: selected.gameType || null,
+    tournament: selected.tournament || null,
+    gameNotes: selected.gameNotes || null,
+    score: {
+      for: ptsFor != null ? +ptsFor : null,
+      against: ptsAgainst != null ? +ptsAgainst : null,
+    },
+    shotProfile: {
+      fga: fgaShots.length,
+      fgm: madeFga,
+      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
+      fta: shots.filter(s => s.range === 'free_throw').length,
+      rim: zoneAgg('rim'),
+      jumper: zoneAgg('jumper'),
+      three_pointer: zoneAgg('three_pointer'),
+    },
+  };
+}
+
+async function _thLoadRecentTournamentCtx(teamA, teamB, season) {
+  const [ctxA, ctxB] = await Promise.all([
+    _thLoadRecentTournamentTeamCtx(teamA, season).catch(() => null),
+    _thLoadRecentTournamentTeamCtx(teamB, season).catch(() => null),
+  ]);
+  return {
+    asOf: new Date().toISOString(),
+    [teamA]: ctxA,
+    [teamB]: ctxB,
+  };
+}
+
+async function _thLoadTournamentIntelTeamCtx(teamName, season) {
+  if (!teamName) return null;
+  const cacheKey = (teamName + ':' + season).toLowerCase();
+  if (_thTeamIntelCache[cacheKey]) return _thTeamIntelCache[cacheKey];
+
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const seasonGames = games
+    .filter(g => {
+      const hn = (g.homeTeam || '').toLowerCase();
+      const an = (g.awayTeam || '').toLowerCase();
+      return (hn === tn || an === tn) && (g.status || '').toLowerCase() === 'final';
+    })
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+  if (!seasonGames.length) return null;
+
+  const trnGames = seasonGames
+    .filter(g => g.gameType === 'TRNMNT' || /championship|tournament|nit|ncaa/i.test(String(g.gameNotes || g.tournament || '')))
+    .slice(0, 8);
+
+  const macRecentGames = seasonGames
+    .filter(g => g.gameType === 'TRNMNT' && /MAC Championship/i.test(String(g.gameNotes || '')) && /Quarterfinal|Semifinal/i.test(String(g.gameNotes || '')))
+    .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+  const playsBundles = await Promise.all(seasonGames.map(async g => {
+    const plays = (typeof loadPlaysForGame === 'function' ? await loadPlaysForGame(g.id).catch(() => []) : []);
+    const teamPlays = (plays || []).filter(p => (p.team || '').toLowerCase() === tn);
+    const oppPlays = (plays || []).filter(p => (p.team || '').toLowerCase() !== tn);
+    return { game: g, plays: plays || [], teamPlays, oppPlays };
+  }));
+
+  const seasonTeamPlays = playsBundles.flatMap(b => b.teamPlays || []);
+  const seasonOppPlays = playsBundles.flatMap(b => b.oppPlays || []);
+  const macRecentBundles = playsBundles.filter(b => macRecentGames.some(g => g.id === b.game.id));
+  const macRecentTeamPlays = macRecentBundles.flatMap(b => b.teamPlays || []);
+
+  function zoneAgg(shots, range) {
+    const z = shots.filter(s => s.range === range);
+    const made = z.filter(s => !!s.made).length;
+    const att = z.length;
+    const miss = att - made;
+    return { made, att, miss, pct: att ? Math.round(made / att * 100) : null, missPct: att ? Math.round(miss / att * 100) : null };
+  }
+
+  function summarizeShotSet(teamShots) {
+    const fgaShots = (teamShots || []).filter(s => s.range !== 'free_throw');
+    const madeFga = fgaShots.filter(s => !!s.made).length;
+    const total = fgaShots.length || 1;
+    const rim = zoneAgg(fgaShots, 'rim');
+    const jumper = zoneAgg(fgaShots, 'jumper');
+    const three = zoneAgg(fgaShots, 'three_pointer');
+    const zones = [
+      { zone: 'rim', label: 'At Rim', ...rim, missShare: rim.miss ? Math.round(rim.miss / total * 100) : 0 },
+      { zone: 'jumper', label: 'Mid-Range', ...jumper, missShare: jumper.miss ? Math.round(jumper.miss / total * 100) : 0 },
+      { zone: 'three_pointer', label: '3PT', ...three, missShare: three.miss ? Math.round(three.miss / total * 100) : 0 },
+    ];
+    const byMissVolume = zones.slice().sort((a, b) => (b.miss || 0) - (a.miss || 0));
+    const byMissRate = zones.slice().filter(z => (z.att || 0) >= 8).sort((a, b) => (b.missPct || 0) - (a.missPct || 0));
+    return {
+      fga: fgaShots.length,
+      fgm: madeFga,
+      fgPct: fgaShots.length ? +((madeFga / fgaShots.length) * 100).toFixed(1) : null,
+      fta: (teamShots || []).filter(s => s.range === 'free_throw').length,
+      zones: { rim, jumper, three_pointer: three },
+      missHotspots: {
+        byVolume: byMissVolume,
+        byRate: byMissRate,
+        primaryMissZone: byMissVolume[0] || null,
+      },
+    };
+  }
+
+  function estPts(play) {
+    if (!play || !play.made) return 0;
+    if (play.range === 'free_throw') return 1;
+    if (play.range === 'three_pointer') return 3;
+    return 2;
+  }
+
+  function clockPhase(period, clock) {
+    const p = parseInt(period, 10) || 0;
+    if (p >= 3) return 'OT';
+    const parts = String(clock || '').split(':');
+    const mm = parseInt(parts[0], 10);
+    const rem = Number.isFinite(mm) ? mm : 0;
+    if (p === 1) {
+      if (rem > 12) return 'H1-Start';
+      if (rem > 8) return 'H1-Mid';
+      if (rem > 4) return 'H1-Late';
+      return 'H1-Close';
+    }
+    if (p === 2) {
+      if (rem > 12) return 'H2-Start';
+      if (rem > 8) return 'H2-Mid';
+      if (rem > 4) return 'H2-Late';
+      return 'H2-Close';
+    }
+    return 'Other';
+  }
+
+  const phaseAgg = {};
+  function addPhase(phase, side, pts) {
+    if (!phaseAgg[phase]) phaseAgg[phase] = { teamPts: 0, oppPts: 0, teamEvents: 0, oppEvents: 0 };
+    if (side === 'team') {
+      phaseAgg[phase].teamPts += pts;
+      phaseAgg[phase].teamEvents += 1;
+    } else {
+      phaseAgg[phase].oppPts += pts;
+      phaseAgg[phase].oppEvents += 1;
+    }
+  }
+  seasonTeamPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'team', estPts(p)));
+  seasonOppPlays.forEach(p => addPhase(clockPhase(p.period, p.clock), 'opp', estPts(p)));
+
+  const phaseRows = Object.keys(phaseAgg).map(k => {
+    const a = phaseAgg[k];
+    return {
+      phase: k,
+      teamPts: +a.teamPts.toFixed(1),
+      oppPts: +a.oppPts.toFixed(1),
+      diff: +(a.teamPts - a.oppPts).toFixed(1),
+      teamEvents: a.teamEvents,
+      oppEvents: a.oppEvents,
+    };
+  });
+
+  const timeoutWindows = phaseRows
+    .filter(r => /^H2-/.test(r.phase) && r.diff >= 3)
+    .sort((a, b) => b.diff - a.diff)
+    .slice(0, 2)
+    .map(r => ({
+      phase: r.phase,
+      avgEdge: r.diff,
+      note: teamName + ' tends to swing this segment. If they string together 2+ made shots or a quick 6-0 burst here, call timeout to disrupt pace.',
+    }));
+
+  const scoreRows = seasonGames.map(g => {
+    const isHome = (g.homeTeam || '').toLowerCase() === tn;
+    const bundle = playsBundles.find(b => b.game.id === g.id);
+    const playCount = bundle ? (bundle.plays || []).length : 0;
+    const teamPts = isHome ? g.homePoints : g.awayPoints;
+    const oppPts = isHome ? g.awayPoints : g.homePoints;
+    return {
+      id: g.id,
+      date: g.startDate || null,
+      opponent: isHome ? (g.awayTeam || '') : (g.homeTeam || ''),
+      for: teamPts,
+      against: oppPts,
+      note: g.gameNotes || null,
+      gameType: g.gameType || null,
+      result: teamPts > oppPts ? 'W' : 'L',
+      playCount: playCount,
+    };
+  });
+
+  const wins = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for > r.against).length;
+  const losses = scoreRows.filter(r => Number.isFinite(r.for) && Number.isFinite(r.against) && r.for < r.against).length;
+
+  const intel = {
+    team: teamName,
+    season: season,
+    seasonGames: seasonGames.length,
+    seasonRecord: { wins, losses },
+    tournamentGames: trnGames.length,
+    recentMacTournamentGames: macRecentGames.map(g => ({
+      id: g.id,
+      date: g.startDate || null,
+      note: g.gameNotes || null,
+      opponent: ((g.homeTeam || '').toLowerCase() === tn) ? (g.awayTeam || '') : (g.homeTeam || ''),
+    })),
+    gameResults: scoreRows,
+    seasonShotChartProfile: summarizeShotSet(seasonTeamPlays),
+    recentTournamentShotChartProfile: summarizeShotSet(macRecentTeamPlays),
+    phaseTrends: phaseRows,
+    timeoutGuidance: {
+      recommendedWhen: timeoutWindows,
+      baselineRule: 'Use early timeout if ' + teamName + ' creates a 6-0 run or 3 made scoring events in ~2 minutes, especially in H2-Late/H2-Close.',
+    },
+    pbpCoverage: {
+      withPlays: playsBundles.filter(b => (b.plays || []).length > 0).length,
+      totalGames: playsBundles.length,
+    },
+  };
+
+  _thTeamIntelCache[cacheKey] = intel;
+  return intel;
+}
+
+async function _thLoadTournamentIntelCtx(teamA, teamB, season) {
+  const [ctxA, ctxB] = await Promise.all([
+    _thLoadTournamentIntelTeamCtx(teamA, season).catch(() => null),
+    _thLoadTournamentIntelTeamCtx(teamB, season).catch(() => null),
+  ]);
+  return {
+    asOf: new Date().toISOString(),
+    [teamA]: ctxA,
+    [teamB]: ctxB,
+  };
+}
+
+async function _thLoadDeepShotIntelForTeam(teamName, season) {
+  if (!teamName) return null;
+  const gamesData = typeof loadGamesForTeam === 'function'
+    ? await loadGamesForTeam(teamName, season)
+    : null;
+  const games = (gamesData && gamesData.games) ? gamesData.games : [];
+  if (!games.length) return null;
+
+  const tn = (teamName || '').toLowerCase();
+  const finalGames = games.filter(g => {
+    const hn = (g.homeTeam || '').toLowerCase();
+    const an = (g.awayTeam || '').toLowerCase();
+    return (hn === tn || an === tn) && (g.status || '').toLowerCase() === 'final';
+  });
+
+  const macTournamentGames = finalGames.filter(g =>
+    g.gameType === 'TRNMNT' && /MAC Championship/i.test(String(g.gameNotes || ''))
+  );
+
+  const postSeasonGames = macTournamentGames.length
+    ? macTournamentGames
+    : finalGames.filter(g => g.gameType === 'TRNMNT');
+
+  async function collectShots(gameList) {
+    const bundles = await Promise.all(gameList.map(async g => {
+      const plays = (typeof loadPlaysForGame === 'function'
+        ? await loadPlaysForGame(g.id).catch(() => [])
+        : []);
+      return (plays || []).filter(p => (p.team || '').toLowerCase() === tn);
+    }));
+    return bundles.flat();
+  }
+
+  const seasonShots = await collectShots(finalGames);
+  const postSeasonShots = await collectShots(postSeasonGames);
+
+  return {
+    team: teamName,
+    season: season,
+    seasonGames: finalGames.length,
+    postSeasonGames: postSeasonGames.length,
+    seasonShots: seasonShots,
+    postSeasonShots: postSeasonShots,
+  };
+}
+
+function _thBuildDeepShotReportHTML(aName, bName) {
+  var parts = [];
+
+  var shotIntel = _thDeepShotIntelCtx;
+  if (shotIntel && (shotIntel.team || '').toLowerCase() === (bName || '').toLowerCase()) {
+    parts.push(
+      '<div class="thMCSection">' +
+        '<div class="thMCSectionHead">📈 ' + bName + ' Shot Chart — Regular Season</div>' +
+        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Aggregated from ' + (shotIntel.seasonGames || 0) + ' final games.</div>' +
+        '<div class="thShotChartsRow">' +
+          _th_buildShotChartSVG(shotIntel.seasonShots || [], bName + ' regular season', 'var(--warn)') +
+        '</div>' +
+      '</div>'
+    );
+
+    parts.push(
+      '<div class="thMCSection">' +
+        '<div class="thMCSectionHead">🏆 ' + bName + ' Shot Chart — Tournament</div>' +
+        '<div style="padding:8px 12px;font-size:10px;color:var(--muted)">Aggregated from ' + (shotIntel.postSeasonGames || 0) + ' tournament games.</div>' +
+        '<div class="thShotChartsRow">' +
+          _th_buildShotChartSVG(shotIntel.postSeasonShots || [], bName + ' tournament', 'var(--warn)') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if (!parts.length) return '';
+  return '<div class="thDeepCharts">' + parts.join('') + '</div>';
+}
+
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
 function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
   mode = mode || 'season';
@@ -1989,9 +4529,19 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
 
   if (!allShots.length) {
     _thLastMatchupCtx = null;
+    _thLastMatchupShots = null;
     el.innerHTML = `<div class="muted" style="padding:24px;text-align:center">No play-by-play data found for ${teamA} vs ${teamB} this season.</div>`;
     return;
   }
+
+  _thLastMatchupShots = {
+    teamA: teamA,
+    teamB: teamB,
+    mode: mode,
+    gamesPlayed: gamesPlayed,
+    shotsA: shotsA,
+    shotsB: shotsB,
+  };
 
   // Per-zone accuracy comparison
   const zones = ['rim', 'jumper', 'three_pointer'];
@@ -2123,31 +4673,31 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     </div>
     <div class="thDNAInsights" style="margin-top:16px">
       <div class="thDeepAnalysisRow">
-        <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
+        <div class="thDNASectionLabel" style="margin:0">Matchup Insights</div>
         <div class="thDeepControls">
           <div class="leagueSwitch" style="gap:6px${_thIsGuest() ? ';opacity:.45;pointer-events:none' : ''}">
-            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">2.5 Lite</span>
             <label class="lsTrackWrap">
               <input type="checkbox" id="thModelSwitchInput"${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' checked' : ''}${_thIsGuest() ? ' disabled' : ''}>
               <span class="lsTrack"></span>
             </label>
-            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">🧠 Pro${_thIsGuest() ? ' 🔒' : ''}</span>
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">Pro${_thIsGuest() ? ' (Login Required)' : ''}</span>
           </div>
-          <button class="thDeepBtn" onclick="thRunDeepAnalysis()"${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? ' disabled' : ''}>${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? '🔒 Limit Reached' : '🧠 Deep Analysis' + (_thIsGuest() ? ' (' + (_TH_GUEST_DA_LIMIT - _thGuestDACount()) + '/' + _TH_GUEST_DA_LIMIT + ')' : '')}</button>
+          <button class="thDeepBtn" onclick="thRunDeepAnalysis()"${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? ' disabled' : ''}>${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? 'Limit Reached' : 'Deep Analysis' + (_thIsGuest() ? ' (' + (_TH_GUEST_DA_LIMIT - _thGuestDACount()) + '/' + _TH_GUEST_DA_LIMIT + ')' : '')}</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
         </div>
       </div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>
     <div class="thMonteCarloRow">
-      <div class="thDNASectionLabel" style="margin:0">🎲 Monte Carlo Simulation</div>
+      <div class="thDNASectionLabel" style="margin:0">Monte Carlo Simulation</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="thMCRunCount" class="thMCSelect" title="Number of simulations">
           <option value="10000" selected>10,000 runs</option>
           <option value="50000">50,000 runs</option>
           <option value="100000">100,000 runs</option>
         </select>
-        <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+        <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">Run Simulation</button>
       </div>
     </div>
     <div class="thMCAdvancedRow">
@@ -2232,10 +4782,44 @@ async function thLoadMatchup(compareTeam, mode) {
     return;
   }
 
+  // Backward-compatible fallback: older in-memory game cache may not include homeTeamId/awayTeamId.
+  // For WBB, hydrate missing team ids from /api/wbb/teams so play.teamId can still map to team names.
+  if (typeof league !== 'undefined' && league === 'WBB' && matchupGames.some(g => !g.homeTeamId || !g.awayTeamId)) {
+    try {
+      const tr = await fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(thCurrentSeason)).then(r => r.json());
+      const teamsMap = (tr && tr.teams) ? tr.teams : {};
+      const nameToId = {};
+      Object.keys(teamsMap).forEach(tid => {
+        const t = teamsMap[tid] || {};
+        [t.location, t.displayName, t.abbreviation, t.name].filter(Boolean).forEach(n => {
+          nameToId[String(n).toLowerCase()] = String(tid);
+        });
+      });
+      matchupGames.forEach(g => {
+        if (!g.homeTeamId && g.homeTeam) g.homeTeamId = nameToId[String(g.homeTeam).toLowerCase()] || '';
+        if (!g.awayTeamId && g.awayTeam) g.awayTeamId = nameToId[String(g.awayTeam).toLowerCase()] || '';
+      });
+    } catch (_) {}
+  }
+
   el.innerHTML = `<div class="muted" style="padding:20px;text-align:center">Loading play-by-play for ${matchupGames.length} game${matchupGames.length!==1?'s':''}…</div>`;
 
   const playsArrays = await Promise.all(matchupGames.map(g => loadPlaysForGame(g.id)));
-  const allShots = playsArrays.flat();
+  const allShots = [];
+  playsArrays.forEach((arr, idx) => {
+    const g = matchupGames[idx] || {};
+    const hId = String(g.homeTeamId || '');
+    const aId = String(g.awayTeamId || '');
+    const hName = g.homeTeam || '';
+    const aName = g.awayTeam || '';
+    (arr || []).forEach(p => {
+      const tid = String(p && p.teamId || '');
+      const mappedTeam = tid && hId && aId
+        ? (tid === hId ? hName : (tid === aId ? aName : (p.team || '')))
+        : (p.team || '');
+      allShots.push(Object.assign({}, p, { team: mappedTeam }));
+    });
+  });
 
   const boxScores = matchupGames.map(g => {
     const tn = (thCurrentTeam || '').toLowerCase();
@@ -2267,9 +4851,8 @@ function thLoadOpponent(teamName) {
   if (typeof clearWarn === 'function') clearWarn();
 
   // Navigate to Team Builder → Opponent tab
-  const tbNavBtn  = document.querySelector('.pageNavBtn[data-page="pageTeamBuilder"]');
   const oppSubBtn = document.querySelector('.tbSubBtn[data-sub="tbSubOpponent"]');
-  if (tbNavBtn)  tbNavBtn.click();
+  if (typeof showDashboardPage === 'function') showDashboardPage('pageTeamBuilder', 'pageTeams');
   setTimeout(() => { if (oppSubBtn) oppSubBtn.click(); }, 80);
 }
 
@@ -2282,13 +4865,18 @@ async function thLoadTeam(teamName, season) {
   thCurrentCompareTeam = '';
   _thCompareStats = null;
   _thLastMatchupCtx = null;
+  _thLastMatchupShots = null;
+  _thRecentTournamentCtx = null;
+  _thTournamentIntelCtx = null;
+  _thTeamIntelCache = {};
+  _thDeepShotIntelCtx = null;
   _thLoading('Loading team data…');
 
   const teamKey  = (teamName || '').toLowerCase();
   const teamData = teamRatings[teamKey] || null;
 
   // Show overview immediately while rest loads in parallel
-  thRenderOverview(teamData, null);
+  thRenderOverview(teamData, null, null);
   const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
     document.getElementById('thDNA'), document.getElementById('thCompare'),
     document.getElementById('thMatchup'), document.getElementById('thScout')];
@@ -2300,11 +4888,16 @@ async function thLoadTeam(teamName, season) {
     loadTeamStats(teamName, thCurrentSeason),
     loadTeamShootingZones(teamName, thCurrentSeason),
   ]);
+  let wbbStandings = null;
+  if (typeof league !== 'undefined' && league === 'WBB') {
+    const confName = (teamData && teamData.conference) ? teamData.conference : _thFindWbbConferenceForTeam(teamName);
+    wbbStandings = await _thBuildWbbConferenceStandings(confName, thCurrentSeason);
+  }
   _thCurrentStats = statsData;
   _thLoading('');
 
-  thRenderOverview(teamData, gamesData);
-  thRenderThreats(teamData, gamesData);
+  thRenderOverview(teamData, gamesData, statsData);
+  thRenderThreats(teamData, gamesData, wbbStandings);
   thRenderGameLog(teamData, gamesData);
   thRenderH2H(teamData, gamesData);
   thRenderDNA(teamData, statsData, shootingData);
@@ -2331,6 +4924,7 @@ function thPopulateTeams() {
   const cmpEl = document.getElementById('thCompareTeam');
   if (cmpEl) cmpEl.innerHTML = '<option value="">— Select opponent team —</option>' +
     teams.map(t => `<option value="${t.replace(/"/g,'&quot;')}">${t}</option>`).join('');
+  _thPopulateBracketTeamSelects();
 }
 
 // ── Refresh dropdown when player data changes (called from app.js) ────────────
@@ -2342,6 +4936,7 @@ function thRefreshTeamList() {
 function initTeamsPage() {
   initTeamsDOMRefs();
   thPopulateTeams();
+  _thSyncWarRoomLauncher();
 
   if (thLoadBtn) {
     thLoadBtn.addEventListener('click', () => {
@@ -2351,11 +4946,80 @@ function initTeamsPage() {
       thLoadTeam(team, season);
     });
   }
+  if (thValueLabBtn) {
+    thValueLabBtn.addEventListener('click', function () {
+      var team = thCurrentTeam || (thTeamSearch ? thTeamSearch.value : '');
+      if (!team) {
+        if (typeof showWarn === 'function') showWarn('Select or load a team first, then open Value Lab.');
+        return;
+      }
+      if (window.ValueLab && typeof window.ValueLab.openActualTeam === 'function') {
+        window.ValueLab.openActualTeam(team);
+      } else if (typeof showDashboardPage === 'function') {
+        showDashboardPage('pageValueLab');
+      }
+    });
+  }
 
   // Compare button
   const thCompareBtn = document.getElementById('thCompareBtn');
   if (thCompareBtn) {
     thCompareBtn.addEventListener('click', () => thLoadCompare());
+  }
+
+  if (thBracketSelectEl) {
+    thBracketSelectEl.addEventListener('change', function () {
+      _thBracketState.activeId = thBracketSelectEl.value || '';
+      _thSaveBracketState();
+      _thRenderBracketWorkspace();
+    });
+  }
+  if (thBracketNameEl) {
+    thBracketNameEl.addEventListener('change', _thCommitBracketMeta);
+  }
+  if (thBracketSeasonEl) {
+    thBracketSeasonEl.addEventListener('change', _thCommitBracketMeta);
+  }
+  var newBtn = document.getElementById('thBracketNewBtn');
+  if (newBtn) newBtn.addEventListener('click', _thCreateBracket);
+  var dupBtn = document.getElementById('thBracketDuplicateBtn');
+  if (dupBtn) dupBtn.addEventListener('click', _thDuplicateBracket);
+  var delBtn = document.getElementById('thBracketDeleteBtn');
+  if (delBtn) delBtn.addEventListener('click', _thDeleteBracket);
+  var addBtn = document.getElementById('thBracketAddBtn');
+  if (addBtn) addBtn.addEventListener('click', function () {
+    _thAddBracketTeam(
+      thBracketTeamAddEl ? thBracketTeamAddEl.value : '',
+      thBracketSeedAddEl ? thBracketSeedAddEl.value : 1,
+      thBracketRegionAddEl ? thBracketRegionAddEl.value : 'South'
+    );
+  });
+  var importBtn = document.getElementById('thBracketImportBtn');
+  if (importBtn) importBtn.addEventListener('click', _thImportBracketTeams);
+  var build64Btn = document.getElementById('thBracketBuild64Btn');
+  if (build64Btn) build64Btn.addEventListener('click', _thBuildEmpty64Bracket);
+  var preset2026Btn = document.getElementById('thBracketPreset2026Btn');
+  if (preset2026Btn) preset2026Btn.addEventListener('click', _thLoadEspn2026Preset);
+  var autofillBtn = document.getElementById('thBracketAutofillSeedsBtn');
+  if (autofillBtn) autofillBtn.addEventListener('click', _thAutofillBracketBySeedList);
+  var clearTeamsBtn = document.getElementById('thBracketClearTeamsBtn');
+  if (clearTeamsBtn) clearTeamsBtn.addEventListener('click', _thClearBracketTeams);
+  var simBtn = document.getElementById('thBracketSimBtn');
+  if (simBtn) simBtn.addEventListener('click', _thRunBracketSimulation);
+  var analyzeBtn = document.getElementById('thBracketAnalyzeBtn');
+  if (analyzeBtn) analyzeBtn.addEventListener('click', _thRunBracketAIAnalysis);
+  var pdfBtn = document.getElementById('thBracketPdfBtn');
+  if (pdfBtn) pdfBtn.addEventListener('click', _thOpenBracketPdfReport);
+  var playInCancelBtn = document.getElementById('thBracketPlayInCancelBtn');
+  if (playInCancelBtn) playInCancelBtn.addEventListener('click', _thClosePlayInModal);
+  var playInSaveBtn = document.getElementById('thBracketPlayInSaveBtn');
+  if (playInSaveBtn) playInSaveBtn.addEventListener('click', _thSavePlayInModal);
+  if (thBracketPlayInModalEl) {
+    thBracketPlayInModalEl.addEventListener('click', function (e) {
+      if (e.target === thBracketPlayInModalEl || (e.target && e.target.getAttribute && e.target.getAttribute('data-playin-close') === '1')) {
+        _thClosePlayInModal();
+      }
+    });
   }
 
   // Allow pressing Enter in team search select (or hitting Enter in season input)
@@ -2372,6 +5036,10 @@ class TeamHub {
   refreshTeamList()             { return thRefreshTeamList(); }
   loadTeam(name, season)        { return thLoadTeam(name, season); }
   loadOpponent(teamName)        { return thLoadOpponent(teamName); }
+  getCurrentTeam()              { return thCurrentTeam; }
+  getCurrentSeason()            { return thCurrentSeason; }
+  refreshTournamentHub()        { return _thScheduleBracketWorkspaceRender(); }
+  refreshTournamentLauncher()   { return _thSyncWarRoomLauncher(); }
 }
 
 window.TeamHub = new TeamHub();

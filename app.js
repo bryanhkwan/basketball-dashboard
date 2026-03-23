@@ -94,7 +94,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Conference multiplier listeners
   confMultToggleEl.addEventListener('change', ()=>{
     renderConfMultTable();
-    if(wb) computeAll();
+    if(wb) requestComputeAll(0);
   });
   resetConfMultBtn.addEventListener('click', ()=>{
     confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
@@ -136,11 +136,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if(wb) { computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)})); renderPlayers(); }
   });
 
-  // Refresh data — MBB always from CBD API, WBB always from Google Sheets
+  // Refresh data — MBB from CBD API, WBB from ESPN/worker-backed sources
   if (loadGsBtn) {
     loadGsBtn.addEventListener('click', async () => {
-      var seasonEl = document.getElementById('cbdSeason');
-      var seasonVal = seasonEl ? (seasonEl.value || '2026') : '2026';
+      var seasonVal = typeof getDashboardSelectedSeason === 'function'
+        ? getDashboardSelectedSeason('2026')
+        : '2026';
       await loadAllData(seasonVal);
       if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     });
@@ -155,7 +156,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   resetValBtn.addEventListener('click', ()=>{
     applyLeagueDefaults(true);
-    starValueEl.value = 100000;
     starPctEl.value = 0.95;
     mpModeEl.value = 'on';
     mpPctEl.value = 0.95;
@@ -167,8 +167,9 @@ window.addEventListener('DOMContentLoaded', () => {
   advancedDirEl.addEventListener('change', renderWeights);
 
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
-    el.addEventListener('input', ()=>{ if(wb) computeAll(); });
-    el.addEventListener('change', ()=>{ if(wb) computeAll(); });
+    if(!el) return;
+    el.addEventListener('input', ()=>{ if(wb) requestComputeAll(120); });
+    el.addEventListener('change', ()=>{ if(wb) requestComputeAll(0); });
   });
 
   // Team builder listeners
@@ -179,7 +180,8 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   tbWeakThreshEl.addEventListener('input', () => {
     tbWeakThreshLabelEl.textContent = tbWeakThreshEl.value + 'th';
-    tbRefresh();
+    if(typeof tbScheduleRefresh === 'function') tbScheduleRefresh(90);
+    else tbRefresh();
   });
 
   // Page navigation
@@ -188,6 +190,9 @@ window.addEventListener('DOMContentLoaded', () => {
   initTeamsPage();
   initFavsPage();
   initSharesPage();
+  if (typeof initLabPage === 'function') initLabPage();
+  if (typeof initValueLabPage === 'function') initValueLabPage();
+  if (typeof initPortalPage === 'function') initPortalPage();
 
   // Quick add widgets (roster + opponent)
   setupQuickAdd('tbQuickAddInput',  'tbQuickAddDropdown',  tbAddPlayer,  () => tbRoster);
@@ -239,4 +244,12 @@ window._app = {
   loadGamesForTeam,
   loadShootingForTeam,
   thLoadOpponent,
+  // Draft model
+  draftProbability:    typeof draftProbability === 'function' ? draftProbability : function(){ return null; },
+  draftGrade:          typeof draftGrade === 'function' ? draftGrade : function(){ return '—'; },
+  draftRangeLabel:     typeof draftRangeLabel === 'function' ? draftRangeLabel : function(){ return '—'; },
+  draftFactors:        typeof draftFactors === 'function' ? draftFactors : function(){ return []; },
+  draftDevelopmentRecs:typeof draftDevelopmentRecs === 'function' ? draftDevelopmentRecs : function(){ return []; },
+  draftComparables:    typeof draftComparables === 'function' ? draftComparables : function(){ return []; },
+  draftInsights:       typeof draftInsights === 'function' ? draftInsights : function(){ return []; },
 };

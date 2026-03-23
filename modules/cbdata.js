@@ -4,6 +4,7 @@
 // Dependencies: none (standalone module)
 
 var CB_PROXY_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/api/proxy';
+var CB_WORKER_BASE = CB_PROXY_BASE.replace(/\/api\/proxy$/, '');
 
 // ── Endpoint definitions ─────────────────────────────────────────────────────
 // Each entry: { id, label, path, pathParams, queryParams, description }
@@ -415,17 +416,160 @@ var _cbPage = 0;
 var CB_PAGE_SIZE = 50;
 
 // ── Fetch helper ─────────────────────────────────────────────────────────────
-async function cbFetch(path, params) {
+function _cbBuildQuery(params) {
   var qs = '';
-  if(params && Object.keys(params).length){
+  if (params && Object.keys(params).length) {
     var parts = [];
-    Object.keys(params).forEach(function(k){
-      if(params[k] !== '' && params[k] !== null && params[k] !== undefined){
+    Object.keys(params).forEach(function(k) {
+      if (params[k] !== '' && params[k] !== null && params[k] !== undefined) {
         parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
       }
     });
-    if(parts.length) qs = '?' + parts.join('&');
+    if (parts.length) qs = '?' + parts.join('&');
   }
+  return qs;
+}
+
+function _cbFilterRows(rows, predicate) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(predicate);
+}
+
+function _cbUseCachedRoute(path, params) {
+  var year = params && params.year ? String(params.year).trim() : '';
+  var team = params && params.team ? String(params.team).trim() : '';
+  var gameId = params && params.gameId ? String(params.gameId).trim() : '';
+  var pathGameMatch = String(path || '').match(/^\/plays\/game\/([^/?#]+)/);
+  if (!gameId && pathGameMatch && pathGameMatch[1]) gameId = decodeURIComponent(pathGameMatch[1]);
+
+  switch (path) {
+    case '/stats/player/season':
+      if (!year) return null;
+      if (params.team || params.conference || params.playerId) {
+        return {
+          url: CB_WORKER_BASE + '/api/cbdata/players?season=' + encodeURIComponent(year),
+          pick: function(data) {
+            var rows = Array.isArray(data && data.players) ? data.players : [];
+            return _cbFilterRows(rows, function(row) {
+              if (params.team && String(row.Team || '').toLowerCase() !== String(params.team).toLowerCase()) return false;
+              if (params.conference && String(row.Conference || '').toLowerCase() !== String(params.conference).toLowerCase()) return false;
+              if (params.playerId) return false;
+              return true;
+            });
+          }
+        };
+      }
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/players?season=' + encodeURIComponent(year),
+        pick: function(data) { return Array.isArray(data && data.players) ? data.players : []; }
+      };
+
+    case '/stats/player/shooting/season':
+      if (!year || !team || params.conference || params.playerId) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/shooting?season=' + encodeURIComponent(year) + '&team=' + encodeURIComponent(team),
+        pick: function(data) { return Array.isArray(data && data.players) ? data.players : []; }
+      };
+
+    case '/stats/team/season':
+      if (!year || !team || params.conference) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/teamstats?season=' + encodeURIComponent(year) + '&team=' + encodeURIComponent(team),
+        pick: function(data) {
+          return data && data.stats ? [data.stats] : [];
+        }
+      };
+
+    case '/stats/team/shooting/season':
+      if (!year || !team || params.conference) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/teamshooting?season=' + encodeURIComponent(year) + '&team=' + encodeURIComponent(team),
+        pick: function(data) {
+          return data && data.shooting ? [data.shooting] : [];
+        }
+      };
+
+    case '/games':
+      if (!year || !team || params.conference || params.home || params.away || params.id || params.seasonType) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/games?season=' + encodeURIComponent(year) + '&team=' + encodeURIComponent(team),
+        pick: function(data) { return Array.isArray(data && data.games) ? data.games : []; }
+      };
+
+    case '/games/teams':
+      if (!year || !team || params.conference || params.gameId || params.seasonType) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/games?season=' + encodeURIComponent(year) + '&team=' + encodeURIComponent(team),
+        pick: function(data) { return Array.isArray(data && data.teamStats) ? data.teamStats : []; }
+      };
+
+    case '/ratings/srs':
+    case '/ratings/adjusted':
+      if (!year) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/ratings?season=' + encodeURIComponent(year),
+        pick: function(data) {
+          var rows = Array.isArray(data && data.teams) ? data.teams : [];
+          return _cbFilterRows(rows, function(row) {
+            if (params.team && String(row.team || '').toLowerCase() !== String(params.team).toLowerCase()) return false;
+            if (params.conference && String(row.conference || '').toLowerCase() !== String(params.conference).toLowerCase()) return false;
+            return true;
+          });
+        }
+      };
+
+    case '/recruiting/players':
+      if (!year) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/recruiting?seasons=' + encodeURIComponent(year),
+        pick: function(data) {
+          var rows = Array.isArray(data && data.recruits) ? data.recruits : [];
+          return _cbFilterRows(rows, function(row) {
+            if (params.team && String(row.team || '').toLowerCase() !== String(params.team).toLowerCase()) return false;
+            if (params.position && String(row.position || '').toLowerCase() !== String(params.position).toLowerCase()) return false;
+            return true;
+          });
+        }
+      };
+
+    case '/draft/picks':
+      if (!year) return null;
+      return {
+        url: CB_WORKER_BASE + '/api/cbdata/draft?year=' + encodeURIComponent(year),
+        pick: function(data) {
+          var rows = Array.isArray(data && data.picks) ? data.picks : [];
+          return _cbFilterRows(rows, function(row) {
+            if (params.team && String(row.collegeTeam || '').toLowerCase() !== String(params.team).toLowerCase()) return false;
+            if (params.position && String(row.position || '').toLowerCase() !== String(params.position).toLowerCase()) return false;
+            return true;
+          });
+        }
+      };
+  }
+
+  if (gameId && String(path || '').indexOf('/plays/game/') === 0) {
+    return {
+      url: CB_WORKER_BASE + '/api/cbdata/plays?gameId=' + encodeURIComponent(gameId),
+      pick: function(data) { return Array.isArray(data && data.plays) ? data.plays : []; }
+    };
+  }
+
+  return null;
+}
+
+async function cbFetch(path, params) {
+  var cached = _cbUseCachedRoute(path, params || {});
+  if (cached && cached.url) {
+    var cachedResp = await fetch(cached.url);
+    if (!cachedResp.ok) {
+      var cachedErrText = await cachedResp.text();
+      throw new Error('HTTP ' + cachedResp.status + ': ' + cachedErrText.slice(0, 200));
+    }
+    var cachedData = await cachedResp.json();
+    return typeof cached.pick === 'function' ? cached.pick(cachedData) : cachedData;
+  }
+
+  var qs = _cbBuildQuery(params);
   var url = CB_PROXY_BASE + path + qs;
   var resp = await fetch(url);
   if(!resp.ok){
