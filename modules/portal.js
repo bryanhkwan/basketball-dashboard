@@ -1315,6 +1315,10 @@ async function portalRunAIAnalysis() {
   if (portalAIDownloadBtn) portalAIDownloadBtn.disabled = true;
   portalAIOutputEl.style.display = 'block';
 
+  var isWbb = portalCurrentLeague() === 'WBB';
+  var leagueTag = isWbb ? 'WBB' : 'MBB';
+  var sportLabel = isWbb ? 'women\'s college basketball' : 'men\'s college basketball';
+  var sportLabelShort = isWbb ? 'women\'s basketball' : 'men\'s basketball';
   var teamName = portalTeamCtx.team;
   var season = portalTeamCtx.season || portalTargetSeason;
   var departures = portalSelectedDepartureNames.slice();
@@ -1433,10 +1437,10 @@ async function portalRunAIAnalysis() {
   recommendedProfiles.forEach(function (r, i) { r.rank = i + 1; });
 
   // ── Phase 2: Build deep analysis context ──
-  portalSetAIStatus('Running deep analysis with Gemini...');
+  portalSetAIStatus('Running ' + sportLabelShort + ' portal analysis with Gemini...');
   portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Analyzing ' +
     departures.length + ' departure' + (departures.length !== 1 ? 's' : '') +
-    ' and ' + recommendedProfiles.length + ' replacement candidates...</div>';
+    ' and ' + recommendedProfiles.length + ' replacement candidates for ' + sportLabelShort + '...</div>';
 
   var deepCtx = {
     team: teamName,
@@ -1450,24 +1454,30 @@ async function portalRunAIAnalysis() {
   };
 
   var prompt =
-    'You are an elite college basketball roster strategist and transfer portal analyst. ' +
+    'You are an elite ' + sportLabel + ' roster strategist and transfer portal analyst. ' +
     'Analyze the following team situation in depth using ALL the structured data provided.\n\n' +
     '## Context\n' +
-    '**' + teamName + '** (' + season + ' season) has ' + departures.length +
+    '**' + teamName + '** (' + season + ' season, ' + leagueTag + ') has ' + departures.length +
     ' player' + (departures.length !== 1 ? 's' : '') + ' departing via the transfer portal. ' +
     'Your job is to evaluate the top ' + recommendedProfiles.length + ' portal replacement candidates.\n\n' +
     '## Instructions\n' +
+    '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
     '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
     '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats and shooting profile against what was lost.\n' +
     '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
     '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
     '- Give a practical priority order: who to pursue first and why.\n' +
-    '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n\n' +
+    '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n' +
+    '- If shooting or zone data is missing, do not guess. Say the data is thinner there and lean on box-score production, efficiency, role, lineup fit, and team context instead.\n' +
+    '- Be direct and business-minded: note where the team is clearly upgrading, treading water, or accepting risk.\n' +
+    (isWbb
+      ? '- On the women\'s side, call out backcourt/wing/post balance, ball security, shot volume, and rebounding load when they materially change the roster outlook.\n\n'
+      : '- On the men\'s side, call out spacing, rim pressure, defensive playmaking, and glass impact when they materially change the roster outlook.\n\n') +
     'Return detailed markdown with these sections:\n' +
     '## What You Lose (per departure)\n' +
     '## Best Replacement Matches (who replaces whom and why)\n' +
     '## Combined Impact (net team improvement or regression)\n' +
-    '## Recruitment Priority (ordered action plan)\n' +
+    '## Portal Priority (ordered action plan)\n' +
     '## Risks & Watchouts\n\n' +
     '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```';
 
@@ -1489,7 +1499,7 @@ async function portalRunAIAnalysis() {
       .trim();
     if (!text) throw new Error('Empty AI response');
     portalLastAIReportText = text;
-    portalSetAIStatus('Done — analyzed ' + departures.length + ' departure(s) with shooting + game data');
+    portalSetAIStatus('Done - analyzed ' + departures.length + ' departure(s) using ' + sportLabelShort + ' team and player context');
     portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' +
       text
         .replace(/&/g, '&amp;')
