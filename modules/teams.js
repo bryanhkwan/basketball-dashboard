@@ -130,7 +130,7 @@ function _thSyncWarRoomLauncher() {
   thWarRoomLaunchBtnEl.dataset.locked = guest ? '1' : '0';
   thWarRoomLaunchBtnEl.setAttribute('aria-disabled', guest ? 'true' : 'false');
   thWarRoomLaunchBtnEl.title = guest ? 'Log in to open Tournament War Room.' : 'Open Tournament War Room';
-  thWarRoomLaunchBtnEl.textContent = guest ? '🔒 Tournament War Room (Users Only)' : '🏆 Open Tournament War Room';
+  thWarRoomLaunchBtnEl.textContent = guest ? 'Tournament War Room (Users Only)' : 'Open Tournament War Room';
   thWarRoomLaunchBtnEl.style.opacity = guest ? '0.72' : '1';
   thWarRoomLaunchBtnEl.style.cursor = guest ? 'pointer' : '';
   if (thWarRoomLockNoteEl) {
@@ -1224,7 +1224,7 @@ function _thRenderBracketWorkspace() {
   if (thBracketGateEl) {
     thBracketGateEl.style.display = guest ? '' : 'none';
     thBracketGateEl.innerHTML = guest
-      ? '<div class="thBracketLockIcon">🔒</div><div style="font-size:16px;font-weight:800;color:var(--fg);margin-bottom:6px">Tournament War Room is user-only</div><div class="muted" style="font-size:12px;max-width:560px;margin:0 auto 10px">Log in to save tournament brackets, simulate the full field, and run Gemini 3 Flash bracket analysis.</div><button class="thLoadBtn" onclick="document.getElementById(\'guestLoginBtn\').click()">Login to unlock</button>'
+      ? '<div style="font-size:16px;font-weight:800;color:var(--fg);margin-bottom:6px">Tournament War Room is user-only</div><div class="muted" style="font-size:12px;max-width:560px;margin:0 auto 10px">Log in to save tournament brackets, simulate the full field, and run Gemini 3 Flash bracket analysis.</div><button class="thLoadBtn" onclick="document.getElementById(\'guestLoginBtn\').click()">Login to unlock</button>'
       : '';
   }
   if (thBracketWorkspaceEl) thBracketWorkspaceEl.style.display = guest ? 'none' : '';
@@ -1770,7 +1770,7 @@ async function _thRunBracketAIAnalysis() {
 function thSetDeepModel(heavy) {
   // Guests cannot use the Pro model
   if (heavy && _thIsGuest()) {
-    if (typeof showWarn === 'function') showWarn('🔒 Pro model requires login. Guest users can only use 2.5 Lite.');
+    if (typeof showWarn === 'function') showWarn('Pro model requires login. Guest users can only use 2.5 Lite.');
     var cb2 = document.getElementById('thModelSwitchInput');
     if (cb2) cb2.checked = false;
     return;
@@ -2464,18 +2464,18 @@ function thRenderDNA(teamData, statsData, shootingData) {
   el.innerHTML = `
     <div class="thDNAGrid">
       <div class="thDNALeft">
-        <div class="thDNASectionLabel">🏀 Team Shooting Zones</div>
+        <div class="thDNASectionLabel">Team Shooting Zones</div>
         ${heatmapHtml}
       </div>
       <div class="thDNARight">
-        <div class="thDNASectionLabel">📊 Scoring Profile</div>
+        <div class="thDNASectionLabel">Scoring Profile</div>
         <div class="thProfCard">${profHtml || '<div class="muted">Stats unavailable</div>'}</div>
         <div style="height:16px"></div>
         ${ff4Html}
       </div>
     </div>
     <div class="thDNAInsights">
-      <div class="thDNASectionLabel">🔍 Strengths &amp; Weaknesses Analysis</div>
+      <div class="thDNASectionLabel">Strengths &amp; Weaknesses Analysis</div>
       <div class="thInsightsGrid">${insightsHtml}</div>
     </div>`;
 }
@@ -2969,7 +2969,7 @@ function thRunMonteCarloUI() {
         '</div>' +
       '</div>' +
       '<div class="thDeepBody">' + _thRenderMonteCarloHTML(mc, aName, bName, sens) + '</div>';
-    if (btn) { btn.disabled = false; btn.textContent = '🎲 Run Simulation'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Run Simulation'; }
   }, 30);
 }
 
@@ -3293,12 +3293,11 @@ async function thRunDeepAnalysis() {
     if (_thDeepUseHeavyModel) thSetDeepModel(false);
     var usedCount = _thGuestDACount();
     if (usedCount >= _TH_GUEST_DA_LIMIT) {
-      if (typeof showWarn === 'function') showWarn('🔒 Guest limit reached (' + _TH_GUEST_DA_LIMIT + '/' + _TH_GUEST_DA_LIMIT + ' Deep Analysis runs used). Log in for unlimited access.');
+      if (typeof showWarn === 'function') showWarn('Guest limit reached (' + _TH_GUEST_DA_LIMIT + '/' + _TH_GUEST_DA_LIMIT + ' Deep Analysis runs used). Log in for unlimited access.');
       var lockedOutput = document.getElementById('thDeepOutput');
       if (lockedOutput) {
         lockedOutput.style.display = 'block';
         lockedOutput.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--muted)">' +
-          '<div style="font-size:32px;margin-bottom:8px">🔒</div>' +
           '<div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px">Guest Limit Reached</div>' +
           '<div style="font-size:12px">You\'ve used all ' + _TH_GUEST_DA_LIMIT + ' free Deep Analysis runs.<br>Log in for unlimited access and the Pro model.</div>' +
         '</div>';
@@ -3911,7 +3910,7 @@ function thRenderCompare(teamA, ratA, statsA, teamB, ratB, statsB) {
       </div>` : ''}
     </div>
     <div class="thEdgeSection">
-      <div class="thDNASectionLabel">🏆 Edge Analysis</div>
+      <div class="thDNASectionLabel">Edge Analysis</div>
       <div class="thEdgeList">${edgeHtml}</div>
     </div>`;
 }
@@ -4674,31 +4673,31 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     </div>
     <div class="thDNAInsights" style="margin-top:16px">
       <div class="thDeepAnalysisRow">
-        <div class="thDNASectionLabel" style="margin:0">🎯 Matchup Insights</div>
+        <div class="thDNASectionLabel" style="margin:0">Matchup Insights</div>
         <div class="thDeepControls">
           <div class="leagueSwitch" style="gap:6px${_thIsGuest() ? ';opacity:.45;pointer-events:none' : ''}">
-            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">⚡ 2.5 Lite</span>
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? '' : ' active'}" id="thModelLblLite" style="font-size:10.5px">2.5 Lite</span>
             <label class="lsTrackWrap">
               <input type="checkbox" id="thModelSwitchInput"${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' checked' : ''}${_thIsGuest() ? ' disabled' : ''}>
               <span class="lsTrack"></span>
             </label>
-            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">🧠 Pro${_thIsGuest() ? ' 🔒' : ''}</span>
+            <span class="lsLabel${(_thDeepUseHeavyModel && !_thIsGuest()) ? ' active' : ''}" id="thModelLblHeavy" style="font-size:10.5px">Pro${_thIsGuest() ? ' (Login Required)' : ''}</span>
           </div>
-          <button class="thDeepBtn" onclick="thRunDeepAnalysis()"${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? ' disabled' : ''}>${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? '🔒 Limit Reached' : '🧠 Deep Analysis' + (_thIsGuest() ? ' (' + (_TH_GUEST_DA_LIMIT - _thGuestDACount()) + '/' + _TH_GUEST_DA_LIMIT + ')' : '')}</button>
+          <button class="thDeepBtn" onclick="thRunDeepAnalysis()"${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? ' disabled' : ''}>${(_thIsGuest() && _thGuestDACount() >= _TH_GUEST_DA_LIMIT) ? 'Limit Reached' : 'Deep Analysis' + (_thIsGuest() ? ' (' + (_TH_GUEST_DA_LIMIT - _thGuestDACount()) + '/' + _TH_GUEST_DA_LIMIT + ')' : '')}</button>
           <span id="thDeepAnalysisStatus" style="font-size:10px;color:var(--muted);white-space:nowrap"></span>
         </div>
       </div>
       <div class="thInsightsGrid">${insightHtml}</div>
     </div>
     <div class="thMonteCarloRow">
-      <div class="thDNASectionLabel" style="margin:0">🎲 Monte Carlo Simulation</div>
+      <div class="thDNASectionLabel" style="margin:0">Monte Carlo Simulation</div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="thMCRunCount" class="thMCSelect" title="Number of simulations">
           <option value="10000" selected>10,000 runs</option>
           <option value="50000">50,000 runs</option>
           <option value="100000">100,000 runs</option>
         </select>
-        <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">🎲 Run Simulation</button>
+        <button id="thMonteCarloBtn" class="thDeepBtn" style="background:rgba(124,58,237,.14)" onclick="thRunMonteCarloUI()">Run Simulation</button>
       </div>
     </div>
     <div class="thMCAdvancedRow">
