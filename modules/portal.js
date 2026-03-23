@@ -11,10 +11,11 @@ var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
 var portalWatchAlertWrapEl, favsPortalAlertWrapEl, favsPortalBadgeEl;
+var portalBoardSubtitleEl, portalSnapshotWrapEl, portalSnapshotLabelEl, portalBoardHintEl, portalFitSubtitleEl, portalAISubtitleEl;
 
 var portalTeamCtx = null;
 var portalRecDist = null;
-var portalAllMbbPlayers = [];
+var portalAllPlayers = [];
 var portalTargetSeason = '2026';
 var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
@@ -59,6 +60,63 @@ function initPortalDOMRefs() {
   portalWatchAlertWrapEl = document.getElementById('portalWatchAlertWrap');
   favsPortalAlertWrapEl = document.getElementById('favsPortalAlertWrap');
   favsPortalBadgeEl = document.getElementById('favsPortalBadge');
+  portalBoardSubtitleEl = document.getElementById('portalBoardSubtitle');
+  portalSnapshotWrapEl = document.getElementById('portalSnapshotWrap');
+  portalSnapshotLabelEl = document.getElementById('portalSnapshotLabel');
+  portalBoardHintEl = document.getElementById('portalBoardHint');
+  portalFitSubtitleEl = document.getElementById('portalFitSubtitle');
+  portalAISubtitleEl = document.getElementById('portalAISubtitle');
+}
+
+function portalCurrentLeague() {
+  var lg = (typeof league !== 'undefined' && league) ? String(league).toUpperCase() : 'MBB';
+  return lg === 'WBB' ? 'WBB' : 'MBB';
+}
+
+function portalCurrentSport() {
+  return portalCurrentLeague() === 'WBB' ? 'wbb' : 'mbb';
+}
+
+function portalSyncLeagueUI() {
+  var isWbb = portalCurrentLeague() === 'WBB';
+  if (portalBoardSubtitleEl) {
+    portalBoardSubtitleEl.textContent = isWbb
+      ? 'Live On3 transfer intel feed with player-name matching to your loaded WBB pool.'
+      : 'Live transfer intel feed with player-name matching to your loaded player pool.';
+  }
+  if (portalSnapshotWrapEl) {
+    portalSnapshotWrapEl.style.display = isWbb ? 'none' : '';
+  }
+  if (portalSnapshotLabelEl) {
+    portalSnapshotLabelEl.textContent = 'Auto-merge local 247 snapshot';
+  }
+  if (portalUseSnapshotEl) {
+    portalUseSnapshotEl.disabled = isWbb;
+    if (isWbb) {
+      portalUseSnapshotEl.checked = false;
+    } else {
+      try {
+        var saved = localStorage.getItem(portalUserStorageKey('snapshot_pref'));
+        if (saved === '0') portalUseSnapshotEl.checked = false;
+        else if (saved === '1') portalUseSnapshotEl.checked = true;
+      } catch (_) {}
+    }
+  }
+  if (portalBoardHintEl) {
+    portalBoardHintEl.textContent = isWbb
+      ? 'Shows women\'s transfer portal entries from the live On3 feed and matches names back to your loaded WBB player pool.'
+      : 'Shows real transfer portal entries from the live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.';
+  }
+  if (portalFitSubtitleEl) {
+    portalFitSubtitleEl.textContent = isWbb
+      ? 'Select your team, flag the players you could lose, and rank the best On3 portal fits for that roster.'
+      : 'Select your team, pick the player you know is leaving, and find the best portal upgrades for that spot — before it\'s official.';
+  }
+  if (portalAISubtitleEl) {
+    portalAISubtitleEl.textContent = isWbb
+      ? 'Deep analysis using WBB player stats, game logs, and team context from the dashboard data stack. Covers all selected departures.'
+      : 'Deep analysis using player stats, game logs, and team context from the dashboard data stack. Covers all selected departures.';
+  }
 }
 
 function portalNorm(s) {
@@ -74,11 +132,12 @@ function portalEsc(s) {
 }
 
 function portalGetAllPlayers() {
+  var lg = portalCurrentLeague();
   if (typeof tbGetAllPlayers === 'function') {
-    return tbGetAllPlayers('MBB') || [];
+    return tbGetAllPlayers(lg) || [];
   }
   if (window._app && typeof window._app.tbGetAllPlayers === 'function') {
-    return window._app.tbGetAllPlayers('MBB') || [];
+    return window._app.tbGetAllPlayers(lg) || [];
   }
   return [];
 }
@@ -236,9 +295,9 @@ function portalPctFromSorted(sorted, val) {
   return p < 0 ? 0 : (p > 1 ? 1 : p);
 }
 
-function portalCollectAllMbbPlayers() {
-  portalAllMbbPlayers = portalGetAllPlayers() || [];
-  return portalAllMbbPlayers;
+function portalCollectAllPlayers() {
+  portalAllPlayers = portalGetAllPlayers() || [];
+  return portalAllPlayers;
 }
 
 function portalBuildDistributions(players) {
@@ -473,7 +532,7 @@ function portalToggleDeparture(name) {
   }
   // Rerun recommendations
   if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length) {
-    var players = portalCollectAllMbbPlayers();
+    var players = portalCollectAllPlayers();
     portalRecDist = portalBuildDistributions(players);
     portalComputeRecommendations();
     portalRenderRecommendations();
@@ -521,6 +580,7 @@ function portalSaveSeenAlertsMap(map) {
 
 function portalEntryKey(it) {
   return [
+    portalNorm(it && it.sport ? it.sport : portalCurrentSport()),
     portalNorm(it && it.playerName),
     portalNorm(it && it.fromTeam),
     portalNorm(it && it.status),
@@ -562,7 +622,7 @@ function portalBuildWatchAlerts() {
     : [];
   var alerts = [];
   favs.forEach(function (fav) {
-    if (String(fav.league || 'MBB') !== 'MBB') return;
+    if (String(fav.league || 'MBB').toUpperCase() !== portalCurrentLeague()) return;
     var matched = portalFavoritePortalMatch(fav);
     if (!matched || !matched.entry) return;
     alerts.push({
@@ -742,14 +802,14 @@ async function portalLoadTeamContext(teamName) {
     if (typeof loadTeamShootingZones === 'function') zones = await loadTeamShootingZones(teamName, season);
   } catch (_) {}
 
-  var roster = (portalAllMbbPlayers || []).filter(function (p) {
+  var roster = (portalAllPlayers || []).filter(function (p) {
     return portalNorm(portalGetPlayerTeam(p)) === portalNorm(teamName);
   });
 
   // If no roster found, try to collect players again (in case they loaded after team dropdown was built)
   if (!roster.length && portalGetAllPlayers) {
-    portalCollectAllMbbPlayers();
-    roster = (portalAllMbbPlayers || []).filter(function (p) {
+    portalCollectAllPlayers();
+    roster = (portalAllPlayers || []).filter(function (p) {
       return portalNorm(portalGetPlayerTeam(p)) === portalNorm(teamName);
     });
   }
@@ -1260,9 +1320,9 @@ async function portalRunAIAnalysis() {
   var departures = portalSelectedDepartureNames.slice();
   var topPicks = (portalRecRows || []).slice(0, 8);
 
-  // ── Phase 1: Fetch CBD API data for deep analysis ──
-  portalSetAIStatus('Fetching shooting data for ' + teamName + '...');
-  portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Gathering advanced data from CBD API...</div>';
+  // ── Phase 1: Fetch supporting player/team data for deep analysis ──
+  portalSetAIStatus('Fetching player and team context for ' + teamName + '...');
+  portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Gathering advanced player and team data...</div>';
 
   var teamShooting = [];
   var picksShooting = {};
@@ -1283,7 +1343,7 @@ async function portalRunAIAnalysis() {
   });
   var pickTeamKeys = Object.keys(pickTeams);
 
-  portalSetAIStatus('Fetching shooting data for ' + pickTeamKeys.length + ' source team(s)...');
+  portalSetAIStatus('Fetching source-team context for ' + pickTeamKeys.length + ' team(s)...');
   for (var ti = 0; ti < pickTeamKeys.length; ti++) {
     try {
       if (typeof loadShootingForTeam === 'function') {
@@ -1455,7 +1515,7 @@ async function portalRunAIAnalysis() {
 
 function portalRefreshTeamOptions() {
   if (!portalRecTeamEl) return;
-  var players = portalCollectAllMbbPlayers();
+  var players = portalCollectAllPlayers();
   var teamMap = {};
   players.forEach(function (p) {
     var t = portalGetPlayerTeam(p);
@@ -1493,7 +1553,7 @@ async function portalRunRecommendations() {
     await portalLoadTeamContext(portalRecTeamEl.value);
   }
 
-  var players = portalCollectAllMbbPlayers();
+  var players = portalCollectAllPlayers();
   portalRecDist = portalBuildDistributions(players);
   // Re-detect departures in case portal items loaded after team selection
   if (portalTeamCtx && portalTeamCtx.roster) {
@@ -1506,6 +1566,7 @@ async function portalRunRecommendations() {
 }
 
 function portalUseSnapshotEnabled() {
+  if (portalCurrentLeague() === 'WBB') return false;
   if (portalUseSnapshotEl && portalUseSnapshotEl.checked) return true;
   try {
     var params = new URLSearchParams(window.location.search || '');
@@ -1707,31 +1768,20 @@ function portalRenderTable() {
 
 async function loadPortalEntries() {
   if (!portalTableBodyEl) return;
-
-  if (typeof league !== 'undefined' && league === 'WBB') {
-    portalItems = [];
-    portalFiltered = [];
-    portalWatchAlerts = [];
-    portalRenderTable();
-    portalRenderWatchAlerts();
-    portalSetStatus('MBB source only');
-    if (portalEmptyEl) {
-      portalEmptyEl.style.display = '';
-      portalEmptyEl.textContent = 'Portal board currently supports MBB feed. Switch to MBB to view candidates.';
-    }
-    return;
-  }
+  portalSyncLeagueUI();
 
   var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || 'https://hidden-salad-773b.bryanhkwan.workers.dev';
   var q = (portalSearchInputEl && portalSearchInputEl.value) || '';
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
   var year = portalGetSeason();
+  var sport = portalCurrentSport();
+  var preferredSource = sport === 'wbb' ? 'on3' : 'both';
   portalTargetSeason = year;
 
   function makeUrl(src) {
     var u = new URL(base + '/api/portal/entries');
     u.searchParams.set('source', src);
-    u.searchParams.set('sport', 'mbb');
+    u.searchParams.set('sport', sport);
     u.searchParams.set('year', year);
     u.searchParams.set('limit', '100');
     u.searchParams.set('page', '1');
@@ -1745,7 +1795,7 @@ async function loadPortalEntries() {
   if (portalRefreshBtnEl) portalRefreshBtnEl.disabled = true;
 
   try {
-    var usedSource = 'both';
+    var usedSource = preferredSource;
     var resp = await fetch(makeUrl(usedSource).toString());
     if (!resp.ok) {
       usedSource = 'on3';
@@ -1757,10 +1807,11 @@ async function loadPortalEntries() {
     var apiItems = Array.isArray(data.items) ? data.items : [];
     var summary = (data && data.sourceSummary) ? data.sourceSummary : {};
     var snapshotInfo = { items: [], path: '' };
+    var snapshotAllowed = sport !== 'wbb';
 
     // Auto-load snapshot as fallback if live feed returned nothing
-    var autoSnapshotFallback = apiItems.length === 0 && !portalUseSnapshotEnabled();
-    if (portalUseSnapshotEnabled() || autoSnapshotFallback) {
+    var autoSnapshotFallback = snapshotAllowed && apiItems.length === 0 && !portalUseSnapshotEnabled();
+    if (snapshotAllowed && (portalUseSnapshotEnabled() || autoSnapshotFallback)) {
       snapshotInfo = await portalLoadSnapshot(year);
       if (snapshotInfo.items.length) {
         snapshotInfo.items = snapshotInfo.items.filter(function (it) {
@@ -1793,10 +1844,10 @@ async function loadPortalEntries() {
       });
       if (parts.length) sourcePart += ' (' + parts.join(', ') + ')';
     }
-    if (portalUseSnapshotEnabled() && !snapshotInfo.items.length) {
+    if (snapshotAllowed && portalUseSnapshotEnabled() && !snapshotInfo.items.length) {
       sourcePart += ' (snapshot: not found)';
     }
-    if (autoSnapshotFallback && snapshotInfo.items.length) {
+    if (snapshotAllowed && autoSnapshotFallback && snapshotInfo.items.length) {
       sourcePart += ' (live empty — using local snapshot)';
     }
     var sourceErrors = Array.isArray(data.sourceErrors) ? data.sourceErrors : [];
@@ -1829,8 +1880,9 @@ async function loadPortalEntries() {
 function initPortalPage() {
   initPortalDOMRefs();
   if (!portalRefreshBtnEl) return;
+  portalSyncLeagueUI();
 
-  if (portalUseSnapshotEl) {
+  if (portalUseSnapshotEl && portalCurrentLeague() !== 'WBB') {
     try {
       var saved = localStorage.getItem(portalUserStorageKey('snapshot_pref'));
       if (saved === '0') portalUseSnapshotEl.checked = false;

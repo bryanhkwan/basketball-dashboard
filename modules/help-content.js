@@ -91,7 +91,7 @@
       methodology: [
         {
           title: 'Portal Sources',
-          body: 'Portal entries come from your live worker pipeline and cached 247 snapshot flow, then merge into one board.'
+          body: 'MBB can merge the live worker pipeline with the cached 247 snapshot flow. WBB currently uses the live On3 women’s portal source.'
         },
         {
           title: 'Player Matching',
