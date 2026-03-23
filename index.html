@@ -27,7 +27,9 @@
   <script src="modules/lab.js" defer></script>
   <script src="modules/value-lab.js" defer></script>
   <script src="modules/chat.js" defer></script>
+  <script src="modules/help-content.js" defer></script>
   <script src="modules/tour.js" defer></script>
+  <script src="modules/help.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -137,12 +139,12 @@
     <button type="button" id="guestLoginBtn" class="primary" style="padding:6px 14px;font-size:12px;display:none">Login</button>
     <button type="button" id="logoutBtn" class="secondary" style="padding:6px 14px;font-size:12px;display:none">Logout</button>
     <button type="button" id="dashboardPrefsBtn" class="secondary" style="padding:6px 14px;font-size:12px">Customize</button>
-    <button type="button" id="tourBtn" title="Take a guided tour" aria-label="Start guided tour">?</button>
+    <button type="button" id="tourBtn" title="Open help for this page" aria-label="Open help for this page">?</button>
   </div>
   </div>
   <p class="sub">
     Click a player to open their full stat profile with percentiles, archetypes, and fit score.
-    Uses: <b>Men Data</b> and <b>Women Data</b> sheets with position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
+    Uses CBD, ESPN, worker-backed portal feeds, and position bucketing (G/G-F → Guards, F/C/F-C/C-F → Bigs).
   </p>
 </header>
 
@@ -152,7 +154,6 @@
   <button class="pageNavBtn" data-page="pagePortal">🚪 Transfer Portal</button>
   <button class="pageNavBtn" data-page="pageTeams">🏟️ Teams</button>
   <button class="pageNavBtn" data-page="pageValueLab">Value Lab</button>
-  <button class="pageNavBtn" data-page="pageMethodology">📖 Methodology</button>
   <button class="pageNavBtn" data-page="pageLab">🔬 Tournament Lab</button>
   <button class="pageNavBtn" data-page="pageFavorites">❤️ Favorites <span id="favsPortalBadge" class="sharesNavBadge" style="display:none">0</span></button>
   <button class="pageNavBtn" data-page="pageCollaborate">🤝 Collaborate <span id="sharesNavBadge" class="sharesNavBadge" style="display:none">0</span></button>
@@ -1015,195 +1016,145 @@
 </div>
 </div><!-- /pageValueLab -->
 
+
 <!-- Methodology Page -->
 <div id="pageMethodology" style="display:none">
 <div class="wrap">
   <div class="methodologyPage">
-    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">📖 Methodology</h2>
-    <p class="muted" style="font-size:13px;margin-bottom:24px">How the NCAA Scouting Dashboard calculates player value, fit scores, and team analysis.</p>
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Methodology</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:24px">This page is the deep reference for how the dashboard turns raw data into scouting, portal, value, and tournament outputs. Use the Help drawer for the short page-level version.</p>
 
     <div class="methodSection" id="methodDataSourcesSection">
-      <div class="methodHead">📡 Data Sources</div>
+      <div class="methodHead">Data Sources</div>
       <div class="methodBody">
-        <p><b>MBB</b> — Stats come from the <b>College Basketball Data (CBD) API</b> via a Cloudflare Worker proxy. Includes advanced metrics: BPM, WS/40, DRtg, ORtg, USG%, eFG%, TS%, A/TO, OR%. Player class is inferred from multi-season career history (2022–2026). Draft probability is available for MBB only.</p>
-        <p style="margin-top:10px"><b>WBB</b> — Stats come directly from the <b>ESPN WBB byathlete API</b> (CORS-friendly, fetched in-browser). Conference mapping is sourced from the ESPN groups endpoint. Player height is enriched in the background from ESPN team rosters (~10s after page load).</p>
-        <p style="margin-top:10px"><b>WBB available stats:</b> PPG, RPG, APG, SPG, BPG, FG%, 3P%, FT%, TOPG, eFG%*, TS%*, A/TO*, USG%†</p>
-        <p style="margin-top:6px"><b>WBB removed stats (not in ESPN API):</b> BPM, WS/40, DRtg, ORtg, OR%, DR% — these are dropped from WBB scoring weights entirely rather than fabricated.</p>
-        <p style="margin-top:6px;font-size:12px;color:var(--muted)">* eFG%, TS%, A/TO are derived from raw counting stats. † USG% is approximated as (FGA + 0.44×FTA + TOV) / 80.7 × 100, where 80.7 is the estimated average possession-actions per game in NCAA WBB.</p>
+        <p><b>MBB</b> - Player stats come from the <b>College Basketball Data (CBD) API</b> through the worker. The dashboard keeps CBD as the source of truth for MBB performance data, while ESPN is used only as a supplement for roster bio details like height when a clean match is available.</p>
+        <p style="margin-top:10px"><b>WBB</b> - Player stats come from ESPN's WBB by-athlete endpoints, with conference mapping, team context, and roster enrichment layered on top. Historical seasons are supported through the season picker, but older ESPN roster coverage can be thinner than current-season coverage.</p>
+        <p style="margin-top:10px"><b>Derived WBB metrics</b> - eFG%, TS%, and A/TO are derived from the available box-score data. Stats ESPN does not provide cleanly for WBB, like BPM or WS/40, are removed from WBB scoring rather than fabricated.</p>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">The dashboard intentionally prefers stable primary data for player performance, then adds worker- or ESPN-based enrichment only where it improves context without replacing the core stat source.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodPerfScoreSection">
-      <div class="methodHead">🎯 PerfScore</div>
+      <div class="methodHead">PerfScore</div>
       <div class="methodBody">
-        <p>PerfScore is a weighted composite of key statistical percentiles. Each stat is normalized to a 0–1 scale between your configured Min and Max, then multiplied by its weight. Higher-is-better stats (like PPG, APG) produce higher percentiles at the top; lower-is-better stats (like DRtg, TOPG) are automatically inverted.</p>
-        <p style="margin-top:10px"><b>Formula:</b> PerfScore = Σ(weight × normalized_stat) / Σ(weight)</p>
-        <p style="margin-top:10px">Percentiles are computed within the selected position group (Guards or Bigs) and league (MBB or WBB). Players are only compared to peers in the same group.</p>
+        <p>PerfScore is the main player evaluation score. Each active stat is normalized between your configured Min and Max, weighted by your selected stat weight, then rolled into one composite score.</p>
+        <p style="margin-top:10px"><b>Formula:</b> PerfScore = sum(weight x normalized stat) / sum(active weights)</p>
+        <p style="margin-top:10px">Higher-is-better stats, like points or assists, reward strong raw values. Lower-is-better stats, like turnovers, are inverted automatically so a better underlying performance still scores higher.</p>
+        <p style="margin-top:10px">PerfScore is always calculated inside the current league and position bucket, so guards are only compared with guards and bigs are only compared with bigs.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodValuationSection">
-      <div class="methodHead">💰 Valuation</div>
+      <div class="methodHead">Valuation</div>
       <div class="methodBody">
-        <p>Player valuation uses an exponential curve anchored to your average pay setting. The curve is calibrated so the average player earns <em>avgPay</em> and a star-level player earns <em>starValue</em>:</p>
-        <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf − avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay × exp(k × (PerfScore − avgPerf)))</p>
-        <p style="margin-top:10px">A <b>minutes multiplier</b> (<code>min(1, sqrt(MP / MP_p))</code>) is then applied to reduce inflation for low-minutes players. If the <b>Conference Multiplier</b> is enabled, PerfScore is boosted/reduced by the conference strength factor before valuation — MAC = 1.00 is the baseline.</p>
+        <p>Player valuation converts PerfScore into a market-style dollar estimate using an exponential curve anchored to your chosen <b>Average Pay</b> and <b>Star Value</b>.</p>
+        <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf - avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay x exp(k x (PerfScore - avgPerf)))</p>
+        <p style="margin-top:10px">A minutes adjustment keeps tiny-sample or low-minute players from inflating too easily, and the conference multiplier can optionally move valuations up or down based on league context before the market curve is applied.</p>
+        <p style="margin-top:10px">Evaluation presets simply save these choices - weights, min/max settings, valuation anchors, and conference multipliers - so different staff users can bring their own lens without changing the system default.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodPositionGroupsSection">
-      <div class="methodHead">📊 Position Groups</div>
+      <div class="methodHead">Position Groups</div>
       <div class="methodBody">
-        <p>Players are bucketed into two position groups for all percentile calculations:</p>
+        <p>For percentile calculations, the dashboard buckets players into two broad role groups:</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Guards</b> — Positions: G, G-F</li>
-          <li><b>Bigs</b> — Positions: F, C, F-C, C-F</li>
+          <li><b>Guards</b> - G, G-F</li>
+          <li><b>Bigs</b> - F, C, F-C, C-F</li>
         </ul>
-        <p style="margin-top:10px">Guards are never compared to Bigs, and vice versa. Switch between groups using the Guards / Bigs tab in the Players page. The Team Builder analyzes gaps for whichever position groups exist on your roster.</p>
+        <p style="margin-top:10px">This keeps comparison logic more honest. A guard is not graded against a rim-protecting center, and a big is not graded against a primary ball handler.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodRoleTagsSection">
-      <div class="methodHead">🏷️ Role Tags</div>
+      <div class="methodHead">Role Tags and Similarity</div>
       <div class="methodBody">
-        <p>Role tags are archetype labels assigned based on percentile thresholds across key stats. A player can hold multiple tags simultaneously. Examples:</p>
+        <p>Role tags are shorthand labels built from percentile thresholds across the core stats. Players can carry multiple tags at once if their profile supports it.</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Elite Scorer</b> — PPG ≥ 80th percentile</li>
-          <li><b>Floor General</b> — APG ≥ 75th, A/TO ≥ 70th</li>
-          <li><b>3-and-D</b> — 3P% ≥ 65th, SPG ≥ 60th</li>
-          <li><b>Rim Anchor</b> — BPG ≥ 70th, RPG ≥ 65th (Bigs)</li>
-          <li><b>Stretch Big</b> — 3P% ≥ 60th (Bigs)</li>
-          <li><b>High Usage</b> — USG% ≥ 75th</li>
+          <li><b>Elite Scorer</b> - high scoring percentile</li>
+          <li><b>Floor General</b> - passing and ball-security profile</li>
+          <li><b>3-and-D</b> - perimeter shooting plus defensive activity</li>
+          <li><b>Rim Anchor</b> - rim protection and glass impact</li>
+          <li><b>Stretch Big</b> - frontcourt shooting gravity</li>
         </ul>
-        <p style="margin-top:10px">Tags appear in player profiles and drive the similar-player matching algorithm.</p>
+        <p style="margin-top:10px">These tags make profiles easier to scan and also help the dashboard group similar player types more intelligently.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodTeamBuilderSection">
-      <div class="methodHead">🏆 Team Builder</div>
+      <div class="methodHead">Team Hub and Team Builder</div>
       <div class="methodBody">
-        <p>The Team Builder lets you assemble a roster within budget and slot constraints:</p>
-        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Budget</b> — Total NIL budget across all players</li>
-          <li><b>Player cap</b> — Maximum per-player valuation</li>
-          <li><b>Max roster</b> — Maximum roster size</li>
-          <li><b>Guards / Bigs targets</b> — Position slot targets for balance</li>
-          <li><b>Weak below</b> — Percentile threshold for flagging swap candidates</li>
-        </ul>
-        <p style="margin-top:10px">The <b>Team Stat Profile</b> shows your roster's average percentile across key categories. Red (weak) areas signal recruiting gaps. The <b>Recommended Fits</b> panel surfaces players who address your weakest categories within budget.</p>
-        <p style="margin-top:10px">Use the <b>⚔️ Head-to-Head</b> sub-tab to compare your team vs. an opponent stat-by-stat, and the <b>🎯 Opponent</b> sub-tab to build and scout your next opponent.</p>
+        <p><b>Team Hub</b> is the real-team workspace. It uses actual team ratings, four factors, schedule context, and matchup data to scout a real roster or opponent.</p>
+        <p style="margin-top:10px"><b>Team Builder</b> is the hypothetical workspace that now lives under Team Hub. It applies budget, player-cap, and roster-balance constraints so staff can build scenarios without overwriting the real-team view.</p>
+        <p style="margin-top:10px">The recommended-fit logic in Team Builder is driven by the weakest percentile categories on the built roster, so the tool is solving gaps rather than just listing the highest-rated players.</p>
+        <p style="margin-top:10px">Head-to-Head and Opponent Builder extend that scenario workflow by comparing category edges and letting staff build the other side of the matchup directly.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodPortalSection">
+      <div class="methodHead">Transfer Portal</div>
+      <div class="methodBody">
+        <p>The Transfer Portal page is a merged scouting board, not just a raw feed. The worker pulls normalized portal data from <b>247Sports</b> and <b>On3</b>, with backend caching in place so the dashboard can stay current without hammering the source pages every request.</p>
+        <p style="margin-top:10px">Portal entrants are matched back to the loaded player pool with normalized name and team logic so the board can surface class, Perf, valuation, and profile links whenever a confident match exists.</p>
+        <p style="margin-top:10px">Portal Fit Lab ranks replacement targets by team context, outgoing-player needs, category priorities, and player value/performance. The goal is to answer "who best solves this actual roster problem?" rather than only "who is the best player in the portal?" The live portal workflow is currently strongest on the MBB side.</p>
+      </div>
+    </div>
+
+    <div class="methodSection" id="methodValueLabSection">
+      <div class="methodHead">Value Lab</div>
+      <div class="methodBody">
+        <p>Value Lab is an independent case-based investment workspace. Each case has its own roster, budget, actual contract entries, and saved business readout.</p>
+        <p style="margin-top:10px"><b>Model Value</b> is the dashboard's internal estimate. <b>Actual Spend</b> is the real contract number you enter. If a contract is unknown, planning math falls back to model value so the case still works before every deal is final.</p>
+        <p style="margin-top:10px"><b>ROI Call</b> compares player performance against the expected return for that spend tier. The labels run from <b>Steal</b> and <b>Premium worth it</b> on the positive side to <b>Rich</b> and <b>Overpay</b> on the negative side.</p>
+        <p style="margin-top:10px"><b>Outcome vs Spend</b> looks for a dominant real-team context when it can, then maps roster Perf back into projected team strength and schedule wins so the business side can see what that spend profile is likely buying.</p>
+        <p style="margin-top:10px">Portal Value Watch extends the same lens to available portal options, highlighting players who look attractive from a bang-for-buck perspective.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodAIScoutSection">
-      <div class="methodHead">🤖 AI Scout</div>
+      <div class="methodHead">AI Workflows</div>
       <div class="methodBody">
-        <p>Scout AI (powered by Google Gemini) has direct access to your dashboard data through a tool-use system:</p>
+        <p>AI is used as an interpretation layer on top of dashboard data, not as a replacement for the underlying calculations.</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>get_top_players</b> — Query the full player database by position, stat, value</li>
-          <li><b>get_player_profile</b> — Get a specific player's full stat profile and percentiles</li>
-          <li><b>get_team_roster</b> — View current roster details and budget status</li>
-          <li><b>add_players_to_roster / remove_player_from_roster / swap_roster_player</b> — Roster management (requires confirmation)</li>
-          <li><b>add_players_to_opponent</b> — Add players to the opponent builder</li>
-          <li><b>compare_players</b> — Open a visual side-by-side stat comparison</li>
-          <li><b>web_search</b> — Search the web for NIL values, injury news, transfer portal updates</li>
+          <li><b>Scout AI</b> can query players, rosters, team context, and approved tool actions inside the dashboard.</li>
+          <li><b>Portal AI</b> explains target boards and replacement fits after the portal model has already ranked the options.</li>
+          <li><b>Director AI Brief</b> in Value Lab uses Gemini 2.5 Flash Lite and focuses on contract efficiency, budget health, projected outcome, and portal value opportunities.</li>
+          <li><b>War Room AI</b> explains bracket simulation outputs after the tournament model finishes running.</li>
         </ul>
-        <p style="margin-top:10px">For valuation and current-event questions, AI runs a dual-source pipeline: dashboard data first, then web search for real-world market context. All roster-modifying actions require your explicit approval.</p>
+        <p style="margin-top:10px">The dashboard's preferred order is numbers first, AI second: the model produces the metrics, then Gemini turns those metrics into clearer staff-facing recommendations.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodWbbDefaultsSection">
-      <div class="methodHead">🏀 WBB Scoring Defaults</div>
+      <div class="methodHead">WBB Defaults</div>
       <div class="methodBody">
-        <p>WBB uses separate default scoring weights calibrated to WBB stat distributions (which differ significantly from MBB — e.g. WBB average PPG ~12 vs MBB ~14, fewer 3-point attempts, higher turnover rates).</p>
-        <p style="margin-top:10px"><b>Guards (default weights):</b> PPG 14 · eFG% 13 · A/TO 11 · SPG 11 · TOPG 11 · APG 13 · 3P% 9 · FT% 6 · RPG 6 · USG% 6</p>
-        <p style="margin-top:6px"><b>Bigs (default weights):</b> RPG 20 · BPG 16 · eFG% 14 · PPG 12 · SPG 8 · A/TO 8 · TOPG 8 · USG% 8 · FT% 6</p>
-        <p style="margin-top:10px">Min/max ranges for each stat are also calibrated to WBB distributions (e.g. PPG Guard max is 25, not 30 as in MBB). Conference multipliers use the same MAC=1.00 baseline but map to WBB conferences. Draft Radar grades are <b>MBB only</b> — WBB draft dynamics differ significantly and no WBB draft model is included.</p>
+        <p>WBB uses its own default weights and min/max ranges because the stat environment is different from MBB. The scoring model is not a direct copy-paste from the men's side.</p>
+        <p style="margin-top:10px"><b>Guards</b> lean more heavily on playmaking efficiency, defensive activity, and balanced shooting context. <b>Bigs</b> lean more heavily on rebounding, rim impact, and efficient frontcourt finishing.</p>
+        <p style="margin-top:10px">Draft Radar remains MBB-only. WBB player evaluation still uses the same dashboard structure, but not every MBB-specific downstream model is carried over.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodMonteCarloSection">
-      <div class="methodHead">🎲 Monte Carlo Match Simulation</div>
+      <div class="methodHead">Simulation Stack</div>
       <div class="methodBody">
-        <p>The Teams Hub Monte Carlo sim projects game outcomes by running thousands of score simulations from each team's adjusted efficiency ratings and pace.</p>
-        <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Regulation model</b> — Expected scoring is computed from offense-vs-defense blends (AdjO/AdjD) and average pace; each team gets game-to-game scoring noise (SD controls) with optional score correlation (ρ).</li>
-          <li><b>OT-aware logic</b> — Regulation ties now trigger overtime simulation instead of ending as ties. OT uses a 5-minute pace-scaled scoring model with lower OT volatility and repeats until a winner (capped periods + rare fallback tiebreak).</li>
-          <li><b>Core outputs</b> — Win%, projected score, average/median margin, close-game rate, blowout rates, and margin distribution histogram.</li>
-          <li><b>OT outputs</b> — Overtime rate, regulation-tie rate, and overtime winner split by team for late-game prep context.</li>
-          <li><b>Scope</b> — This is a probabilistic scenario engine (not a possession-level play-caller). Use with shot chart, matchup, and scouting context for full prep.</li>
-        </ul>
+        <p><b>Teams Hub Monte Carlo</b> runs single-game simulations from adjusted team strength, pace, matchup effects, recency form, and team-specific volatility. Regulation ties trigger overtime logic instead of ending as ties.</p>
+        <p style="margin-top:10px"><b>Tournament War Room</b> uses a related bracket model, but applies it across the full field: play-ins resolve first, then each round is simulated repeatedly to estimate champion odds, Final Four odds, region winners, and common upsets.</p>
+        <p style="margin-top:10px">The bracket model blends baseline offensive and defensive strength with four-factor matchup adjustments, recent form, and team-level volatility, then repeats the tournament thousands of times to measure advancement probabilities instead of pretending one path is certain.</p>
       </div>
     </div>
 
     <div class="methodSection" id="methodDraftRadarSection">
-      <div class="methodHead">🏀 Draft Radar</div>
+      <div class="methodHead">Draft Radar</div>
       <div class="methodBody">
-        <p>The Draft Radar predicts NBA draft probability from college stats using a sign-constrained elastic-net logistic regression model with <b>balanced class weights</b>, trained on <b>2,391 NCAA players</b> from the 2019–2025 drafts (326 drafted, 2,065 undrafted), sourced from the College Basketball Data API.</p>
-
-        <p style="margin-top:12px"><b>Model Architecture</b></p>
-        <p style="margin-top:6px">Elastic-net logistic regression with 10 features: 7 statistical z-scores + 3 categorical variables. Regularization uses both L1 (λ=0.005) and L2 (λ=0.03) penalties. All stat weights constrained ≥ 0 via projected gradient descent. Balanced class weights in the loss function (drafted samples weighted 3.67×) correct the 6:1 class imbalance and produce well-calibrated probabilities.</p>
-
-        <p style="margin-top:12px"><b>Statistical Features (z-scored against dataset means)</b></p>
-        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
-          <li><b>PPG</b> — Points per game (μ=14.8, σ=3.5) — regularized to ~0: scoring volume doesn't discriminate drafted vs. undrafted</li>
-          <li><b>WS/40</b> — Win Shares per 40 min (μ=0.13, σ=0.06) — strongest stat predictor</li>
-          <li><b>eFG%</b> — Effective FG% (μ=51.2%, σ=5.3%)</li>
-          <li><b>BPG</b> — Blocks per game (μ=0.38, σ=0.46) — rim protection highly valued</li>
-          <li><b>RPG</b> — Rebounds per game (μ=4.8, σ=1.9)</li>
-          <li><b>APG, SPG</b> — Assists and steals per game (regularized near zero)</li>
-        </ul>
-        <p style="margin-top:8px;font-size:12px;color:var(--muted)">BPM and USG% were dropped to eliminate multicollinearity (BPM↔WS/40 r=0.80, PPG↔USG% r=0.87, VIF up to 14.4). Their signals are captured by the remaining features.</p>
-
-        <p style="margin-top:12px"><b>Categorical Features</b></p>
-        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
-          <li><b>Conference tier</b> — Power=1, Mid-major=0, Low-major=−1 (highest importance, weight=1.29)</li>
-          <li><b>Class</b> — Youth premium: Fr=3, So=2, Jr=1, Sr/Grad=0 (weight=0.52). Inferred at runtime from multi-season CBD API data (2022–2026): a player's first appearance determines their class year. CBD API does not provide class directly.</li>
-          <li><b>Starter flag</b> — 1 if MPG &gt; 25, else 0 (weight=−0.22)</li>
-        </ul>
-
-        <p style="margin-top:12px"><b>Why No Interaction Terms?</b></p>
-        <p style="margin-top:4px">Earlier model versions used 6 interaction terms (PPG×USG%, BPM×Class, etc.). These caused suppressor variable artifacts: multiplying two negative z-scores produced false positives (bench players rated A+). The interaction model's 6% CV F1 advantage did not offset the catastrophic out-of-distribution failures. Removing interactions trades in-sample fit for robust generalization.</p>
-
-        <p style="margin-top:12px"><b>Validation</b></p>
-        <p style="margin-top:4px">5-fold cross-validation: 86.7% accuracy, 50.9% precision, 90.5% recall, 64.7% F1. Final model on all data: 86.8% accuracy, 50.9% precision, 90.2% recall, 65.0% F1, TP=294 FP=284 FN=32 TN=1781. The balanced-weight approach prioritizes recall (catching actual draft picks) over raw precision. 90% of drafted players are correctly identified.</p>
-
-        <p style="margin-top:12px"><b>Feature Importance (|weight × std|)</b></p>
-        <p style="margin-top:4px">Ranked: Conference (1.06) &gt; WS/40 (0.77) &gt; Class (0.53) &gt; BPG (0.43) &gt; RPG (0.16) &gt; eFG% (0.14)</p>
-
-        <p style="margin-top:12px"><b>Additional Features</b></p>
-        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
-          <li><b>Quantified Development Path</b> — Identifies stats below drafted-player averages with actionable advice. Each recommendation shows the exact probability impact of reaching the target: e.g., "Improving eFG% from 45.0% → 51.2% shifts draft probability by +X%"</li>
-          <li><b>Draft Comparables</b> — Finds the 3 most statistically similar drafted players (from a 119-player pool of lottery + notable picks) using weighted Euclidean distance on z-scored features.</li>
-          <li><b>Scouting Insights</b> — Readable takeaways about scoring efficiency, defensive impact, youth premium, and competition level</li>
-        </ul>
-
-        <p style="margin-top:12px"><b>Data Pipeline</b></p>
-        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
-          <li><b>Source</b> — College Basketball Data API via Cloudflare Worker proxy</li>
-          <li><b>Seasons</b> — Player stats for 2018–2025; draft picks for 2019–2025</li>
-          <li><b>Class inference</b> — Multi-season appearance tracking (first appearance = Fr, +1 year per subsequent season). Used both in training (<code>build-draft-dataset.js</code>) and at runtime (<code>data.js loadCareerSeasons</code>) since the CBD API does not provide class/eligibility data.</li>
-          <li><b>Undrafted pool</b> — Players with PPG ≥ 5, MPG ≥ 20, G ≥ 15 who were not drafted, selected by total minutes played (~6:1 undrafted:drafted ratio)</li>
-          <li><b>Build script</b> — <code>tools/build-draft-dataset.js</code> fetches all data and outputs <code>data/draft-history.json</code></li>
-        </ul>
-
-        <p style="margin-top:12px"><b>Limitations</b></p>
-        <ul style="margin-top:8px;padding-left:18px;display:flex;flex-direction:column;gap:5px">
-          <li>No physical measurables (height, wingspan, athletic testing)</li>
-          <li>No combine/workout performance data</li>
-          <li>No team need or draft class depth context</li>
-          <li>International prospects not modeled (different stat context)</li>
-          <li>Class inferred from multi-season appearances — may be off for transfers or redshirts</li>
-          <li>MBB only — WBB draft dynamics differ significantly</li>
-          <li>PPG regularized to zero weight — scoring volume doesn't differentiate drafted vs. undrafted in training data</li>
-          <li>Eligibility gate: players with PPG &lt; 5, MPG &lt; 15, or G &lt; 10 receive no draft grade (shown as —). These players fall outside the training distribution and predictions would be unreliable extrapolations</li>
-        </ul>
-        <p style="margin-top:10px;font-size:12px;color:var(--muted)">Training: <code>tools/train-draft-model-v2.js</code> · Dataset: <code>tools/build-draft-dataset.js</code> → <code>data/draft-history.json</code> · Rebuild: run build script, then retrain.</p>
+        <p>Draft Radar predicts MBB draft probability from college production using a sign-constrained elastic-net logistic regression model trained on recent draft classes and their undrafted comparison pool.</p>
+        <p style="margin-top:10px">The strongest signals in the model come from conference tier, WS/40, class/age signal, rim-protection indicators, rebounding, and shooting efficiency. The system intentionally favors recall so likely draftable profiles are not missed too easily.</p>
+        <p style="margin-top:10px">It is still a college-stat model, not a full NBA scouting stack. Physical tools, combine performance, team need, international context, and long-term projection all sit outside this model.</p>
       </div>
     </div>
   </div>
 </div>
 </div><!-- /pageMethodology -->
+
 
 <!-- Tournament Lab Page -->
 <div id="pageLab" style="display:none">

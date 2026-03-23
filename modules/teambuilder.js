@@ -978,6 +978,9 @@ function showDashboardPage(targetId, activeNavId){
   if(targetId === 'pageAdmin' && window.AdminPanel && typeof window.AdminPanel.load === 'function') {
     window.AdminPanel.load();
   }
+  if(window.HelpPanel && typeof window.HelpPanel.refreshCurrentPage === 'function') {
+    window.HelpPanel.refreshCurrentPage();
+  }
 }
 
 window._dashboardCurrentPageId = window._dashboardCurrentPageId || 'pagePlayers';

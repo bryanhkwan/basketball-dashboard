@@ -19,7 +19,6 @@ var DASH_PREF_TAB_OPTIONS = [
   { pageId: 'pagePortal', label: 'Transfer Portal', desc: 'Hide the portal board tab from the top navigation.' },
   { pageId: 'pageTeams', label: 'Teams', desc: 'Hide the team scouting hub tab.' },
   { pageId: 'pageValueLab', label: 'Value Lab', desc: 'Hide the roster investment and ROI page.' },
-  { pageId: 'pageMethodology', label: 'Methodology', desc: 'Hide the methodology / explainer page.' },
   { pageId: 'pageLab', label: 'Tournament Lab', desc: 'Hide Tournament Lab and its War Room entry path.' },
   { pageId: 'pageFavorites', label: 'Favorites', desc: 'Hide the favorites page tab.' },
   { pageId: 'pageCollaborate', label: 'Collaborate', desc: 'Hide collaboration and sharing tools.' }
@@ -64,10 +63,12 @@ var DASH_PREF_SECTION_OPTIONS = {
     { id: 'methodValuationSection', label: 'Valuation', desc: 'Show or hide valuation methodology.' },
     { id: 'methodPositionGroupsSection', label: 'Position Groups', desc: 'Show or hide position group notes.' },
     { id: 'methodRoleTagsSection', label: 'Role Tags', desc: 'Show or hide role tag methodology.' },
-    { id: 'methodTeamBuilderSection', label: 'Team Builder', desc: 'Show or hide Team Builder methodology.' },
+    { id: 'methodTeamBuilderSection', label: 'Team Workspaces', desc: 'Show or hide Team Hub and Team Builder methodology.' },
+    { id: 'methodPortalSection', label: 'Transfer Portal', desc: 'Show or hide transfer portal methodology.' },
+    { id: 'methodValueLabSection', label: 'Value Lab', desc: 'Show or hide Value Lab methodology.' },
     { id: 'methodAIScoutSection', label: 'AI Scout', desc: 'Show or hide the AI Scout explainer.' },
     { id: 'methodWbbDefaultsSection', label: 'WBB Defaults', desc: 'Show or hide WBB default model notes.' },
-    { id: 'methodMonteCarloSection', label: 'Monte Carlo Sim', desc: 'Show or hide the simulation methodology.' },
+    { id: 'methodMonteCarloSection', label: 'Simulation Stack', desc: 'Show or hide the simulation methodology.' },
     { id: 'methodDraftRadarSection', label: 'Draft Radar', desc: 'Show or hide draft model methodology.' }
   ],
   pageLab: [

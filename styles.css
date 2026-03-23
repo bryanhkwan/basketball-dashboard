@@ -608,6 +608,205 @@
   transform: scale(1.08);
 }
 
+body.helpPanelOpen {
+  overflow: hidden;
+}
+
+.helpPanelBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .54);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s ease;
+  z-index: 9098;
+}
+
+.helpPanelBackdrop.isOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.helpPanelDrawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(8,18,33,.98), rgba(5,13,25,.98));
+  border-left: 1px solid rgba(255,255,255,.08);
+  box-shadow: -20px 0 60px rgba(0,0,0,.42);
+  transform: translateX(100%);
+  transition: transform .22s ease;
+  z-index: 9099;
+}
+
+.helpPanelDrawer.isOpen {
+  transform: translateX(0);
+}
+
+.helpPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.helpPanelBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-rgb), .22);
+  background: rgba(var(--accent-rgb), .10);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.helpPanelTitle {
+  margin-top: 12px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -.4px;
+  color: var(--text);
+}
+
+.helpPanelOverview {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.helpPanelClose {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .15s ease;
+}
+
+.helpPanelClose:hover {
+  background: rgba(var(--accent-rgb), .12);
+  border-color: rgba(var(--accent-rgb), .34);
+  transform: scale(1.04);
+}
+
+.helpPanelBody {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.helpPanelSection {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,.03);
+  padding: 16px;
+}
+
+.helpPanelSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.helpPanelSectionTitle {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.helpPanelTourRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.helpPanelTourTitle {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.helpPanelTourMeta,
+.helpPanelTourNote {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.helpPanelTourMeta {
+  margin-top: 5px;
+}
+
+.helpPanelTourNote {
+  margin-top: 12px;
+}
+
+.helpPanelMethodology {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.helpPanelMethodCard {
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
+  background: rgba(255,255,255,.02);
+  padding: 14px;
+}
+
+.helpPanelMethodTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.helpPanelMethodBody {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.helpPanelMethodologyBtn {
+  padding-inline: 12px;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .helpPanelDrawer {
+    width: 100vw;
+    padding: 16px;
+  }
+}
+
 /* Spotlight highlight ring (fixed, covers the target) */
 .tourHL {
   position: fixed;
