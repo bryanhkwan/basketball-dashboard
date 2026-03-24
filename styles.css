@@ -3090,6 +3090,49 @@ body.helpPanelOpen {
   box-sizing: border-box;
   font-family: inherit;
 }
+.chatUserPickerHint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.chatUserPickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 172px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.chatUserPill {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(6,12,26,.55);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+.chatUserPill:hover {
+  border-color: rgba(var(--accent-rgb), .4);
+  transform: translateY(-1px);
+}
+.chatUserPill--active {
+  border-color: rgba(var(--accent-rgb), .55);
+  background: rgba(var(--accent-rgb), .12);
+  color: var(--accent);
+}
+.chatUserPickerEmpty {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,.10);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  background: rgba(255,255,255,.02);
+}
 .shareModalErr {
   font-size: 12px;
   color: #f87171;

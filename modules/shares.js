@@ -521,21 +521,111 @@ async function chatCreateConv(type,usernamesOrName){
 // ── Load users ────────────────────────────────────────────────────────────────
 async function chatLoadUsers(){
   if(chatState.users.length)return;
-  try{var data=await chatFetch('/users');if(!data)return;chatState.users=(data.users||[]).map(function(u){return u.username;});}catch(e){}
+  try{
+    var data=await chatFetch('/users');
+    if(!data)return;
+    chatState.users=(data.users||[]).map(function(u){return u.username;}).filter(Boolean);
+  }catch(e){}
 }
 
-// ── New Chat Modal ────────────────────────────────────────────────────────────
+function chatParseUsernames(text){
+  return String(text||'').split(/[\s,]+/).map(function(u){return u.trim();}).filter(Boolean);
+}
+
+function chatRenderNewUserPicker(){
+  var listEl=document.getElementById('chatNewUserPicker');
+  var hintEl=document.getElementById('chatNewUserPickerHint');
+  if(!listEl)return;
+  var typeEl=document.getElementById('chatNewType');
+  var mode=typeEl?typeEl.value:'dm';
+  var searchEl=document.getElementById('chatNewUserSearch');
+  var filter=String(searchEl&&searchEl.value||'').trim().toLowerCase();
+  var users=(chatState.users||[]).slice().filter(Boolean);
+  if(filter)users=users.filter(function(username){return String(username).toLowerCase().indexOf(filter)!==-1;});
+  if(hintEl){
+    hintEl.textContent=mode==='group'
+      ? 'Click users to add or remove them from the group members field.'
+      : 'Click a user to fill the direct-message recipient field.';
+  }
+  if(!users.length){
+    listEl.innerHTML='<div class="chatUserPickerEmpty">No users available to message right now.</div>';
+    return;
+  }
+  var dmInput=document.getElementById('chatNewDmUser');
+  var grpInput=document.getElementById('chatNewGrpMembers');
+  var activeDm=String(dmInput&&dmInput.value||'').trim().toLowerCase();
+  var groupMembers=chatParseUsernames(grpInput&&grpInput.value||'').map(function(u){return u.toLowerCase();});
+  listEl.innerHTML=users.map(function(username){
+    var normalized=String(username).toLowerCase();
+    var isActive=mode==='group'?groupMembers.indexOf(normalized)!==-1:activeDm===normalized;
+    return '<button type="button" class="chatUserPill'+(isActive?' chatUserPill--active':'')+'" data-username="'+_chatEsc(username)+'">'+_chatEsc(username)+'</button>';
+  }).join('');
+  listEl.querySelectorAll('.chatUserPill').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var username=btn.getAttribute('data-username')||'';
+      var errEl=document.getElementById('chatNewErr');
+      if(errEl)errEl.textContent='';
+      if(mode==='group'){
+        var current=chatParseUsernames(grpInput&&grpInput.value||'');
+        var lowered=current.map(function(u){return u.toLowerCase();});
+        var idx=lowered.indexOf(String(username).toLowerCase());
+        if(idx===-1)current.push(username);
+        else current.splice(idx,1);
+        if(grpInput)grpInput.value=current.join(', ');
+      }else{
+        if(dmInput)dmInput.value=username;
+      }
+      chatRenderNewUserPicker();
+    });
+  });
+}
+
+function chatRenderSingleRecipientPicker(opts){
+  opts=opts||{};
+  var listEl=document.getElementById(opts.listId||'');
+  if(!listEl)return;
+  var hintEl=document.getElementById(opts.hintId||'');
+  var searchEl=document.getElementById(opts.searchId||'');
+  var inputEl=document.getElementById(opts.inputId||'');
+  var errEl=document.getElementById(opts.errId||'');
+  var filter=String(searchEl&&searchEl.value||'').trim().toLowerCase();
+  var selected=String(inputEl&&inputEl.value||'').trim().toLowerCase();
+  var users=(chatState.users||[]).slice().filter(Boolean);
+  if(filter)users=users.filter(function(username){return String(username).toLowerCase().indexOf(filter)!==-1;});
+  if(hintEl)hintEl.textContent='Click a user to fill the recipient field.';
+  if(!users.length){
+    listEl.innerHTML='<div class="chatUserPickerEmpty">No users available to message right now.</div>';
+    return;
+  }
+  listEl.innerHTML=users.map(function(username){
+    var isActive=String(username).toLowerCase()===selected;
+    return '<button type="button" class="chatUserPill'+(isActive?' chatUserPill--active':'')+'" data-username="'+_chatEsc(username)+'">'+_chatEsc(username)+'</button>';
+  }).join('');
+  listEl.querySelectorAll('.chatUserPill').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var username=btn.getAttribute('data-username')||'';
+      if(inputEl)inputEl.value=username;
+      if(errEl)errEl.textContent='';
+      chatRenderSingleRecipientPicker(opts);
+    });
+  });
+}
+
+// ?? New Chat Modal ????????????????????????????????????????????????????????????
 function chatOpenNewModal(){
   var back=document.getElementById('chatNewModalBack');if(!back)return;
-  chatLoadUsers();
+  chatLoadUsers().then(chatRenderNewUserPicker);
   var typeEl=document.getElementById('chatNewType');var dmArea=document.getElementById('chatNewDmArea');var grpArea=document.getElementById('chatNewGrpArea');var errEl=document.getElementById('chatNewErr');
   if(typeEl)typeEl.value='dm';if(dmArea)dmArea.style.display='';if(grpArea)grpArea.style.display='none';if(errEl)errEl.textContent='';
   var dmInput=document.getElementById('chatNewDmUser');if(dmInput)dmInput.value='';
   var grpName=document.getElementById('chatNewGrpName');if(grpName)grpName.value='';
   var grpMbrs=document.getElementById('chatNewGrpMembers');if(grpMbrs)grpMbrs.value='';
+  var searchEl=document.getElementById('chatNewUserSearch');if(searchEl)searchEl.value='';
+  chatRenderNewUserPicker();
   back.style.display='flex';
   setTimeout(function(){if(dmInput)dmInput.focus();},60);
 }
+
 function chatCloseNewModal(){var back=document.getElementById('chatNewModalBack');if(back)back.style.display='none';}
 async function _chatDoCreate(){
   var typeEl=document.getElementById('chatNewType');var errEl=document.getElementById('chatNewErr');var btn=document.getElementById('chatNewCreateBtn');
@@ -613,11 +703,15 @@ var _chatSendPickPlayer=null;
 function sharesOpenSendModal(r){
   if(typeof authIsGuest==='function'&&authIsGuest()){alert('Please log in to send picks.');return;}
   _chatSendPickPlayer=r;
-  chatLoadUsers();
+  chatLoadUsers().then(function(){
+    chatRenderSingleRecipientPicker({listId:'chatSendPickUserPicker',hintId:'chatSendPickUserHint',searchId:'chatSendPickUserSearch',inputId:'chatSendPickTo',errId:'chatSendPickErr'});
+  });
   var back=document.getElementById('chatSendPickBack');if(!back)return;
-  var nameEl=document.getElementById('chatSendPickName');if(nameEl)nameEl.textContent=(r.Player||'')+(r.Team?'  \u00b7  '+r.Team:'');
+  var nameEl=document.getElementById('chatSendPickName');if(nameEl)nameEl.textContent=(r.Player||'')+(r.Team?'  ?  '+r.Team:'');
   var toEl=document.getElementById('chatSendPickTo');var msgEl=document.getElementById('chatSendPickMsg');var errEl=document.getElementById('chatSendPickErr');var btn=document.getElementById('chatSendPickBtn');
   if(toEl)toEl.value='';if(msgEl)msgEl.value='';if(errEl)errEl.textContent='';if(btn){btn.disabled=false;btn.textContent='Send';}
+  var searchEl=document.getElementById('chatSendPickUserSearch');if(searchEl)searchEl.value='';
+  chatRenderSingleRecipientPicker({listId:'chatSendPickUserPicker',hintId:'chatSendPickUserHint',searchId:'chatSendPickUserSearch',inputId:'chatSendPickTo',errId:'chatSendPickErr'});
   back.style.display='flex';
   setTimeout(function(){if(toEl)toEl.focus();},60);
 }
@@ -648,12 +742,16 @@ var _chatBulkFavs=null;
 function sharesOpenBulkModal(folderName,favs){
   if(typeof authIsGuest==='function'&&authIsGuest()){alert('Please log in to send picks.');return;}
   _chatBulkFavs=favs||[];
-  chatLoadUsers();
+  chatLoadUsers().then(function(){
+    chatRenderSingleRecipientPicker({listId:'chatBulkPickUserPicker',hintId:'chatBulkPickUserHint',searchId:'chatBulkPickUserSearch',inputId:'chatBulkPickTo',errId:'chatBulkPickErr'});
+  });
   var back=document.getElementById('chatBulkPickBack');if(!back)return;
-  var titleEl=document.getElementById('chatBulkPickTitle');if(titleEl)titleEl.textContent='\uD83D\uDCC1 '+folderName+' \u2014 '+_chatBulkFavs.length+' player'+(_chatBulkFavs.length!==1?'s':'');
+  var titleEl=document.getElementById('chatBulkPickTitle');if(titleEl)titleEl.textContent='?? '+folderName+' ? '+_chatBulkFavs.length+' player'+(_chatBulkFavs.length!==1?'s':'');
   var toEl=document.getElementById('chatBulkPickTo');var msgEl=document.getElementById('chatBulkPickMsg');var errEl=document.getElementById('chatBulkPickErr');var btn=document.getElementById('chatBulkPickBtn');var listEl=document.getElementById('chatBulkPickList');
   if(toEl)toEl.value='';if(msgEl)msgEl.value='';if(errEl)errEl.textContent='';if(btn){btn.disabled=false;btn.textContent='Send All';}
-  if(listEl)listEl.innerHTML=_chatBulkFavs.map(function(fav,i){return'<div class="bulkSharePlayer"><div class="bulkSharePlayerName">'+_chatEsc(fav.player_name||'')+(fav.team?'<span class="shareCardTeam"> \u00b7 '+_chatEsc(fav.team)+'</span>':'')+'</div><textarea class="bulkSharePlayerNote" data-idx="'+i+'" placeholder="Note (optional)\u2026" rows="2"></textarea></div>';}).join('');
+  var searchEl=document.getElementById('chatBulkPickUserSearch');if(searchEl)searchEl.value='';
+  chatRenderSingleRecipientPicker({listId:'chatBulkPickUserPicker',hintId:'chatBulkPickUserHint',searchId:'chatBulkPickUserSearch',inputId:'chatBulkPickTo',errId:'chatBulkPickErr'});
+  if(listEl)listEl.innerHTML=_chatBulkFavs.map(function(fav,i){return'<div class="bulkSharePlayer"><div class="bulkSharePlayerName">'+_chatEsc(fav.player_name||'')+(fav.team?'<span class="shareCardTeam"> ? '+_chatEsc(fav.team)+'</span>':'')+'</div><textarea class="bulkSharePlayerNote" data-idx="'+i+'" placeholder="Note (optional)?" rows="2"></textarea></div>';}).join('');
   back.style.display='flex';
   setTimeout(function(){if(toEl)toEl.focus();},60);
 }
@@ -687,7 +785,14 @@ function initSharesPage(){
   if(newType)newType.onchange=function(){
     var dm=document.getElementById('chatNewDmArea');var grp=document.getElementById('chatNewGrpArea');
     if(dm)dm.style.display=newType.value==='dm'?'':'none';if(grp)grp.style.display=newType.value==='group'?'':'none';
+    chatRenderNewUserPicker();
   };
+  var newUserSearch=document.getElementById('chatNewUserSearch');
+  var newDmUser=document.getElementById('chatNewDmUser');
+  var newGrpMembers=document.getElementById('chatNewGrpMembers');
+  if(newUserSearch&&!newUserSearch._boundPicker){newUserSearch.addEventListener('input',chatRenderNewUserPicker);newUserSearch._boundPicker=true;}
+  if(newDmUser&&!newDmUser._boundPicker){newDmUser.addEventListener('input',chatRenderNewUserPicker);newDmUser._boundPicker=true;}
+  if(newGrpMembers&&!newGrpMembers._boundPicker){newGrpMembers.addEventListener('input',chatRenderNewUserPicker);newGrpMembers._boundPicker=true;}
   var mgBack=document.getElementById('chatManageModalBack');var mgCancel=document.getElementById('chatManageCancelBtn');var mgSave=document.getElementById('chatManageSaveBtn');var mgAdd=document.getElementById('chatManageAddBtn');
   if(mgCancel)mgCancel.onclick=chatCloseManageGroup;
   if(mgBack)mgBack.onclick=function(e){if(e.target===mgBack)chatCloseManageGroup();};
@@ -715,8 +820,14 @@ function initSharesPage(){
     var pickerTimer=null;
     pickerSearch.addEventListener('input',function(){clearTimeout(pickerTimer);pickerTimer=setTimeout(function(){chatPickerSearch(pickerSearch.value);},200);});
   }
+  var spUserSearch=document.getElementById('chatSendPickUserSearch');var spTo=document.getElementById('chatSendPickTo');
+  if(spUserSearch&&!spUserSearch._boundPicker){spUserSearch.addEventListener('input',function(){chatRenderSingleRecipientPicker({listId:'chatSendPickUserPicker',hintId:'chatSendPickUserHint',searchId:'chatSendPickUserSearch',inputId:'chatSendPickTo',errId:'chatSendPickErr'});});spUserSearch._boundPicker=true;}
+  if(spTo&&!spTo._boundPicker){spTo.addEventListener('input',function(){chatRenderSingleRecipientPicker({listId:'chatSendPickUserPicker',hintId:'chatSendPickUserHint',searchId:'chatSendPickUserSearch',inputId:'chatSendPickTo',errId:'chatSendPickErr'});});spTo._boundPicker=true;}
   var spBack=document.getElementById('chatSendPickBack');var spCancel=document.getElementById('chatSendPickCancel');var spSend=document.getElementById('chatSendPickBtn');
   if(spCancel)spCancel.onclick=sharesCloseSendModal;if(spSend)spSend.onclick=_chatDoSendPick;if(spBack)spBack.onclick=function(e){if(e.target===spBack)sharesCloseSendModal();};
+  var bpUserSearch=document.getElementById('chatBulkPickUserSearch');var bpTo=document.getElementById('chatBulkPickTo');
+  if(bpUserSearch&&!bpUserSearch._boundPicker){bpUserSearch.addEventListener('input',function(){chatRenderSingleRecipientPicker({listId:'chatBulkPickUserPicker',hintId:'chatBulkPickUserHint',searchId:'chatBulkPickUserSearch',inputId:'chatBulkPickTo',errId:'chatBulkPickErr'});});bpUserSearch._boundPicker=true;}
+  if(bpTo&&!bpTo._boundPicker){bpTo.addEventListener('input',function(){chatRenderSingleRecipientPicker({listId:'chatBulkPickUserPicker',hintId:'chatBulkPickUserHint',searchId:'chatBulkPickUserSearch',inputId:'chatBulkPickTo',errId:'chatBulkPickErr'});});bpTo._boundPicker=true;}
   var bpBack=document.getElementById('chatBulkPickBack');var bpCancel=document.getElementById('chatBulkPickCancel');var bpSend=document.getElementById('chatBulkPickBtn');
   if(bpCancel)bpCancel.onclick=sharesCloseBulkModal;if(bpSend)bpSend.onclick=_chatDoBulkSend;if(bpBack)bpBack.onclick=function(e){if(e.target===bpBack)sharesCloseBulkModal();};
   document.querySelectorAll('.pageNavBtn:not([data-page="pageCollaborate"])').forEach(function(btn){btn.addEventListener('click',chatStopPolling);});

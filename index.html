@@ -1892,6 +1892,12 @@
       <input id="chatSendPickTo" type="text" placeholder="Type a username…" autocomplete="off">
     </div>
     <div class="shareModalField">
+      <label class="shareModalLabel">Available users</label>
+      <input id="chatSendPickUserSearch" type="text" placeholder="Filter users…" autocomplete="off">
+      <div id="chatSendPickUserHint" class="chatUserPickerHint">Click a user to fill the recipient field.</div>
+      <div id="chatSendPickUserPicker" class="chatUserPickerList"></div>
+    </div>
+    <div class="shareModalField">
       <label class="shareModalLabel">Message <span style="color:var(--muted);font-weight:400">(optional)</span></label>
       <textarea id="chatSendPickMsg" rows="3" placeholder="Add a scouting note or reason…"></textarea>
     </div>
@@ -1916,6 +1922,12 @@
     <div class="shareModalField">
       <label class="shareModalLabel">Send to <span style="color:var(--muted);font-weight:400">(username)</span></label>
       <input id="chatBulkPickTo" type="text" placeholder="Type a username…" autocomplete="off">
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Available users</label>
+      <input id="chatBulkPickUserSearch" type="text" placeholder="Filter users…" autocomplete="off">
+      <div id="chatBulkPickUserHint" class="chatUserPickerHint">Click a user to fill the recipient field.</div>
+      <div id="chatBulkPickUserPicker" class="chatUserPickerList"></div>
     </div>
     <div class="shareModalField">
       <label class="shareModalLabel">General note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
@@ -1962,6 +1974,12 @@
         <label class="shareModalLabel">Members <span style="color:var(--muted);font-weight:400">(comma-separated usernames)</span></label>
         <input id="chatNewGrpMembers" type="text" placeholder="alice, bob, carol…" autocomplete="off">
       </div>
+    </div>
+    <div class="shareModalField">
+      <label class="shareModalLabel">Available users</label>
+      <input id="chatNewUserSearch" type="text" placeholder="Filter users…" autocomplete="off">
+      <div id="chatNewUserPickerHint" class="chatUserPickerHint">Click a user to fill the recipient field.</div>
+      <div id="chatNewUserPicker" class="chatUserPickerList"></div>
     </div>
     <div id="chatNewErr" class="shareModalErr"></div>
     <div class="shareModalFooter">
