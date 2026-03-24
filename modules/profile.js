@@ -9,6 +9,63 @@
 var _currentProfilePlayer = null;
 var _lastCompare = null;
 
+function profileIsGuestDemo() {
+  return typeof demoIsGuestMode === 'function' && demoIsGuestMode();
+}
+
+function profileDisplayMoney(value) {
+  if (typeof demoFormatMoney === 'function') return demoFormatMoney(value);
+  return fmtMoney(value);
+}
+
+function profileShotTier(value, high, medium) {
+  if (!Number.isFinite(value)) return 'Unknown';
+  if (value >= high) return 'High';
+  if (value >= medium) return 'Moderate';
+  return 'Low';
+}
+
+function profileBuildGuestShotProfileHtml(p) {
+  p = p || {};
+  var bd = p.attemptsBreakdown || {};
+  var layups = p.layups || {};
+  var dunks = p.dunks || {};
+  var tipIns = p.tipIns || {};
+  var threes = p.threePointJumpers || {};
+  var mids = p.twoPointJumpers || {};
+  var ft = p.freeThrows || {};
+  var rimShare = Number(bd.layups || 0) + Number(bd.dunks || 0) + Number(bd.tipIns || 0);
+  var midShare = Number(bd.twoPointJumpers || 0);
+  var threeShare = Number(bd.threePointJumpers || 0);
+  var rimAttempts = Number(dunks.attempted || 0) + Number(tipIns.attempted || 0) + Number(layups.attempted || 0);
+  var rimMade = Number(dunks.made || 0) + Number(tipIns.made || 0) + Number(layups.made || 0);
+  var rimPct = rimAttempts ? (rimMade / rimAttempts) * 100 : null;
+  var archetype = 'Balanced shot mix';
+  if (rimShare >= 38 && threeShare >= 28) archetype = 'Rim + three pressure';
+  else if (rimShare >= 42) archetype = 'Paint-first finisher';
+  else if (threeShare >= 38) archetype = 'Perimeter-first shot diet';
+  else if (midShare >= 28) archetype = 'Mid-range leaning scorer';
+
+  function card(label, value, subtext) {
+    return '<div class="miniStat"><div class="label">' + label + '</div><div class="value">' + value + '</div><div class="sub">' + subtext + '</div></div>';
+  }
+
+  return '' +
+    '<div class="valueLabEmpty" style="display:block">' +
+      '<div style="font-weight:700;color:var(--text);margin-bottom:6px">Shot profile preview</div>' +
+      '<div class="muted" style="font-size:12px;line-height:1.55">Demo mode shows the broad shot tendencies and finishing profile without exposing the full internal chart or exact zone breakdown.</div>' +
+    '</div>' +
+    '<div class="miniStats" style="margin-top:10px">' +
+      card('Rim pressure', profileShotTier(rimShare, 38, 22), 'based on at-rim share') +
+      card('3PT volume', profileShotTier(threeShare, 34, 20), 'spacing + pull-up diet') +
+      card('Mid-range', profileShotTier(midShare, 24, 12), 'in-between reliance') +
+      card('At-rim finishing', profileShotTier(rimPct, 64, 52), 'conversion at the basket') +
+      card('Free throws', profileShotTier(Number(ft.pct || 0), 75, 62), 'line reliability') +
+      card('Archetype', archetype, 'summary label') +
+    '</div>' +
+    '<div class="hint" style="margin-top:10px">Full shot chart and exact zone percentages stay limited to approved staff accounts.</div>';
+}
+
 // --- Profile modal functions ---
 
 function openProfile(r){
@@ -24,7 +81,7 @@ function openProfile(r){
   document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
   mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
   mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
-  mVal.textContent = fmtMoney(r.ActualValuation_calc);
+  mVal.textContent = profileDisplayMoney(r.ActualValuation_calc);
   mMult.textContent = Number.isFinite(r.MinMultiplier_calc) ? r.MinMultiplier_calc.toFixed(2) : '—';
 
   const mConfMultRow = document.getElementById('mConfMultRow');
@@ -44,7 +101,7 @@ function openProfile(r){
   if(Number.isFinite(bossVal)){
     const sign = Number.isFinite(delta) ? (delta>=0?'+':'') : '';
     const pctTxt = Number.isFinite(deltaPct) ? ` (${(deltaPct*100).toFixed(1)}%)` : '';
-    bossLine = `Actual valuation: <b>${fmtMoney(bossVal)}</b> • Model vs Boss: <b>${sign}${fmtMoney(delta).replace('$','')}</b>${pctTxt}`;
+    bossLine = `Actual valuation: <b>${profileDisplayMoney(bossVal)}</b> • Model vs Boss: <b>${sign}${profileDisplayMoney(delta).replace('$','')}</b>${pctTxt}`;
   }
 
   if(bossLine){ mMeta.innerHTML = `<div class="muted">${bossLine}</div>`; }
@@ -95,13 +152,21 @@ function openProfile(r){
   const avgPay = Number(avgPayEl.value);
   const starValue = Number(starValueEl.value);
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
-  mMeta.innerHTML = `
-    <div class="muted">
-      Star anchor: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'—'}</b>),
-      predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
-      More starValue → steeper curve (bigger top-end).
-    </div>
-  `;
+  if (profileIsGuestDemo()) {
+    mMeta.innerHTML = `
+      <div class="muted">
+        Demo mode keeps the player profile and decision outputs visible, but the exact valuation curve, weighting recipe, and shot-detail internals stay limited to approved staff accounts.
+      </div>
+    `;
+  } else {
+    mMeta.innerHTML = `
+      <div class="muted">
+        Star anchor: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
+        predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
+        More starValue means a steeper curve (bigger top-end).
+      </div>
+    `;
+  }
 
   const exclude = new Set(['PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc']);
   const all = Object.keys(r).filter(k => !exclude.has(k));
@@ -145,7 +210,7 @@ function openProfile(r){
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)">
           <span>${arrow} <span class="link" style="cursor:pointer" onclick="window._app.openProfile(window._app.tbGetAllPlayers().find(x=>x.Player==='${(pp.Player||'').replace(/'/g,"\\'")}'));event.stopPropagation();">${pp.Player}</span>
           <span style="color:var(--muted);font-size:10px;margin-left:4px">${pp.Team||''}</span></span>
-          <span style="font-size:11px"><b>${pp.Score?pp.Score.toFixed(1):'—'}</b> perf · ${pp.ActualValuation_calc?fmtMoney(pp.ActualValuation_calc):'—'}</span>
+          <span style="font-size:11px"><b>${pp.Score?pp.Score.toFixed(1):'—'}</b> perf · ${pp.ActualValuation_calc?profileDisplayMoney(pp.ActualValuation_calc):'—'}</span>
         </div>`;
       }).join('');
     } else { mSimilar.innerHTML = '<div class="muted">No similar players found.</div>'; }
@@ -171,25 +236,29 @@ function openProfile(r){
   // Player shot chart (uses play-by-play data via worker)
   const mShotChart = document.getElementById('mShotChart');
   if (mShotChart) {
-    const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
-    mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data…</div>';
-    if (typeof loadPlayerShots === 'function') {
-      loadPlayerShots(team, yr, player, r['EspnId'] || null).then(function(shots) {
-        if (!shots || !shots.length) {
-          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
-          return;
-        }
-        const svgHtml = typeof _th_buildShotChartSVG === 'function'
-          ? _th_buildShotChartSVG(shots, player, 'var(--accent)')
-          : '';
-        mShotChart.innerHTML =
-          '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts · ' + yr + ' season</div>' + svgHtml;
-        if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
-        enrichScoutReportWithShots(shots);
-        if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
-      }).catch(function() {
-        mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
-      });
+    if (profileIsGuestDemo()) {
+      mShotChart.innerHTML = '<div class="valueLabEmpty" style="display:block"><div style="font-weight:700;color:var(--text);margin-bottom:6px">Full shot chart locked</div><div class="muted" style="font-size:12px;line-height:1.55">Demo mode shows the shot-profile preview and overall player evaluation, but the exact shot map, location counts, and zone percentages stay limited to approved staff accounts.</div></div>';
+    } else {
+      const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
+      mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data...</div>';
+      if (typeof loadPlayerShots === 'function') {
+        loadPlayerShots(team, yr, player, r['EspnId'] || null).then(function(shots) {
+          if (!shots || !shots.length) {
+            mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
+            return;
+          }
+          const svgHtml = typeof _th_buildShotChartSVG === 'function'
+            ? _th_buildShotChartSVG(shots, player, 'var(--accent)')
+            : '';
+          mShotChart.innerHTML =
+            '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts - ' + yr + ' season</div>' + svgHtml;
+          if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
+          enrichScoutReportWithShots(shots);
+          if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
+        }).catch(function() {
+          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
+        });
+      }
     }
   }
 
@@ -909,6 +978,10 @@ async function renderShootingZones(r) {
     el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Shot data not available for this player.</div>';
     return;
   }
+  if (profileIsGuestDemo()) {
+    el.innerHTML = profileBuildGuestShotProfileHtml(p);
+    return;
+  }
   el.innerHTML = _buildCourtHeatmap(p);
 }
 
@@ -1015,7 +1088,7 @@ function openCompare(name1, name2){
 
   function renderCol(player, otherPlayer){
     const perf = player.Score != null ? player.Score.toFixed(1) : '—';
-    const val = player.ActualValuation_calc != null ? fmtMoney(player.ActualValuation_calc) : '—';
+    const val = player.ActualValuation_calc != null ? profileDisplayMoney(player.ActualValuation_calc) : '—';
     const perfColor = player.Score >= 60 ? 'var(--good)' : player.Score >= 35 ? 'var(--warn)' : 'var(--bad)';
 
     let rows = '';
@@ -1062,7 +1135,10 @@ function openCompare(name1, name2){
   if(p2wins.length) verdict += ` ${p2.Player} leads in ${p2wins.join(', ')}.`;
 
   const v1 = safeNum(p1.ActualValuation_calc)||0, v2 = safeNum(p2.ActualValuation_calc)||0;
-  if(v1 !== v2) verdict += ` Value gap: $${Math.abs(v1 - v2).toLocaleString()} (${v1 < v2 ? p1.Player : p2.Player} is cheaper).`;
+  if(v1 !== v2) {
+    if (profileIsGuestDemo()) verdict += ` Value band edge: ${v1 < v2 ? p1.Player : p2.Player} projects cheaper in demo mode.`;
+    else verdict += ` Value gap: $${Math.abs(v1 - v2).toLocaleString()} (${v1 < v2 ? p1.Player : p2.Player} is cheaper).`;
+  }
 
   cmpBody.innerHTML = `<div class="cmpGrid">
     ${renderCol(p1, p2)}

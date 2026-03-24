@@ -11,6 +11,7 @@ var AUTH_ROLE_KEY = 'ncaa_auth_role';
 var AUTH_FORCE_PW_KEY = 'ncaa_auth_force_password_change';
 var AUTH_GUEST_KEY = 'ncaa_guest_mode';
 var GUEST_AI_KEY = 'ncaa_guest_ai_uses';
+var AUTH_GUEST_TOUR_KEY = 'ncaa_guest_demo_tour_seen';
 
 function authGetToken() { return localStorage.getItem(AUTH_KEY); }
 function authGetUser() { return localStorage.getItem(AUTH_USER_KEY); }
@@ -119,6 +120,9 @@ function authHandleUnauthorized(message) {
   if (window.ValueLab && typeof window.ValueLab.resetSession === 'function') {
     window.ValueLab.resetSession();
   }
+  if (window.SharesManager && typeof window.SharesManager.resetSession === 'function') {
+    window.SharesManager.resetSession();
+  }
   var loadingOverlay = document.getElementById('loadingOverlay');
   var welcomeOverlay = document.getElementById('welcomeOverlay');
   if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -137,7 +141,28 @@ function authEnterGuest() {
   localStorage.removeItem(AUTH_FORCE_PW_KEY);
   authHidePasswordChangeOverlay();
   localStorage.setItem(AUTH_GUEST_KEY, '1');
+  try { sessionStorage.removeItem(AUTH_GUEST_TOUR_KEY); } catch (_) {}
+  if (window.SharesManager && typeof window.SharesManager.resetSession === 'function') {
+    window.SharesManager.resetSession();
+  }
   authStartLoading();
+}
+
+function authMaybeStartGuestTour() {
+  if (!authIsGuest()) return;
+  try {
+    if (sessionStorage.getItem(AUTH_GUEST_TOUR_KEY) === '1') return;
+  } catch (_) {}
+  if (!window._tour || typeof window._tour.startGuestDemo !== 'function') return;
+  try { sessionStorage.setItem(AUTH_GUEST_TOUR_KEY, '1'); } catch (_) {}
+  setTimeout(function () {
+    if (window.HelpPanel && typeof window.HelpPanel.close === 'function') {
+      window.HelpPanel.close();
+    }
+    if (window._tour && typeof window._tour.startGuestDemo === 'function') {
+      window._tour.startGuestDemo();
+    }
+  }, 900);
 }
 
 /* Show loading screen and start video + data fetch in parallel */
@@ -226,11 +251,13 @@ function _authSetupHeader() {
   var userEl = document.getElementById('authUser');
   var logoutBtn = document.getElementById('logoutBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
+  var demoModeBanner = document.getElementById('demoModeBanner');
   var notesToggle = document.getElementById('notesToggle');
+  var isGuest = authIsGuest();
 
   if (typeof window._apiUsageUpdateBadge === 'function') window._apiUsageUpdateBadge();
 
-  if (authIsGuest()) {
+  if (isGuest) {
     if (userEl) userEl.textContent = 'Guest';
     if (logoutBtn) logoutBtn.style.display = 'none';
     if (guestLoginBtn) guestLoginBtn.style.display = '';
@@ -240,6 +267,10 @@ function _authSetupHeader() {
     if (logoutBtn) logoutBtn.style.display = '';
     if (guestLoginBtn) guestLoginBtn.style.display = 'none';
     if (notesToggle) notesToggle.style.display = '';
+  }
+  if (demoModeBanner) demoModeBanner.style.display = isGuest ? '' : 'none';
+  if (isGuest && window._dashboardCurrentPageId === 'pageMethodology' && window.TeamBuilder && typeof window.TeamBuilder.showDashboardPage === 'function') {
+    window.TeamBuilder.showDashboardPage('pagePlayers', 'pagePlayers');
   }
 
   if (window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
@@ -257,7 +288,17 @@ function _authSetupHeader() {
   if (window.AdminPanel && typeof window.AdminPanel.refreshUI === 'function') {
     window.AdminPanel.refreshUI();
   }
-  if (!authIsGuest() && authMustChangePassword()) authShowPasswordChangeOverlay();
+  if (window.SharesManager && typeof window.SharesManager.refreshUI === 'function') {
+    window.SharesManager.refreshUI();
+  }
+  if (window.HelpPanel && typeof window.HelpPanel.refreshCurrentPage === 'function') {
+    window.HelpPanel.refreshCurrentPage();
+  }
+  if (window._app && typeof window._app.refreshGuestDemoUI === 'function') {
+    window._app.refreshGuestDemoUI();
+  }
+  if (isGuest) authMaybeStartGuestTour();
+  if (!isGuest && authMustChangePassword()) authShowPasswordChangeOverlay();
   else authHidePasswordChangeOverlay();
 }
 
@@ -274,6 +315,12 @@ function authShowOverlay() {
   if (notesToggle) notesToggle.style.display = 'none';
   var userEl = document.getElementById('authUser');
   if (userEl) userEl.textContent = '';
+}
+
+function authPromptUpgrade(message) {
+  authShowOverlay();
+  var loginErr = document.getElementById('loginError');
+  if (loginErr) loginErr.textContent = message || 'Log in with an approved UToledo Athletics account to access this internal workflow.';
 }
 
 async function authPost(url, body) {
@@ -303,6 +350,7 @@ async function authInit() {
   var logoutBtn = document.getElementById('logoutBtn');
   var guestBtn = document.getElementById('guestBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
+  var demoModeLoginBtn = document.getElementById('demoModeLoginBtn');
   var showCreateAccountBtn = document.getElementById('showCreateAccountBtn');
   var backToLoginBtn = document.getElementById('backToLoginBtn');
 
@@ -334,6 +382,12 @@ async function authInit() {
       var notesToggle = document.getElementById('notesToggle');
       if (notesToggle) notesToggle.style.display = 'none';
       authShowOverlay();
+    });
+  }
+
+  if (demoModeLoginBtn) {
+    demoModeLoginBtn.addEventListener('click', function () {
+      authPromptUpgrade('Log in with an approved staff account to unlock internal methodology, model settings, and collaboration.');
     });
   }
 
@@ -462,6 +516,9 @@ async function authInit() {
       if (window.ValueLab && typeof window.ValueLab.resetSession === 'function') {
         window.ValueLab.resetSession();
       }
+      if (window.SharesManager && typeof window.SharesManager.resetSession === 'function') {
+        window.SharesManager.resetSession();
+      }
       authShowOverlay();
       if (loginForm) loginForm.reset();
       if (registerForm) registerForm.reset();
@@ -489,10 +546,13 @@ class Auth {
   getUser() { return authGetUser(); }
   getRole() { return authGetRole(); }
   mustChangePassword() { return authMustChangePassword(); }
+  isGuest() { return authIsGuest(); }
   isAdmin() { return authIsAdmin(); }
   showDashboard() { return authShowDashboard(); }
   showOverlay() { return authShowOverlay(); }
+  promptUpgrade(message) { return authPromptUpgrade(message); }
   clear() { return authClear(); }
 }
 
 window.Auth = new Auth();
+window.authPromptUpgrade = authPromptUpgrade;

@@ -162,6 +162,7 @@ async function _chatRefreshConvList() {
 }
 
 function chatStartPolling(){
+  if (chatIsGuestPreview()) return;
   chatStopPolling();
   // 2s: fast poll for messages in the active conversation
   chatState.polling=setInterval(chatPollActive,2000);
@@ -171,6 +172,85 @@ function chatStartPolling(){
 function chatStopPolling(){
   if(chatState.polling){clearInterval(chatState.polling);chatState.polling=null;}
   if(chatState.listPolling){clearInterval(chatState.listPolling);chatState.listPolling=null;}
+}
+
+function chatIsGuestPreview() {
+  return typeof authIsGuest === 'function' && authIsGuest();
+}
+
+function chatSetEmptyState(title, hint) {
+  var empty = document.getElementById('chatEmpty');
+  if (!empty) return;
+  var titleEl = empty.querySelector('.chatEmptyTitle');
+  var hintEl = empty.querySelector('.chatEmptyHint');
+  if (titleEl) titleEl.textContent = title || 'No conversation selected';
+  if (hintEl) hintEl.textContent = hint || 'Pick one from the left, or click New to start a conversation.';
+}
+
+function chatRefreshGuestUI() {
+  var isGuest = chatIsGuestPreview();
+  var guestBanner = document.getElementById('chatGuestBanner');
+  var layout = document.getElementById('chatLayout');
+  var newBtn = document.getElementById('chatNewBtn');
+  var attachBtn = document.getElementById('chatAttachBtn');
+  var sendBtn = document.getElementById('chatSendBtn');
+  var input = document.getElementById('chatInput');
+  var header = document.getElementById('chatHeader');
+  var msgs = document.getElementById('chatMessages');
+  var composer = document.getElementById('chatComposer');
+  var empty = document.getElementById('chatEmpty');
+
+  if (guestBanner) guestBanner.style.display = isGuest ? '' : 'none';
+  if (layout) layout.classList.toggle('chatGuestLocked', isGuest);
+  if (newBtn) {
+    newBtn.disabled = isGuest;
+    newBtn.title = isGuest ? 'New conversations are locked in demo mode.' : 'New conversation';
+  }
+  if (attachBtn) {
+    attachBtn.disabled = isGuest;
+    attachBtn.title = isGuest ? 'Messaging actions are locked in demo mode.' : 'Attach player pick';
+  }
+  if (sendBtn) {
+    sendBtn.disabled = isGuest;
+    sendBtn.title = isGuest ? 'Messaging actions are locked in demo mode.' : 'Send';
+  }
+  if (input) {
+    input.disabled = isGuest;
+    input.placeholder = isGuest ? 'Guest preview mode keeps Collaborate read-only.' : 'Message...';
+  }
+
+  if (isGuest) {
+    chatState.activeConvId = null;
+    if (header) header.style.display = 'none';
+    if (msgs) msgs.style.display = 'none';
+    if (composer) composer.style.display = 'none';
+    if (empty) empty.style.display = '';
+    chatSetEmptyState(
+      'Collaborate is staff-only in demo mode',
+      'Approved accounts can open live threads, send player picks, and collaborate across the dashboard. Guests can preview the workspace without seeing internal staff conversations.'
+    );
+  } else if (!chatState.activeConvId) {
+    if (header) header.style.display = 'none';
+    if (msgs) msgs.style.display = 'none';
+    if (composer) composer.style.display = 'none';
+    if (empty) empty.style.display = '';
+    chatSetEmptyState('No conversation selected', 'Pick one from the left, or click New to start a conversation.');
+  }
+}
+
+function chatResetSession() {
+  chatStopPolling();
+  chatState.conversations = [];
+  chatState.activeConvId = null;
+  chatState.messages = {};
+  chatState.users = [];
+  chatState.loaded = false;
+  chatState.hasMore = {};
+  chatState.replyTo = null;
+  chatState.attachPlayer = null;
+  chatState.attachPicks = null;
+  chatRenderList();
+  chatRefreshGuestUI();
 }
 
 // ── Open conversation ─────────────────────────────────────────────────────────
@@ -200,6 +280,10 @@ async function chatOpenConv(convId) {
 function chatRenderList() {
   var listEl=document.getElementById('chatConvList');
   if (!listEl) return;
+  if (chatIsGuestPreview()) {
+    listEl.innerHTML='<div class="chatConvEmpty">Guest preview mode keeps live staff conversations hidden. Log in with an approved account to start direct messages, group chats, or share player picks.</div>';
+    return;
+  }
   var myName=typeof authGetUser==='function'?authGetUser():'';
   var q=((document.getElementById('chatConvSearch')||{}).value||'').toLowerCase();
   var convs=chatState.conversations.slice();
@@ -846,10 +930,13 @@ function initSharesPage(){
       if(collaborateVisible&&collaborateVisible.style.display!=='none') chatStartPolling();
     }
   });
+  chatRefreshGuestUI();
   chatRenderList();
 }
 
 function sharesLoad(){return chatLoad();}
 function sharesUpdateBadge(){return chatUpdateBadge();}
+function sharesRefreshUI(){return chatRefreshGuestUI();}
+function sharesResetSession(){return chatResetSession();}
 
-window.SharesManager={sharesLoad,sharesOpenSendModal,sharesCloseSendModal,sharesOpenBulkModal,sharesCloseBulkModal,sharesUpdateBadge,chatLoad,chatUpdateBadge,initSharesPage};
+window.SharesManager={sharesLoad,sharesOpenSendModal,sharesCloseSendModal,sharesOpenBulkModal,sharesCloseBulkModal,sharesUpdateBadge,sharesRefreshUI,sharesResetSession,chatLoad,chatUpdateBadge,initSharesPage,refreshUI:sharesRefreshUI,resetSession:sharesResetSession};

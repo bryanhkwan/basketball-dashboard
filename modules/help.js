@@ -34,6 +34,59 @@
     };
   }
 
+  function getGuestMethodologyCards(pageId, content) {
+    if (pageId === 'pagePlayers') {
+      return [
+        {
+          title: 'Scouting board',
+          body: 'Players is the live ranking board for the selected league and position bucket, with profile access, Perf outputs, and valuation outputs still visible in demo mode.'
+        },
+        {
+          title: 'Protected model controls',
+          body: 'Guest mode keeps the public-facing results available, but the internal tuning controls for presets, weights, valuation, and conference multipliers stay behind approved staff access.'
+        },
+        {
+          title: 'Best use',
+          body: 'Use this page to understand the core scouting workflow, then branch into Transfer Portal, Team Hub, and Value Lab to see how those outputs feed the rest of the dashboard.'
+        }
+      ];
+    }
+    if (pageId === 'pageMethodology') {
+      return [
+        {
+          title: 'Staff-only methodology',
+          body: 'Full formulas, thresholds, and internal modeling notes are limited to approved staff accounts. Guest mode keeps the workflow tour and high-level page summaries available instead.'
+        }
+      ];
+    }
+    return Array.isArray(content.methodology) ? content.methodology.slice() : [];
+  }
+
+  function getTourStepsForPage(pageId, content) {
+    var steps = Array.isArray(content && content.tourSteps) ? content.tourSteps.slice() : [];
+    var isGuest = typeof authIsGuest === 'function' && authIsGuest();
+    if (!isGuest) return steps;
+
+    return steps.reduce(function (nextSteps, step) {
+      if (!step) return nextSteps;
+      var target = step.target ? String(step.target) : '';
+      if (target === '#playersSettingsToggleBtn' && pageId === 'pagePlayers') {
+        var guestStep = {};
+        Object.keys(step).forEach(function (key) { guestStep[key] = step[key]; });
+        guestStep.playersSettings = 'closed';
+        guestStep.body = 'Model settings houses the internal presets, weights, valuation anchors, and conference multipliers. In guest demo mode, that tuning workspace stays locked to approved staff accounts.';
+        nextSteps.push(guestStep);
+        return nextSteps;
+      }
+      if (['#weightsCard', '#valuationCard', '#confMultCard', '#evalPresetsCard', '#pageMethodology'].indexOf(target) !== -1) {
+        return nextSteps;
+      }
+      if (step.playersSettings === 'open') return nextSteps;
+      nextSteps.push(step);
+      return nextSteps;
+    }, []);
+  }
+
   function buildDom() {
     if (refs.drawer) return;
 
@@ -117,8 +170,18 @@
     state.currentPageId = pageId || getCurrentPageId();
 
     var content = getContent(state.currentPageId);
-    var steps = Array.isArray(content.tourSteps) ? content.tourSteps : [];
+    var steps = getTourStepsForPage(state.currentPageId, content);
     var isMethodologyPage = state.currentPageId === 'pageMethodology';
+    var isGuest = typeof authIsGuest === 'function' && authIsGuest();
+    var methodologyCards = isGuest
+      ? getGuestMethodologyCards(state.currentPageId, content)
+      : (Array.isArray(content.methodology) ? content.methodology.slice() : []);
+    if (isGuest) {
+      methodologyCards.push({
+        title: 'Internal model details',
+        body: 'Guest mode keeps the page guide high-level. Exact methodology, tuning logic, and internal decision rules stay limited to approved staff accounts.'
+      });
+    }
 
     refs.badge.textContent = 'Help - ' + (content.title || 'Current Page');
     refs.title.textContent = content.title || 'Dashboard Help';
@@ -126,15 +189,20 @@
     refs.tourMeta.textContent = steps.length
       ? steps.length + ' short stop' + (steps.length === 1 ? '' : 's') + ' focused only on this page.'
       : 'No tour stops are set up for this page yet.';
-    refs.note.textContent = 'The drawer stays contextual so you do not have to sit through one giant dashboard tour.';
+    refs.note.textContent = isGuest
+      ? 'Guest mode keeps the tour contextual while protecting deeper methodology and model-tuning internals.'
+      : 'The drawer stays contextual so you do not have to sit through one giant dashboard tour.';
     refs.tourBtn.disabled = !steps.length;
     refs.tourBtn.classList.toggle('secondary', !steps.length);
     refs.tourBtn.classList.toggle('primary', !!steps.length);
     refs.tourBtn.textContent = steps.length ? 'Start Tour' : 'Tour Coming Soon';
-    refs.methodologyBtn.disabled = false;
-    refs.methodologyBtn.textContent = isMethodologyPage ? 'Scroll to Top of Methodology' : 'Open Full Methodology';
+    refs.methodologyBtn.disabled = isGuest;
+    refs.methodologyBtn.title = isGuest ? 'Full methodology is reserved for approved staff accounts.' : '';
+    refs.methodologyBtn.textContent = isGuest
+      ? 'Staff methodology only'
+      : (isMethodologyPage ? 'Scroll to Top of Methodology' : 'Open Full Methodology');
 
-    renderMethodology(content.methodology || []);
+    renderMethodology(methodologyCards);
   }
 
   function open() {
@@ -155,7 +223,7 @@
 
   function startCurrentPageTour() {
     var content = getContent(state.currentPageId);
-    var steps = Array.isArray(content.tourSteps) ? content.tourSteps : [];
+    var steps = getTourStepsForPage(state.currentPageId, content);
     if (!steps.length || !window._tour || typeof window._tour.start !== 'function') return;
     close();
     window._tour.start(steps);
@@ -163,6 +231,12 @@
 
   function openFullMethodology() {
     close();
+    if (typeof authIsGuest === 'function' && authIsGuest()) {
+      if (typeof authPromptUpgrade === 'function') {
+        authPromptUpgrade('Full methodology is limited to approved staff accounts. Guest mode keeps the workflow tour and high-level page notes available.');
+      }
+      return;
+    }
     if (state.currentPageId === 'pageMethodology') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;

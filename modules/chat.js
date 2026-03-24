@@ -96,7 +96,10 @@
   }
 
   function fmtMoneyAI(n){
-    if(n==null || !Number.isFinite(+n)) return '—';
+    if(n == null) return 'N/A';
+    if(typeof n === 'string') return n;
+    if(!Number.isFinite(+n)) return 'N/A';
+    if (typeof demoFormatMoney === 'function') return demoFormatMoney(+n);
     return '$' + Math.round(+n).toLocaleString();
   }
 
@@ -146,7 +149,7 @@
       const lines = [
         `<b>Dashboard data</b>`,
         `${escapeHtml(s.player||playerName||'Player')} (${escapeHtml(s.team||'')}${s.conf?`, ${escapeHtml(s.conf)}`:''})`,
-        `PerfScore: <b>${escapeHtml(s.perf ?? '—')}</b> | Model value: <b>${escapeHtml(fmtMoneyAI(s.value))}</b> | Pos: ${escapeHtml(s.pos||'')}${s.cls?` | Class: ${escapeHtml(s.cls)}`:''}`,
+        `PerfScore: <b>${escapeHtml(s.perf ?? '—')}</b> | ${typeof demoIsGuestMode === 'function' && demoIsGuestMode() ? 'Value band' : 'Model value'}: <b>${escapeHtml(fmtMoneyAI(s.value))}</b> | Pos: ${escapeHtml(s.pos||'')}${s.cls?` | Class: ${escapeHtml(s.cls)}`:''}`,
         `PPG: ${escapeHtml(s.ppg ?? '—')} | APG: ${escapeHtml(s.apg ?? '—')} | RPG: ${escapeHtml(s.rpg ?? '—')} | BPG: ${escapeHtml(s.bpg ?? '—')} | DRtg: ${escapeHtml(s.drtg ?? '—')}`,
       ];
       addMsg('system', lines.join('<br>'));
@@ -154,7 +157,7 @@
     }
     const list = Array.isArray(matches) ? matches.slice(0,6) : [];
     const header = `<b>Dashboard matches</b> (top ${list.length})`;
-    const rows = list.map(r => `${escapeHtml(r.player||'')} (${escapeHtml(r.team||'')}) | Perf: ${escapeHtml(r.perf ?? '—')} | Val: ${escapeHtml(fmtMoneyAI(r.value))}`);
+    const rows = list.map(r => `${escapeHtml(r.player||'')} (${escapeHtml(r.team||'')}) | Perf: ${escapeHtml(r.perf ?? '—')} | ${typeof demoIsGuestMode === 'function' && demoIsGuestMode() ? 'Band' : 'Val'}: ${escapeHtml(fmtMoneyAI(r.value))}`);
     addMsg('system', [header].concat(rows.length ? rows : ['No matching players found in loaded data.']).join('<br>'));
   }
 
@@ -185,7 +188,7 @@
     const hasPool = allPlayers().length > 0;
 
     const formatInstructions = isValuation
-      ? `\n\nAfter reviewing the tool results, respond with this exact structure:\nDashboard evidence:\n- (1-3 bullets, cite PerfScore + model value)\nWeb evidence:\n- (1-3 bullets, include concrete dates if present)\nComparison:\n- (1-3 bullets explaining how web context changes confidence/upside/risk)\nVerdict: steal | fair | overpay | avoid (pick one)`
+      ? `\n\nAfter reviewing the tool results, respond with this exact structure:\nDashboard evidence:\n- (1-3 bullets, cite PerfScore + ${typeof demoIsGuestMode === 'function' && demoIsGuestMode() ? 'value band' : 'model value'})\nWeb evidence:\n- (1-3 bullets, include concrete dates if present)\nComparison:\n- (1-3 bullets explaining how web context changes confidence/upside/risk)\nVerdict: steal | fair | overpay | avoid (pick one)`
       : `\n\nAfter reviewing the tool results, respond with this exact structure:\nDashboard data:\n- (1-3 bullets from our loaded stats, or "No dashboard data loaded" if none available)\nWeb context:\n- (1-3 bullets with concrete dates from search results)\nSummary:\n- (direct answer combining both sources)`;
     chatHistory.push({role:'user', parts:[{text: text + formatInstructions}]});
 
@@ -228,7 +231,8 @@
   function statLine(r){
     return { player:r.Player, team:r.Team, pos:r.Position||r.Pos||'', conf:r.Conference||'',
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
-      perf:r.Score?+r.Score.toFixed(1):null, value:r.ActualValuation_calc?Math.round(r.ActualValuation_calc):null,
+      perf:r.Score?+r.Score.toFixed(1):null,
+      value:r.ActualValuation_calc ? ((typeof demoIsGuestMode === 'function' && demoIsGuestMode()) ? (typeof demoFormatMoney === 'function' ? demoFormatMoney(r.ActualValuation_calc) : ('$' + Math.round(r.ActualValuation_calc).toLocaleString())) : Math.round(r.ActualValuation_calc)) : null,
       ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
       rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
       bpg:r.BPG!=null?+Number(r.BPG).toFixed(1):null, bpm:r.BPM!=null?+Number(r.BPM).toFixed(1):null,
@@ -246,7 +250,7 @@
     const a=app(), roster=a.tbRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
       rosterSize:roster.length, roster:roster.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
-      perf:r.Score?r.Score.toFixed(1):'—',value:r.ActualValuation_calc?'$'+Math.round(r.ActualValuation_calc).toLocaleString():'—'})),
+      perf:r.Score?r.Score.toFixed(1):'N/A',value:r.ActualValuation_calc?(typeof demoFormatMoney === 'function' ? demoFormatMoney(r.ActualValuation_calc) : '$'+Math.round(r.ActualValuation_calc).toLocaleString()):'N/A'})),
       budget:document.getElementById('tbBudget')?.value||'500000',
       playerCap:document.getElementById('tbPlayerCap')?.value||'150000',
       maxRoster:document.getElementById('tbMaxRoster')?.value||'13',
@@ -267,6 +271,13 @@
     m = m || all.find(r=>(r.Player||'').toLowerCase().includes(pn));
     if(!m) return null;
     const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
+    if (typeof demoIsGuestMode === 'function' && demoIsGuestMode()) {
+      var band = typeof demoFormatMoney === 'function' ? demoFormatMoney(m.ActualValuation_calc) : null;
+      ['ActualValuation_calc','ActualValuation','PredictedValue_calc','PredictedValue','ValueDelta_calc','ValueDeltaPct_calc'].forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(out, key)) delete out[key];
+      });
+      if (band) out.ValueBand = band;
+    }
     // Draft probability (MBB only)
     if(typeof draftProbability==='function'){
       const dp=draftProbability(m);

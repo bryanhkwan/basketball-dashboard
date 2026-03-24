@@ -52,8 +52,18 @@ function valueLabNum(value) {
 function valueLabFmtMoney(value) {
   var n = valueLabNum(value);
   if (!Number.isFinite(n)) return '—';
+  if (typeof demoFormatMoney === 'function') return demoFormatMoney(n);
   if (typeof fmtMoney === 'function') return fmtMoney(n);
   return '$' + Math.round(n).toLocaleString('en-US');
+}
+
+function valueLabMoneyForAI(value) {
+  var n = valueLabNum(value);
+  if (!Number.isFinite(n)) return null;
+  if (typeof demoIsGuestMode === 'function' && demoIsGuestMode()) {
+    return valueLabFmtMoney(n);
+  }
+  return n;
 }
 
 function valueLabNorm(text) {
@@ -1484,30 +1494,50 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
   analysis = analysis && !analysis.empty ? analysis : null;
   if (!analysis) return null;
   portalCtx = portalCtx || { targets: [], note: '' };
+  var outcome = analysis.outcome ? Object.assign({}, analysis.outcome) : null;
+  if (outcome) {
+    outcome.spendBasis = valueLabMoneyForAI(outcome.spendBasis);
+    outcome.spendPerProjectedWin = valueLabMoneyForAI(outcome.spendPerProjectedWin);
+    outcome.spendPerActualWin = valueLabMoneyForAI(outcome.spendPerActualWin);
+  }
   return {
     caseName: analysis.bundle && analysis.bundle.label ? analysis.bundle.label : 'Value Lab Case',
     league: valueLabCurrentLeague(),
     season: valueLabCurrentSeason(),
     sourceType: analysis.bundle && analysis.bundle.sourceType ? analysis.bundle.sourceType : 'manual',
-    budgetTotal: analysis.budgetTotal,
-    budgetRemaining: analysis.budgetRemaining,
-    totalModelValue: analysis.totalModelValue,
-    totalActualSpend: analysis.totalActualSpend,
-    effectiveSpend: analysis.totalSpend,
+    budgetTotal: valueLabMoneyForAI(analysis.budgetTotal),
+    budgetRemaining: valueLabMoneyForAI(analysis.budgetRemaining),
+    totalModelValue: valueLabMoneyForAI(analysis.totalModelValue),
+    totalActualSpend: valueLabMoneyForAI(analysis.totalActualSpend),
+    effectiveSpend: valueLabMoneyForAI(analysis.totalSpend),
     contractCoverage: analysis.contractCoverage,
     avgPerf: analysis.avgPerf,
     perfPer100kActual: analysis.perfPer100kActual,
     perfPer100k: analysis.perfPer100k,
-    avgDelta: analysis.avgDelta,
-    overMarketTotal: analysis.overMarketTotal,
-    underMarketTotal: analysis.underMarketTotal,
+    avgDelta: valueLabMoneyForAI(analysis.avgDelta),
+    overMarketTotal: valueLabMoneyForAI(analysis.overMarketTotal),
+    underMarketTotal: valueLabMoneyForAI(analysis.underMarketTotal),
     top3SpendShare: analysis.top3SpendShare,
-    outcome: analysis.outcome || null,
+    outcome: outcome,
     topValueWins: (analysis.steals || []).slice(0, 4).map(function (row) {
-      return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
+      return {
+        player: row.Player,
+        team: row.Team,
+        perf: row.perf,
+        surplus: row.surplus,
+        modelValue: valueLabMoneyForAI(row.valuation),
+        actualSpend: valueLabMoneyForAI(row.actualSpend)
+      };
     }),
     topRisks: (analysis.overpays || []).slice(0, 4).map(function (row) {
-      return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
+      return {
+        player: row.Player,
+        team: row.Team,
+        perf: row.perf,
+        surplus: row.surplus,
+        modelValue: valueLabMoneyForAI(row.valuation),
+        actualSpend: valueLabMoneyForAI(row.actualSpend)
+      };
     }),
     roster: analysis.players.map(function (row) {
       return {
@@ -1517,9 +1547,9 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         classLabel: row.classBucket,
         perf: row.perf,
         expectedPerf: row.expectedPerf,
-        modelValue: row.valuation,
-        actualSpend: row.actualSpend,
-        delta: row.delta,
+        modelValue: valueLabMoneyForAI(row.valuation),
+        actualSpend: valueLabMoneyForAI(row.actualSpend),
+        delta: valueLabMoneyForAI(row.delta),
         roiCall: row.roiLabel,
       };
     }),
@@ -1530,7 +1560,7 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         position: target.position,
         classLabel: target.classLabel,
         perf: target.perf,
-        modelValue: target.valuation,
+        modelValue: valueLabMoneyForAI(target.valuation),
         expectedPerf: target.expectedPerf,
         surplus: target.surplus,
         withinBudget: target.withinBudget,
@@ -1884,10 +1914,22 @@ async function valueLabRunAIBrief() {
           rosterDiff: {
             sharedCount: rosterDiff ? rosterDiff.sharedCount : 0,
             onlyActive: (rosterDiff && rosterDiff.onlyCurrent ? rosterDiff.onlyCurrent : []).slice(0, 8).map(function (row) {
-              return { player: row.Player, team: row.Team, perf: row.perf, spendBasis: row.spendBasis, roiCall: row.roiLabel };
+              return {
+                player: row.Player,
+                team: row.Team,
+                perf: row.perf,
+                spendBasis: valueLabMoneyForAI(row.spendBasis),
+                roiCall: row.roiLabel
+              };
             }),
             onlyCompare: (rosterDiff && rosterDiff.onlyCompare ? rosterDiff.onlyCompare : []).slice(0, 8).map(function (row) {
-              return { player: row.Player, team: row.Team, perf: row.perf, spendBasis: row.spendBasis, roiCall: row.roiLabel };
+              return {
+                player: row.Player,
+                team: row.Team,
+                perf: row.perf,
+                spendBasis: valueLabMoneyForAI(row.spendBasis),
+                roiCall: row.roiLabel
+              };
             }),
           }
         }

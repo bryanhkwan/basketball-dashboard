@@ -234,6 +234,7 @@ function portalSafeNum(v) {
 function portalFmtMoney(v) {
   var n = portalSafeNum(v);
   if (n === null) return '\u2014';
+  if (typeof demoFormatMoney === 'function') return demoFormatMoney(n);
   if (typeof fmtMoney === 'function') return fmtMoney(n);
   return '$' + Math.round(n).toLocaleString();
 }

@@ -25,6 +25,11 @@ var _cachedAllPlayers = null;
 var _cachedAllPlayersLg = '';
 var _tbRefreshTimer = null;
 
+function tbDisplayMoney(value) {
+  if (typeof demoFormatMoney === 'function') return demoFormatMoney(value);
+  return fmtMoney(value);
+}
+
 function initTeamBuilderDOMRefs(){
   tbBudgetEl = document.getElementById('tbBudget');
   tbPlayerCapEl = document.getElementById('tbPlayerCap');
@@ -137,7 +142,7 @@ function tbAddPlayer(r){
   }
   const cap = Number(tbPlayerCapEl.value) || Infinity;
   const val = safeNum(r.ActualValuation_calc) || 0;
-  if(Number.isFinite(cap) && val > cap){ showWarn(`${r.Player} ($${val.toLocaleString()}) exceeds per-player cap ($${cap.toLocaleString()}).`); return; }
+  if(Number.isFinite(cap) && val > cap){ showWarn(`${r.Player} (${tbDisplayMoney(val)}) exceeds the per-player cap (${tbDisplayMoney(cap)}).`); return; }
   const budget = Number(tbBudgetEl.value) || Infinity;
   const used = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
   if(Number.isFinite(budget) && used + val > budget){ showWarn(`Adding ${r.Player} would exceed budget.`); return; }
@@ -176,7 +181,7 @@ function oppRefresh(){
 
   const totalCost = oppRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
   if(oppCountEl) oppCountEl.textContent = oppRoster.length;
-  if(oppCostEl) oppCostEl.textContent = fmtMoney(totalCost);
+  if(oppCostEl) oppCostEl.textContent = tbDisplayMoney(totalCost);
 
   oppRoster.forEach((r, i) => {
     const tr = document.createElement('tr');
@@ -186,7 +191,7 @@ function oppRefresh(){
       <td style="font-size:11px">${r.Team||'—'}</td>
       <td style="font-size:11px">${r.Position||r.Pos||(tbPosGroup(r)==='guard'?'Guard':'Big')}</td>
       <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
-      <td style="font-size:11.5px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+      <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
     `;
     tr.querySelector('.link').addEventListener('click', () => openProfile(r));
@@ -549,9 +554,9 @@ function tbRefresh(){
 
   tbMaxLabelEl.textContent = maxR;
   tbCountEl.textContent = tbRoster.length;
-  tbCostEl.textContent = fmtMoney(totalCost);
+  tbCostEl.textContent = tbDisplayMoney(totalCost);
   const rem = budget - totalCost;
-  tbRemainingEl.textContent = fmtMoney(rem);
+  tbRemainingEl.textContent = tbDisplayMoney(rem);
   tbRemainingEl.style.color = rem < 0 ? 'var(--bad)' : rem < budget * 0.1 ? 'var(--warn)' : 'var(--good)';
 
   let guards = 0, bigs = 0;
@@ -610,12 +615,12 @@ function tbRefresh(){
           const cVal = safeNum(bigCand.ActualValuation_calc)||0;
           row.innerHTML = `
             <span class="tbAddBtn" data-rebal-drop="${gIdx}" data-rebal-add="${tbPlayerKey(bigCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-            <b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)})</span>
+            <b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(gVal)})</span>
             <span style="color:var(--muted)">→</span>
-            <b style="color:var(--good)">${bigCand.Player}</b> <span class="muted">(${bigCand.Position||'Big'}, ${(bigCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
+            <b style="color:var(--good)">${bigCand.Player}</b> <span class="muted">(${bigCand.Position||'Big'}, ${(bigCand.Score||0).toFixed(1)} perf, ${tbDisplayMoney(cVal)})</span>
           `;
         } else {
-          row.innerHTML = `<b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(gVal)}) — no big candidates in budget</span>`;
+          row.innerHTML = `<b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(gVal)}) — no big candidates in budget</span>`;
         }
         rebalanceInfo.appendChild(row);
       });
@@ -648,12 +653,12 @@ function tbRefresh(){
           const cVal = safeNum(grdCand.ActualValuation_calc)||0;
           row.innerHTML = `
             <span class="tbAddBtn" data-rebal-drop="${bIdx}" data-rebal-add="${tbPlayerKey(grdCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-            <b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)})</span>
+            <b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(bVal)})</span>
             <span style="color:var(--muted)">→</span>
-            <b style="color:var(--good)">${grdCand.Player}</b> <span class="muted">(${grdCand.Position||'Guard'}, ${(grdCand.Score||0).toFixed(1)} perf, ${fmtMoney(cVal)})</span>
+            <b style="color:var(--good)">${grdCand.Player}</b> <span class="muted">(${grdCand.Position||'Guard'}, ${(grdCand.Score||0).toFixed(1)} perf, ${tbDisplayMoney(cVal)})</span>
           `;
         } else {
-          row.innerHTML = `<b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${fmtMoney(bVal)}) — no guard candidates in budget</span>`;
+          row.innerHTML = `<b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(bVal)}) — no guard candidates in budget</span>`;
         }
         rebalanceInfo.appendChild(row);
       });
@@ -743,7 +748,7 @@ function tbRenderRoster(){
       <td style="font-size:11px">${r.Team||'—'}</td>
       <td style="font-size:11px">${r.Position||r.Pos||(tbPosGroup(r)==='guard'?'Guard':'Big')}</td>
       <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} <span class="muted" style="font-size:10px;font-weight:500">(${pctStr})</span></td>
-      <td style="font-size:11.5px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+      <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
     `;
     tr.querySelector('.link').addEventListener('click', () => openProfile(r));
@@ -794,7 +799,7 @@ function tbRenderRoster(){
 
       let headerHtml = `<div class="swapHeader">
         <div><span style="color:var(--bad);font-weight:700">${weakPlayer.Player}</span>
-          <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||weakPlayer.Pos||(tbPosGroup(weakPlayer)==='guard'?'Guard':'Big')} · ${Math.round(avgPct*100)}th avg · ${fmtMoney(weakVal)}</span></div>
+          <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||weakPlayer.Pos||(tbPosGroup(weakPlayer)==='guard'?'Guard':'Big')} · ${Math.round(avgPct*100)}th avg · ${tbDisplayMoney(weakVal)}</span></div>
       </div>`;
 
       let optsHtml = '';
@@ -803,7 +808,7 @@ function tbRenderRoster(){
         top3.forEach(({c, perfGain, costDelta, bfb, cVal}) => {
           const bfbLevel = bfb >= 5 ? 'high' : bfb >= 2 ? 'mid' : 'low';
           const bfbLabel = bfb >= 5 ? '🔥 Great deal' : bfb >= 2 ? '👍 Solid' : '📊 Marginal';
-          const costLabel = costDelta <= 0 ? `saves ${fmtMoney(Math.abs(costDelta))}` : `+${fmtMoney(costDelta)}`;
+          const costLabel = costDelta <= 0 ? `saves ${tbDisplayMoney(Math.abs(costDelta))}` : `+${tbDisplayMoney(costDelta)}`;
           const costColor = costDelta <= 0 ? 'var(--good)' : costDelta < 20000 ? 'var(--warn)' : 'var(--bad)';
           optsHtml += `<div class="tbSwapOpt">
             <span class="tbAddBtn" data-swap-weak="${weakIdx}" data-swap-key="${tbPlayerKey(c)}" style="font-size:10px">Swap</span>
@@ -931,7 +936,7 @@ function tbRenderSuggestions(){
       <td style="font-size:11px">${rPos}</td>
       <td style="font-size:10.5px;color:${gapColor};font-weight:700">${bestGap} (${pct}th)</td>
       <td style="font-size:11px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
-      <td style="font-size:11px">${fmtMoney(safeNum(r.ActualValuation_calc))}</td>
+      <td style="font-size:11px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><span class="tbAddBtn" title="Add to roster">＋</span></td>
     `;
     tr.querySelector('.link').addEventListener('click', () => openProfile(r));
@@ -943,6 +948,13 @@ function tbRenderSuggestions(){
 // --- Page navigation ---
 
 function showDashboardPage(targetId, activeNavId){
+  if (targetId === 'pageMethodology' && typeof authIsGuest === 'function' && authIsGuest()) {
+    if (typeof authPromptUpgrade === 'function') {
+      authPromptUpgrade('Full methodology is reserved for approved staff accounts. Guest mode keeps the dashboard outputs visible without exposing the internal model recipe.');
+    }
+    targetId = 'pagePlayers';
+    activeNavId = 'pagePlayers';
+  }
   var prefsIsCustomizing = !!(window.DashboardPrefs && typeof window.DashboardPrefs.isCustomizing === 'function' && window.DashboardPrefs.isCustomizing());
   if (!prefsIsCustomizing && window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
     targetId = (window.DashboardPrefs.getFirstVisiblePage && window.DashboardPrefs.getFirstVisiblePage()) || 'pagePlayers';

@@ -55,6 +55,9 @@
     .playersQuickActions{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:0;border:none;background:none;box-shadow:none}
     .playersSettingsToggle{white-space:nowrap}
     .playersSettingsToggle.isActive{border-color:rgba(var(--accent-rgb),.32);background:rgba(var(--accent-rgb),.11);color:#f7fbff}
+    .playersSettingsToggle.isLocked{border-style:dashed;color:#b8c5d8}
+    .playersSettingsToggle.isLocked:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e8eff8}
+    #export.isLocked{border-style:dashed;color:#b8c5d8}
     #playersGrid{align-items:start;grid-template-columns:minmax(0,1fr)}
     .playersBoardCard{display:flex;flex-direction:column;gap:14px;padding:20px 20px 18px}
     .playersBoardMeta{align-items:flex-start;padding:0 2px}
@@ -93,6 +96,10 @@
     .appShellBtn{padding:8px 15px;font-size:12px}
     .appFocusRow{position:relative;z-index:1;display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
     .appFocusPill{display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;background:rgba(8,20,38,.82);border:1px solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.02);color:#d8e2f0;font-size:11px;font-weight:700;letter-spacing:.02em}
+    .demoModeBanner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:12px 24px 0;padding:14px 18px;border-radius:18px;border:1px solid rgba(var(--accent-rgb),.18);background:linear-gradient(135deg, rgba(255,210,0,.09), rgba(255,255,255,.03));box-shadow:0 14px 30px rgba(0,0,0,.14)}
+    .demoModeCopy{display:flex;flex-direction:column;gap:6px;min-width:260px}
+    .demoModeLabel{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+    .demoModeText{max-width:980px;font-size:12.5px;line-height:1.65;color:#d5e0ee}
     .opsHero{position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr);gap:18px;padding:26px;border-radius:24px;overflow:hidden;
       background:
         radial-gradient(circle at 14% 18%, rgba(255,210,0,.15), transparent 28%),
@@ -469,7 +476,7 @@
     @keyframes modalSlide{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
     @media(max-width:1200px){.playersControlGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.playersActionRow,.playersQuickActions{justify-content:flex-start}}
     @media(max-width:980px){:root{--header-h:150px;--nav-h:62px}.opsHero{grid-template-columns:1fr}.playersControlGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.playersCompactTitleRow{align-items:flex-start}.playersSettingsDrawer{top:calc(var(--header-h) + var(--nav-h) + 12px);right:12px;bottom:12px;width:min(520px,calc(100vw - 24px))}}
-    @media(max-width:640px){:root{--header-h:196px;--nav-h:58px}.wrap{padding:16px}.pageNav{padding:10px 16px}.pageNavBtn{padding:9px 13px;font-size:12px}header{top:3px;padding:16px 16px 14px}h1{font-size:22px}.appControlRail{justify-content:flex-start}.appActionGroup{width:100%}.appFocusRow{gap:8px}.appFocusPill{font-size:10px;padding:6px 10px}.opsHero{padding:22px}.opsHeroTitle{font-size:28px}.opsHeroActions{justify-content:flex-start}.playersControlStage{padding:16px}.playersControlGrid{grid-template-columns:1fr}.playersControlCell,.playersQuickActions{padding:12px 14px}.playersQuickActions{padding:0;justify-content:flex-start}.playersCompactHead{align-items:flex-start}.playersCompactTitleRow{gap:8px}.playersActionRow{justify-content:flex-start}.playersBoardMeta{gap:10px}.card{padding:16px}.modalHead{padding:16px}.modalBody{padding:16px}.playersSettingsDrawer{top:calc(var(--header-h) + var(--nav-h) + 8px);right:8px;bottom:8px;width:calc(100vw - 16px);padding:16px}.kpis{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}}
+    @media(max-width:640px){:root{--header-h:196px;--nav-h:58px}.wrap{padding:16px}.pageNav{padding:10px 16px}.pageNavBtn{padding:9px 13px;font-size:12px}header{top:3px;padding:16px 16px 14px}h1{font-size:22px}.appControlRail{justify-content:flex-start}.appActionGroup{width:100%}.appFocusRow{gap:8px}.appFocusPill{font-size:10px;padding:6px 10px}.demoModeBanner{margin:12px 12px 0;padding:12px 14px}.opsHero{padding:22px}.opsHeroTitle{font-size:28px}.opsHeroActions{justify-content:flex-start}.playersControlStage{padding:16px}.playersControlGrid{grid-template-columns:1fr}.playersControlCell,.playersQuickActions{padding:12px 14px}.playersQuickActions{padding:0;justify-content:flex-start}.playersCompactHead{align-items:flex-start}.playersCompactTitleRow{gap:8px}.playersActionRow{justify-content:flex-start}.playersBoardMeta{gap:10px}.card{padding:16px}.modalHead{padding:16px}.modalBody{padding:16px}.playersSettingsDrawer{top:calc(var(--header-h) + var(--nav-h) + 8px);right:8px;bottom:8px;width:calc(100vw - 16px);padding:16px}.kpis{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}}
 
     /* ─ Career History Table ─ */
     .careerTable{overflow-x:auto}
@@ -3154,6 +3161,12 @@ body.helpPanelOpen {
   background: var(--bg);
 }
 .collaborateWrap{display:flex;flex-direction:column;gap:16px}
+.chatGuestBanner{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));box-shadow:0 10px 24px rgba(0,0,0,.16)}
+.chatGuestBannerLabel{flex:0 0 auto;display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(var(--accent-rgb),.22);background:rgba(var(--accent-rgb),.1);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.chatGuestBannerText{font-size:12.5px;line-height:1.65;color:#d9e3f1}
+.chatGuestLocked{opacity:.58}
+.chatGuestLocked .chatComposerRow{pointer-events:none}
+.chatGuestLocked textarea,.chatGuestLocked button,.chatGuestLocked input{cursor:not-allowed}
 .chatLayoutStage{
   height:min(760px,calc(100vh - 300px));
   min-height:540px;
@@ -4347,6 +4360,11 @@ body.helpPanelOpen {
 .valueLabInsightItem { display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-items: start; font-size: 13px; line-height: 1.6; }
 .valueLabInsightDot { width: 8px; height: 8px; border-radius: 999px; margin-top: 7px; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .10); }
 .valueLabEmpty, .valueLabLoading { min-height: 120px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.7; padding: 10px; border: 1px dashed rgba(255,255,255,.10); border-radius: 12px; background: rgba(255,255,255,.02); }
+.miniStats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+.miniStat { padding:12px 14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.03); }
+.miniStat .label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.miniStat .value { margin-top:6px; font-size:18px; font-weight:800; color:var(--text); }
+.miniStat .sub { margin-top:4px; font-size:11px; color:var(--muted); line-height:1.4; }
 .valueLabMiniKpis { margin-top: 0; }
 .valueLabMiniKpis .pill { min-width: 0; }
 .valueLabMiniKpis b { font-size: 14px; }

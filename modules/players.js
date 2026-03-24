@@ -70,7 +70,9 @@ function renderPlayersPage(){
     const frag = document.createDocumentFragment();
     colsToShow.forEach(c => {
       const th = document.createElement('th');
-      th.textContent = c.label;
+      th.textContent = (c.key === 'ActualValuation_calc' && typeof demoIsGuestMode === 'function' && demoIsGuestMode())
+        ? 'Value band'
+        : c.label;
       if(c.key === 'Score') th.classList.add('playersPerfHead');
       th.addEventListener('click', ()=>{
         if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
@@ -140,7 +142,9 @@ function renderPlayersPage(){
         td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '\u2014';
       }else if(c.key === 'ActualValuation_calc'){
         const modelValue = safeNum(r.ActualValuation_calc);
-        td.textContent = Number.isFinite(modelValue) ? fmtMoney(modelValue) : '\u2014';
+        td.textContent = Number.isFinite(modelValue)
+          ? (typeof demoFormatMoney === 'function' ? demoFormatMoney(modelValue) : fmtMoney(modelValue))
+          : '\u2014';
       }else if(c.key === '_draft_prob'){
         if(typeof draftBadgeHtml === 'function'){
           td.innerHTML = draftBadgeHtml(r);

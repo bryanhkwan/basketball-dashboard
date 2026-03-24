@@ -35,16 +35,16 @@
       overview: 'Use Players to rank the full pool, pressure-test your evaluation model, and jump into detailed player profiles.',
       methodology: [
         {
+          title: 'Model settings drawer',
+          body: 'Open Model settings to access presets, weights, valuation anchors, and conference multipliers without taking over the main player board.'
+        },
+        {
           title: 'PerfScore',
-          body: 'PerfScore is a weighted percentile composite inside the selected Guards or Bigs bucket. Your weights drive the ranking immediately.'
+          body: 'PerfScore is built inside the selected Guards or Bigs bucket, so the player board stays role-aware when you re-rank or compare names.'
         },
         {
           title: 'Valuation',
-          body: 'Model value comes from your valuation settings, with minutes and conference adjustments layered onto the performance profile.'
-        },
-        {
-          title: 'Position Buckets',
-          body: 'Guards are only compared to guards and bigs are only compared to bigs, so percentiles stay role-aware.'
+          body: 'Model value comes from the active player model, with valuation anchors and context adjustments layered on top of the performance profile.'
         },
         {
           title: 'Best Use',
@@ -53,14 +53,9 @@
       ],
       tourSteps: withPage('pagePlayers', [
         {
-          target: '#loadGs',
-          title: 'Refresh Data',
-          body: 'Reload the current season so your player pool, valuations, and derived outputs all stay aligned.'
-        },
-        {
           target: '#tabGuards',
           title: 'Position Groups',
-          body: 'Switch between Guards and Bigs before you interpret percentiles or compare players.'
+          body: 'Switch between Guards and Bigs before you interpret the board. Every downstream ranking on this page stays inside the active position bucket.'
         },
         {
           target: '#fitPreset',
@@ -68,19 +63,34 @@
           body: 'Preset philosophies are the fastest way to test how a different coaching lens changes the board.'
         },
         {
-          target: '#playersBody',
-          title: 'Player Table',
-          body: 'The table is your live ranked board. Click any player row to open the full profile.'
+          target: '#playersSettingsToggleBtn',
+          title: 'Model Settings',
+          body: 'Use this button to open the right-side model-settings drawer whenever you want to tune presets, weights, valuation anchors, or conference multipliers.',
+          playersSettings: 'closed'
+        },
+        {
+          target: '#evalPresetsCard',
+          title: 'Evaluation Presets',
+          body: 'Inside the drawer, presets let staff save named MBB and WBB lenses without changing the broader dashboard workflow.',
+          playersSettings: 'open'
         },
         {
           target: '#weightsCard',
           title: 'Weights',
-          body: 'This is where the scoring model is tuned. Weight, min, max, and on/off changes re-rank the page instantly.'
+          body: 'This is where the scoring model is tuned. Weight, min, max, and direction changes update the board immediately.',
+          playersSettings: 'open'
         },
         {
           target: '#valuationCard',
           title: 'Valuation',
-          body: 'This card sets the market anchors that turn model performance into dollar estimates.'
+          body: 'This card sets the market anchors that turn player performance into value estimates. Conference multipliers live in the same drawer just below it.',
+          playersSettings: 'open'
+        },
+        {
+          target: '#playersBody',
+          title: 'Player Table',
+          body: 'The table is your live ranked board. Click any player row to open the full profile once the model is set the way you want.',
+          playersSettings: 'closed'
         }
       ])
     },
@@ -158,6 +168,11 @@
           body: 'Launch the scenario workspace from Team Hub instead of treating it like a separate top-level section.'
         },
         {
+          target: '#thValueLabBtn',
+          title: 'Open in Value Lab',
+          body: 'Send the currently loaded real team into Value Lab when you want the roster investment and spend-efficiency view.'
+        },
+        {
           target: '#thDNA',
           title: 'Team DNA',
           body: 'This card gives the quick read on efficiency, factors, scoring profile, and identity.'
@@ -213,6 +228,12 @@
           body: 'This profile summarizes how the scenario roster grades across key categories and shows where the build is thin.'
         },
         {
+          target: '#tbValueLabBtn',
+          title: 'Evaluate in Value Lab',
+          body: 'Use this shortcut when the scenario is ready for the business lens. The roster is copied into Value Lab instead of staying live-linked.',
+          activeNavId: 'pageTeams'
+        },
+        {
           target: '#tbSubH2H',
           title: 'Head-to-Head',
           body: 'Use Head-to-Head once both rosters are built and you want a category-by-category matchup read.'
@@ -248,6 +269,10 @@
         {
           title: 'Compare Mode',
           body: 'Use Compare against to stack the active case next to another saved case, surface a recommendation pill, and see which roster gives you the cleaner spend, projected wins, and budget flexibility.'
+        },
+        {
+          title: 'Director Brief',
+          body: 'The Director AI Brief explains the roster from a business lens, can compare two cases side by side, and supports PDF export for meeting-ready summaries.'
         }
       ],
       tourSteps: withPage('pageValueLab', [
@@ -275,6 +300,11 @@
           target: '#valueLabAISection',
           title: 'Director AI Brief',
           body: 'AI explains whether the roster is financially healthy, compares two cases when selected, and can export the director brief to PDF.'
+        },
+        {
+          target: '#valueLabPortalWatch',
+          title: 'Portal Value Watch',
+          body: 'This panel extends the same bang-for-buck lens to available portal options so you can spot value targets before adding them to a case.'
         }
       ])
     },
@@ -449,9 +479,18 @@
         {
           title: 'Context',
           body: 'The page is most useful when the discussion stays tied to a scouting task, target list, or planning decision.'
+        },
+        {
+          title: 'Available Users',
+          body: 'New conversations, Send pick, and Send all now surface available usernames so staff do not have to remember or guess account names.'
         }
       ],
       tourSteps: withPage('pageCollaborate', [
+        {
+          target: '#chatNewBtn',
+          title: 'Start a Conversation',
+          body: 'Use New to start a DM or group thread. The new-conversation flow now includes available users so staff can click names instead of memorizing usernames.'
+        },
         {
           target: '#chatSidebar',
           title: 'Conversation List',

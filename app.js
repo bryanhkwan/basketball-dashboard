@@ -69,6 +69,62 @@ var playersSettingsDockEl = null;
 var playersSettingsDrawerEl = null;
 var playersSettingsBackdropEl = null;
 var playersSettingsCloseBtnEl = null;
+var playersBoardFootnoteEl = null;
+var playersBoardFootnoteDefaultHtml = '';
+
+function demoIsGuestMode() {
+  return typeof authIsGuest === 'function' && authIsGuest();
+}
+
+function demoCanViewSensitiveModeling() {
+  return !demoIsGuestMode();
+}
+
+function demoCanExportSensitiveData() {
+  return !demoIsGuestMode();
+}
+
+function demoMoneyBand(value) {
+  var n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  var sign = n < 0 ? '-' : '';
+  var abs = Math.abs(n);
+  var label = '$400k+';
+  if (abs < 50000) label = '<$50k';
+  else if (abs < 100000) label = '$50k–$100k';
+  else if (abs < 150000) label = '$100k–$150k';
+  else if (abs < 250000) label = '$150k–$250k';
+  else if (abs < 400000) label = '$250k–$400k';
+  return sign + label;
+}
+
+function demoFormatMoney(value) {
+  var n = typeof safeNum === 'function' ? safeNum(value) : Number(value);
+  if (!Number.isFinite(n)) return '—';
+  if (!demoIsGuestMode()) {
+    if (typeof fmtMoney === 'function') return fmtMoney(n);
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  return demoMoneyBand(n);
+}
+
+function demoFormatMoneyLabel(value, noun) {
+  var band = demoFormatMoney(value);
+  if (!demoIsGuestMode()) return band;
+  return (noun || 'Value band') + ': ' + band;
+}
+
+function playersSettingsIsGuestLocked() {
+  return demoIsGuestMode();
+}
+
+function promptGuestStaffAccess(message) {
+  if (typeof authPromptUpgrade === 'function') {
+    authPromptUpgrade(message);
+    return;
+  }
+  alert(message || 'Log in with an approved staff account to access this internal workflow.');
+}
 
 function setPlayersSettingsOpen(open) {
   if (!playersSettingsDockEl || !playersSettingsToggleBtnEl || !playersSettingsDrawerEl || !playersSettingsBackdropEl) return;
@@ -87,6 +143,30 @@ function setPlayersSettingsAvailable(hasVisibleSections) {
   var available = !!hasVisibleSections;
   playersSettingsToggleBtnEl.style.display = available ? '' : 'none';
   if (!available) setPlayersSettingsOpen(false);
+}
+
+function refreshGuestDemoUI() {
+  var locked = playersSettingsIsGuestLocked();
+  if (playersSettingsToggleBtnEl) {
+    playersSettingsToggleBtnEl.classList.toggle('isLocked', locked);
+    playersSettingsToggleBtnEl.setAttribute('title', locked
+      ? 'Model settings are reserved for approved staff accounts in demo mode.'
+      : 'Open player model settings');
+    playersSettingsToggleBtnEl.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  }
+  if (playersBoardFootnoteEl) {
+    playersBoardFootnoteEl.innerHTML = locked
+      ? '<b>Model note</b> Guest mode keeps the player board and outputs visible, but the exact weighting and valuation formulas stay limited to approved staff accounts. Logged-in users can open Model settings and the full methodology for the internal calculation details.'
+      : playersBoardFootnoteDefaultHtml;
+  }
+  if (typeof exportBtn !== 'undefined' && exportBtn) {
+    exportBtn.classList.toggle('isLocked', locked);
+    exportBtn.setAttribute('title', locked
+      ? 'CSV export is reserved for approved staff accounts in demo mode.'
+      : 'Export the current player table as CSV');
+    exportBtn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  }
+  if (locked) setPlayersSettingsOpen(false);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -186,7 +266,13 @@ window.addEventListener('DOMContentLoaded', () => {
     mpPctEl.value = 0.95;
     computeAll();
   });
-  exportBtn.addEventListener('click', exportCSV);
+  exportBtn.addEventListener('click', ()=>{
+    if (!demoCanExportSensitiveData()) {
+      promptGuestStaffAccess('CSV export is reserved for approved staff accounts. Guest mode is meant to showcase the workflow without exposing raw internal exports.');
+      return;
+    }
+    exportCSV();
+  });
   searchInput.addEventListener('input', debouncedSearch);
   showSelectedOnlyEl.addEventListener('change', renderWeights);
   advancedDirEl.addEventListener('change', renderWeights);
@@ -196,9 +282,17 @@ window.addEventListener('DOMContentLoaded', () => {
   playersSettingsDrawerEl = document.getElementById('playersSettingsDrawer');
   playersSettingsBackdropEl = document.getElementById('playersSettingsBackdrop');
   playersSettingsCloseBtnEl = document.getElementById('playersSettingsCloseBtn');
+  playersBoardFootnoteEl = document.getElementById('playersBoardFootnote');
+  if (playersBoardFootnoteEl && !playersBoardFootnoteDefaultHtml) {
+    playersBoardFootnoteDefaultHtml = playersBoardFootnoteEl.innerHTML;
+  }
   if (playersSettingsToggleBtnEl && playersSettingsDockEl && playersSettingsDrawerEl && playersSettingsBackdropEl) {
     setPlayersSettingsOpen(false);
     playersSettingsToggleBtnEl.addEventListener('click', () => {
+      if (playersSettingsIsGuestLocked()) {
+        promptGuestStaffAccess('Model settings are reserved for approved staff accounts. Guest mode keeps the rankings and outputs visible, but not the internal tuning controls.');
+        return;
+      }
       setPlayersSettingsOpen(!playersSettingsDrawerEl.classList.contains('isOpen'));
     });
     playersSettingsBackdropEl.addEventListener('click', () => setPlayersSettingsOpen(false));
@@ -219,6 +313,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  refreshGuestDemoUI();
 
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
     if(!el) return;
@@ -289,11 +384,18 @@ window._app = {
   openCompare,
   safeNum,
   fmtMoney,
+  demoIsGuestMode,
+  demoCanViewSensitiveModeling,
+  demoCanExportSensitiveData,
+  demoMoneyBand,
+  demoFormatMoney,
+  demoFormatMoneyLabel,
   statPercentile,
   barColor,
   getInvertForStat,
   setPlayersSettingsOpen,
   setPlayersSettingsAvailable,
+  refreshGuestDemoUI,
   // Teams Hub / ratings
   get teamRatings()      { return teamRatings; },
   get allRatingsData()   { return allRatingsData; },
