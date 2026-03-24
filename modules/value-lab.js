@@ -1140,6 +1140,140 @@ function valueLabRenderOutcome(analysis) {
     '</div>';
 }
 
+function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
+  if (!valueLabCompareSummaryEl) return;
+  if (!currentAnalysis || currentAnalysis.empty) {
+    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Build or load a case first, then choose another saved case to compare against.</div>';
+    return;
+  }
+  if (!compareAnalysis || compareAnalysis.empty) {
+    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Choose a saved case in <b>Compare against</b> to see side-by-side spend, outcome, and roster tradeoffs.</div>';
+    return;
+  }
+
+  var currentOutcome = currentAnalysis.outcome || {};
+  var compareOutcome = compareAnalysis.outcome || {};
+  var rosterDiff = valueLabBuildCompareRosterDiff(currentAnalysis, compareAnalysis);
+  var metrics = [
+    {
+      label: 'Effective spend',
+      current: currentAnalysis.totalSpend,
+      compare: compareAnalysis.totalSpend,
+      format: valueLabFmtMoney,
+      deltaFormat: valueLabFmtMoney,
+      preferLower: true,
+    },
+    {
+      label: 'Budget left',
+      current: currentAnalysis.budgetRemaining,
+      compare: compareAnalysis.budgetRemaining,
+      format: valueLabFmtMoney,
+      deltaFormat: valueLabFmtMoney,
+      preferLower: false,
+    },
+    {
+      label: 'Avg perf',
+      current: currentAnalysis.avgPerf,
+      compare: compareAnalysis.avgPerf,
+      format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) : '—'; },
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' perf' : '—'; },
+      preferLower: false,
+    },
+    {
+      label: 'Perf / $100k',
+      current: Number.isFinite(currentAnalysis.perfPer100kActual) ? currentAnalysis.perfPer100kActual : currentAnalysis.perfPer100k,
+      compare: Number.isFinite(compareAnalysis.perfPer100kActual) ? compareAnalysis.perfPer100kActual : compareAnalysis.perfPer100k,
+      format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) : '—'; },
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' perf/$100k' : '—'; },
+      preferLower: false,
+    },
+    {
+      label: 'ROI gap',
+      current: currentAnalysis.roiGap,
+      compare: compareAnalysis.roiGap,
+      format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabFmtSigned(Math.round(valueLabNum(value)), null, ' pts') : '—'; },
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? Math.round(valueLabNum(value)) + ' pts' : '—'; },
+      preferLower: false,
+    },
+    {
+      label: 'Projected wins',
+      current: currentOutcome.projectedFullWins,
+      compare: compareOutcome.projectedFullWins,
+      format: valueLabFmtWins,
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' wins' : '—'; },
+      preferLower: false,
+    },
+    {
+      label: 'Spend / projected win',
+      current: currentOutcome.spendPerProjectedWin,
+      compare: compareOutcome.spendPerProjectedWin,
+      format: valueLabFmtMoney,
+      deltaFormat: valueLabFmtMoney,
+      preferLower: true,
+    },
+    {
+      label: 'Top-3 spend share',
+      current: (currentAnalysis.top3SpendShare || 0) * 100,
+      compare: (compareAnalysis.top3SpendShare || 0) * 100,
+      format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(0) + '%' : '—'; },
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(0) + '%' : '—'; },
+      preferLower: true,
+    },
+  ].filter(function (metric) {
+    return Number.isFinite(valueLabNum(metric.current)) || Number.isFinite(valueLabNum(metric.compare));
+  });
+
+  var metricsHtml = metrics.map(function (metric) {
+    var currentVal = valueLabNum(metric.current);
+    var compareVal = valueLabNum(metric.compare);
+    var delta = (Number.isFinite(currentVal) && Number.isFinite(compareVal)) ? (currentVal - compareVal) : NaN;
+    var tone = valueLabCompareMetricTone(delta, !!metric.preferLower);
+    var direction = Number.isFinite(delta)
+      ? (delta === 0 ? 'No gap' : (delta > 0 ? 'Active case +' : 'Compare case +') + (metric.deltaFormat ? metric.deltaFormat(Math.abs(delta)) : metric.format(Math.abs(delta))))
+      : 'Awaiting full data';
+    return '<div class="valueLabCompareMetric valueLabCompareMetric--' + tone + '">' +
+      '<div class="valueLabCompareMetricLabel">' + metric.label + '</div>' +
+      '<div class="valueLabCompareMetricValues">' +
+        '<div class="valueLabCompareMetricCase"><span>Active</span><strong>' + metric.format(metric.current) + '</strong></div>' +
+        '<div class="valueLabCompareMetricCase"><span>Compare</span><strong>' + metric.format(metric.compare) + '</strong></div>' +
+      '</div>' +
+      '<div class="valueLabCompareMetricDelta">' + direction + '</div>' +
+    '</div>';
+  }).join('');
+
+  function nameChips(rows) {
+    rows = Array.isArray(rows) ? rows : [];
+    if (!rows.length) return '<div class="valueLabEmpty" style="min-height:auto">No unique players.</div>';
+    return '<div class="valueLabCompareChipRow">' + rows.slice(0, 6).map(function (row) {
+      var spend = Number.isFinite(row.actualSpend) ? row.actualSpend : row.valuation;
+      return '<span class="valueLabCompareChip"><b>' + valueLabEsc(row.Player || 'Player') + '</b><small>' +
+        valueLabEsc(row.Team || '—') + ' · ' + valueLabFmtMoney(spend) + '</small></span>';
+    }).join('') + '</div>';
+  }
+
+  var takeaways = valueLabBuildCompareTakeaways(currentAnalysis, compareAnalysis, rosterDiff);
+
+  valueLabCompareSummaryEl.innerHTML =
+    '<div class="valueLabCompareTop">' +
+      '<div class="valueLabCompareCase valueLabCompareCase--active"><small>Active case</small><strong>' + valueLabEsc(currentAnalysis.bundle.label || 'Active Case') + '</strong><span>' + currentAnalysis.rosterSize + ' players · ' + valueLabFmtMoney(currentAnalysis.totalSpend) + ' effective spend</span></div>' +
+      '<div class="valueLabCompareVs">vs</div>' +
+      '<div class="valueLabCompareCase"><small>Compare case</small><strong>' + valueLabEsc(compareAnalysis.bundle.label || 'Compare Case') + '</strong><span>' + compareAnalysis.rosterSize + ' players · ' + valueLabFmtMoney(compareAnalysis.totalSpend) + ' effective spend</span></div>' +
+    '</div>' +
+    '<div class="valueLabCompareMetricGrid">' + metricsHtml + '</div>' +
+    '<div class="valueLabCompareRosterMeta">' +
+      '<span class="pill"><span>Shared players</span><b>' + (rosterDiff ? rosterDiff.sharedCount : 0) + '</b></span>' +
+      '<span class="pill"><span>Only in active</span><b>' + (rosterDiff ? rosterDiff.onlyCurrent.length : 0) + '</b></span>' +
+      '<span class="pill"><span>Only in compare</span><b>' + (rosterDiff ? rosterDiff.onlyCompare.length : 0) + '</b></span>' +
+    '</div>' +
+    '<div class="valueLabCompareSplit">' +
+      '<div class="valueLabCompareBlock"><div class="valueLabMiniTitle">Only in active case</div>' + nameChips(rosterDiff ? rosterDiff.onlyCurrent : []) + '</div>' +
+      '<div class="valueLabCompareBlock"><div class="valueLabMiniTitle">Only in compare case</div>' + nameChips(rosterDiff ? rosterDiff.onlyCompare : []) + '</div>' +
+    '</div>' +
+    '<div class="valueLabCompareTakeaways">' + takeaways.map(function (note) {
+      return '<div class="valueLabInsightItem"><span class="valueLabInsightDot"></span><div>' + note + '</div></div>';
+    }).join('') + '</div>';
+}
+
 function valueLabAIMarkdownToHtml(text) {
   text = String(text || '').trim();
   if (!text) return '<div class="valueLabEmpty">No AI brief returned.</div>';
@@ -1406,11 +1540,12 @@ function valueLabRenderRosterTable(analysis) {
   valueLabRosterBodyEl.appendChild(fragment);
 }
 
-function valueLabRenderAll(analysis) {
+function valueLabRenderAll(analysis, compareAnalysis) {
   valueLabRenderSourceControls();
   valueLabRenderKpis(analysis);
   valueLabRenderInsights(analysis);
   valueLabRenderOutcome(analysis);
+  valueLabRenderComparison(analysis, compareAnalysis);
   valueLabRenderScatter(analysis);
   valueLabRenderBreakdowns(analysis);
   valueLabRenderRosterTable(analysis);
@@ -1745,22 +1880,24 @@ var valueLabCaseState = {
   loading: false,
   cases: [],
   currentCase: null,
+  compareCaseId: '',
   dirty: false,
   refreshToken: 0,
   statusTimer: null,
   quickTimer: null,
   pendingTeamImport: '',
   lastAnalysis: null,
+  lastCompareAnalysis: null,
   lastPortalTargets: null,
   portalCache: { key: '', items: [], meta: null },
 };
 
-var valueLabCaseSelectEl2, valueLabCaseNameEl2, valueLabTeamImportSelectEl2;
+var valueLabCaseSelectEl2, valueLabCaseNameEl2, valueLabTeamImportSelectEl2, valueLabCompareSelectEl2;
 var valueLabQuickAddInputEl2, valueLabQuickAddDropdownEl2;
 var valueLabNewCaseBtnEl2, valueLabDuplicateBtnEl2, valueLabClearCaseBtnEl2;
 var valueLabImportHubBtnEl2, valueLabImportBuilderBtnEl2, valueLabImportTeamBtnEl2;
 var valueLabBudgetInputEl2;
-var valueLabAIRunBtnEl, valueLabAIStatusEl, valueLabAIOutputEl, valueLabPortalWatchEl;
+var valueLabAIRunBtnEl, valueLabAIStatusEl, valueLabAIOutputEl, valueLabPortalWatchEl, valueLabCompareSummaryEl;
 
 var VALUE_LAB_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var VALUE_LAB_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -2100,6 +2237,108 @@ function valueLabBuildBundleFromCaseV2() {
     valueCase: currentCase,
   };
 }
+
+function valueLabGetCompareCaseV2() {
+  var currentCase = valueLabEnsureCurrentCaseV2();
+  var targetId = String(valueLabCaseState.compareCaseId || '').trim();
+  if (!targetId) return null;
+  var compareCase = valueLabFindCaseV2(targetId);
+  if (!compareCase) return null;
+  if (currentCase.id && String(compareCase.id) === String(currentCase.id)) return null;
+  return compareCase;
+}
+
+function valueLabBuildCompareBundleV2(compareCase) {
+  compareCase = compareCase ? valueLabNormalizeCaseV2(compareCase) : valueLabGetCompareCaseV2();
+  if (!compareCase) return null;
+  return {
+    id: compareCase.id || '',
+    mode: 'caseCompare',
+    sourceType: compareCase.payload.sourceType || 'manual',
+    label: compareCase.name || 'Compare Case',
+    actualTeam: compareCase.payload.actualTeam || '',
+    players: valueLabResolveCasePlayersV2(compareCase),
+    valueCase: compareCase,
+  };
+}
+
+function valueLabBuildCompareRosterDiff(currentAnalysis, compareAnalysis) {
+  currentAnalysis = currentAnalysis && !currentAnalysis.empty ? currentAnalysis : null;
+  compareAnalysis = compareAnalysis && !compareAnalysis.empty ? compareAnalysis : null;
+  if (!currentAnalysis || !compareAnalysis) return null;
+  var compareKeys = new Set(compareAnalysis.players.map(function (row) { return row.key || valueLabPlayerKey(row); }));
+  var currentKeys = new Set(currentAnalysis.players.map(function (row) { return row.key || valueLabPlayerKey(row); }));
+  var onlyCurrent = currentAnalysis.players.filter(function (row) {
+    return !compareKeys.has(row.key || valueLabPlayerKey(row));
+  }).sort(function (a, b) {
+    return (b.spendBasis || b.valuation || 0) - (a.spendBasis || a.valuation || 0);
+  });
+  var onlyCompare = compareAnalysis.players.filter(function (row) {
+    return !currentKeys.has(row.key || valueLabPlayerKey(row));
+  }).sort(function (a, b) {
+    return (b.spendBasis || b.valuation || 0) - (a.spendBasis || a.valuation || 0);
+  });
+  return {
+    sharedCount: currentAnalysis.players.length - onlyCurrent.length,
+    onlyCurrent: onlyCurrent,
+    onlyCompare: onlyCompare,
+  };
+}
+
+function valueLabFmtSigned(value, digits, suffix) {
+  var n = valueLabNum(value);
+  if (!Number.isFinite(n)) return '—';
+  var fixed = Number.isFinite(digits) ? n.toFixed(digits) : String(Math.round(n));
+  return (n >= 0 ? '+' : '') + fixed + (suffix || '');
+}
+
+function valueLabCompareMetricTone(delta, preferLower) {
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.0001) return 'neutral';
+  var currentBetter = preferLower ? delta < 0 : delta > 0;
+  return currentBetter ? 'good' : 'warn';
+}
+
+function valueLabBuildCompareTakeaways(currentAnalysis, compareAnalysis, rosterDiff) {
+  var notes = [];
+  if (currentAnalysis && currentAnalysis.outcome && compareAnalysis && compareAnalysis.outcome &&
+      Number.isFinite(currentAnalysis.outcome.projectedFullWins) && Number.isFinite(compareAnalysis.outcome.projectedFullWins)) {
+    var winDelta = currentAnalysis.outcome.projectedFullWins - compareAnalysis.outcome.projectedFullWins;
+    if (Math.abs(winDelta) >= 0.4) {
+      notes.push((winDelta > 0 ? currentAnalysis.bundle.label : compareAnalysis.bundle.label) +
+        ' projects ' + Math.abs(winDelta).toFixed(1) + ' more wins on the same schedule context.');
+    }
+  }
+  if (Number.isFinite(currentAnalysis.perfPer100kActual || currentAnalysis.perfPer100k) &&
+      Number.isFinite(compareAnalysis.perfPer100kActual || compareAnalysis.perfPer100k)) {
+    var efficiencyDelta = (currentAnalysis.perfPer100kActual || currentAnalysis.perfPer100k) - (compareAnalysis.perfPer100kActual || compareAnalysis.perfPer100k);
+    if (Math.abs(efficiencyDelta) >= 0.8) {
+      notes.push((efficiencyDelta > 0 ? currentAnalysis.bundle.label : compareAnalysis.bundle.label) +
+        ' is returning better performance per $100k, which is the cleaner bang-for-buck build right now.');
+    }
+  }
+  if (Number.isFinite(currentAnalysis.budgetRemaining) && Number.isFinite(compareAnalysis.budgetRemaining)) {
+    var budgetDelta = currentAnalysis.budgetRemaining - compareAnalysis.budgetRemaining;
+    if (Math.abs(budgetDelta) >= 25000) {
+      notes.push((budgetDelta > 0 ? currentAnalysis.bundle.label : compareAnalysis.bundle.label) +
+        ' keeps ' + valueLabFmtMoney(Math.abs(budgetDelta)) + ' more budget room for late portal or retention moves.');
+    }
+  }
+  if (Number.isFinite(currentAnalysis.roiGap) && Number.isFinite(compareAnalysis.roiGap)) {
+    var roiDelta = currentAnalysis.roiGap - compareAnalysis.roiGap;
+    if (Math.abs(roiDelta) >= 4) {
+      notes.push((roiDelta > 0 ? currentAnalysis.bundle.label : compareAnalysis.bundle.label) +
+        ' is outperforming its spend tier more convincingly on the current player model.');
+    }
+  }
+  if (rosterDiff && (rosterDiff.onlyCurrent.length || rosterDiff.onlyCompare.length)) {
+    notes.push('Roster overlap is ' + rosterDiff.sharedCount + ' shared players, with ' + rosterDiff.onlyCurrent.length +
+      ' unique to the active case and ' + rosterDiff.onlyCompare.length + ' unique to the comparison case.');
+  }
+  if (!notes.length) {
+    notes.push('The two cases are reading pretty close right now, so the choice may come down to fit preference or which contracts you trust more.');
+  }
+  return notes.slice(0, 4);
+}
 function valueLabRenderSourceControls() {
   if (!valueLabCaseSelectEl2 || !valueLabCaseNameEl2 || !valueLabTeamImportSelectEl2) return;
   var currentCase = valueLabEnsureCurrentCaseV2();
@@ -2107,6 +2346,9 @@ function valueLabRenderSourceControls() {
   var teams = valueLabCurrentTeams();
   var teamHubTeam = valueLabCanonicalTeamName(valueLabGetTeamHubTeam(), teams);
   var builderCount = Array.isArray(tbRoster) ? tbRoster.length : 0;
+  var compareableCases = savedCases.filter(function (caseItem) {
+    return !currentCase.id || String(caseItem.id) !== String(currentCase.id);
+  });
 
   valueLabCaseSelectEl2.innerHTML = '';
   if (!currentCase.id) {
@@ -2135,6 +2377,20 @@ function valueLabRenderSourceControls() {
   }) ? selectedImportTeam : '';
   valueLabCaseState.pendingTeamImport = valueLabTeamImportSelectEl2.value || '';
 
+  if (valueLabCompareSelectEl2) {
+    var compareId = String(valueLabCaseState.compareCaseId || '');
+    if (!compareableCases.some(function (caseItem) { return String(caseItem.id) === compareId; })) {
+      valueLabCaseState.compareCaseId = '';
+      compareId = '';
+    }
+    valueLabCompareSelectEl2.innerHTML = '<option value="">— No comparison —</option>' + compareableCases.map(function (caseItem) {
+      var stamp = caseItem.updated_at ? new Date(caseItem.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      return '<option value="' + String(caseItem.id).replace(/"/g, '&quot;') + '">' + valueLabEsc(caseItem.name) + (stamp ? ' - ' + stamp : '') + '</option>';
+    }).join('');
+    valueLabCompareSelectEl2.value = compareId;
+    valueLabCompareSelectEl2.disabled = !compareableCases.length;
+  }
+
   if (valueLabSaveBtnEl) valueLabSaveBtnEl.textContent = valueLabUseLocalModeV2() ? 'Save Locally' : 'Save Case';
   if (valueLabDeleteBtnEl) valueLabDeleteBtnEl.disabled = !(currentCase.id || (currentCase.payload.players && currentCase.payload.players.length));
   if (valueLabDuplicateBtnEl2) valueLabDuplicateBtnEl2.disabled = !(currentCase.payload.players && currentCase.payload.players.length);
@@ -2152,6 +2408,10 @@ function valueLabRenderSourceControls() {
     if (Number.isFinite(valueLabNum(currentCase.payload.budgetTotal))) meta.push('budget: ' + valueLabFmtMoney(currentCase.payload.budgetTotal));
     if (teamHubTeam) meta.push('Team Hub ready: ' + teamHubTeam);
     if (builderCount) meta.push('Team Builder ready: ' + builderCount + ' players');
+    if (valueLabCaseState.compareCaseId) {
+      var compareCase = valueLabGetCompareCaseV2();
+      if (compareCase) meta.push('comparing vs: ' + compareCase.name);
+    }
     if (valueLabCaseState.dirty) meta.push('unsaved changes');
     valueLabSourceMetaEl.textContent = meta.join(' · ');
   }
@@ -2361,18 +2621,31 @@ async function valueLabRefresh(forceBootstrap) {
   await valueLabBootstrapV2(!!forceBootstrap);
   var bundle = valueLabBuildBundleFromCaseV2();
   var analysis = valueLabBuildAnalysis(bundle);
+  var compareBundle = valueLabBuildCompareBundleV2();
+  var compareAnalysis = compareBundle ? valueLabBuildAnalysis(compareBundle) : null;
   valueLabCaseState.lastAnalysis = analysis;
-  valueLabRenderAll(analysis);
+  valueLabCaseState.lastCompareAnalysis = compareAnalysis;
+  valueLabRenderAll(analysis, compareAnalysis);
   valueLabRenderPortalWatch({ loading: true });
   if (valueLabAIOutputEl && valueLabAIOutputEl.style.display !== 'none') {
     valueLabSetAIStatus('Case changed — rerun Director Brief to refresh the executive summary.');
   }
   var refreshToken = ++valueLabCaseState.refreshToken;
   if (valueLabOutcomeEl && !analysis.empty) valueLabOutcomeEl.innerHTML = '<div class="valueLabLoading">Projecting case outcome and spend efficiency...</div>';
-  analysis.outcome = await valueLabBuildOutcome(analysis);
+  if (valueLabCompareSummaryEl && compareAnalysis && !compareAnalysis.empty) {
+    valueLabRenderComparison(analysis, compareAnalysis);
+  }
+  var outcomes = await Promise.all([
+    analysis.empty ? Promise.resolve(null) : valueLabBuildOutcome(analysis),
+    (!compareAnalysis || compareAnalysis.empty) ? Promise.resolve(null) : valueLabBuildOutcome(compareAnalysis)
+  ]);
   if (refreshToken !== valueLabCaseState.refreshToken) return;
+  analysis.outcome = outcomes[0];
+  if (compareAnalysis) compareAnalysis.outcome = outcomes[1];
   valueLabCaseState.lastAnalysis = analysis;
+  valueLabCaseState.lastCompareAnalysis = compareAnalysis;
   valueLabRenderOutcome(analysis);
+  valueLabRenderComparison(analysis, compareAnalysis);
   var portalCtx = await valueLabGetPortalPool()
     .then(function (portalPack) { return valueLabBuildPortalTargets(analysis, portalPack); })
     .catch(function (e) { return { supported: false, targets: [], note: e && e.message ? e.message : 'Portal value watch unavailable right now.' }; });
@@ -2467,8 +2740,10 @@ function valueLabHandleDataChange() {
   valueLabCaseState.loadedKey = '';
   valueLabCaseState.cases = [];
   valueLabCaseState.currentCase = null;
+  valueLabCaseState.compareCaseId = '';
   valueLabCaseState.dirty = false;
   valueLabCaseState.lastAnalysis = null;
+  valueLabCaseState.lastCompareAnalysis = null;
   valueLabCaseState.lastPortalTargets = null;
   valueLabCaseState.portalCache = { key: '', items: [], meta: null };
   if (valueLabAIOutputEl) {
@@ -2498,6 +2773,7 @@ function initValueLabPage() {
   valueLabCaseSelectEl2 = document.getElementById('valueLabCaseSelect');
   valueLabCaseNameEl2 = document.getElementById('valueLabCaseName');
   valueLabTeamImportSelectEl2 = document.getElementById('valueLabTeamImportSelect');
+  valueLabCompareSelectEl2 = document.getElementById('valueLabCompareSelect');
   valueLabQuickAddInputEl2 = document.getElementById('valueLabQuickAddInput');
   valueLabQuickAddDropdownEl2 = document.getElementById('valueLabQuickAddDropdown');
   valueLabNewCaseBtnEl2 = document.getElementById('valueLabNewCaseBtn');
@@ -2524,6 +2800,7 @@ function initValueLabPage() {
   valueLabAIStatusEl = document.getElementById('valueLabAIStatus');
   valueLabAIOutputEl = document.getElementById('valueLabAIOutput');
   valueLabPortalWatchEl = document.getElementById('valueLabPortalWatch');
+  valueLabCompareSummaryEl = document.getElementById('valueLabCompareSummary');
   if (!valueLabCaseSelectEl2) return;
 
   if (!valueLabCaseSelectEl2._bound) {
@@ -2561,6 +2838,13 @@ function initValueLabPage() {
       valueLabRenderSourceControls();
     });
     valueLabBudgetInputEl2._bound = true;
+  }
+  if (valueLabCompareSelectEl2 && !valueLabCompareSelectEl2._bound) {
+    valueLabCompareSelectEl2.addEventListener('change', function () {
+      valueLabCaseState.compareCaseId = String(valueLabCompareSelectEl2.value || '');
+      valueLabRefresh(false);
+    });
+    valueLabCompareSelectEl2._bound = true;
   }
   if (valueLabQuickAddInputEl2 && !valueLabQuickAddInputEl2._bound) {
     valueLabQuickAddInputEl2.addEventListener('input', function () {

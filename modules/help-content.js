@@ -244,6 +244,10 @@
         {
           title: 'Outcome Lens',
           body: 'Outcome vs Spend estimates what this budget and roster profile are buying in terms of projected team performance.'
+        },
+        {
+          title: 'Compare Mode',
+          body: 'Use Compare against to stack the active case next to another saved case and see which roster gives you the cleaner spend, projected wins, and budget flexibility.'
         }
       ],
       tourSteps: withPage('pageValueLab', [
@@ -256,6 +260,11 @@
           target: '#valueLabKpisSection',
           title: 'Executive KPIs',
           body: 'These cards summarize spend, budget health, value efficiency, and the top-level business picture.'
+        },
+        {
+          target: '#valueLabCompareSection',
+          title: 'Case Comparison',
+          body: 'Compare the active case against another saved case to see the tradeoffs in wins, budget room, efficiency, and roster changes.'
         },
         {
           target: '#valueLabOutcomeSection',

@@ -1072,6 +1072,10 @@
           <label>Case budget</label>
           <input id="valueLabBudgetInput" type="number" min="0" step="1000" placeholder="1800000">
         </div>
+        <div>
+          <label>Compare against</label>
+          <select id="valueLabCompareSelect" class="valueLabSourceSelect"></select>
+        </div>
       </div>
       <div class="valueLabControlActions">
         <button id="valueLabNewCaseBtn" type="button" class="secondary">New Case</button>
@@ -1095,6 +1099,17 @@
     <div class="thSection valueLabSummarySection" id="valueLabKpisSection">
       <div class="thSectionHead">Executive Summary</div>
       <div id="valueLabKpis" class="kpis valueLabKpis"></div>
+    </div>
+
+    <div class="card valueLabStageCard" id="valueLabCompareSection">
+      <div class="valueLabSectionHead">
+        <div>
+          <div class="valueLabSectionEyebrow">Decision lens</div>
+          <div class="valueLabSectionHeroTitle">Case Comparison</div>
+          <div class="valueLabSectionLead">Compare the active case against another saved case in the same league and season so you can see which build gives you the stronger spend, outcome, and efficiency profile.</div>
+        </div>
+      </div>
+      <div id="valueLabCompareSummary" class="valueLabCompareSummary"></div>
     </div>
 
     <div class="valueLabTopGrid">
@@ -1277,6 +1292,7 @@
         <p style="margin-top:10px"><b>Model Value</b> is the dashboard's internal estimate. <b>Actual Spend</b> is the real contract number you enter. If a contract is unknown, planning math falls back to model value so the case still works before every deal is final.</p>
         <p style="margin-top:10px"><b>ROI Call</b> compares player performance against the expected return for that spend tier. The labels run from <b>Steal</b> and <b>Premium worth it</b> on the positive side to <b>Rich</b> and <b>Overpay</b> on the negative side.</p>
         <p style="margin-top:10px"><b>Outcome vs Spend</b> looks for a dominant real-team context when it can, then maps roster Perf back into projected team strength and schedule wins so the business side can see what that spend profile is likely buying.</p>
+        <p style="margin-top:10px"><b>Compare Mode</b> stacks the active case against another saved case from the same league and season. It surfaces which build is stronger on budget room, performance efficiency, projected wins, and roster turnover so staff can make cleaner business decisions.</p>
         <p style="margin-top:10px">Portal Value Watch extends the same lens to available portal options, highlighting players who look attractive from a bang-for-buck perspective.</p>
       </div>
     </div>

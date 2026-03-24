@@ -4260,6 +4260,32 @@ body.helpPanelOpen {
 .valueLabSummarySection .thSectionHead { background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); border-bottom: 1px solid rgba(255,255,255,.07); color: #dce7f4; letter-spacing: .14em; }
 .valueLabSummarySection #valueLabKpis { padding: 18px 20px 20px; }
 .valueLabSummarySection .kpis .pill { background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02)); border-color: rgba(255,255,255,.08); border-top-color: rgba(var(--accent-rgb),.34); }
+.valueLabCompareSummary { display: flex; flex-direction: column; gap: 14px; }
+.valueLabCompareTop { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.valueLabCompareCase { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.025); }
+.valueLabCompareCase--active { border-color: rgba(var(--accent-rgb), .24); box-shadow: inset 0 1px 0 rgba(var(--accent-rgb), .08); }
+.valueLabCompareCase small { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.valueLabCompareCase strong { font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
+.valueLabCompareCase span { font-size: 12px; line-height: 1.6; color: var(--muted); }
+.valueLabCompareVs { display: flex; align-items: center; justify-content: center; padding: 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+.valueLabCompareMetricGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.valueLabCompareMetric { padding: 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.025); display: flex; flex-direction: column; gap: 10px; }
+.valueLabCompareMetric--good { border-color: rgba(52,211,153,.22); }
+.valueLabCompareMetric--warn { border-color: rgba(251,191,36,.22); }
+.valueLabCompareMetricLabel { font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.valueLabCompareMetricValues { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.valueLabCompareMetricCase { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 12px; background: rgba(4,10,18,.3); border: 1px solid rgba(255,255,255,.05); }
+.valueLabCompareMetricCase span { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.valueLabCompareMetricCase strong { font-size: 16px; font-weight: 800; color: var(--text); }
+.valueLabCompareMetricDelta { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.valueLabCompareRosterMeta { display: flex; gap: 10px; flex-wrap: wrap; }
+.valueLabCompareSplit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.valueLabCompareBlock { border: 1px solid rgba(255,255,255,.07); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.02); }
+.valueLabCompareChipRow { display: flex; flex-wrap: wrap; gap: 8px; }
+.valueLabCompareChip { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); background: rgba(5,11,20,.34); }
+.valueLabCompareChip b { font-size: 11px; color: var(--text); }
+.valueLabCompareChip small { font-size: 10px; color: var(--muted); }
+.valueLabCompareTakeaways { display: flex; flex-direction: column; gap: 10px; }
 .valueLabTopGrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 16px; }
 .valueLabChartGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 .valueLabSectionTitle { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 14px; }
@@ -4314,10 +4340,13 @@ body.helpPanelOpen {
   .valueLabControlGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .valueLabTopGrid, .valueLabChartGrid { grid-template-columns: 1fr; }
   .valueLabBreakdownGrid { grid-template-columns: 1fr; }
+  .valueLabCompareTop, .valueLabCompareSplit { grid-template-columns: 1fr; }
+  .valueLabCompareVs { min-height: 24px; }
 }
 @media (max-width: 880px) {
   .valueLabControlGrid { grid-template-columns: 1fr; }
   .valueLabControlActions { justify-content: flex-start; }
+  .valueLabCompareMetricGrid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .valueLabHero { padding: 22px; }
