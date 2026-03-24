@@ -247,7 +247,7 @@
         },
         {
           title: 'Compare Mode',
-          body: 'Use Compare against to stack the active case next to another saved case and see which roster gives you the cleaner spend, projected wins, and budget flexibility.'
+          body: 'Use Compare against to stack the active case next to another saved case, surface a recommendation pill, and see which roster gives you the cleaner spend, projected wins, and budget flexibility.'
         }
       ],
       tourSteps: withPage('pageValueLab', [
@@ -274,7 +274,7 @@
         {
           target: '#valueLabAISection',
           title: 'Director AI Brief',
-          body: 'AI explains whether the roster is financially healthy, where the risk sits, and which portal moves give the best bang for the buck.'
+          body: 'AI explains whether the roster is financially healthy, compares two cases when selected, and can export the director brief to PDF.'
         }
       ])
     },

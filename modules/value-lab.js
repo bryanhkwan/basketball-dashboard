@@ -1137,60 +1137,49 @@ function valueLabRenderOutcome(analysis) {
       '<div><strong>Roster share:</strong> ' + outcome.detectedShare + ' slots from ' + outcome.teamName + ' · confidence ' + outcome.confidence + '.</div>' +
       '<div><strong>Business read:</strong> This case currently spends ' + valueLabFmtMoney(outcome.spendBasis) + ' using actual contracts when entered, otherwise model value, so the spend-per-win view stays actionable even before every deal is filled in.</div>' +
       '<div><strong>Projection logic:</strong> ' + outcome.note + '</div>' +
-    '</div>';
+     '</div>';
 }
 
-function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
-  if (!valueLabCompareSummaryEl) return;
-  if (!currentAnalysis || currentAnalysis.empty) {
-    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Build or load a case first, then choose another saved case to compare against.</div>';
-    return;
-  }
-  if (!compareAnalysis || compareAnalysis.empty) {
-    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Choose a saved case in <b>Compare against</b> to see side-by-side spend, outcome, and roster tradeoffs.</div>';
-    return;
-  }
-
-  var currentOutcome = currentAnalysis.outcome || {};
-  var compareOutcome = compareAnalysis.outcome || {};
-  var rosterDiff = valueLabBuildCompareRosterDiff(currentAnalysis, compareAnalysis);
-  var metrics = [
+function valueLabGetComparisonMetrics(currentAnalysis, compareAnalysis) {
+  var currentOutcome = currentAnalysis && currentAnalysis.outcome ? currentAnalysis.outcome : {};
+  var compareOutcome = compareAnalysis && compareAnalysis.outcome ? compareAnalysis.outcome : {};
+  return [
     {
       label: 'Effective spend',
-      current: currentAnalysis.totalSpend,
-      compare: compareAnalysis.totalSpend,
+      current: currentAnalysis ? currentAnalysis.totalSpend : NaN,
+      compare: compareAnalysis ? compareAnalysis.totalSpend : NaN,
       format: valueLabFmtMoney,
       deltaFormat: valueLabFmtMoney,
       preferLower: true,
     },
     {
       label: 'Budget left',
-      current: currentAnalysis.budgetRemaining,
-      compare: compareAnalysis.budgetRemaining,
+      current: currentAnalysis ? currentAnalysis.budgetRemaining : NaN,
+      compare: compareAnalysis ? compareAnalysis.budgetRemaining : NaN,
       format: valueLabFmtMoney,
       deltaFormat: valueLabFmtMoney,
       preferLower: false,
     },
     {
       label: 'Avg perf',
-      current: currentAnalysis.avgPerf,
-      compare: compareAnalysis.avgPerf,
+      current: currentAnalysis ? currentAnalysis.avgPerf : NaN,
+      compare: compareAnalysis ? compareAnalysis.avgPerf : NaN,
       format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) : '—'; },
       deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' perf' : '—'; },
       preferLower: false,
     },
     {
       label: 'Perf / $100k',
-      current: Number.isFinite(currentAnalysis.perfPer100kActual) ? currentAnalysis.perfPer100kActual : currentAnalysis.perfPer100k,
-      compare: Number.isFinite(compareAnalysis.perfPer100kActual) ? compareAnalysis.perfPer100kActual : compareAnalysis.perfPer100k,
+      current: currentAnalysis ? (Number.isFinite(currentAnalysis.perfPer100kActual) ? currentAnalysis.perfPer100kActual : currentAnalysis.perfPer100k) : NaN,
+      compare: compareAnalysis ? (Number.isFinite(compareAnalysis.perfPer100kActual) ? compareAnalysis.perfPer100kActual : compareAnalysis.perfPer100k) : NaN,
       format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) : '—'; },
       deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' perf/$100k' : '—'; },
       preferLower: false,
     },
     {
       label: 'ROI gap',
-      current: currentAnalysis.roiGap,
-      compare: compareAnalysis.roiGap,
+      current: currentAnalysis ? currentAnalysis.roiGap : NaN,
+      compare: compareAnalysis ? compareAnalysis.roiGap : NaN,
       format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabFmtSigned(Math.round(valueLabNum(value)), null, ' pts') : '—'; },
       deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? Math.round(valueLabNum(value)) + ' pts' : '—'; },
       preferLower: false,
@@ -1213,8 +1202,8 @@ function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
     },
     {
       label: 'Top-3 spend share',
-      current: (currentAnalysis.top3SpendShare || 0) * 100,
-      compare: (compareAnalysis.top3SpendShare || 0) * 100,
+      current: currentAnalysis ? ((currentAnalysis.top3SpendShare || 0) * 100) : NaN,
+      compare: compareAnalysis ? ((compareAnalysis.top3SpendShare || 0) * 100) : NaN,
       format: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(0) + '%' : '—'; },
       deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(0) + '%' : '—'; },
       preferLower: true,
@@ -1222,6 +1211,177 @@ function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
   ].filter(function (metric) {
     return Number.isFinite(valueLabNum(metric.current)) || Number.isFinite(valueLabNum(metric.compare));
   });
+}
+
+function valueLabBuildCompareRecommendation(currentAnalysis, compareAnalysis) {
+  currentAnalysis = currentAnalysis && !currentAnalysis.empty ? currentAnalysis : null;
+  compareAnalysis = compareAnalysis && !compareAnalysis.empty ? compareAnalysis : null;
+  if (!currentAnalysis || !compareAnalysis) return null;
+
+  var currentName = (currentAnalysis.bundle && currentAnalysis.bundle.label) || 'Active Case';
+  var compareName = (compareAnalysis.bundle && compareAnalysis.bundle.label) || 'Compare Case';
+  var scores = { active: 0, compare: 0 };
+  var reasons = [];
+
+  function addSignal(opts) {
+    var currentValue = valueLabNum(opts.current);
+    var compareValue = valueLabNum(opts.compare);
+    if (!Number.isFinite(currentValue) || !Number.isFinite(compareValue)) return;
+    var diff = currentValue - compareValue;
+    if (!Number.isFinite(diff) || Math.abs(diff) < (opts.threshold || 0)) return;
+    var winner = opts.preferLower ? (diff < 0 ? 'active' : 'compare') : (diff > 0 ? 'active' : 'compare');
+    scores[winner] += opts.weight || 1;
+    reasons.push({
+      winner: winner,
+      weight: opts.weight || 1,
+      text: typeof opts.text === 'function' ? opts.text(Math.abs(diff), winner) : String(opts.text || ''),
+    });
+  }
+
+  addSignal({
+    current: currentAnalysis.outcome && currentAnalysis.outcome.projectedFullWins,
+    compare: compareAnalysis.outcome && compareAnalysis.outcome.projectedFullWins,
+    threshold: 0.4,
+    weight: 4,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' projects ' + diff.toFixed(1) + ' more wins on the same schedule context.';
+    }
+  });
+  addSignal({
+    current: currentAnalysis.outcome && currentAnalysis.outcome.spendPerProjectedWin,
+    compare: compareAnalysis.outcome && compareAnalysis.outcome.spendPerProjectedWin,
+    threshold: 15000,
+    weight: 3,
+    preferLower: true,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' buys each projected win about ' + valueLabFmtMoney(diff) + ' cheaper.';
+    }
+  });
+  addSignal({
+    current: Number.isFinite(currentAnalysis.perfPer100kActual) ? currentAnalysis.perfPer100kActual : currentAnalysis.perfPer100k,
+    compare: Number.isFinite(compareAnalysis.perfPer100kActual) ? compareAnalysis.perfPer100kActual : compareAnalysis.perfPer100k,
+    threshold: 0.8,
+    weight: 3,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' is returning ' + diff.toFixed(1) + ' more perf per $100k.';
+    }
+  });
+  addSignal({
+    current: currentAnalysis.budgetRemaining,
+    compare: compareAnalysis.budgetRemaining,
+    threshold: 25000,
+    weight: 2,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' keeps ' + valueLabFmtMoney(diff) + ' more budget room for retention or portal moves.';
+    }
+  });
+  addSignal({
+    current: currentAnalysis.roiGap,
+    compare: compareAnalysis.roiGap,
+    threshold: 4,
+    weight: 2,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' is outperforming its spend tier by ' + Math.round(diff) + ' more ROI-gap points.';
+    }
+  });
+  addSignal({
+    current: (currentAnalysis.top3SpendShare || 0) * 100,
+    compare: (compareAnalysis.top3SpendShare || 0) * 100,
+    threshold: 5,
+    weight: 1,
+    preferLower: true,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' spreads spend more evenly with a top-3 concentration gap of ' + diff.toFixed(0) + ' points.';
+    }
+  });
+  addSignal({
+    current: currentAnalysis.contractCoverage,
+    compare: compareAnalysis.contractCoverage,
+    threshold: 0.15,
+    weight: 1,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' has more real-contract coverage locked in (' + Math.round(diff * 100) + ' pts more coverage).';
+    }
+  });
+
+  if (Number.isFinite(currentAnalysis.budgetRemaining) && Number.isFinite(compareAnalysis.budgetRemaining) &&
+      currentAnalysis.budgetRemaining >= 0 && compareAnalysis.budgetRemaining < 0) {
+    scores.active += 2;
+    reasons.push({
+      winner: 'active',
+      weight: 2,
+      text: currentName + ' stays under budget while ' + compareName + ' is over by ' + valueLabFmtMoney(Math.abs(compareAnalysis.budgetRemaining)) + '.',
+    });
+  } else if (Number.isFinite(currentAnalysis.budgetRemaining) && Number.isFinite(compareAnalysis.budgetRemaining) &&
+      compareAnalysis.budgetRemaining >= 0 && currentAnalysis.budgetRemaining < 0) {
+    scores.compare += 2;
+    reasons.push({
+      winner: 'compare',
+      weight: 2,
+      text: compareName + ' stays under budget while ' + currentName + ' is over by ' + valueLabFmtMoney(Math.abs(currentAnalysis.budgetRemaining)) + '.',
+    });
+  }
+
+  var winner = 'tie';
+  if (scores.active > scores.compare) winner = 'active';
+  else if (scores.compare > scores.active) winner = 'compare';
+
+  if (!reasons.length || Math.abs(scores.active - scores.compare) <= 1) {
+    winner = 'tie';
+  }
+
+  var winnerName = winner === 'active' ? currentName : compareName;
+  var winnerReasons = reasons.filter(function (item) { return item.winner === winner; }).sort(function (a, b) {
+    return (b.weight || 0) - (a.weight || 0);
+  });
+  var counterReason = reasons.filter(function (item) { return item.winner !== winner; }).sort(function (a, b) {
+    return (b.weight || 0) - (a.weight || 0);
+  })[0];
+
+  if (winner === 'tie') {
+    return {
+      winner: 'tie',
+      tone: 'neutral',
+      pillLabel: 'Too close to call',
+      title: 'Both cases are reading close enough that the decision is still open.',
+      summary: 'Neither build has built a decisive enough edge yet. Use staff fit preference, negotiation confidence, or one more roster move to break the tie.',
+      reasons: reasons.slice(0, 3),
+      score: scores,
+    };
+  }
+
+  var summaryParts = winnerReasons.slice(0, 2).map(function (item) { return item.text; });
+  if (counterReason) summaryParts.push('Main caution: ' + counterReason.text);
+  return {
+    winner: winner,
+    tone: winner === 'active' ? 'good' : 'warn',
+    pillLabel: winner === 'active' ? 'Favor active case' : 'Favor compare case',
+    title: winnerName + ' is the cleaner director-side bet right now.',
+    summary: summaryParts.join(' '),
+    reasons: winnerReasons.slice(0, 3),
+    score: scores,
+  };
+}
+
+function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
+  if (!valueLabCompareSummaryEl) return;
+  if (!currentAnalysis || currentAnalysis.empty) {
+    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Build or load a case first, then choose another saved case to compare against.</div>';
+    return;
+  }
+  if (!compareAnalysis || compareAnalysis.empty) {
+    valueLabCompareSummaryEl.innerHTML = '<div class="valueLabEmpty">Choose a saved case in <b>Compare against</b> to see side-by-side spend, outcome, and roster tradeoffs.</div>';
+    return;
+  }
+
+  var rosterDiff = valueLabBuildCompareRosterDiff(currentAnalysis, compareAnalysis);
+  var metrics = valueLabGetComparisonMetrics(currentAnalysis, compareAnalysis);
+  var recommendation = valueLabBuildCompareRecommendation(currentAnalysis, compareAnalysis);
 
   var metricsHtml = metrics.map(function (metric) {
     var currentVal = valueLabNum(metric.current);
@@ -1252,8 +1412,19 @@ function valueLabRenderComparison(currentAnalysis, compareAnalysis) {
   }
 
   var takeaways = valueLabBuildCompareTakeaways(currentAnalysis, compareAnalysis, rosterDiff);
+  var recommendationHtml = recommendation
+    ? '<div class="valueLabCompareRecommendation valueLabCompareRecommendation--' + recommendation.tone + '">' +
+        '<div>' +
+          '<div class="valueLabCompareRecommendationEyebrow">Recommendation</div>' +
+          '<div class="valueLabCompareRecommendationTitle">' + valueLabEsc(recommendation.title) + '</div>' +
+          '<div class="valueLabCompareRecommendationText">' + valueLabEsc(recommendation.summary) + '</div>' +
+        '</div>' +
+        '<div class="valueLabCompareRecommendationPill valueLabCompareRecommendationPill--' + recommendation.tone + '">' + valueLabEsc(recommendation.pillLabel) + '</div>' +
+      '</div>'
+    : '';
 
   valueLabCompareSummaryEl.innerHTML =
+    recommendationHtml +
     '<div class="valueLabCompareTop">' +
       '<div class="valueLabCompareCase valueLabCompareCase--active"><small>Active case</small><strong>' + valueLabEsc(currentAnalysis.bundle.label || 'Active Case') + '</strong><span>' + currentAnalysis.rosterSize + ' players · ' + valueLabFmtMoney(currentAnalysis.totalSpend) + ' effective spend</span></div>' +
       '<div class="valueLabCompareVs">vs</div>' +
@@ -1291,6 +1462,119 @@ function valueLabAIMarkdownToHtml(text) {
 
 function valueLabSetAIStatus(message) {
   if (valueLabAIStatusEl) valueLabAIStatusEl.textContent = message || '';
+}
+
+function valueLabBuildBriefSignature() {
+  var currentCase = valueLabEnsureCurrentCaseV2();
+  return [
+    valueLabCurrentLeague(),
+    valueLabCurrentSeason(),
+    currentCase && currentCase.id ? String(currentCase.id) : '__draft__',
+    String(valueLabCaseState.compareCaseId || '')
+  ].join('::');
+}
+
+function valueLabGetFreshBriefRaw() {
+  if (!valueLabAIOutputEl || !valueLabAIOutputEl.dataset) return '';
+  if ((valueLabAIOutputEl.dataset.lastSignature || '') !== valueLabBuildBriefSignature()) return '';
+  return String(valueLabAIOutputEl.dataset.lastRaw || '').trim();
+}
+
+function valueLabBuildAICaseContext(analysis, portalCtx) {
+  analysis = analysis && !analysis.empty ? analysis : null;
+  if (!analysis) return null;
+  portalCtx = portalCtx || { targets: [], note: '' };
+  return {
+    caseName: analysis.bundle && analysis.bundle.label ? analysis.bundle.label : 'Value Lab Case',
+    league: valueLabCurrentLeague(),
+    season: valueLabCurrentSeason(),
+    sourceType: analysis.bundle && analysis.bundle.sourceType ? analysis.bundle.sourceType : 'manual',
+    budgetTotal: analysis.budgetTotal,
+    budgetRemaining: analysis.budgetRemaining,
+    totalModelValue: analysis.totalModelValue,
+    totalActualSpend: analysis.totalActualSpend,
+    effectiveSpend: analysis.totalSpend,
+    contractCoverage: analysis.contractCoverage,
+    avgPerf: analysis.avgPerf,
+    perfPer100kActual: analysis.perfPer100kActual,
+    perfPer100k: analysis.perfPer100k,
+    avgDelta: analysis.avgDelta,
+    overMarketTotal: analysis.overMarketTotal,
+    underMarketTotal: analysis.underMarketTotal,
+    top3SpendShare: analysis.top3SpendShare,
+    outcome: analysis.outcome || null,
+    topValueWins: (analysis.steals || []).slice(0, 4).map(function (row) {
+      return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
+    }),
+    topRisks: (analysis.overpays || []).slice(0, 4).map(function (row) {
+      return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
+    }),
+    roster: analysis.players.map(function (row) {
+      return {
+        player: row.Player,
+        team: row.Team,
+        position: row.posLabel,
+        classLabel: row.classBucket,
+        perf: row.perf,
+        expectedPerf: row.expectedPerf,
+        modelValue: row.valuation,
+        actualSpend: row.actualSpend,
+        delta: row.delta,
+        roiCall: row.roiLabel,
+      };
+    }),
+    portalTargets: (portalCtx.targets || []).slice(0, 6).map(function (target) {
+      return {
+        player: target.name,
+        fromTeam: target.fromTeam,
+        position: target.position,
+        classLabel: target.classLabel,
+        perf: target.perf,
+        modelValue: target.valuation,
+        expectedPerf: target.expectedPerf,
+        surplus: target.surplus,
+        withinBudget: target.withinBudget,
+        fitsNeed: target.fitsNeed,
+      };
+    }),
+    portalNote: portalCtx.note || '',
+  };
+}
+
+function valueLabEnsureJsPdf() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!valueLabJsPdfPromise) {
+    valueLabJsPdfPromise = loadScriptOnce(
+      'jspdf',
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      {
+        timeoutMs: 12000,
+        test: function () { return window.jspdf && window.jspdf.jsPDF; },
+        errorMessage: 'jsPDF failed to load.'
+      }
+    );
+  }
+  return valueLabJsPdfPromise;
+}
+
+function valueLabPdfFileName(name) {
+  return String(name || 'value-lab-director-brief')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') + '.pdf';
+}
+
+function valueLabPdfMarkdownLines(raw) {
+  return String(raw || '')
+    .split(/\r?\n/)
+    .map(function (line) {
+      return String(line || '')
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/^[-*]\s+/, '')
+        .replace(/^\d+\.\s+/, '')
+        .trim();
+    })
+    .filter(Boolean);
 }
 
 async function valueLabGetPortalPool() {
@@ -1556,6 +1840,8 @@ async function valueLabRunAIBrief() {
   await valueLabBootstrapV2(false);
   var bundle = valueLabBuildBundleFromCaseV2();
   var analysis = valueLabBuildAnalysis(bundle);
+  var compareBundle = valueLabBuildCompareBundleV2();
+  var compareAnalysis = compareBundle ? valueLabBuildAnalysis(compareBundle) : null;
   if (analysis.empty) {
     valueLabSetAIStatus((analysis && analysis.emptyMessage) || 'Load a Value Lab case first.');
     return;
@@ -1568,85 +1854,82 @@ async function valueLabRunAIBrief() {
 
   try {
     analysis.outcome = await valueLabBuildOutcome(analysis);
+    if (compareAnalysis && !compareAnalysis.empty) {
+      compareAnalysis.outcome = await valueLabBuildOutcome(compareAnalysis);
+    }
     var portalPack = await valueLabGetPortalPool().catch(function () {
       return { supported: false, items: [], note: 'Portal feed unavailable right now.' };
     });
     var portalCtx = valueLabBuildPortalTargets(analysis, portalPack);
+    var comparePortalCtx = (compareAnalysis && !compareAnalysis.empty)
+      ? valueLabBuildPortalTargets(compareAnalysis, portalPack)
+      : { targets: [], note: '' };
     valueLabCaseState.lastAnalysis = analysis;
+    valueLabCaseState.lastCompareAnalysis = compareAnalysis;
     valueLabCaseState.lastPortalTargets = portalCtx;
     valueLabRenderPortalWatch(portalCtx);
 
-    var promptCtx = {
-      caseName: bundle.label,
-      league: valueLabCurrentLeague(),
-      season: valueLabCurrentSeason(),
-      sourceType: bundle.sourceType || 'manual',
-      budgetTotal: analysis.budgetTotal,
-      budgetRemaining: analysis.budgetRemaining,
-      totalModelValue: analysis.totalModelValue,
-      totalActualSpend: analysis.totalActualSpend,
-      effectiveSpend: analysis.totalSpend,
-      contractCoverage: analysis.contractCoverage,
-      avgPerf: analysis.avgPerf,
-      perfPer100kActual: analysis.perfPer100kActual,
-      avgDelta: analysis.avgDelta,
-      overMarketTotal: analysis.overMarketTotal,
-      underMarketTotal: analysis.underMarketTotal,
-      top3SpendShare: analysis.top3SpendShare,
-      outcome: analysis.outcome,
-      topValueWins: (analysis.steals || []).slice(0, 4).map(function (row) {
-        return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
-      }),
-      topRisks: (analysis.overpays || []).slice(0, 4).map(function (row) {
-        return { player: row.Player, team: row.Team, perf: row.perf, surplus: row.surplus, modelValue: row.valuation, actualSpend: row.actualSpend };
-      }),
-      roster: analysis.players.map(function (row) {
-        return {
-          player: row.Player,
-          team: row.Team,
-          position: row.posLabel,
-          classLabel: row.classBucket,
-          perf: row.perf,
-          expectedPerf: row.expectedPerf,
-          modelValue: row.valuation,
-          actualSpend: row.actualSpend,
-          delta: row.delta,
-          roiCall: row.roiLabel,
-        };
-      }),
-      portalTargets: (portalCtx.targets || []).slice(0, 6).map(function (target) {
-        return {
-          player: target.name,
-          fromTeam: target.fromTeam,
-          position: target.position,
-          classLabel: target.classLabel,
-          perf: target.perf,
-          modelValue: target.valuation,
-          expectedPerf: target.expectedPerf,
-          surplus: target.surplus,
-          withinBudget: target.withinBudget,
-          fitsNeed: target.fitsNeed,
-        };
-      }),
-      portalNote: portalCtx.note || '',
-    };
-
-    var userPrompt =
-      'Build a director-facing college basketball Value Lab brief using ONLY the structured JSON below.\n\n' +
-      'Goals:\n' +
-      '- Evaluate whether this roster investment is healthy on the business side.\n' +
-      '- Explain if current contracts are under market, fair, or rich.\n' +
-      '- Interpret projected wins and whether spend is justified.\n' +
-      '- Point out budget flexibility and where the money is too concentrated.\n' +
-      '- Use the provided transfer portal targets to suggest best bang-for-buck additions when relevant.\n' +
-      '- If contract coverage is incomplete, say that clearly and lower confidence.\n\n' +
-      'Return markdown with these sections:\n' +
-      '## Executive Verdict\n' +
-      '## Budget & Contract Health\n' +
-      '## Outcome vs Spend\n' +
-      '## Portal Value Targets\n' +
-      '## Director Action Plan\n\n' +
-      'JSON:\n```json\n' + JSON.stringify(promptCtx, null, 2) + '\n```';
+    var promptCtx;
+    var userPrompt;
+    if (compareAnalysis && !compareAnalysis.empty) {
+      var rosterDiff = valueLabBuildCompareRosterDiff(analysis, compareAnalysis);
+      var recommendation = valueLabBuildCompareRecommendation(analysis, compareAnalysis);
+      promptCtx = {
+        mode: 'compare',
+        activeCase: valueLabBuildAICaseContext(analysis, portalCtx),
+        compareCase: valueLabBuildAICaseContext(compareAnalysis, comparePortalCtx),
+        comparison: {
+          recommendation: recommendation,
+          takeaways: valueLabBuildCompareTakeaways(analysis, compareAnalysis, rosterDiff),
+          rosterDiff: {
+            sharedCount: rosterDiff ? rosterDiff.sharedCount : 0,
+            onlyActive: (rosterDiff && rosterDiff.onlyCurrent ? rosterDiff.onlyCurrent : []).slice(0, 8).map(function (row) {
+              return { player: row.Player, team: row.Team, perf: row.perf, spendBasis: row.spendBasis, roiCall: row.roiLabel };
+            }),
+            onlyCompare: (rosterDiff && rosterDiff.onlyCompare ? rosterDiff.onlyCompare : []).slice(0, 8).map(function (row) {
+              return { player: row.Player, team: row.Team, perf: row.perf, spendBasis: row.spendBasis, roiCall: row.roiLabel };
+            }),
+          }
+        }
+      };
+      userPrompt =
+        'Build a director-facing college basketball Value Lab comparison brief using ONLY the structured JSON below.\n\n' +
+        'Goals:\n' +
+        '- Pick which case is the better director-side choice right now and explain why.\n' +
+        '- Compare contract health, budget flexibility, projected wins, and spend efficiency.\n' +
+        '- Call out where the active case is stronger, where the compare case is stronger, and what would change the recommendation.\n' +
+        '- Use the transfer portal targets as business-side suggestions for whichever case looks most actionable.\n' +
+        '- If contract coverage is incomplete, say that clearly and lower confidence.\n\n' +
+        'Return markdown with these sections:\n' +
+        '## Executive Verdict\n' +
+        '## Head-to-Head Decision\n' +
+        '## Budget & Contract Health\n' +
+        '## Outcome vs Spend\n' +
+        '## Portal Value Targets\n' +
+        '## Director Action Plan\n\n' +
+        'JSON:\n```json\n' + JSON.stringify(promptCtx, null, 2) + '\n```';
+    } else {
+      promptCtx = {
+        mode: 'single',
+        activeCase: valueLabBuildAICaseContext(analysis, portalCtx),
+      };
+      userPrompt =
+        'Build a director-facing college basketball Value Lab brief using ONLY the structured JSON below.\n\n' +
+        'Goals:\n' +
+        '- Evaluate whether this roster investment is healthy on the business side.\n' +
+        '- Explain if current contracts are under market, fair, or rich.\n' +
+        '- Interpret projected wins and whether spend is justified.\n' +
+        '- Point out budget flexibility and where the money is too concentrated.\n' +
+        '- Use the provided transfer portal targets to suggest best bang-for-buck additions when relevant.\n' +
+        '- If contract coverage is incomplete, say that clearly and lower confidence.\n\n' +
+        'Return markdown with these sections:\n' +
+        '## Executive Verdict\n' +
+        '## Budget & Contract Health\n' +
+        '## Outcome vs Spend\n' +
+        '## Portal Value Targets\n' +
+        '## Director Action Plan\n\n' +
+        'JSON:\n```json\n' + JSON.stringify(promptCtx, null, 2) + '\n```';
+    }
 
     var res = await fetch(VALUE_LAB_GEMINI_PROXY_URL, {
       method: 'POST',
@@ -1671,8 +1954,14 @@ async function valueLabRunAIBrief() {
     if (!text) throw new Error('Empty AI response');
 
     valueLabAIOutputEl.innerHTML = valueLabAIMarkdownToHtml(text);
-    if (valueLabAIOutputEl.dataset) valueLabAIOutputEl.dataset.lastRaw = text;
-    valueLabSetAIStatus('Director brief ready — grounded in case spend, projection, and portal value targets.');
+    if (valueLabAIOutputEl.dataset) {
+      valueLabAIOutputEl.dataset.lastRaw = text;
+      valueLabAIOutputEl.dataset.lastSignature = valueLabBuildBriefSignature();
+      valueLabAIOutputEl.dataset.lastGeneratedAt = new Date().toISOString();
+    }
+    valueLabSetAIStatus(compareAnalysis && !compareAnalysis.empty
+      ? 'Director comparison brief ready — grounded in spend, projection, and portal options for both cases.'
+      : 'Director brief ready — grounded in case spend, projection, and portal value targets.');
   } catch (e) {
     valueLabAIOutputEl.innerHTML = '<div class="muted" style="padding:12px">Unable to run the director brief: ' + valueLabEsc(e && e.message ? e.message : String(e)) + '</div>';
     valueLabSetAIStatus('Director brief failed');
@@ -1680,6 +1969,195 @@ async function valueLabRunAIBrief() {
     valueLabAIRunBtnEl.disabled = false;
   }
 }
+
+async function valueLabExportBriefPdf() {
+  await valueLabBootstrapV2(false);
+  var bundle = valueLabBuildBundleFromCaseV2();
+  var analysis = valueLabBuildAnalysis(bundle);
+  var compareBundle = valueLabBuildCompareBundleV2();
+  var compareAnalysis = compareBundle ? valueLabBuildAnalysis(compareBundle) : null;
+  if (!analysis || analysis.empty) {
+    valueLabSetAIStatus((analysis && analysis.emptyMessage) || 'Load a Value Lab case first.');
+    return;
+  }
+
+  valueLabSetAIStatus('Building Value Lab PDF...');
+  if (valueLabAIPdfBtnEl) valueLabAIPdfBtnEl.disabled = true;
+  try {
+    await valueLabEnsureJsPdf();
+  } catch (e) {
+    valueLabSetAIStatus('PDF export unavailable right now.');
+    if (typeof showWarn === 'function') showWarn('Value Lab PDF export failed: ' + (e && e.message ? e.message : e));
+    if (valueLabAIPdfBtnEl) valueLabAIPdfBtnEl.disabled = false;
+    return;
+  }
+
+  try {
+    analysis.outcome = await valueLabBuildOutcome(analysis);
+    if (compareAnalysis && !compareAnalysis.empty) {
+      compareAnalysis.outcome = await valueLabBuildOutcome(compareAnalysis);
+    }
+    valueLabCaseState.lastAnalysis = analysis;
+    valueLabCaseState.lastCompareAnalysis = compareAnalysis;
+
+    var portalPack = await valueLabGetPortalPool().catch(function () {
+      return { supported: false, items: [], note: 'Portal feed unavailable right now.' };
+    });
+    var portalCtx = valueLabBuildPortalTargets(analysis, portalPack);
+    valueLabCaseState.lastPortalTargets = portalCtx;
+    var recommendation = (compareAnalysis && !compareAnalysis.empty) ? valueLabBuildCompareRecommendation(analysis, compareAnalysis) : null;
+    var rosterDiff = (compareAnalysis && !compareAnalysis.empty) ? valueLabBuildCompareRosterDiff(analysis, compareAnalysis) : null;
+    var rawBrief = valueLabGetFreshBriefRaw();
+    var generatedAt = (valueLabAIOutputEl && valueLabAIOutputEl.dataset && valueLabAIOutputEl.dataset.lastGeneratedAt) || '';
+
+    var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 42;
+    var y = margin;
+    var pageNum = 1;
+
+    function ensureSpace(height) {
+      if (y + height <= pageH - margin) return;
+      addFooter();
+      doc.addPage();
+      pageNum += 1;
+      y = margin;
+    }
+    function addFooter() {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(145, 155, 170);
+      doc.text('Toledo Basketball Ops Platform - Value Lab Director Brief', margin, pageH - 22);
+      doc.text('Page ' + pageNum, pageW - margin, pageH - 22, { align: 'right' });
+      doc.setDrawColor(210, 215, 228);
+      doc.setLineWidth(0.4);
+      doc.line(margin, pageH - 32, pageW - margin, pageH - 32);
+      doc.setTextColor(0, 0, 0);
+    }
+    function addTitle(text, size) {
+      size = size || 18;
+      ensureSpace(size + 16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(size);
+      doc.text(String(text || ''), margin, y);
+      y += size + 10;
+    }
+    function addBody(text, opts) {
+      opts = opts || {};
+      var fontSize = opts.fontSize || 10;
+      var lineHeight = opts.lineHeight || 13;
+      var indent = opts.indent || 0;
+      var maxWidth = pageW - (margin * 2) - indent;
+      var raw = Array.isArray(text) ? text.join('\n') : String(text || '');
+      var lines = doc.splitTextToSize(raw, maxWidth);
+      ensureSpace(lines.length * lineHeight + 4);
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      doc.text(lines, margin + indent, y);
+      y += lines.length * lineHeight + (opts.gap != null ? opts.gap : 6);
+    }
+    function addSection(title, lines) {
+      addTitle(title, 13);
+      (lines || []).forEach(function (line) {
+        addBody(line, { fontSize: 10, lineHeight: 13 });
+      });
+      y += 4;
+    }
+
+    var exportedAt = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
+    var currentName = (analysis.bundle && analysis.bundle.label) || 'Active Case';
+    var compareName = compareAnalysis && compareAnalysis.bundle ? (compareAnalysis.bundle.label || 'Compare Case') : '';
+    var metrics = compareAnalysis && !compareAnalysis.empty ? valueLabGetComparisonMetrics(analysis, compareAnalysis) : [];
+
+    doc.setProperties({
+      title: currentName + (compareName ? ' vs ' + compareName : '') + ' Value Lab Brief',
+      subject: 'Value Lab director brief',
+      author: 'Toledo Basketball Ops Platform'
+    });
+
+    addTitle('Value Lab Director Brief', 20);
+    addBody('League: ' + valueLabCurrentLeague() + '   -   Season: ' + valueLabCurrentSeason(), { fontSize: 11, lineHeight: 14 });
+    addBody('Active case: ' + currentName + (compareName ? '   -   Compare case: ' + compareName : ''), { fontSize: 11, lineHeight: 14 });
+    addBody('Exported: ' + exportedAt, { fontSize: 9, lineHeight: 12, gap: 10 });
+
+    if (recommendation) {
+      addSection('Recommendation', [
+        recommendation.pillLabel + ' - ' + recommendation.title,
+        recommendation.summary
+      ]);
+    }
+
+    addSection('Executive Snapshot', [
+      'Roster size: ' + analysis.rosterSize,
+      'Effective spend: ' + valueLabFmtMoney(analysis.totalSpend),
+      'Model value: ' + valueLabFmtMoney(analysis.totalModelValue),
+      'Actual spend entered: ' + (analysis.enteredContracts ? valueLabFmtMoney(analysis.totalActualSpend) : '—'),
+      'Budget remaining: ' + (Number.isFinite(analysis.budgetRemaining) ? valueLabFmtMoney(analysis.budgetRemaining) : '—'),
+      'Average Perf: ' + (Number.isFinite(analysis.avgPerf) ? analysis.avgPerf.toFixed(1) : '—'),
+      'Perf / $100k: ' + (Number.isFinite(analysis.perfPer100kActual) ? analysis.perfPer100kActual.toFixed(1) : (Number.isFinite(analysis.perfPer100k) ? analysis.perfPer100k.toFixed(1) : '—')),
+      'ROI gap: ' + (Number.isFinite(analysis.roiGap) ? valueLabFmtSigned(Math.round(analysis.roiGap), null, ' pts') : '—'),
+      'Contract coverage: ' + Math.round((analysis.contractCoverage || 0) * 100) + '%'
+    ]);
+
+    addSection('Outcome vs Spend', analysis.outcome && analysis.outcome.hasTeamContext ? [
+      'Detected team: ' + analysis.outcome.teamName,
+      'Actual record: ' + (analysis.outcome.gamesPlayed ? (analysis.outcome.actualWins + '-' + analysis.outcome.actualLosses) : '—'),
+      'Baseline wins: ' + valueLabFmtWins(analysis.outcome.baselineFullWins),
+      'Case projected wins: ' + valueLabFmtWins(analysis.outcome.projectedFullWins),
+      'Delta vs baseline: ' + (Number.isFinite(analysis.outcome.projectedWinDelta) ? valueLabFmtSigned(analysis.outcome.projectedWinDelta, 1, ' wins') : '—'),
+      'Spend / projected win: ' + (Number.isFinite(analysis.outcome.spendPerProjectedWin) ? valueLabFmtMoney(analysis.outcome.spendPerProjectedWin) : '—'),
+      'Projection note: ' + (analysis.outcome.note || 'No note available.')
+    ] : [
+      (analysis.outcome && analysis.outcome.note) || 'No real team context was detected for outcome replay.'
+    ]);
+
+    if (compareAnalysis && !compareAnalysis.empty) {
+      addSection('Case Comparison Snapshot', metrics.map(function (metric) {
+        var currentVal = valueLabNum(metric.current);
+        var compareVal = valueLabNum(metric.compare);
+        var delta = (Number.isFinite(currentVal) && Number.isFinite(compareVal)) ? (currentVal - compareVal) : NaN;
+        var deltaText = Number.isFinite(delta)
+          ? (delta === 0 ? 'No gap' : ((delta > 0 ? 'Active case +' : 'Compare case +') + (metric.deltaFormat ? metric.deltaFormat(Math.abs(delta)) : metric.format(Math.abs(delta)))))
+          : 'Awaiting full data';
+        return metric.label + ': Active ' + metric.format(metric.current) + ' | Compare ' + metric.format(metric.compare) + ' | ' + deltaText;
+      }).concat([
+        'Shared players: ' + (rosterDiff ? rosterDiff.sharedCount : 0),
+        'Only in active case: ' + (rosterDiff && rosterDiff.onlyCurrent.length ? rosterDiff.onlyCurrent.slice(0, 5).map(function (row) { return row.Player; }).join(', ') : 'None'),
+        'Only in compare case: ' + (rosterDiff && rosterDiff.onlyCompare.length ? rosterDiff.onlyCompare.slice(0, 5).map(function (row) { return row.Player; }).join(', ') : 'None')
+      ]));
+    }
+
+    addSection('Portal Value Watch', (portalCtx.targets || []).length
+      ? portalCtx.targets.slice(0, 5).map(function (target, idx) {
+          return (idx + 1) + '. ' + target.name + ' - ' + (target.fromTeam || 'Portal') + ' - ' + (target.position || '—') + ' - Perf ' + target.perf.toFixed(1) + ' - ' + valueLabFmtMoney(target.valuation) + (target.fitsNeed ? ' - fills ' + (portalCtx.weakestLabel || 'need') : '');
+        })
+      : [portalCtx.note || 'No portal value targets surfaced for this case right now.']);
+
+    addSection('Director AI Brief', rawBrief
+      ? valueLabPdfMarkdownLines(rawBrief)
+      : ['Run Director Brief before exporting if you want the Gemini narrative included. The PDF still captures the current Value Lab numbers and comparison view.']);
+
+    if (rawBrief && generatedAt) {
+      addBody('AI brief generated: ' + new Date(generatedAt).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }), { fontSize: 8.5, lineHeight: 11, gap: 0 });
+    }
+
+    var blobUrl = doc.output('bloburl');
+    var preview = window.open(blobUrl, '_blank');
+    if (!preview) {
+      doc.save(valueLabPdfFileName((currentName || 'value-lab') + (compareName ? '-vs-' + compareName : '') + '-brief'));
+      valueLabSetAIStatus('PDF downloaded');
+      return;
+    }
+    valueLabSetAIStatus('PDF preview opened in a new tab');
+  } catch (e) {
+    valueLabSetAIStatus('PDF export failed');
+    if (typeof showWarn === 'function') showWarn('Value Lab PDF export failed: ' + (e && e.message ? e.message : e));
+  } finally {
+    if (valueLabAIPdfBtnEl) valueLabAIPdfBtnEl.disabled = false;
+  }
+}
+
 async function valueLabRefresh() {
   if (!valueLabModeSelectEl) return;
   valueLabRenderSourceControls();
@@ -1897,7 +2375,8 @@ var valueLabQuickAddInputEl2, valueLabQuickAddDropdownEl2;
 var valueLabNewCaseBtnEl2, valueLabDuplicateBtnEl2, valueLabClearCaseBtnEl2;
 var valueLabImportHubBtnEl2, valueLabImportBuilderBtnEl2, valueLabImportTeamBtnEl2;
 var valueLabBudgetInputEl2;
-var valueLabAIRunBtnEl, valueLabAIStatusEl, valueLabAIOutputEl, valueLabPortalWatchEl, valueLabCompareSummaryEl;
+var valueLabAIRunBtnEl, valueLabAIPdfBtnEl, valueLabAIStatusEl, valueLabAIOutputEl, valueLabPortalWatchEl, valueLabCompareSummaryEl;
+var valueLabJsPdfPromise = null;
 
 var VALUE_LAB_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var VALUE_LAB_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -2749,7 +3228,11 @@ function valueLabHandleDataChange() {
   if (valueLabAIOutputEl) {
     valueLabAIOutputEl.style.display = 'none';
     valueLabAIOutputEl.innerHTML = '';
-    if (valueLabAIOutputEl.dataset) delete valueLabAIOutputEl.dataset.lastRaw;
+    if (valueLabAIOutputEl.dataset) {
+      delete valueLabAIOutputEl.dataset.lastRaw;
+      delete valueLabAIOutputEl.dataset.lastSignature;
+      delete valueLabAIOutputEl.dataset.lastGeneratedAt;
+    }
   }
   valueLabSetAIStatus('');
   if (window._dashboardCurrentPageId === 'pageValueLab') valueLabRefresh(true);
@@ -2797,6 +3280,7 @@ function initValueLabPage() {
   valueLabOpenTeamBuilderBtnEl = document.getElementById('valueLabOpenTeamBuilderBtn');
   valueLabOpenTeamHubBtnEl = document.getElementById('valueLabOpenTeamHubBtn');
   valueLabAIRunBtnEl = document.getElementById('valueLabAIRunBtn');
+  valueLabAIPdfBtnEl = document.getElementById('valueLabAIPdfBtn');
   valueLabAIStatusEl = document.getElementById('valueLabAIStatus');
   valueLabAIOutputEl = document.getElementById('valueLabAIOutput');
   valueLabPortalWatchEl = document.getElementById('valueLabPortalWatch');
@@ -2969,6 +3453,12 @@ function initValueLabPage() {
     });
     valueLabAIRunBtnEl._boundV2 = true;
   }
+  if (valueLabAIPdfBtnEl && !valueLabAIPdfBtnEl._boundV2) {
+    valueLabAIPdfBtnEl.addEventListener('click', function () {
+      valueLabExportBriefPdf();
+    });
+    valueLabAIPdfBtnEl._boundV2 = true;
+  }
   if (valueLabPortalWatchEl) valueLabRenderPortalWatch({ loading: true });
   valueLabRenderAll({ empty: true, emptyMessage: 'Create a Value Lab case, then add players or import a roster to start the investment view.' });
 }
@@ -2984,7 +3474,11 @@ function valueLabResetSessionV2() {
   if (valueLabAIOutputEl) {
     valueLabAIOutputEl.style.display = 'none';
     valueLabAIOutputEl.innerHTML = '';
-    if (valueLabAIOutputEl.dataset) delete valueLabAIOutputEl.dataset.lastRaw;
+    if (valueLabAIOutputEl.dataset) {
+      delete valueLabAIOutputEl.dataset.lastRaw;
+      delete valueLabAIOutputEl.dataset.lastSignature;
+      delete valueLabAIOutputEl.dataset.lastGeneratedAt;
+    }
   }
   valueLabSetAIStatus('');
   if (window._dashboardCurrentPageId === 'pageValueLab') valueLabRefresh(true);
