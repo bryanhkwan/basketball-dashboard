@@ -132,7 +132,7 @@ function authHandleUnauthorized(message) {
   if (loginErr) loginErr.textContent = message || 'Your session expired. Please log in again.';
 }
 
-// Loading coordination -- both flags must be true before Welcome shows
+// Loading coordination -- loading screen exits as soon as the intro video ends
 var _loadDataReady = false;
 var _loadVideoEnded = false;
 
@@ -150,6 +150,7 @@ function authEnterGuest() {
 
 function authMaybeStartGuestTour() {
   if (!authIsGuest()) return;
+  if (!_loadDataReady) return;
   try {
     if (sessionStorage.getItem(AUTH_GUEST_TOUR_KEY) === '1') return;
   } catch (_) {}
@@ -218,9 +219,9 @@ function authFinishLoading() {
   }
 }
 
-/* Show Welcome overlay once BOTH video has ended AND data is ready */
+/* Show Welcome overlay once the intro video is done; data can continue loading in background */
 function _checkLoadingComplete() {
-  if (!_loadDataReady || !_loadVideoEnded) return;
+  if (!_loadVideoEnded) return;
 
   var welcomeOverlay = document.getElementById('welcomeOverlay');
   var welcomeName = document.getElementById('welcomeName');
@@ -228,8 +229,9 @@ function _checkLoadingComplete() {
   if (welcomeName) welcomeName.textContent = name;
   if (welcomeOverlay) welcomeOverlay.classList.remove('hidden');
 
+  var overlay = document.getElementById('loadingOverlay');
+  _authSetupHeader();
   setTimeout(function () {
-    var overlay = document.getElementById('loadingOverlay');
     if (overlay) {
       overlay.classList.add('fade-out');
       setTimeout(function () {
@@ -237,8 +239,7 @@ function _checkLoadingComplete() {
         overlay.classList.remove('fade-out');
       }, 500);
     }
-    _authSetupHeader();
-  }, 1000);
+  }, 650);
 }
 
 function authShowDashboard() {

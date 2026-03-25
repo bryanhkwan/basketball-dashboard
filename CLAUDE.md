@@ -107,11 +107,11 @@ window._app bridge [app.js]
 
 **Key functions**:
 - `authStartLoading()` — hides auth overlay, shows loading video, fires `loadAllData`
-- `authFinishLoading()` — called by data.js when data is ready; shows Welcome overlay
+- `authFinishLoading()` — called by data.js when data is ready; background data can continue, but the loading screen exits as soon as the intro video finishes
 - `authIsGuest()` — returns `true` if guest session active
 - `authGetToken()`, `authGetUser()`, `authSave()`, `authClear()` — token helpers
 
-**Key flags**: `_loadDataReady`, `_loadVideoEnded` — both must be true before Welcome shows
+**Key flags**: `_loadDataReady`, `_loadVideoEnded` — the loading overlay now exits on `_loadVideoEnded`; `_loadDataReady` tracks background data readiness
 
 **Dependencies**: data.js (loadAllData)
 
