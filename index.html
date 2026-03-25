@@ -34,12 +34,15 @@
 </head>
 <body>
 
-<!-- Auth Overlay -->
-<div id="authOverlay" class="authOverlay">
-  <video id="authBgVideo" class="authBgVideo" playsinline muted loop autoplay preload="metadata">
+<div id="introVideoStage" class="introVideoStage hidden" aria-hidden="true">
+  <video id="loadingVideo" class="introVideo" playsinline muted preload="auto">
     <source src="ut_vid.mp4" type="video/mp4">
   </video>
-  <div class="authOverlayScrim"></div>
+  <div class="introVideoShade"></div>
+</div>
+
+<!-- Auth Overlay -->
+<div id="authOverlay" class="authOverlay">
   <div class="authCard">
     <div class="authLogo">NCAA Scouting</div>
 
@@ -118,9 +121,6 @@
 
 <!-- Loading Overlay (shown between auth and dashboard) -->
 <div id="loadingOverlay" class="loadingOverlay hidden">
-  <video id="loadingVideo" class="loadingVideo" playsinline muted>
-    <source src="ut_vid.mp4" type="video/mp4">
-  </video>
   <div id="welcomeOverlay" class="welcomeOverlay hidden">
     <div class="welcomeText">Welcome, <span id="welcomeName"></span></div>
   </div>

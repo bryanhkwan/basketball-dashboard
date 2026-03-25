@@ -62,16 +62,77 @@ function authClearFormMessages() {
   if (pwChangeError) pwChangeError.textContent = '';
 }
 
-function authSyncOverlayVideo(shouldPlay) {
-  var video = document.getElementById('authBgVideo');
+function authGetIntroStage() {
+  return document.getElementById('introVideoStage');
+}
+
+function authGetIntroVideo() {
+  return document.getElementById('loadingVideo');
+}
+
+function authWarmIntroVideo() {
+  var video = authGetIntroVideo();
   if (!video) return;
-  if (shouldPlay) {
-    var playAttempt = video.play();
-    if (playAttempt && typeof playAttempt.catch === 'function') {
-      playAttempt.catch(function () {});
+  video.preload = 'auto';
+  try { video.load(); } catch (_) {}
+}
+
+var _introStageHideTimer = null;
+
+function authShowIntroStage() {
+  var stage = authGetIntroStage();
+  if (!stage) return;
+  if (_introStageHideTimer) {
+    clearTimeout(_introStageHideTimer);
+    _introStageHideTimer = null;
+  }
+  stage.classList.remove('hidden');
+  stage.classList.remove('fade-out');
+}
+
+function authHideIntroStage(immediate) {
+  var stage = authGetIntroStage();
+  var video = authGetIntroVideo();
+  if (!stage) return;
+  if (immediate) {
+    if (_introStageHideTimer) {
+      clearTimeout(_introStageHideTimer);
+      _introStageHideTimer = null;
     }
+    stage.classList.add('hidden');
+    stage.classList.remove('fade-out');
+    if (video) {
+      try { video.pause(); } catch (_) {}
+    }
+    return;
+  }
+  stage.classList.add('fade-out');
+  _introStageHideTimer = setTimeout(function () {
+    _introStageHideTimer = null;
+    stage.classList.add('hidden');
+    stage.classList.remove('fade-out');
+    if (video) {
+      try { video.pause(); } catch (_) {}
+    }
+  }, 450);
+}
+
+function authPlayIntroVideo(mode, onPlayError) {
+  var video = authGetIntroVideo();
+  authShowIntroStage();
+  if (!video) return;
+  try { video.pause(); } catch (_) {}
+  if (mode === 'auth') {
+    video.loop = true;
   } else {
-    try { video.pause(); } catch (_) {}
+    video.loop = false;
+    try { video.currentTime = 0; } catch (_) {}
+  }
+  var playAttempt = video.play();
+  if (playAttempt && typeof playAttempt.catch === 'function') {
+    playAttempt.catch(function () {
+      if (typeof onPlayError === 'function') onPlayError();
+    });
   }
 }
 
@@ -148,6 +209,9 @@ function authHandleUnauthorized(message) {
 // Loading coordination -- loading screen exits as soon as the intro video ends
 var _loadDataReady = false;
 var _loadVideoEnded = false;
+var _loadTransitionStarted = false;
+var _loadVideoLastTick = 0;
+var _loadVideoStallTimer = null;
 
 function authEnterGuest() {
   localStorage.removeItem(AUTH_ROLE_KEY);
@@ -183,19 +247,40 @@ function authMaybeStartGuestTour() {
 function authStartLoading() {
   _loadDataReady = false;
   _loadVideoEnded = false;
+  _loadTransitionStarted = false;
+  _loadVideoLastTick = Date.now();
+  if (_loadVideoStallTimer) {
+    clearTimeout(_loadVideoStallTimer);
+    _loadVideoStallTimer = null;
+  }
 
   document.getElementById('authOverlay').classList.add('hidden');
-  authSyncOverlayVideo(false);
   var loadingOverlay = document.getElementById('loadingOverlay');
-  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+  var welcomeOverlay = document.getElementById('welcomeOverlay');
+  if (loadingOverlay) {
+    loadingOverlay.classList.remove('hidden');
+    loadingOverlay.classList.remove('fade-out');
+  }
+  if (welcomeOverlay) welcomeOverlay.classList.add('hidden');
 
   // Set up video -- mark ended when it finishes (or errors / can't autoplay)
-  var video = document.getElementById('loadingVideo');
+  var video = authGetIntroVideo();
   if (video) {
     var onVideoEnd = function () { _loadVideoEnded = true; _checkLoadingComplete(); };
-    video.addEventListener('ended', onVideoEnd, { once: true });
-    video.addEventListener('error', onVideoEnd, { once: true });
-    video.play().catch(onVideoEnd);
+    video.onended = onVideoEnd;
+    video.onerror = onVideoEnd;
+    video.ontimeupdate = function () { _loadVideoLastTick = Date.now(); };
+    var scheduleStallCheck = function () {
+      if (_loadVideoStallTimer) clearTimeout(_loadVideoStallTimer);
+      _loadVideoStallTimer = setTimeout(function () {
+        _loadVideoStallTimer = null;
+        if (_loadVideoEnded) return;
+        if (Date.now() - _loadVideoLastTick >= 1400) onVideoEnd();
+      }, 1400);
+    };
+    video.onwaiting = scheduleStallCheck;
+    video.onstalled = scheduleStallCheck;
+    authPlayIntroVideo('loading', onVideoEnd);
   } else {
     _loadVideoEnded = true;
   }
@@ -235,7 +320,12 @@ function authFinishLoading() {
 
 /* Show Welcome overlay once the intro video is done; data can continue loading in background */
 function _checkLoadingComplete() {
-  if (!_loadVideoEnded) return;
+  if (!_loadVideoEnded || _loadTransitionStarted) return;
+  _loadTransitionStarted = true;
+  if (_loadVideoStallTimer) {
+    clearTimeout(_loadVideoStallTimer);
+    _loadVideoStallTimer = null;
+  }
 
   var welcomeOverlay = document.getElementById('welcomeOverlay');
   var welcomeName = document.getElementById('welcomeName');
@@ -253,11 +343,13 @@ function _checkLoadingComplete() {
         overlay.classList.remove('fade-out');
       }, 500);
     }
+    authHideIntroStage();
   }, 650);
 }
 
 function authShowDashboard() {
   document.getElementById('authOverlay').classList.add('hidden');
+  authHideIntroStage(true);
   _authSetupHeader();
 }
 
@@ -321,8 +413,27 @@ function authShowOverlay() {
   authSetMode('login');
   authClearFormMessages();
   authHidePasswordChangeOverlay();
+  var introVideo = authGetIntroVideo();
+  if (introVideo) {
+    introVideo.onended = null;
+    introVideo.onerror = null;
+    introVideo.onwaiting = null;
+    introVideo.onstalled = null;
+    introVideo.ontimeupdate = null;
+  }
+  if (_loadVideoStallTimer) {
+    clearTimeout(_loadVideoStallTimer);
+    _loadVideoStallTimer = null;
+  }
+  authPlayIntroVideo('auth');
   document.getElementById('authOverlay').classList.remove('hidden');
-  authSyncOverlayVideo(true);
+  var loadingOverlay = document.getElementById('loadingOverlay');
+  var welcomeOverlay = document.getElementById('welcomeOverlay');
+  if (loadingOverlay) {
+    loadingOverlay.classList.add('hidden');
+    loadingOverlay.classList.remove('fade-out');
+  }
+  if (welcomeOverlay) welcomeOverlay.classList.add('hidden');
   var logoutBtn = document.getElementById('logoutBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
   var notesToggle = document.getElementById('notesToggle');
@@ -371,6 +482,7 @@ async function authInit() {
   var backToLoginBtn = document.getElementById('backToLoginBtn');
 
   authSetMode('login');
+  authWarmIntroVideo();
 
   if (guestBtn) {
     guestBtn.addEventListener('click', function () { authEnterGuest(); });
@@ -553,7 +665,6 @@ async function authInit() {
   } else {
     authShowOverlay();
   }
-  authSyncOverlayVideo(!document.getElementById('authOverlay').classList.contains('hidden'));
 }
 
 document.addEventListener('DOMContentLoaded', authInit);
