@@ -263,6 +263,206 @@ function portalGetPlayerValuation(player) {
   return value;
 }
 
+function portalClamp01(v) {
+  var n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
+}
+
+function portalPlayerPosGroup(player) {
+  if (!player) return 'guard';
+  if (typeof tbPosGroup === 'function') return tbPosGroup(player);
+  var pos = String(player.Position || player.Pos || '').toLowerCase();
+  return (pos.indexOf('g') >= 0 || pos.indexOf('guard') >= 0) ? 'guard' : 'big';
+}
+
+function portalClassBucket(player) {
+  var raw = String(player && (player.Class || player.Yr || player.Year || player.Experience || '')).trim().toLowerCase();
+  if (!raw) return 'Unknown';
+  if (raw.indexOf('grad') >= 0) return 'Sr+';
+  if (raw.indexOf('fresh') >= 0 || raw.startsWith('fr')) return 'Fr';
+  if (raw.indexOf('soph') >= 0 || raw.startsWith('so')) return 'So';
+  if (raw.indexOf('jun') >= 0 || raw.startsWith('jr')) return 'Jr';
+  if (raw.indexOf('sen') >= 0 || raw.startsWith('sr') || raw.startsWith('gr')) return 'Sr+';
+  return String(player.Class || player.Yr || player.Year || 'Unknown');
+}
+
+function portalAverage(values) {
+  var nums = (values || []).filter(function (v) { return Number.isFinite(v); });
+  if (!nums.length) return null;
+  var sum = nums.reduce(function (acc, v) { return acc + v; }, 0);
+  return sum / nums.length;
+}
+
+function portalSelectedDeparturePlayers() {
+  if (!portalTeamCtx || !Array.isArray(portalTeamCtx.roster)) return [];
+  return portalSelectedReplaceNames().map(function (name) {
+    return (portalTeamCtx.roster || []).find(function (row) {
+      return portalNorm(portalGetPlayerName(row)) === portalNorm(name);
+    }) || null;
+  }).filter(Boolean);
+}
+
+function portalPositionFitScore(player, departurePlayers) {
+  if (!departurePlayers || !departurePlayers.length) return 0.55;
+  var candGroup = portalPlayerPosGroup(player);
+  var candPos = String(player && (player.Position || player.Pos || '')).trim().toLowerCase();
+  var sameGroupCount = 0;
+  var exactPosCount = 0;
+
+  departurePlayers.forEach(function (dep) {
+    if (portalPlayerPosGroup(dep) === candGroup) sameGroupCount += 1;
+    var depPos = String(dep && (dep.Position || dep.Pos || '')).trim().toLowerCase();
+    if (candPos && depPos && candPos === depPos) exactPosCount += 1;
+  });
+
+  if (!sameGroupCount) return departurePlayers.length === 1 ? 0.28 : 0.36;
+
+  var share = sameGroupCount / departurePlayers.length;
+  var score = departurePlayers.length === 1 ? 0.88 : (0.72 + 0.20 * share);
+  if (exactPosCount) score += 0.08;
+  return portalClamp01(score);
+}
+
+function portalValueFitScore(player, impact, replaceGain, targetValue) {
+  var candidateValue = portalGetPlayerValuation(player);
+  var replaceEdge = replaceGain === null ? 0.5 : portalClamp01(0.5 + replaceGain);
+  impact = portalClamp01(impact);
+
+  if (candidateValue === null || candidateValue <= 0) {
+    return portalClamp01(0.75 * impact + 0.25 * replaceEdge);
+  }
+
+  if (targetValue === null || targetValue <= 0) {
+    return portalClamp01(0.8 * impact + 0.2 * replaceEdge);
+  }
+
+  var ratio = candidateValue / targetValue;
+  var similarity = portalClamp01(1 - (Math.abs(ratio - 1) / 0.85));
+  var costDiscipline = ratio <= 1.05 ? 1 : portalClamp01(1 - ((ratio - 1.05) / 0.95));
+  var cheaperBonus = ratio < 0.95 ? portalClamp01((0.95 - ratio) / 0.45) : 0;
+
+  return portalClamp01(
+    0.40 * impact +
+    0.25 * similarity +
+    0.20 * costDiscipline +
+    0.10 * cheaperBonus +
+    0.05 * replaceEdge
+  );
+}
+
+function portalUpsideScore(player, impact, targetValue) {
+  var cls = portalClassBucket(player);
+  var classBase = 0.58;
+  if (cls === 'Fr') classBase = 0.95;
+  else if (cls === 'So') classBase = 0.84;
+  else if (cls === 'Jr') classBase = 0.68;
+  else if (cls === 'Sr+') classBase = 0.44;
+
+  var mp = portalSafeNum(player && player.MP);
+  var minuteBase = mp === null ? 0.6 : (mp < 12 ? 0.42 : (mp < 18 ? 0.72 : (mp < 28 ? 0.86 : 0.68)));
+  var candidateValue = portalGetPlayerValuation(player);
+  var valueLeverage = 0.55;
+  if (targetValue !== null && targetValue > 0 && candidateValue !== null && candidateValue > 0) {
+    valueLeverage = candidateValue <= targetValue
+      ? portalClamp01(0.65 + ((targetValue - candidateValue) / targetValue))
+      : portalClamp01(0.62 - ((candidateValue - targetValue) / (targetValue * 2)));
+  }
+
+  return portalClamp01(
+    0.42 * classBase +
+    0.30 * portalClamp01(impact) +
+    0.18 * minuteBase +
+    0.10 * valueLeverage
+  );
+}
+
+function portalReplacementType(positionFit, valueFit, upside, replaceGain, targetValue, candidateValue) {
+  if (positionFit >= 0.84 && replaceGain !== null && replaceGain >= 0.03) return 'Direct replacement';
+  if (valueFit >= 0.76) {
+    if (targetValue !== null && candidateValue !== null && candidateValue <= targetValue * 1.05) return 'Value play';
+    return 'Upgrade bet';
+  }
+  if (upside >= 0.76) return 'Upside swing';
+  if (positionFit >= 0.84) return 'Role fit';
+  return 'Rotation fit';
+}
+
+function portalBuildRecommendationReasons(reasonPool, meta) {
+  var reasons = [];
+  var seen = {};
+
+  function addReason(label) {
+    if (!label || seen[label]) return;
+    seen[label] = true;
+    reasons.push(label);
+  }
+
+  if (meta.departurePlayers && meta.departurePlayers.length) {
+    if (meta.positionFit >= 0.84) addReason(meta.departurePlayers.length === 1 ? 'Same-position replacement' : 'Covers a departing role');
+    else if (meta.departurePlayers.length === 1 && meta.positionFit < 0.4) addReason('Cross-position swing');
+  }
+
+  if (meta.valueFit >= 0.78) {
+    if (meta.targetValue !== null && meta.candidateValue !== null) {
+      if (meta.candidateValue <= meta.targetValue * 0.95) addReason('Best bang-for-buck');
+      else if (meta.candidateValue <= meta.targetValue * 1.15) addReason('Similar valuation tier');
+      else addReason('Higher-cost upgrade bet');
+    } else {
+      addReason('Strong value profile');
+    }
+  }
+
+  if (meta.replaceGain !== null && meta.replaceGain >= 0.05) addReason('Improves lost production');
+  if (meta.upside >= 0.78) addReason('High-upside development bet');
+
+  reasonPool.sort(function (a, b) { return b.contrib - a.contrib; });
+  reasonPool.forEach(function (item) {
+    if (reasons.length >= 4) return;
+    addReason(item.label + ' (' + Math.round((item.cand || 0) * 100) + 'th pct)');
+  });
+
+  return reasons.slice(0, 4);
+}
+
+function portalEnforcePositionBalance(rows, departurePlayers) {
+  if (!Array.isArray(rows) || rows.length < 3 || !departurePlayers || departurePlayers.length !== 1) return rows;
+  var targetGroup = portalPlayerPosGroup(departurePlayers[0]);
+  var sameGroupRows = rows.filter(function (row) { return row.positionGroup === targetGroup; });
+  if (sameGroupRows.length < 2) return rows;
+
+  var topThree = rows.slice(0, 3);
+  var sameInTopThree = topThree.filter(function (row) { return row.positionGroup === targetGroup; }).length;
+  if (sameInTopThree >= 2) return rows;
+
+  var chosen = [];
+  var used = new Set();
+  var bestOverall = rows[0];
+  chosen.push(bestOverall);
+  used.add(bestOverall);
+
+  var needed = 2 - (bestOverall.positionGroup === targetGroup ? 1 : 0);
+  sameGroupRows.forEach(function (row) {
+    if (needed > 0 && !used.has(row)) {
+      chosen.push(row);
+      used.add(row);
+      needed -= 1;
+    }
+  });
+
+  rows.forEach(function (row) {
+    if (chosen.length >= 3) return;
+    if (!used.has(row)) {
+      chosen.push(row);
+      used.add(row);
+    }
+  });
+
+  return chosen.concat(rows.filter(function (row) { return !used.has(row); }));
+}
+
 function portalGetPlayerName(r) {
   return (r && (r.Player || r.Name || r.playerName)) ? String(r.Player || r.Name || r.playerName) : '';
 }
@@ -860,6 +1060,7 @@ function portalComputeRecommendations() {
   }
 
   var removedNames = portalSelectedReplaceNames();
+  var departurePlayers = portalSelectedDeparturePlayers();
   var removedSet = {};
   removedNames.forEach(function (n) { removedSet[portalNorm(n)] = true; });
 
@@ -874,6 +1075,9 @@ function portalComputeRecommendations() {
     ? portalCategoryScoresForRoster(portalTeamCtx.roster.filter(function (p) { return removedSet[portalNorm(portalGetPlayerName(p))]; }), defs, portalRecDist)
     : null;
   var priority = portalCategoryPriorityFromTeamStats(portalTeamCtx.stats);
+  var targetValue = portalAverage(departurePlayers.map(function (player) {
+    return portalGetPlayerValuation(player);
+  }));
 
   var rows = [];
   portalFiltered.forEach(function (entry) {
@@ -927,15 +1131,33 @@ function portalComputeRecommendations() {
       }
     }
 
-    var final = 0.45 * needFit + 0.25 * style + 0.20 * impact + 0.10 * 0.55;
-    if (replaceGain !== null) final += 0.20 * replaceGain;
+    var positionFit = portalPositionFitScore(m, departurePlayers);
+    var valueFit = portalValueFitScore(m, impact, replaceGain, targetValue);
+    var upside = portalUpsideScore(m, impact, targetValue);
+    var candidateValue = portalGetPlayerValuation(m);
+
+    var final =
+      0.27 * needFit +
+      0.14 * style +
+      0.14 * impact +
+      0.16 * positionFit +
+      0.17 * valueFit +
+      0.08 * upside +
+      0.04 * 0.55;
+    if (replaceGain !== null) final += 0.16 * replaceGain;
 
     var risks = portalCandidateRisk(m);
     if (risks.length) final -= Math.min(0.12, 0.03 * risks.length);
+    final = portalClamp01(final);
 
-    reasonPool.sort(function (a, b) { return b.contrib - a.contrib; });
-    var reasons = reasonPool.slice(0, 3).map(function (x) {
-      return x.label + ' (' + Math.round((x.cand || 0) * 100) + 'th pct)';
+    var reasons = portalBuildRecommendationReasons(reasonPool, {
+      departurePlayers: departurePlayers,
+      positionFit: positionFit,
+      valueFit: valueFit,
+      upside: upside,
+      replaceGain: replaceGain,
+      targetValue: targetValue,
+      candidateValue: candidateValue
     });
 
     rows.push({
@@ -945,13 +1167,21 @@ function portalComputeRecommendations() {
       needFit: needFit,
       style: style,
       impact: impact,
+      positionFit: positionFit,
+      valueFit: valueFit,
+      upside: upside,
       replaceGain: replaceGain,
+      positionGroup: portalPlayerPosGroup(m),
+      replacementType: portalReplacementType(positionFit, valueFit, upside, replaceGain, targetValue, candidateValue),
+      candidateValue: candidateValue,
+      targetValue: targetValue,
       reasons: reasons,
       risks: risks,
     });
   });
 
   rows.sort(function (a, b) { return b.fit - a.fit; });
+  rows = portalEnforcePositionBalance(rows, departurePlayers);
   portalRecRows = rows.slice(0, 25);
   return portalRecRows;
 }
@@ -977,7 +1207,7 @@ function portalRenderRecommendations() {
 
     tr.innerHTML =
       '<td>' + (idx + 1) + '</td>' +
-      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">Perf ' + (perf === null ? '—' : portalFmtNum(perf, 1)) + '</div></td>' +
+      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">Perf ' + (perf === null ? '—' : portalFmtNum(perf, 1)) + ' · ' + portalEsc(row.replacementType || 'Fit') + '</div></td>' +
       '<td>' + team + '</td>' +
       '<td>' + (row.entry.position || row.player.Position || row.player.Pos || '—') + '</td>' +
       '<td><span class="portalFitPill">' + fitPct + '</span></td>' +
@@ -1007,6 +1237,136 @@ function portalRenderRecommendations() {
     }
     portalRecBodyEl.appendChild(tr);
   });
+}
+
+async function portalFetchWbbGameLog(player, season) {
+  var espnId = player && player.EspnId;
+  if (!espnId) return [];
+  try {
+    var url = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/womens-college-basketball/athletes/'
+      + espnId + '/gamelog?season=' + encodeURIComponent(season);
+    var resp = await fetch(url);
+    if (!resp.ok) return [];
+    var data = await resp.json();
+    var games = [];
+    var events = data.events || {};
+    var seasonTypes = data.seasonTypes || [];
+
+    seasonTypes.forEach(function (seasonType) {
+      var isPost = seasonType.type === 3 || Number(seasonType.id) === 3 || String(seasonType.displayName || '').toLowerCase().indexOf('post') >= 0;
+      (seasonType.categories || []).forEach(function (category) {
+        var labels = category.labels || data.labels || [];
+        (category.events || []).forEach(function (eventItem) {
+          var stats = eventItem.stats || [];
+          var statMap = {};
+          labels.forEach(function (label, idx) { statMap[label] = stats[idx]; });
+
+          var eventInfo = events[String(eventItem.eventId)] || {};
+          var opponent = eventInfo.opponent || {};
+          var dateStr = String(eventInfo.gameDate || eventInfo.date || '').slice(0, 10);
+          var homeAway = String(eventInfo.homeAway || 'home').toLowerCase() === 'home' ? 'H' : 'A';
+          var score = String(eventInfo.score || '').split('-').map(Number);
+          var result = '—';
+          if (score.length === 2 && !isNaN(score[0]) && !isNaN(score[1])) {
+            var myScore = homeAway === 'H' ? score[0] : score[1];
+            var oppScore = homeAway === 'H' ? score[1] : score[0];
+            result = (eventInfo.gameResult || (myScore > oppScore ? 'W' : 'L')) + ' ' + myScore + '-' + oppScore;
+          }
+
+          var fgRaw = String(statMap['FGM-FGA'] || statMap.FG || '').split('-');
+          games.push({
+            date: dateStr || null,
+            opponent: opponent.displayName || opponent.abbreviation || '',
+            homeAway: homeAway,
+            result: result,
+            seasonType: isPost ? 'postseason' : 'regular',
+            points: parseInt(statMap.PTS || 0, 10) || 0,
+            rebounds: parseInt(statMap.REB || 0, 10) || 0,
+            assists: parseInt(statMap.AST || 0, 10) || 0,
+            steals: parseInt(statMap.STL || 0, 10) || 0,
+            blocks: parseInt(statMap.BLK || 0, 10) || 0,
+            minutes: statMap.MIN || null,
+            fgm: parseInt(fgRaw[0], 10) || 0,
+            fga: parseInt(fgRaw[1], 10) || 0,
+          });
+        });
+      });
+    });
+
+    return games.sort(function (a, b) {
+      return String(a.date || '').localeCompare(String(b.date || ''));
+    });
+  } catch (_) {
+    return [];
+  }
+}
+
+async function portalFetchPlayerGameLog(player, season, isWbb) {
+  if (!player) return [];
+  if (isWbb) return portalFetchWbbGameLog(player, season);
+  if (typeof WORKER_URL === 'undefined') return [];
+
+  var team = portalGetPlayerTeam(player);
+  var playerName = portalGetPlayerName(player);
+  if (!team || !playerName) return [];
+
+  try {
+    var url = WORKER_URL + '/api/cbdata/playergamelog?team=' + encodeURIComponent(team)
+      + '&season=' + encodeURIComponent(season)
+      + '&playerName=' + encodeURIComponent(playerName);
+    var resp = await fetch(url);
+    if (!resp.ok) return [];
+    var data = await resp.json();
+    return Array.isArray(data.games) ? data.games : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function portalSummarizePlayerGameLog(games) {
+  var rows = (games || []).filter(function (game) {
+    return game && (
+      portalSafeNum(game.points) !== null ||
+      portalSafeNum(game.rebounds) !== null ||
+      portalSafeNum(game.assists) !== null
+    );
+  });
+  if (!rows.length) return null;
+
+  rows.sort(function (a, b) {
+    return String(a.date || '').localeCompare(String(b.date || ''));
+  });
+
+  var lastFive = rows.slice(-5);
+  var seasonPts = portalAverage(rows.map(function (game) { return portalSafeNum(game.points); }));
+  var seasonReb = portalAverage(rows.map(function (game) { return portalSafeNum(game.rebounds); }));
+  var seasonAst = portalAverage(rows.map(function (game) { return portalSafeNum(game.assists); }));
+  var lastFivePts = portalAverage(lastFive.map(function (game) { return portalSafeNum(game.points); }));
+  var lastFiveReb = portalAverage(lastFive.map(function (game) { return portalSafeNum(game.rebounds); }));
+  var lastFiveAst = portalAverage(lastFive.map(function (game) { return portalSafeNum(game.assists); }));
+  var trendDelta = (seasonPts === null || lastFivePts === null) ? null : +(lastFivePts - seasonPts).toFixed(1);
+
+  return {
+    gamesPlayed: rows.length,
+    seasonAvg: {
+      points: seasonPts,
+      rebounds: seasonReb,
+      assists: seasonAst
+    },
+    lastFiveAvg: {
+      points: lastFivePts,
+      rebounds: lastFiveReb,
+      assists: lastFiveAst
+    },
+    scoring20PlusGames: rows.filter(function (game) { return (portalSafeNum(game.points) || 0) >= 20; }).length,
+    doubleDigitScoringGames: rows.filter(function (game) { return (portalSafeNum(game.points) || 0) >= 10; }).length,
+    bestScoringGame: rows.reduce(function (best, game) {
+      var pts = portalSafeNum(game.points) || 0;
+      return pts > best ? pts : best;
+    }, 0),
+    trendDeltaPoints: trendDelta,
+    trendLabel: trendDelta === null ? 'steady' : (trendDelta >= 2 ? 'up' : (trendDelta <= -2 ? 'down' : 'steady'))
+  };
 }
 
 function portalBuildAIContext(topN) {
@@ -1323,7 +1683,7 @@ async function portalRunAIAnalysis() {
   var teamName = portalTeamCtx.team;
   var season = portalTeamCtx.season || portalTargetSeason;
   var departures = portalSelectedDepartureNames.slice();
-  var topPicks = (portalRecRows || []).slice(0, 8);
+  var topPicks = (portalRecRows || []).slice(0, 6);
 
   // ── Phase 1: Fetch supporting player/team data for deep analysis ──
   portalSetAIStatus('Fetching player and team context for ' + teamName + '...');
@@ -1386,6 +1746,9 @@ async function portalRunAIAnalysis() {
     var profile = { name: nm };
     if (rosterP) {
       profile.position = rosterP.Position || rosterP.Pos || null;
+      profile.positionGroup = portalPlayerPosGroup(rosterP);
+      profile.classYear = portalGetPlayerClass(rosterP);
+      profile.valuation = portalGetPlayerValuation(rosterP);
       profile.stats = {
         ppg: portalSafeNum(rosterP.PPG), rpg: portalSafeNum(rosterP.RPG),
         apg: portalSafeNum(rosterP.APG), spg: portalSafeNum(rosterP.SPG),
@@ -1397,6 +1760,7 @@ async function portalRunAIAnalysis() {
         orPct: portalSafeNum(rosterP['OR%']), drPct: portalSafeNum(rosterP['DR%']),
         perf: portalSafeNum(rosterP.Score) || portalSafeNum(rosterP.PerfScore_calc),
       };
+      profile._playerRef = rosterP;
     }
     if (shootingP) {
       profile.shooting = shootingP;
@@ -1417,10 +1781,25 @@ async function portalRunAIAnalysis() {
       name: row.entry.playerName || portalGetPlayerName(p),
       sourceTeam: recTeam,
       position: row.entry.position || p.Position || p.Pos || null,
+      positionGroup: row.positionGroup || portalPlayerPosGroup(p),
+      classYear: portalGetPlayerClass(p),
+      valuation: row.candidateValue != null ? row.candidateValue : portalGetPlayerValuation(p),
       fitScore: Math.round((row.fit || 0) * 100),
       replaceGainPts: row.replaceGain == null ? null : Math.round(row.replaceGain * 100),
+      replacementType: row.replacementType || 'Fit',
       reasons: row.reasons,
       risks: row.risks,
+      fitBreakdown: {
+        teamNeed: Math.round((row.needFit || 0) * 100),
+        style: Math.round((row.style || 0) * 100),
+        impact: Math.round((row.impact || 0) * 100),
+        positionFit: Math.round((row.positionFit || 0) * 100),
+        valueFit: Math.round((row.valueFit || 0) * 100),
+        upside: Math.round((row.upside || 0) * 100)
+      },
+      valueDeltaPct: (row.targetValue != null && row.candidateValue != null && row.targetValue > 0)
+        ? Math.round(((row.candidateValue - row.targetValue) / row.targetValue) * 100)
+        : null,
       stats: {
         ppg: portalSafeNum(p.PPG), rpg: portalSafeNum(p.RPG),
         apg: portalSafeNum(p.APG), spg: portalSafeNum(p.SPG),
@@ -1433,9 +1812,23 @@ async function portalRunAIAnalysis() {
         perf: portalSafeNum(p.Score) || portalSafeNum(p.PerfScore_calc),
       },
       shooting: recShooting || null,
+      _playerRef: p
     };
   });
   recommendedProfiles.forEach(function (r, i) { r.rank = i + 1; });
+
+  portalSetAIStatus('Fetching player trend context for departures and top fits...');
+  var logTargets = departureProfiles.concat(recommendedProfiles);
+  for (var li = 0; li < logTargets.length; li++) {
+    var profile = logTargets[li];
+    if (!profile._playerRef) continue;
+    try {
+      var playerGames = await portalFetchPlayerGameLog(profile._playerRef, season, isWbb);
+      var gameLogSummary = portalSummarizePlayerGameLog(playerGames);
+      if (gameLogSummary) profile.gameLogSummary = gameLogSummary;
+    } catch (_) {}
+    delete profile._playerRef;
+  }
 
   // ── Phase 2: Build deep analysis context ──
   portalSetAIStatus('Running ' + sportLabelShort + ' portal analysis with Gemini...');
@@ -1464,11 +1857,16 @@ async function portalRunAIAnalysis() {
     '## Instructions\n' +
     '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
     '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
-    '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats and shooting profile against what was lost.\n' +
+    '- Treat position realism as a real constraint. If the team loses a guard, make sure the core replacement plan stays guard-focused unless there is a clear roster-level reason to pivot big/wing, and vice versa for frontcourt losses.\n' +
+    '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats, shooting profile, recent-game summary, valuation tier, and role against what was lost.\n' +
     '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
     '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
+    '- Do not blindly chase the highest raw performer. Weigh acquisition realism, similar valuation tiers, bang-for-buck, and upside/potential. Better players often cost materially more and may be unrealistic.\n' +
+    '- Use the fitBreakdown fields to separate direct replacements, value plays, upgrade bets, and upside swings.\n' +
+    '- If a candidate is notably more expensive than the departing player, say whether the talent jump is worth it or likely unrealistic for that value band.\n' +
     '- Give a practical priority order: who to pursue first and why.\n' +
     '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n' +
+    '- Use game-log trend context when it is available to call out consistency, late-season momentum, or volatility. Do not invent play-by-play data if it is not in the structured context.\n' +
     '- If shooting or zone data is missing, do not guess. Say the data is thinner there and lean on box-score production, efficiency, role, lineup fit, and team context instead.\n' +
     '- Be direct and business-minded: note where the team is clearly upgrading, treading water, or accepting risk.\n' +
     (isWbb
