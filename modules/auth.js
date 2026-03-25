@@ -62,6 +62,19 @@ function authClearFormMessages() {
   if (pwChangeError) pwChangeError.textContent = '';
 }
 
+function authSyncOverlayVideo(shouldPlay) {
+  var video = document.getElementById('authBgVideo');
+  if (!video) return;
+  if (shouldPlay) {
+    var playAttempt = video.play();
+    if (playAttempt && typeof playAttempt.catch === 'function') {
+      playAttempt.catch(function () {});
+    }
+  } else {
+    try { video.pause(); } catch (_) {}
+  }
+}
+
 function authHidePasswordChangeOverlay() {
   var overlay = document.getElementById('pwChangeOverlay');
   if (overlay) overlay.classList.add('hidden');
@@ -172,6 +185,7 @@ function authStartLoading() {
   _loadVideoEnded = false;
 
   document.getElementById('authOverlay').classList.add('hidden');
+  authSyncOverlayVideo(false);
   var loadingOverlay = document.getElementById('loadingOverlay');
   if (loadingOverlay) loadingOverlay.classList.remove('hidden');
 
@@ -308,6 +322,7 @@ function authShowOverlay() {
   authClearFormMessages();
   authHidePasswordChangeOverlay();
   document.getElementById('authOverlay').classList.remove('hidden');
+  authSyncOverlayVideo(true);
   var logoutBtn = document.getElementById('logoutBtn');
   var guestLoginBtn = document.getElementById('guestLoginBtn');
   var notesToggle = document.getElementById('notesToggle');
@@ -538,6 +553,7 @@ async function authInit() {
   } else {
     authShowOverlay();
   }
+  authSyncOverlayVideo(!document.getElementById('authOverlay').classList.contains('hidden'));
 }
 
 document.addEventListener('DOMContentLoaded', authInit);
