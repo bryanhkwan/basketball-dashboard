@@ -82,7 +82,7 @@ function portalSyncLeagueUI() {
   if (portalBoardSubtitleEl) {
     portalBoardSubtitleEl.textContent = isWbb
       ? 'Live On3 transfer intel feed with player-name matching to your loaded WBB pool.'
-      : 'Live transfer intel feed with player-name matching to your loaded player pool.';
+      : 'Live On3 transfer intel feed with optional 247 supplement and player-name matching to your loaded player pool.';
   }
   if (portalSnapshotWrapEl) {
     portalSnapshotWrapEl.style.display = isWbb ? 'none' : '';
@@ -105,7 +105,7 @@ function portalSyncLeagueUI() {
   if (portalBoardHintEl) {
     portalBoardHintEl.textContent = isWbb
       ? 'Shows women\'s transfer portal entries from the live On3 feed and matches names back to your loaded WBB player pool.'
-      : 'Shows real transfer portal entries from the live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.';
+      : 'Shows real transfer portal entries from the live On3 feed first, then layers in your saved 247 snapshot as a supplement when enabled.';
   }
   if (portalFitSubtitleEl) {
     portalFitSubtitleEl.textContent = isWbb
@@ -2032,19 +2032,37 @@ async function portalLoadSnapshot(year) {
 }
 
 function portalMergeItems(primary, extra) {
-  var list = Array.isArray(primary) ? primary.slice() : [];
+  var list = [];
   var seen = Object.create(null);
-  list.forEach(function (it) {
+
+  function add(it) {
+    if (!it) return;
     var k = portalNorm((it && it.playerName) || '') + '|' + portalNorm((it && it.fromTeam) || '') + '|' + portalNorm((it && it.status) || '');
-    seen[k] = true;
-  });
-  (Array.isArray(extra) ? extra : []).forEach(function (it) {
-    var k = portalNorm((it && it.playerName) || '') + '|' + portalNorm((it && it.fromTeam) || '') + '|' + portalNorm((it && it.status) || '');
-    if (seen[k]) return;
-    seen[k] = true;
+    var existingIdx = seen[k];
+    if (typeof existingIdx === 'number') {
+      var existing = list[existingIdx];
+      var incomingSrc = portalNorm(it && it.source ? it.source : '');
+      var existingSrc = portalNorm(existing && existing.source ? existing.source : '');
+      if (incomingSrc === 'on3' && existingSrc !== 'on3') {
+        list[existingIdx] = it;
+      }
+      return;
+    }
+    seen[k] = list.length;
     list.push(it);
-  });
+  }
+
+  (Array.isArray(primary) ? primary : []).forEach(add);
+  (Array.isArray(extra) ? extra : []).forEach(add);
   return list;
+}
+
+function portalStatusMatchesFilter(statusValue, filterValue) {
+  var ls = portalNorm(statusValue || '');
+  if (ls === 'transfer' || ls === 'intransfer' || ls === 'in transfer' || ls === 'available' || ls === 'portal') ls = 'entered';
+  if (!filterValue || filterValue === 'all') return true;
+  if (filterValue === 'entries') return ls === 'entered' || ls === 'expected' || ls === 'committed';
+  return ls === filterValue;
 }
 
 function portalApplyFilters() {
@@ -2052,10 +2070,7 @@ function portalApplyFilters() {
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
 
   portalFiltered = portalItems.filter(function (it) {
-    var ls = (it.status || '').toLowerCase();
-    if (st === 'entered' && ls !== 'entered') return false;
-    if (st === 'expected' && ls !== 'expected') return false;
-    if (st === 'entries' && ls !== 'entered' && ls !== 'expected') return false;
+    if (!portalStatusMatchesFilter(it && it.status, st)) return false;
     if (!q) return true;
     var hay = portalNorm((it.playerName || '') + ' ' + (it.status || '') + ' ' + (it.position || '') + ' ' + (it.fromTeam || '') + ' ' + (it.toTeam || ''));
     return hay.includes(q);
@@ -2184,20 +2199,46 @@ async function loadPortalEntries() {
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
   var year = portalGetSeason();
   var sport = portalCurrentSport();
-  var preferredSource = sport === 'wbb' ? 'on3' : 'both';
+  var preferredSource = 'on3';
   portalTargetSeason = year;
+  var apiPageLimit = 100;
 
-  function makeUrl(src) {
+  function makeUrl(src, pageNum) {
     var u = new URL(base + '/api/portal/entries');
     u.searchParams.set('source', src);
     u.searchParams.set('sport', sport);
     u.searchParams.set('year', year);
-    u.searchParams.set('limit', '100');
-    u.searchParams.set('page', '1');
+    u.searchParams.set('limit', String(apiPageLimit));
+    u.searchParams.set('page', String(pageNum || 1));
     u.searchParams.set('status', st);
     u.searchParams.set('onlyEntries', '1');
     if (q.trim()) u.searchParams.set('search', q.trim());
     return u;
+  }
+
+  async function fetchPortalSource(src) {
+    var firstResp = await fetch(makeUrl(src, 1).toString());
+    if (!firstResp.ok) return { resp: firstResp, data: null, items: [] };
+
+    var firstData = await firstResp.json();
+    var allItems = Array.isArray(firstData.items) ? firstData.items.slice() : [];
+    var totalAvailable = firstData && Number.isFinite(+firstData.totalAvailable) ? +firstData.totalAvailable : allItems.length;
+    var totalPages = Math.max(1, Math.ceil(totalAvailable / apiPageLimit));
+
+    for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
+      var pageResp = await fetch(makeUrl(src, pageNum).toString());
+      if (!pageResp.ok) throw new Error('Portal API page ' + pageNum + ' failed with ' + pageResp.status);
+      var pageData = await pageResp.json();
+      if (Array.isArray(pageData.items) && pageData.items.length) {
+        allItems = allItems.concat(pageData.items);
+      }
+    }
+
+    return {
+      resp: firstResp,
+      data: firstData,
+      items: allItems,
+    };
   }
 
   portalSetStatus('Loading...');
@@ -2205,15 +2246,16 @@ async function loadPortalEntries() {
 
   try {
     var usedSource = preferredSource;
-    var resp = await fetch(makeUrl(usedSource).toString());
-    if (!resp.ok) {
+    var result = await fetchPortalSource(usedSource);
+    if (!result.resp.ok) {
       usedSource = 'on3';
-      resp = await fetch(makeUrl(usedSource).toString());
+      result = await fetchPortalSource(usedSource);
     }
+    var resp = result.resp;
     if (!resp.ok) throw new Error('Portal API ' + resp.status);
 
-    var data = await resp.json();
-    var apiItems = Array.isArray(data.items) ? data.items : [];
+    var data = result.data || {};
+    var apiItems = Array.isArray(result.items) ? result.items : [];
     var summary = (data && data.sourceSummary) ? data.sourceSummary : {};
     var snapshotInfo = { items: [], path: '' };
     var snapshotAllowed = sport !== 'wbb';
@@ -2224,10 +2266,7 @@ async function loadPortalEntries() {
       snapshotInfo = await portalLoadSnapshot(year);
       if (snapshotInfo.items.length) {
         snapshotInfo.items = snapshotInfo.items.filter(function (it) {
-          var ls = String((it && it.status) || '').toLowerCase();
-          if (st === 'entered' && ls !== 'entered') return false;
-          if (st === 'expected' && ls !== 'expected') return false;
-          if (st === 'entries' && ls !== 'entered' && ls !== 'expected') return false;
+          if (!portalStatusMatchesFilter(it && it.status, st)) return false;
           if (!q.trim()) return true;
           var hay = portalNorm((it.playerName || '') + ' ' + (it.status || '') + ' ' + (it.position || '') + ' ' + (it.fromTeam || '') + ' ' + (it.toTeam || ''));
           return hay.includes(portalNorm(q.trim()));
