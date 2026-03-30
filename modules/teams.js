@@ -4658,9 +4658,17 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
       <div class="thMatchupTeam" style="color:var(--warn)">${teamB}</div>
     </div>
     ${avgPtsA ? `<div class="thMatchupScore"><span style="color:var(--accent)">${avgPtsA} ppg</span> <span class="muted" style="font-size:11px">avg score</span> <span style="color:var(--warn)">${avgPtsB} ppg</span></div>` : ''}
-    <div class="thShotChartsRow">
+    <div class="saShotToggle" style="justify-content:center;margin-bottom:4px">
+      <button class="saShotBtn active" data-view="dots" onclick="saToggleMatchupCharts(this,'dots')">Shots</button>
+      <button class="saShotBtn" data-view="hex" onclick="saToggleMatchupCharts(this,'hex')">Hex Map</button>
+    </div>
+    <div class="thShotChartsRow" id="thMatchupDots">
       ${_th_buildShotChartSVG(shotsA, teamA + ' offense', 'var(--accent)')}
       ${_th_buildShotChartSVG(shotsB, teamB + ' offense', 'var(--warn)')}
+    </div>
+    <div class="thShotChartsRow" id="thMatchupHex" style="display:none">
+      ${typeof saBuildHexChart === 'function' ? saBuildHexChart(shotsA, teamA + ' offense', {color: 'var(--accent)'}) : ''}
+      ${typeof saBuildHexChart === 'function' ? saBuildHexChart(shotsB, teamB + ' offense', {color: 'var(--warn)'}) : ''}
     </div>
     <div class="thZoneTable">
       <div class="thZoneHead">
@@ -4727,7 +4735,8 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     var cb = document.getElementById('thModelSwitchInput');
     if (cb) cb.addEventListener('change', function() { thSetDeepModel(cb.checked); });
   }, 50);
-  setTimeout(() => thInitShotChart('thMatchup'), 50);
+  setTimeout(() => thInitShotChart('thMatchupDots'), 50);
+  setTimeout(function() { if (typeof saInitHexTooltips === 'function') saInitHexTooltips('thMatchupHex'); }, 60);
 }
 
 // ── thLoadMatchup — find games, load play-by-play, render; supports history ───

@@ -1519,6 +1519,44 @@ body.helpPanelOpen {
   text-align: center; margin-bottom: 3px; opacity: .65;
 }
 
+/* ── Hexbin shot chart (shot-analytics.js) ────────────────────────────────────── */
+.saShotToggle {
+  display: flex; gap: 4px; margin-bottom: 8px;
+}
+.saShotBtn {
+  padding: 3px 12px; font-size: 11px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,.12); border-radius: 6px;
+  background: rgba(255,255,255,.04); color: var(--muted);
+  cursor: pointer; transition: all .15s;
+}
+.saShotBtn:hover { background: rgba(255,255,255,.08); color: var(--text); }
+.saShotBtn.active {
+  background: rgba(37,99,235,.18); border-color: rgba(37,99,235,.4);
+  color: var(--accent);
+}
+.saHexHint {
+  font-size: 10px; color: var(--muted); text-align: center;
+  margin-bottom: 3px; opacity: .65;
+}
+.sa-hex-svg { cursor: crosshair; }
+.sa-hex { cursor: pointer; transition: opacity .15s; }
+.sa-hex:hover { opacity: 1 !important; filter: brightness(1.25); }
+.saLegend {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; margin-top: 4px;
+}
+.saLegLabel { font-size: 10px; color: var(--muted); }
+.saLegBar {
+  display: inline-block; width: 120px; height: 10px; border-radius: 3px;
+  background: linear-gradient(to right,
+    rgba(210,50,45,0.88),
+    rgba(160,85,82,0.88) 25%,
+    rgba(110,120,120,0.88) 50%,
+    rgba(72,140,180,0.88) 75%,
+    rgba(35,160,240,0.88));
+}
+.saHexWrap { gap: 4px; }
+
 /* ── Shot hover tooltip ──────────────────────────────────────────────────────── */
 #pShotTooltip {
   display: none;

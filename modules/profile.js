@@ -247,12 +247,24 @@ function openProfile(r){
             mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
             return;
           }
-          const svgHtml = typeof _th_buildShotChartSVG === 'function'
-            ? _th_buildShotChartSVG(shots, player, 'var(--accent)')
+          var dotHtml = typeof _th_buildShotChartSVG === 'function'
+            ? _th_buildShotChartSVG(shots, player, 'var(--accent)') : '';
+          var hexHtml = typeof saBuildHexChart === 'function'
+            ? saBuildHexChart(shots, player, {}) : '';
+          var hasHex = !!hexHtml && typeof saBuildHexChart === 'function';
+          var toggleBar = hasHex
+            ? '<div class="saShotToggle">'
+              + '<button class="saShotBtn active" data-view="dots" onclick="saToggleProfileChart(this,\'dots\')">Shots</button>'
+              + '<button class="saShotBtn" data-view="hex" onclick="saToggleProfileChart(this,\'hex\')">Hex Map</button>'
+              + '</div>'
             : '';
           mShotChart.innerHTML =
-            '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts - ' + yr + ' season</div>' + svgHtml;
-          if (typeof thInitShotChart === 'function') thInitShotChart('mShotChart');
+            '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts - ' + yr + ' season</div>'
+            + toggleBar
+            + '<div id="mShotChartDots">' + dotHtml + '</div>'
+            + (hasHex ? '<div id="mShotChartHex" style="display:none">' + hexHtml + '</div>' : '');
+          if (typeof thInitShotChart === 'function') thInitShotChart('mShotChartDots');
+          if (hasHex && typeof saInitHexTooltips === 'function') saInitHexTooltips('mShotChartHex');
           enrichScoutReportWithShots(shots);
           if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
         }).catch(function() {
