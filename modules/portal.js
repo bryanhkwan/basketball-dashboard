@@ -1563,11 +1563,16 @@ async function portalDownloadAIReport() {
         continue;
       }
 
-      // Markdown table detection
+      // Markdown table detection — normalize missing trailing pipe
+      if (/^\s*\|/.test(line) && line.indexOf('|', 1) > 0 && !/\|\s*$/.test(line)) line = line.trimEnd() + ' |';
       if (/^\s*\|/.test(line) && /\|\s*$/.test(line)) {
         var tableRows = [];
         var ti = i;
-        while (ti < lines.length && /^\s*\|/.test(lines[ti]) && /\|\s*$/.test(lines[ti])) {
+        while (ti < lines.length) {
+          var tl = lines[ti];
+          if (/^\s*\|/.test(tl) && tl.indexOf('|', 1) > 0 && !/\|\s*$/.test(tl)) tl = tl.trimEnd() + ' |';
+          lines[ti] = tl;
+          if (!(/^\s*\|/.test(tl) && /\|\s*$/.test(tl))) break;
           var raw = lines[ti].split('|').slice(1, -1).map(function(c) { return c.trim().replace(/\*\*([^*]+)\*\*/g, '$1'); });
           if (!/^[\s:|-]+$/.test(raw.join('|'))) tableRows.push(raw);
           ti++;
@@ -1727,6 +1732,8 @@ function portalFmtAIMarkdown(text) {
   var headerDone = false;
   for (var i = 0; i < lines.length; i++) {
     var ln = lines[i];
+    // Normalize: ensure trailing pipe if line looks like a table row
+    if (/^\s*\|/.test(ln) && ln.indexOf('|', 1) > 0 && !/\|\s*$/.test(ln)) ln = ln.trimEnd() + ' |';
     if (/^\s*\|/.test(ln) && /\|\s*$/.test(ln)) {
       var cells = ln.split('|').slice(1, -1);
       if (/^[\s:|-]+$/.test(cells.join('|'))) continue; // separator row
@@ -1969,20 +1976,21 @@ async function portalRunAIAnalysis() {
     'For EACH departing player, provide a markdown table with EXACTLY 5 replacement candidates ranked from the most premium/expensive option down to the most affordable bang-for-buck option.\n' +
     'Use this exact table format for each departing player (one table per player):\n\n' +
     '### Replacing [Departing Player Name]\n' +
-    '| Tier | Player | From | Fit | PPG | eFG% | Key Strengths | Valuation Tier | Why This Pick |\n' +
-    '|------|--------|------|-----|-----|------|---------------|----------------|---------------|\n' +
-    '| Premium | ... | ... | ... | ... | ... | ... | $$$ | ... |\n' +
-    '| Upgrade | ... | ... | ... | ... | ... | ... | $$ | ... |\n' +
-    '| Direct Fit | ... | ... | ... | ... | ... | ... | $$ | ... |\n' +
-    '| Value Play | ... | ... | ... | ... | ... | ... | $ | ... |\n' +
-    '| Sleeper | ... | ... | ... | ... | ... | ... | $ | ... |\n\n' +
+    '| Tier | Player | From | Key Stats | Cost | Why This Pick |\n' +
+    '|------|--------|------|-----------|------|---------------|\n' +
+    '| Premium | ... | ... | ... | $$$ | ... |\n' +
+    '| Upgrade | ... | ... | ... | $$ | ... |\n' +
+    '| Direct Fit | ... | ... | ... | $$ | ... |\n' +
+    '| Value Play | ... | ... | ... | $ | ... |\n' +
+    '| Sleeper | ... | ... | ... | $ | ... |\n\n' +
     'Tier definitions:\n' +
     '- Premium = highest-ceiling target, may cost more than the departing player\n' +
     '- Upgrade = clear step up in at least one area, moderate cost\n' +
     '- Direct Fit = closest statistical and role match to the departing player\n' +
     '- Value Play = solid contributor at a lower valuation tier -- bang for your buck\n' +
     '- Sleeper = under-the-radar upside pick, youngest or lowest-minute breakout candidate\n\n' +
-    'Fill all stat columns from the data. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n\n' +
+    'In the Key Stats column, include PPG/eFG%/APG or RPG as a compact slash-separated line (e.g. "14.2 PPG / 54% eFG / 4.1 APG"). Keep Why This Pick to 1-2 sentences max. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n' +
+    'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row.\n\n' +
     '## Combined Impact (net team improvement or regression)\n' +
     '## Portal Priority (ordered action plan — who to call first)\n' +
     '## Risks & Watchouts\n\n' +
@@ -1995,7 +2003,7 @@ async function portalRunAIAnalysis() {
       body: JSON.stringify({
         model: PORTAL_GEMINI_MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 8000 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 12000 },
       })
     });
     var data = await res.json();
