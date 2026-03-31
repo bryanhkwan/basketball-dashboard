@@ -1437,6 +1437,60 @@ function portalBuildReportFileName() {
   return safe + '.pdf';
 }
 
+function portalIsMarkdownTableLine(line) {
+  var trimmed = (line || '').trim();
+  if (!trimmed || /^```/.test(trimmed)) return false;
+  var pipeCount = (trimmed.match(/\|/g) || []).length;
+  return pipeCount >= 2 && (/^\|/.test(trimmed) || /\s\|\s/.test(trimmed));
+}
+
+function portalNormalizeMarkdownTableLine(line) {
+  var trimmed = (line || '').trim();
+  if (!portalIsMarkdownTableLine(trimmed)) return '';
+  if (trimmed.charAt(0) !== '|') trimmed = '| ' + trimmed;
+  if (trimmed.charAt(trimmed.length - 1) !== '|') trimmed += ' |';
+  return trimmed;
+}
+
+function portalParseMarkdownTable(lines, startIndex) {
+  var rows = [];
+  var sawSeparator = false;
+  var sawTableLine = false;
+  var idx = startIndex;
+  while (idx < lines.length) {
+    var rawLine = lines[idx];
+    if (!rawLine || !rawLine.trim()) {
+      if (sawTableLine) {
+        idx++;
+        continue;
+      }
+      break;
+    }
+    if (!portalIsMarkdownTableLine(rawLine)) break;
+    sawTableLine = true;
+    var normalized = portalNormalizeMarkdownTableLine(rawLine);
+    var cells = normalized.split('|').slice(1, -1).map(function(c) {
+      return c.trim().replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
+    });
+    if (/^[\s:|-]+$/.test(cells.join('|'))) {
+      sawSeparator = true;
+      idx++;
+      continue;
+    }
+    rows.push(cells);
+    idx++;
+  }
+  if (!rows.length || (!sawSeparator && rows.length < 2)) return null;
+  var columnCount = rows[0].length;
+  for (var r = 1; r < rows.length; r++) {
+    if (rows[r].length > columnCount) {
+      rows[r] = rows[r].slice(0, columnCount - 1).concat([rows[r].slice(columnCount - 1).join(' | ')]);
+    }
+    while (rows[r].length < columnCount) rows[r].push('');
+  }
+  return { rows: rows, nextIndex: idx - 1 };
+}
+
 async function portalDownloadAIReport() {
   var reportText = (portalLastAIReportText || '').trim();
   if (!reportText && portalAIOutputEl) reportText = (portalAIOutputEl.innerText || '').trim();
@@ -1563,65 +1617,67 @@ async function portalDownloadAIReport() {
         continue;
       }
 
-      // Markdown table detection — normalize missing trailing pipe
-      if (/^\s*\|/.test(line) && line.indexOf('|', 1) > 0 && !/\|\s*$/.test(line)) line = line.trimEnd() + ' |';
-      if (/^\s*\|/.test(line) && /\|\s*$/.test(line)) {
-        var tableRows = [];
-        var ti = i;
-        while (ti < lines.length) {
-          var tl = lines[ti];
-          if (/^\s*\|/.test(tl) && tl.indexOf('|', 1) > 0 && !/\|\s*$/.test(tl)) tl = tl.trimEnd() + ' |';
-          lines[ti] = tl;
-          if (!(/^\s*\|/.test(tl) && /\|\s*$/.test(tl))) break;
-          var raw = lines[ti].split('|').slice(1, -1).map(function(c) { return c.trim().replace(/\*\*([^*]+)\*\*/g, '$1'); });
-          if (!/^[\s:|-]+$/.test(raw.join('|'))) tableRows.push(raw);
-          ti++;
+      var parsedTable = portalParseMarkdownTable(lines, i);
+      if (parsedTable) {
+        i = parsedTable.nextIndex;
+        var tableRows = parsedTable.rows;
+        var numCols = tableRows[0].length;
+        var colWeights = numCols === 6 ? [0.85, 1.15, 1.05, 1.35, 0.7, 1.9] : [];
+        var totalWeight = 0;
+        var colWidths = [];
+        for (var cw = 0; cw < numCols; cw++) totalWeight += (colWeights[cw] || 1);
+        for (var cx = 0; cx < numCols; cx++) colWidths[cx] = contentW * ((colWeights[cx] || 1) / totalWeight);
+
+        var hdr = tableRows[0];
+        var headerWrapped = [];
+        var headerLineCount = 1;
+        for (var hw = 0; hw < numCols; hw++) {
+          headerWrapped[hw] = doc.splitTextToSize(hdr[hw] || '', Math.max(20, colWidths[hw] - 6));
+          headerLineCount = Math.max(headerLineCount, headerWrapped[hw].length || 1);
         }
-        i = ti - 1; // advance outer loop past table
+        var headerH = Math.max(20, headerLineCount * 8 + 8);
+        checkPage(headerH + 18);
 
-        if (tableRows.length > 0) {
-          var numCols = tableRows[0].length;
-          var colW = contentW / numCols;
-          var rowH = 16;
-          var headerH = 18;
-          checkPage(headerH + tableRows.length * rowH + 10);
+        doc.setFillColor(15, 30, 60);
+        doc.rect(margin, y - 12, contentW, headerH, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(255, 255, 255);
+        var headerX = margin;
+        for (var hc = 0; hc < numCols; hc++) {
+          doc.text(headerWrapped[hc], headerX + 3, y);
+          headerX += colWidths[hc];
+        }
+        y += headerH - 4;
+        doc.setFillColor(255, 210, 0);
+        doc.rect(margin, y - 2, contentW, 1.5, 'F');
+        y += 6;
 
-          // Table header row
-          var hdr = tableRows[0];
-          doc.setFillColor(15, 30, 60);
-          doc.rect(margin, y - 12, contentW, headerH, 'F');
-          doc.setFont('helvetica', 'bold');
+        for (var tr = 1; tr < tableRows.length; tr++) {
+          var wrappedCells = [];
+          var lineCount = 1;
+          for (var tc = 0; tc < numCols; tc++) {
+            wrappedCells[tc] = doc.splitTextToSize(tableRows[tr][tc] || '', Math.max(20, colWidths[tc] - 6));
+            lineCount = Math.max(lineCount, wrappedCells[tc].length || 1);
+          }
+          var rowH = Math.max(16, lineCount * 8 + 6);
+          checkPage(rowH + 4);
+          if (tr % 2 === 0) {
+            doc.setFillColor(243, 245, 252);
+            doc.rect(margin, y - 12, contentW, rowH, 'F');
+          }
+          doc.setFont('helvetica', 'normal');
           doc.setFontSize(7.5);
-          doc.setTextColor(255, 255, 255);
-          for (var hc = 0; hc < numCols; hc++) {
-            var cellText = doc.splitTextToSize(hdr[hc] || '', colW - 4);
-            doc.text(cellText[0] || '', margin + hc * colW + 3, y);
+          doc.setTextColor(40, 48, 68);
+          var cellX = margin;
+          for (var td = 0; td < numCols; td++) {
+            doc.text(wrappedCells[td], cellX + 3, y);
+            cellX += colWidths[td];
           }
-          y += headerH - 4;
-          doc.setFillColor(255, 210, 0);
-          doc.rect(margin, y - 2, contentW, 1.5, 'F');
-          y += 6;
-
-          // Data rows
-          for (var tr = 1; tr < tableRows.length; tr++) {
-            checkPage(rowH + 4);
-            if (tr % 2 === 0) {
-              doc.setFillColor(243, 245, 252);
-              doc.rect(margin, y - 12, contentW, rowH, 'F');
-            }
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(40, 48, 68);
-            for (var tc = 0; tc < numCols; tc++) {
-              var val = (tableRows[tr][tc] || '');
-              var cTxt = doc.splitTextToSize(val, colW - 4);
-              doc.text(cTxt[0] || '', margin + tc * colW + 3, y);
-            }
-            y += rowH;
-          }
-          y += 6;
-          doc.setTextColor(0, 0, 0);
+          y += rowH;
         }
+        y += 6;
+        doc.setTextColor(0, 0, 0);
         continue;
       }
 
@@ -1716,7 +1772,7 @@ async function portalDownloadAIReport() {
     '<p class="meta">' + teamName + ' &nbsp;·&nbsp; Season ' + season + ' &nbsp;·&nbsp; ' + mode + '</p>' +
     '<p class="date">Generated ' + dateStr + '</p></div>' +
     '<div class="accent"></div>' +
-    '<div class="body"><p>' + htmlBody + '</p></div>' +
+    '<div class="body">' + htmlBody + '</div>' +
     '</body></html>');
   w.document.close();
   w.focus();
@@ -1728,29 +1784,29 @@ function portalFmtAIMarkdown(text) {
   var esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   var lines = esc.split('\n');
   var html = '';
-  var inTable = false;
-  var headerDone = false;
   for (var i = 0; i < lines.length; i++) {
     var ln = lines[i];
-    // Normalize: ensure trailing pipe if line looks like a table row
-    if (/^\s*\|/.test(ln) && ln.indexOf('|', 1) > 0 && !/\|\s*$/.test(ln)) ln = ln.trimEnd() + ' |';
-    if (/^\s*\|/.test(ln) && /\|\s*$/.test(ln)) {
+    var parsedTable = portalParseMarkdownTable(lines, i);
+    if (parsedTable) {
+      i = parsedTable.nextIndex;
+      var tableRows = parsedTable.rows;
+      var numCols = tableRows[0].length;
       var cells = ln.split('|').slice(1, -1);
-      if (/^[\s:|-]+$/.test(cells.join('|'))) continue; // separator row
-      if (!inTable) {
-        html += '<table class="portalAITable"><thead><tr>';
-        cells.forEach(function(c) { html += '<th>' + c.trim().replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</th>'; });
-        html += '</tr></thead><tbody>';
-        inTable = true;
-        headerDone = true;
-        continue;
+      html += '<table class="portalAITable"><thead><tr>';
+      for (var hc = 0; hc < numCols; hc++) {
+        html += '<th>' + tableRows[0][hc] + '</th>';
       }
-      html += '<tr>';
-      cells.forEach(function(c) { html += '<td>' + c.trim().replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</td>'; });
-      html += '</tr>';
+      html += '</tr></thead><tbody>';
+      for (var tr = 1; tr < tableRows.length; tr++) {
+        html += '<tr>';
+        for (var tc = 0; tc < numCols; tc++) {
+          html += '<td>' + tableRows[tr][tc] + '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
       continue;
     }
-    if (inTable) { html += '</tbody></table>'; inTable = false; headerDone = false; }
     if (/^##\s+/.test(ln)) { html += '<h4>' + ln.replace(/^##\s+/, '') + '</h4>'; }
     else if (/^###\s+/.test(ln)) { html += '<h5 style="margin:8px 0 4px;font-size:12px;color:var(--accent)">' + ln.replace(/^###\s+/, '') + '</h5>'; }
     else if (/^[-*]\s+/.test(ln)) { html += '<div class="portalAIBullet">\u2022 ' + ln.replace(/^[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</div>'; }
@@ -1758,7 +1814,6 @@ function portalFmtAIMarkdown(text) {
     else if (ln.trim() === '') { html += '<br>'; }
     else { html += '<p>' + ln.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</p>'; }
   }
-  if (inTable) html += '</tbody></table>';
   return html;
 }
 
@@ -1990,7 +2045,7 @@ async function portalRunAIAnalysis() {
     '- Value Play = solid contributor at a lower valuation tier -- bang for your buck\n' +
     '- Sleeper = under-the-radar upside pick, youngest or lowest-minute breakout candidate\n\n' +
     'In the Key Stats column, include PPG/eFG%/APG or RPG as a compact slash-separated line (e.g. "14.2 PPG / 54% eFG / 4.1 APG"). Keep Why This Pick to 1-2 sentences max. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n' +
-    'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row.\n\n' +
+    'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row. Do not insert blank lines between table rows.\n\n' +
     '## Combined Impact (net team improvement or regression)\n' +
     '## Portal Priority (ordered action plan — who to call first)\n' +
     '## Risks & Watchouts\n\n' +
