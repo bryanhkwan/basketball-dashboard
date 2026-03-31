@@ -1563,6 +1563,63 @@ async function portalDownloadAIReport() {
         continue;
       }
 
+      // Markdown table detection
+      if (/^\s*\|/.test(line) && /\|\s*$/.test(line)) {
+        var tableRows = [];
+        var ti = i;
+        while (ti < lines.length && /^\s*\|/.test(lines[ti]) && /\|\s*$/.test(lines[ti])) {
+          var raw = lines[ti].split('|').slice(1, -1).map(function(c) { return c.trim().replace(/\*\*([^*]+)\*\*/g, '$1'); });
+          if (!/^[\s:|-]+$/.test(raw.join('|'))) tableRows.push(raw);
+          ti++;
+        }
+        i = ti - 1; // advance outer loop past table
+
+        if (tableRows.length > 0) {
+          var numCols = tableRows[0].length;
+          var colW = contentW / numCols;
+          var rowH = 16;
+          var headerH = 18;
+          checkPage(headerH + tableRows.length * rowH + 10);
+
+          // Table header row
+          var hdr = tableRows[0];
+          doc.setFillColor(15, 30, 60);
+          doc.rect(margin, y - 12, contentW, headerH, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          doc.setTextColor(255, 255, 255);
+          for (var hc = 0; hc < numCols; hc++) {
+            var cellText = doc.splitTextToSize(hdr[hc] || '', colW - 4);
+            doc.text(cellText[0] || '', margin + hc * colW + 3, y);
+          }
+          y += headerH - 4;
+          doc.setFillColor(255, 210, 0);
+          doc.rect(margin, y - 2, contentW, 1.5, 'F');
+          y += 6;
+
+          // Data rows
+          for (var tr = 1; tr < tableRows.length; tr++) {
+            checkPage(rowH + 4);
+            if (tr % 2 === 0) {
+              doc.setFillColor(243, 245, 252);
+              doc.rect(margin, y - 12, contentW, rowH, 'F');
+            }
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(40, 48, 68);
+            for (var tc = 0; tc < numCols; tc++) {
+              var val = (tableRows[tr][tc] || '');
+              var cTxt = doc.splitTextToSize(val, colW - 4);
+              doc.text(cTxt[0] || '', margin + tc * colW + 3, y);
+            }
+            y += rowH;
+          }
+          y += 6;
+          doc.setTextColor(0, 0, 0);
+        }
+        continue;
+      }
+
       // Bullet  -  *  •
       if (/^[-*•]\s+/.test(line)) {
         var bText = line.replace(/^[-*•]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
@@ -1631,14 +1688,7 @@ async function portalDownloadAIReport() {
   // — Fallback: styled print window —
   var w = window.open('', '_blank');
   if (!w) { portalSetAIStatus('Popup blocked. Allow popups to export PDF.'); return; }
-  var htmlBody = reportText
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^##\s+(.*)$/gm, '</p><h3>$1</h3><p>')
-    .replace(/^###\s+(.*)$/gm, '</p><h4>$1</h4><p>')
-    .replace(/^[-*•]\s+(.*)$/gm, '<li>$1</li>')
-    .replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n\n/g, '</p><p>');
+  var htmlBody = portalFmtAIMarkdown(reportText);
   w.document.write('<!doctype html><html><head><title>Transfer Portal Fit Report</title><style>' +
     'body{font-family:system-ui,Arial,sans-serif;margin:0;color:#222;}' +
     '.hdr{background:#0f1e3c;color:#fff;padding:28px 40px 22px;}' +
@@ -1651,6 +1701,10 @@ async function portalDownloadAIReport() {
     'h4{color:#1e2d5a;margin-top:16px;font-size:12.5px;}' +
     'li{margin:5px 0 5px 20px;line-height:1.6;font-size:13px;}' +
     'p{font-size:13px;line-height:1.65;margin:8px 0;}' +
+    'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px;}' +
+    'th{background:#0f1e3c;color:#fff;text-align:left;padding:6px 8px;font-size:11px;}' +
+    'td{padding:5px 8px;border-bottom:1px solid #e0e0e0;}' +
+    'tr:nth-child(even) td{background:#f5f7fc;}' +
     '@media print{body{margin:0;}.hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
     '</style></head><body>' +
     '<div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
@@ -1663,6 +1717,42 @@ async function portalDownloadAIReport() {
   w.focus();
   w.print();
   portalSetAIStatus('Print dialog opened. Choose Save as PDF.');
+}
+
+function portalFmtAIMarkdown(text) {
+  var esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  var lines = esc.split('\n');
+  var html = '';
+  var inTable = false;
+  var headerDone = false;
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    if (/^\s*\|/.test(ln) && /\|\s*$/.test(ln)) {
+      var cells = ln.split('|').slice(1, -1);
+      if (/^[\s:|-]+$/.test(cells.join('|'))) continue; // separator row
+      if (!inTable) {
+        html += '<table class="portalAITable"><thead><tr>';
+        cells.forEach(function(c) { html += '<th>' + c.trim().replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</th>'; });
+        html += '</tr></thead><tbody>';
+        inTable = true;
+        headerDone = true;
+        continue;
+      }
+      html += '<tr>';
+      cells.forEach(function(c) { html += '<td>' + c.trim().replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</td>'; });
+      html += '</tr>';
+      continue;
+    }
+    if (inTable) { html += '</tbody></table>'; inTable = false; headerDone = false; }
+    if (/^##\s+/.test(ln)) { html += '<h4>' + ln.replace(/^##\s+/, '') + '</h4>'; }
+    else if (/^###\s+/.test(ln)) { html += '<h5 style="margin:8px 0 4px;font-size:12px;color:var(--accent)">' + ln.replace(/^###\s+/, '') + '</h5>'; }
+    else if (/^[-*]\s+/.test(ln)) { html += '<div class="portalAIBullet">\u2022 ' + ln.replace(/^[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</div>'; }
+    else if (/^\d+\.\s+/.test(ln)) { var m = ln.match(/^(\d+)\.\s+(.*)/); html += '<div class="portalAIBullet"><b>' + m[1] + '.</b> ' + m[2].replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</div>'; }
+    else if (ln.trim() === '') { html += '<br>'; }
+    else { html += '<p>' + ln.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</p>'; }
+  }
+  if (inTable) html += '</tbody></table>';
+  return html;
 }
 
 async function portalRunAIAnalysis() {
@@ -1683,7 +1773,8 @@ async function portalRunAIAnalysis() {
   var teamName = portalTeamCtx.team;
   var season = portalTeamCtx.season || portalTargetSeason;
   var departures = portalSelectedDepartureNames.slice();
-  var topPicks = (portalRecRows || []).slice(0, 6);
+  var topPickCount = Math.max(8, departures.length * 5 + 2);
+  var topPicks = (portalRecRows || []).slice(0, topPickCount);
 
   // ── Phase 1: Fetch supporting player/team data for deep analysis ──
   portalSetAIStatus('Fetching player and team context for ' + teamName + '...');
@@ -1874,9 +1965,26 @@ async function portalRunAIAnalysis() {
       : '- On the men\'s side, call out spacing, rim pressure, defensive playmaking, and glass impact when they materially change the roster outlook.\n\n') +
     'Return detailed markdown with these sections:\n' +
     '## What You Lose (per departure)\n' +
-    '## Best Replacement Matches (who replaces whom and why)\n' +
+    '## Best Replacement Matches\n' +
+    'For EACH departing player, provide a markdown table with EXACTLY 5 replacement candidates ranked from the most premium/expensive option down to the most affordable bang-for-buck option.\n' +
+    'Use this exact table format for each departing player (one table per player):\n\n' +
+    '### Replacing [Departing Player Name]\n' +
+    '| Tier | Player | From | Fit | PPG | eFG% | Key Strengths | Valuation Tier | Why This Pick |\n' +
+    '|------|--------|------|-----|-----|------|---------------|----------------|---------------|\n' +
+    '| Premium | ... | ... | ... | ... | ... | ... | $$$ | ... |\n' +
+    '| Upgrade | ... | ... | ... | ... | ... | ... | $$ | ... |\n' +
+    '| Direct Fit | ... | ... | ... | ... | ... | ... | $$ | ... |\n' +
+    '| Value Play | ... | ... | ... | ... | ... | ... | $ | ... |\n' +
+    '| Sleeper | ... | ... | ... | ... | ... | ... | $ | ... |\n\n' +
+    'Tier definitions:\n' +
+    '- Premium = highest-ceiling target, may cost more than the departing player\n' +
+    '- Upgrade = clear step up in at least one area, moderate cost\n' +
+    '- Direct Fit = closest statistical and role match to the departing player\n' +
+    '- Value Play = solid contributor at a lower valuation tier -- bang for your buck\n' +
+    '- Sleeper = under-the-radar upside pick, youngest or lowest-minute breakout candidate\n\n' +
+    'Fill all stat columns from the data. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n\n' +
     '## Combined Impact (net team improvement or regression)\n' +
-    '## Portal Priority (ordered action plan)\n' +
+    '## Portal Priority (ordered action plan — who to call first)\n' +
     '## Risks & Watchouts\n\n' +
     '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```';
 
@@ -1887,7 +1995,7 @@ async function portalRunAIAnalysis() {
       body: JSON.stringify({
         model: PORTAL_GEMINI_MODEL,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 4500 },
+        generationConfig: { temperature: 0.5, maxOutputTokens: 8000 },
       })
     });
     var data = await res.json();
@@ -1899,18 +2007,7 @@ async function portalRunAIAnalysis() {
     if (!text) throw new Error('Empty AI response');
     portalLastAIReportText = text;
     portalSetAIStatus('Done - analyzed ' + departures.length + ' departure(s) using ' + sportLabelShort + ' team and player context');
-    portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' +
-      text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/^##\s+(.*)$/gm, '<h4>$1</h4>')
-        .replace(/^###\s+(.*)$/gm, '<h5 style="margin:8px 0 4px;font-size:12px;color:var(--accent)">$1</h5>')
-        .replace(/^[-*]\s+(.*)$/gm, '<div class="portalAIBullet">• $1</div>')
-        .replace(/^(\d+)\.\s+(.*)$/gm, '<div class="portalAIBullet"><b>$1.</b> $2</div>')
-        .replace(/\n{2,}/g, '<br><br>')
-      + '</div>';
+    portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' + portalFmtAIMarkdown(text) + '</div>';
   } catch (e) {
     portalLastAIReportText = '';
     portalSetAIStatus('AI analysis failed');

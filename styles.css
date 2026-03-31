@@ -450,6 +450,11 @@
     .portalAIMarkdown{font-size:12px;line-height:1.6}
     .portalAIMarkdown h4{margin:10px 0 6px;color:var(--accent);font-size:13px}
     .portalAIBullet{margin:3px 0 0 8px}
+    .portalAITable{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11px}
+    .portalAITable th{background:rgba(var(--accent-rgb),.15);color:var(--accent);text-align:left;padding:5px 6px;font-weight:700;border-bottom:1.5px solid var(--line);white-space:nowrap}
+    .portalAITable td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .portalAITable tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+    .portalAITable tr:hover td{background:rgba(var(--accent-rgb),.07)}
     .portalAIOutput{max-height:600px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
     .portalAIOutput .portalAIMarkdown{padding:14px 16px;white-space:normal}
 
