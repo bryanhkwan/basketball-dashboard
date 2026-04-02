@@ -349,6 +349,7 @@
     .portalEmptyState{text-align:center;padding:20px;display:block}
     .portalSectionFootnote{margin-top:12px;font-size:12px;line-height:1.7;color:var(--muted);opacity:.92}
     .portalTeamBand{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+    .portalRepSummaryBand{justify-content:space-between}
     .portalWorkspaceGrid{margin-top:0}
     .portalPanel{border-color:rgba(255,255,255,.07);background:linear-gradient(180deg, rgba(11,20,35,.92), rgba(9,16,28,.82))}
     .portalPanelHint{font-size:11px;margin-bottom:10px;line-height:1.65}
@@ -445,6 +446,18 @@
     .portalRecTableWrap{max-height:420px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .portalRecTableWrap table{border:none;border-radius:0}
     .portalRecTableWrap th{top:0}
+    .portalRepTableWrap{max-height:460px;overflow:auto;border-radius:var(--r);border:1px solid var(--line);background:rgba(5,11,20,.34)}
+    .portalRepTableWrap table{border:none;border-radius:0}
+    .portalRepTableWrap th{top:0}
+    .portalRepPlayer{font-size:12px;font-weight:700;color:#f3f8ff;line-height:1.35}
+    .portalRepMeta{font-size:10.5px;color:var(--muted);margin-top:3px}
+    .portalRepContactCell a,.portalRepSourcesCell a{color:#cfe6ff;text-decoration:none}
+    .portalRepContactCell a:hover,.portalRepSourcesCell a:hover{text-decoration:underline}
+    .portalRepConfidence{display:inline-flex;align-items:center;justify-content:center;min-width:60px;padding:4px 8px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border:1px solid transparent}
+    .portalRepConfidence--high{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.3);color:#7ff0bb}
+    .portalRepConfidence--medium{background:rgba(96,165,250,.14);border-color:rgba(96,165,250,.28);color:#b4d6ff}
+    .portalRepConfidence--low{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.26);color:#fde68a}
+    .portalRepConfidence--none{background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22);color:#cbd5e1}
     .portalFitPill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:var(--good)}
     .portalRiskText{font-size:10px;color:var(--warn);margin-top:4px}
     .portalAIMarkdown{font-size:12px;line-height:1.6}

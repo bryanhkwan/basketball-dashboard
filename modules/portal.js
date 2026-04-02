@@ -10,6 +10,8 @@ var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, port
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
+var portalRepResearchBtnEl, portalRepExportBtnEl, portalRepClearBtnEl, portalRepLimitEl;
+var portalRepStatusEl, portalRepBodyEl, portalRepEmptyEl, portalRepCountEl;
 var portalWatchAlertWrapEl, favsPortalAlertWrapEl, favsPortalBadgeEl;
 var portalBoardSubtitleEl, portalSnapshotWrapEl, portalSnapshotLabelEl, portalBoardHintEl, portalFitSubtitleEl, portalAISubtitleEl;
 
@@ -21,11 +23,13 @@ var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
 var portalSelectedDepartureNames = [];
 var portalWatchAlerts = [];
+var portalRepResults = [];
 var portalFilterTimer = null;
 var portalPlayerIndexRef = null;
 var portalPlayerIndexExact = Object.create(null);
 var portalPlayerIndexLoose = [];
 var portalJsPdfPromise = null;
+var portalRepBusy = false;
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -57,6 +61,14 @@ function initPortalDOMRefs() {
   portalAIDownloadBtn = document.getElementById('portalAIDownloadBtn');
   portalAIStatusEl = document.getElementById('portalAIStatus');
   portalAIOutputEl = document.getElementById('portalAIOutput');
+  portalRepResearchBtnEl = document.getElementById('portalRepResearchBtn');
+  portalRepExportBtnEl = document.getElementById('portalRepExportBtn');
+  portalRepClearBtnEl = document.getElementById('portalRepClearBtn');
+  portalRepLimitEl = document.getElementById('portalRepLimit');
+  portalRepStatusEl = document.getElementById('portalRepStatus');
+  portalRepBodyEl = document.getElementById('portalRepBody');
+  portalRepEmptyEl = document.getElementById('portalRepEmpty');
+  portalRepCountEl = document.getElementById('portalRepCount');
   portalWatchAlertWrapEl = document.getElementById('portalWatchAlertWrap');
   favsPortalAlertWrapEl = document.getElementById('favsPortalAlertWrap');
   favsPortalBadgeEl = document.getElementById('favsPortalBadge');
@@ -217,6 +229,10 @@ function portalSetStatus(msg) {
 
 function portalSetAIStatus(msg) {
   if (portalAIStatusEl) portalAIStatusEl.textContent = msg || '';
+}
+
+function portalSetRepStatus(msg) {
+  if (portalRepStatusEl) portalRepStatusEl.textContent = msg || '';
 }
 
 function portalFmtNum(v, d) {
@@ -761,6 +777,378 @@ function portalUserStorageKey(suffix) {
   } catch (_) {}
   user = String(user || 'guest').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
   return 'portal_' + suffix + '_' + user;
+}
+
+function portalRepStorageKey() {
+  return portalUserStorageKey('rep_research_' + portalCurrentSport() + '_' + portalGetSeason());
+}
+
+function portalLoadRepCacheMap() {
+  try {
+    var raw = localStorage.getItem(portalRepStorageKey()) || '{}';
+    var parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function portalSaveRepCacheMap(map) {
+  try {
+    localStorage.setItem(portalRepStorageKey(), JSON.stringify(map || {}));
+  } catch (_) {}
+}
+
+function portalRepEntryKey(entry) {
+  return [
+    portalCurrentSport(),
+    portalGetSeason(),
+    portalNorm(entry && entry.playerName),
+    portalNorm(entry && entry.fromTeam)
+  ].join('|');
+}
+
+function portalRepParseJson(text) {
+  var raw = String(text || '').trim();
+  raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+  var start = raw.indexOf('{');
+  var end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('No JSON object found');
+  return JSON.parse(raw.slice(start, end + 1));
+}
+
+function portalRepConfidenceRank(value) {
+  var v = String(value || '').toLowerCase();
+  if (v === 'high') return 4;
+  if (v === 'medium') return 3;
+  if (v === 'low') return 2;
+  if (v === 'none') return 1;
+  return 0;
+}
+
+function portalRepConfidenceClass(value) {
+  var v = String(value || 'none').toLowerCase();
+  if (v !== 'high' && v !== 'medium' && v !== 'low') v = 'none';
+  return 'portalRepConfidence--' + v;
+}
+
+function portalNormalizeRepSources(list) {
+  var out = [];
+  var seen = {};
+  (Array.isArray(list) ? list : []).forEach(function (src) {
+    if (out.length >= 4) return;
+    var title = String(src && src.title ? src.title : src && src.url ? src.url : '').trim().slice(0, 160);
+    var url = String(src && src.url ? src.url : '').trim().slice(0, 320);
+    if (!title && !url) return;
+    var key = title + '|' + url;
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push({ title: title || url, url: url });
+  });
+  return out;
+}
+
+function portalSanitizeRepResult(raw, entry, searchData, query) {
+  raw = raw && typeof raw === 'object' ? raw : {};
+  var result = {
+    key: portalRepEntryKey(entry),
+    sport: portalCurrentSport(),
+    season: portalGetSeason(),
+    playerName: String(entry && entry.playerName ? entry.playerName : '').trim().slice(0, 120),
+    fromTeam: String(entry && entry.fromTeam ? entry.fromTeam : '').trim().slice(0, 120),
+    status: String(entry && entry.status ? entry.status : '').trim().slice(0, 40),
+    query: String(query || '').trim().slice(0, 280),
+    hasPublicRepresentation: raw.hasPublicRepresentation === true,
+    repName: String(raw.agentName || raw.repName || raw.advisorName || '').trim().slice(0, 120),
+    organization: String(raw.organization || raw.orgName || raw.agency || '').trim().slice(0, 140),
+    publicBusinessEmail: String(raw.publicBusinessEmail || raw.email || '').trim().slice(0, 160),
+    publicBusinessPhone: String(raw.publicBusinessPhone || raw.phone || '').trim().slice(0, 80),
+    publicWebsite: String(raw.publicWebsite || raw.website || '').trim().slice(0, 320),
+    contactPage: String(raw.contactPage || raw.contactUrl || '').trim().slice(0, 320),
+    confidence: String(raw.confidence || 'none').trim().toLowerCase(),
+    notes: String(raw.notes || raw.summary || '').trim().slice(0, 360),
+    sources: portalNormalizeRepSources(raw.sources && raw.sources.length ? raw.sources : (searchData && searchData.sources ? searchData.sources : [])),
+    searchedAt: new Date().toISOString()
+  };
+
+  if (result.confidence !== 'high' && result.confidence !== 'medium' && result.confidence !== 'low') {
+    result.confidence = 'none';
+  }
+  if (!result.repName && !result.organization) result.hasPublicRepresentation = false;
+  if ((result.repName || result.organization) && result.confidence === 'none') result.confidence = 'medium';
+  if (!result.hasPublicRepresentation && !result.notes) result.notes = 'No clear public representation signal found in the current web results.';
+  return result;
+}
+
+function portalBuildRepResearchQuery(entry) {
+  var playerName = String(entry && entry.playerName ? entry.playerName : '').trim();
+  var teamName = String(entry && entry.fromTeam ? entry.fromTeam : '').trim();
+  var sportLabel = portalCurrentLeague() === 'WBB' ? 'women college basketball' : 'men college basketball';
+  return '"' + playerName + '" ' + (teamName ? ('"' + teamName + '" ') : '') + sportLabel + ' agent OR advisor OR represented by OR management OR NIL';
+}
+
+async function portalRunPublicWebSearch(query) {
+  try {
+    var res = await fetch(PORTAL_GEMINI_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'web_search', query: query })
+    });
+    var data = await res.json();
+    if (!res.ok || data.error) throw new Error((data && data.error && data.error.message) || data.error || ('HTTP ' + res.status));
+    return {
+      summary: String(data && data.summary ? data.summary : '').trim(),
+      sources: portalNormalizeRepSources(data && data.sources ? data.sources : [])
+    };
+  } catch (e) {
+    return {
+      error: 'Web search failed: ' + (e && e.message ? e.message : String(e)),
+      summary: '',
+      sources: []
+    };
+  }
+}
+
+async function portalExtractRepResearch(entry, searchData, query) {
+  if (searchData && searchData.error) {
+    return portalSanitizeRepResult({
+      hasPublicRepresentation: false,
+      confidence: 'none',
+      notes: searchData.error
+    }, entry, searchData, query);
+  }
+
+  var prompt =
+    'You extract PUBLIC basketball player representation information from search evidence. Return JSON only.\n' +
+    'Schema:\n' +
+    '{"hasPublicRepresentation":boolean,"agentName":"","organization":"","publicBusinessEmail":"","publicBusinessPhone":"","publicWebsite":"","contactPage":"","confidence":"none|low|medium|high","notes":"","sources":[{"title":"","url":""}]}\n\n' +
+    'Rules:\n' +
+    '- Use ONLY explicit information from the supplied summary and source list.\n' +
+    '- Do NOT guess agent names, organizations, phone numbers, or email addresses.\n' +
+    '- Only include public business contact details for agencies, management groups, advisors, or public contact pages.\n' +
+    '- Do NOT include private or personal contact details.\n' +
+    '- If the evidence only suggests a likely agency but does not clearly state it, set confidence to low and explain why.\n' +
+    '- If no clear representation signal exists, set hasPublicRepresentation=false and confidence=none.\n\n' +
+    'Player: ' + String(entry && entry.playerName ? entry.playerName : '') + '\n' +
+    'School: ' + String(entry && entry.fromTeam ? entry.fromTeam : '') + '\n' +
+    'Search query: ' + String(query || '') + '\n\n' +
+    'Search summary:\n' + String(searchData && searchData.summary ? searchData.summary : '') + '\n\n' +
+    'Sources:\n' + portalNormalizeRepSources(searchData && searchData.sources ? searchData.sources : []).map(function (src) {
+      return '- ' + src.title + ' | ' + src.url;
+    }).join('\n');
+
+  try {
+    var res = await fetch(PORTAL_GEMINI_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: PORTAL_GEMINI_MODEL,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1600 }
+      })
+    });
+    var data = await res.json();
+    if (!res.ok || data.error) throw new Error((data && data.error && data.error.message) || data.error || ('HTTP ' + res.status));
+    var text = ((data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [])
+      .map(function (p) { return p.text || ''; })
+      .join('')
+      .trim();
+    var parsed = portalRepParseJson(text);
+    return portalSanitizeRepResult(parsed, entry, searchData, query);
+  } catch (e) {
+    return portalSanitizeRepResult({
+      hasPublicRepresentation: false,
+      confidence: 'none',
+      notes: 'Structured extraction failed: ' + (e && e.message ? e.message : String(e))
+    }, entry, searchData, query);
+  }
+}
+
+async function portalResearchRepForEntry(entry, forceRefresh) {
+  var key = portalRepEntryKey(entry);
+  var cache = portalLoadRepCacheMap();
+  if (!forceRefresh && cache[key]) {
+    var cached = JSON.parse(JSON.stringify(cache[key]));
+    cached.fromCache = true;
+    return cached;
+  }
+  var query = portalBuildRepResearchQuery(entry);
+  var searchData = await portalRunPublicWebSearch(query);
+  var result = await portalExtractRepResearch(entry, searchData, query);
+  cache[key] = result;
+  portalSaveRepCacheMap(cache);
+  result.fromCache = false;
+  return result;
+}
+
+function portalRepContactMarkup(item) {
+  var parts = [];
+  if (item.publicBusinessEmail) {
+    parts.push('<a href="mailto:' + portalEsc(item.publicBusinessEmail) + '">' + portalEsc(item.publicBusinessEmail) + '</a>');
+  }
+  if (item.publicBusinessPhone) {
+    parts.push('<a href="tel:' + portalEsc(item.publicBusinessPhone) + '">' + portalEsc(item.publicBusinessPhone) + '</a>');
+  }
+  if (item.publicWebsite) {
+    parts.push('<a href="' + portalEsc(item.publicWebsite) + '" target="_blank" rel="noopener noreferrer">Website</a>');
+  }
+  if (item.contactPage && item.contactPage !== item.publicWebsite) {
+    parts.push('<a href="' + portalEsc(item.contactPage) + '" target="_blank" rel="noopener noreferrer">Contact page</a>');
+  }
+  if (!parts.length) return '<span class="muted">No public business contact found</span>';
+  return parts.join('<br>');
+}
+
+function portalRepSourcesMarkup(item) {
+  var sources = portalNormalizeRepSources(item && item.sources ? item.sources : []);
+  if (!sources.length) return '<span class="muted">No sources saved</span>';
+  return sources.map(function (src) {
+    return '<a href="' + portalEsc(src.url) + '" target="_blank" rel="noopener noreferrer">' + portalEsc(src.title) + '</a>';
+  }).join('<br>');
+}
+
+function portalRenderRepResults() {
+  if (!portalRepBodyEl) return;
+  portalRepBodyEl.innerHTML = '';
+
+  var rows = (portalRepResults || []).slice().sort(function (a, b) {
+    var diff = portalRepConfidenceRank(b && b.confidence) - portalRepConfidenceRank(a && a.confidence);
+    if (diff) return diff;
+    return String(a && a.playerName ? a.playerName : '').localeCompare(String(b && b.playerName ? b.playerName : ''));
+  });
+
+  var frag = document.createDocumentFragment();
+  rows.forEach(function (item) {
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><div class="portalRepPlayer">' + portalEsc(item.playerName || 'Unknown') + '</div><div class="portalRepMeta">' + portalEsc(item.status || 'Portal') + '</div></td>' +
+      '<td>' + portalEsc(item.fromTeam || '—') + '</td>' +
+      '<td><div class="portalRepPlayer">' + portalEsc(item.repName || (item.hasPublicRepresentation ? 'Public rep found' : 'No public rep found')) + '</div><div class="portalRepMeta">' + portalEsc(item.organization || '—') + '</div></td>' +
+      '<td class="portalRepContactCell">' + portalRepContactMarkup(item) + '</td>' +
+      '<td><span class="portalRepConfidence ' + portalRepConfidenceClass(item.confidence) + '">' + portalEsc(item.confidence || 'none') + '</span></td>' +
+      '<td class="portalRepSourcesCell">' + portalRepSourcesMarkup(item) + '</td>' +
+      '<td>' + portalEsc(item.notes || '—') + '</td>';
+    frag.appendChild(tr);
+  });
+  portalRepBodyEl.appendChild(frag);
+
+  if (portalRepCountEl) portalRepCountEl.textContent = String(rows.length);
+  if (portalRepEmptyEl) {
+    portalRepEmptyEl.style.display = rows.length ? 'none' : '';
+    portalRepEmptyEl.textContent = rows.length ? '' : 'No representation research cached for the current filtered portal board yet.';
+  }
+  if (portalRepExportBtnEl) portalRepExportBtnEl.disabled = !rows.length || portalRepBusy;
+}
+
+function portalSyncRepResultsFromCache() {
+  var cache = portalLoadRepCacheMap();
+  var seen = {};
+  portalRepResults = portalFiltered.map(function (entry) {
+    var key = portalRepEntryKey(entry);
+    if (seen[key]) return null;
+    seen[key] = true;
+    return cache[key] || null;
+  }).filter(Boolean);
+  portalRenderRepResults();
+}
+
+function portalCsvEscape(value) {
+  var str = String(value == null ? '' : value);
+  if (/[",\n]/.test(str)) str = '"' + str.replace(/"/g, '""') + '"';
+  return str;
+}
+
+function portalExportRepResearchCsv() {
+  var rows = (portalRepResults || []).slice();
+  if (!rows.length) {
+    portalSetRepStatus('No representation research results to export.');
+    return;
+  }
+  var headers = [
+    'Player', 'From Team', 'Status', 'Rep Name', 'Organization', 'Public Business Email',
+    'Public Business Phone', 'Public Website', 'Contact Page', 'Confidence', 'Notes', 'Sources'
+  ];
+  var lines = [headers.map(portalCsvEscape).join(',')];
+  rows.forEach(function (item) {
+    lines.push([
+      item.playerName,
+      item.fromTeam,
+      item.status,
+      item.repName,
+      item.organization,
+      item.publicBusinessEmail,
+      item.publicBusinessPhone,
+      item.publicWebsite,
+      item.contactPage,
+      item.confidence,
+      item.notes,
+      (item.sources || []).map(function (src) { return (src.title || '') + ' ' + (src.url || ''); }).join(' | ')
+    ].map(portalCsvEscape).join(','));
+  });
+  var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'portal_rep_research_' + portalCurrentSport() + '_' + portalGetSeason() + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  portalSetRepStatus('CSV exported for ' + rows.length + ' researched portal players.');
+}
+
+function portalClearRepResearch() {
+  var ok = true;
+  try {
+    ok = window.confirm('Clear cached public representation research for the current portal season?');
+  } catch (_) {}
+  if (!ok) return;
+  try {
+    localStorage.removeItem(portalRepStorageKey());
+  } catch (_) {}
+  portalRepResults = [];
+  portalRenderRepResults();
+  portalSetRepStatus('Cleared cached public representation research.');
+}
+
+async function portalRunRepResearch(forceRefresh) {
+  if (portalRepBusy) return;
+  if (!portalFiltered.length) {
+    portalSetRepStatus('No filtered portal players to research.');
+    portalRenderRepResults();
+    return;
+  }
+
+  var limit = parseInt(portalRepLimitEl && portalRepLimitEl.value ? portalRepLimitEl.value : '20', 10);
+  if (!Number.isFinite(limit)) limit = 20;
+  limit = Math.max(1, Math.min(60, limit));
+  if (portalRepLimitEl) portalRepLimitEl.value = String(limit);
+
+  var entries = portalFiltered.slice(0, limit);
+  var withSignals = 0;
+  var cacheHits = 0;
+  portalRepBusy = true;
+  if (portalRepResearchBtnEl) portalRepResearchBtnEl.disabled = true;
+  if (portalRepExportBtnEl) portalRepExportBtnEl.disabled = true;
+  if (portalRepClearBtnEl) portalRepClearBtnEl.disabled = true;
+
+  try {
+    for (var i = 0; i < entries.length; i++) {
+      portalSetRepStatus('Researching ' + (i + 1) + '/' + entries.length + ' - ' + (entries[i].playerName || 'Player'));
+      var result = await portalResearchRepForEntry(entries[i], !!forceRefresh);
+      if (result && result.hasPublicRepresentation) withSignals += 1;
+      if (result && result.fromCache) cacheHits += 1;
+      portalSyncRepResultsFromCache();
+    }
+    portalSetRepStatus('Done - ' + entries.length + ' players researched, ' + withSignals + ' with public rep signals, ' + cacheHits + ' cache hits. Public business contacts only.');
+  } catch (e) {
+    portalSetRepStatus('Representation research failed: ' + (e && e.message ? e.message : String(e)));
+  } finally {
+    portalRepBusy = false;
+    if (portalRepResearchBtnEl) portalRepResearchBtnEl.disabled = false;
+    if (portalRepClearBtnEl) portalRepClearBtnEl.disabled = false;
+    portalRenderRepResults();
+  }
 }
 
 function portalSeenAlertsMap() {
@@ -2238,6 +2626,7 @@ function portalApplyFilters() {
 
   portalRenderTable();
   portalRenderWatchAlerts();
+  portalSyncRepResultsFromCache();
 
   if (portalRecRows.length && portalTeamCtx) {
     portalComputeRecommendations();
@@ -2545,8 +2934,27 @@ function initPortalPage() {
     });
   }
 
+  if (portalRepResearchBtnEl) {
+    portalRepResearchBtnEl.addEventListener('click', function () {
+      portalRunRepResearch(false);
+    });
+  }
+
+  if (portalRepExportBtnEl) {
+    portalRepExportBtnEl.addEventListener('click', function () {
+      portalExportRepResearchCsv();
+    });
+  }
+
+  if (portalRepClearBtnEl) {
+    portalRepClearBtnEl.addEventListener('click', function () {
+      portalClearRepResearch();
+    });
+  }
+
   portalRefreshTeamOptions();
   portalRenderWatchAlerts();
+  portalRenderRepResults();
 }
 
 window.TransferPortal = {
@@ -2556,4 +2964,6 @@ window.TransferPortal = {
   runRecommendations: portalRunRecommendations,
   runAIAnalysis: portalRunAIAnalysis,
   downloadAIReport: portalDownloadAIReport,
+  runRepresentationResearch: portalRunRepResearch,
+  exportRepresentationResearch: portalExportRepResearchCsv,
 };
