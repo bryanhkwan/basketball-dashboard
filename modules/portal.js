@@ -197,12 +197,14 @@ function portalFindPlayerMatch(name, teamName) {
   }
   var index = portalGetPlayerIndex();
   if (index.exact[needle]) return index.exact[needle];
+  var looseFallback = null;
   for (var j = 0; j < index.loose.length; j++) {
     var n2 = index.loose[j].norm;
     if (!n2 || !(n2.includes(needle) || needle.includes(n2))) continue;
     if (!teamNeedle || portalNorm(portalGetPlayerTeam(index.loose[j].player)) === teamNeedle) return index.loose[j].player;
+    if (!looseFallback) looseFallback = index.loose[j].player;
   }
-  return null;
+  return looseFallback;
 }
 
 function portalScheduleApplyFilters(delayMs) {
@@ -1967,7 +1969,14 @@ function portalRenderRecommendations() {
   var targetMap = portalTargetListToMap(portalLoadTargetList());
 
   if (!portalRecRows.length) {
-    if (portalRecEmptyEl) portalRecEmptyEl.style.display = '';
+    if (portalRecEmptyEl) {
+      portalRecEmptyEl.style.display = '';
+      if (!portalRecEmptyEl.textContent || portalRecEmptyEl.textContent === 'Scoring fit candidates...') {
+        portalRecEmptyEl.textContent = !portalFiltered.length
+          ? 'No portal entries are available for the current board filters.'
+          : 'No matched portal fit candidates were found for the current board and team context.';
+      }
+    }
     return;
   }
   if (portalRecEmptyEl) portalRecEmptyEl.style.display = 'none';
@@ -2982,20 +2991,45 @@ async function portalRunRecommendations() {
     portalRecEmptyEl.textContent = 'Scoring fit candidates...';
   }
 
-  if (!portalTeamCtx || portalTeamCtx.team !== portalRecTeamEl.value || portalTeamCtx.season !== portalGetSeason()) {
-    await portalLoadTeamContext(portalRecTeamEl.value);
-  }
+  try {
+    if (!portalItems.length) {
+      if (portalRecEmptyEl) portalRecEmptyEl.textContent = 'Loading portal board first...';
+      await loadPortalEntries();
+    }
 
-  var players = portalCollectAllPlayers();
-  portalRecDist = portalBuildDistributions(players);
-  // Re-detect departures in case portal items loaded after team selection
-  if (portalTeamCtx && portalTeamCtx.roster) {
-    portalDetectDepartures(portalTeamCtx.roster);
-    portalRenderDepartureCards(portalDetectedDepartures);
+    if (!portalFiltered.length) {
+      portalRecRows = [];
+      portalRenderRecommendations();
+      if (portalRecEmptyEl) {
+        portalRecEmptyEl.style.display = '';
+        portalRecEmptyEl.textContent = portalItems.length
+          ? 'No portal entries match the current board filters. Adjust the search or status filter and try again.'
+          : 'Portal board is empty right now, so there are no candidates to score.';
+      }
+      return;
+    }
+
+    if (!portalTeamCtx || portalTeamCtx.team !== portalRecTeamEl.value || portalTeamCtx.season !== portalGetSeason()) {
+      await portalLoadTeamContext(portalRecTeamEl.value);
+    }
+
+    var players = portalCollectAllPlayers();
+    portalRecDist = portalBuildDistributions(players);
+    // Re-detect departures in case portal items loaded after team selection
+    if (portalTeamCtx && portalTeamCtx.roster) {
+      portalDetectDepartures(portalTeamCtx.roster);
+      portalRenderDepartureCards(portalDetectedDepartures);
+    }
+    portalComputeRecommendations();
+    portalRenderRecommendations();
+
+    if (!portalRecRows.length && portalRecEmptyEl) {
+      portalRecEmptyEl.style.display = '';
+      portalRecEmptyEl.textContent = 'No scored fit candidates were found from the current portal board. This usually means the live portal names did not match the loaded player pool cleanly enough yet.';
+    }
+  } finally {
+    if (portalRecRunBtn) portalRecRunBtn.disabled = false;
   }
-  portalComputeRecommendations();
-  portalRenderRecommendations();
-  if (portalRecRunBtn) portalRecRunBtn.disabled = false;
 }
 
 function portalUseSnapshotEnabled() {
@@ -3269,13 +3303,25 @@ async function loadPortalEntries() {
     var totalAvailable = firstData && Number.isFinite(+firstData.totalAvailable) ? +firstData.totalAvailable : allItems.length;
     var totalPages = Math.max(1, Math.ceil(totalAvailable / apiPageLimit));
 
-    for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
-      var pageResp = await fetch(makeUrl(src, pageNum).toString());
-      if (!pageResp.ok) throw new Error('Portal API page ' + pageNum + ' failed with ' + pageResp.status);
-      var pageData = await pageResp.json();
-      if (Array.isArray(pageData.items) && pageData.items.length) {
-        allItems = allItems.concat(pageData.items);
+    if (totalPages > 1) {
+      var pagePromises = [];
+      for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
+        (function (n) {
+          pagePromises.push(
+            fetch(makeUrl(src, n).toString())
+              .then(function (pageResp) {
+                if (!pageResp.ok) throw new Error('Portal API page ' + n + ' failed with ' + pageResp.status);
+                return pageResp.json();
+              })
+          );
+        })(pageNum);
       }
+      var pageResults = await Promise.all(pagePromises);
+      pageResults.forEach(function (pageData) {
+        if (Array.isArray(pageData.items) && pageData.items.length) {
+          allItems = allItems.concat(pageData.items);
+        }
+      });
     }
 
     return {
