@@ -2318,274 +2318,29 @@ async function portalDownloadAIReport() {
     ? 'Replacing ' + portalSelectedDepartureNames.join(', ')
     : 'Team Fit Mode';
   var dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-  try {
-    await portalEnsureJsPdf();
-  } catch (e) {
-    portalSetAIStatus('PDF export unavailable right now.');
-    if (typeof showWarn === 'function') showWarn('PDF export failed: ' + (e && e.message ? e.message : e));
-    return;
-  }
-
-  if (window.jspdf && window.jspdf.jsPDF) {
-    var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var margin = 50;
-    var contentW = pageW - margin * 2;
-    var pageNum = 1;
-
-    function addFooter() {
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(155, 155, 165);
-      doc.text('NCAA Scouting Dashboard  ·  Transfer Portal Fit Analysis  ·  ' + dateStr, margin, pageH - 22);
-      doc.text('Page ' + pageNum, pageW - margin, pageH - 22, { align: 'right' });
-      doc.setDrawColor(210, 215, 228);
-      doc.setLineWidth(0.4);
-      doc.line(margin, pageH - 32, pageW - margin, pageH - 32);
-      doc.setTextColor(0, 0, 0);
-    }
-
-    // — Cover header block (navy, taller, with date + mode) —
-    doc.setFillColor(15, 30, 60);
-    doc.rect(0, 0, pageW, 128, 'F');
-    doc.setFillColor(255, 210, 0);
-    doc.rect(0, 128, pageW, 3, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.text('Transfer Portal Fit Report', margin, 46);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(12);
-    doc.setTextColor(190, 207, 235);
-    doc.text(teamName + '  ·  Season ' + season + '  ·  ' + mode, margin, 72);
-
-    doc.setFontSize(9.5);
-    doc.setTextColor(130, 150, 185);
-    doc.text('Generated ' + dateStr, margin, 98);
-
-    doc.setTextColor(0, 0, 0);
-    var y = 148;
-    addFooter();
-
-    // Helper: check page overflow, add new page with mini header
-    function checkPage(needed) {
-      needed = needed || 18;
-      if (y + needed > pageH - 46) {
-        addFooter();
-        doc.addPage();
-        pageNum++;
-        // Mini continuation header
-        doc.setFillColor(15, 30, 60);
-        doc.rect(0, 0, pageW, 28, 'F');
-        doc.setFillColor(255, 210, 0);
-        doc.rect(0, 28, pageW, 2, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(195, 210, 235);
-        doc.text('Transfer Portal Fit Report  ·  ' + teamName + '  ·  Season ' + season, margin, 19);
-        doc.setTextColor(0, 0, 0);
-        y = 46;
-        addFooter();
-      }
-    }
-
-    // — Render markdown lines —
-    var lines = reportText.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i];
-
-      // Section header ##
-      if (/^##\s+/.test(line)) {
-        checkPage(34);
-        y += 8;
-        var hText = line.replace(/^##\s+/, '');
-        // Navy/gold themed band
-        doc.setFillColor(238, 242, 252);
-        doc.rect(margin, y - 14, contentW, 26, 'F');
-        doc.setFillColor(255, 210, 0);
-        doc.rect(margin, y - 14, 4, 26, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11.5);
-        doc.setTextColor(15, 30, 60);
-        doc.text(hText, margin + 12, y + 4);
-        doc.setTextColor(0, 0, 0);
-        y += 22;
-        continue;
-      }
-
-      // Sub-header ###
-      if (/^###\s+/.test(line)) {
-        checkPage(22);
-        y += 5;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10.5);
-        doc.setTextColor(30, 45, 85);
-        doc.text(line.replace(/^###\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1'), margin + 6, y);
-        doc.setTextColor(0, 0, 0);
-        y += 16;
-        continue;
-      }
-
-      var parsedTable = portalParseMarkdownTable(lines, i);
-      if (parsedTable) {
-        i = parsedTable.nextIndex;
-        var tableRows = parsedTable.rows;
-        var numCols = tableRows[0].length;
-        var colWeights = [];
-        if (numCols === 6) {
-          colWeights = [0.85, 1.15, 1.05, 1.35, 0.7, 1.9];
-        } else if (numCols === 8) {
-          colWeights = [1.15, 0.95, 0.72, 0.82, 1.05, 1.1, 2.2, 2.01];
-        }
-        var tableFontSize = numCols >= 8 ? 6.8 : 7.5;
-        var tableLineStep = numCols >= 8 ? 7.2 : 8;
-        var cellPadX = numCols >= 8 ? 2.5 : 3;
-        var minColWidth = numCols >= 8 ? 18 : 20;
-        var totalWeight = 0;
-        var colWidths = [];
-        for (var cw = 0; cw < numCols; cw++) totalWeight += (colWeights[cw] || 1);
-        for (var cx = 0; cx < numCols; cx++) colWidths[cx] = contentW * ((colWeights[cx] || 1) / totalWeight);
-
-        var hdr = tableRows[0];
-        var headerWrapped = [];
-        var headerLineCount = 1;
-        for (var hw = 0; hw < numCols; hw++) {
-          headerWrapped[hw] = doc.splitTextToSize(hdr[hw] || '', Math.max(minColWidth, colWidths[hw] - (cellPadX * 2)));
-          headerLineCount = Math.max(headerLineCount, headerWrapped[hw].length || 1);
-        }
-        var headerH = Math.max(20, headerLineCount * tableLineStep + 8);
-        checkPage(headerH + 18);
-
-        doc.setFillColor(15, 30, 60);
-        doc.rect(margin, y - 12, contentW, headerH, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(tableFontSize);
-        doc.setTextColor(255, 255, 255);
-        var headerX = margin;
-        for (var hc = 0; hc < numCols; hc++) {
-          doc.text(headerWrapped[hc], headerX + cellPadX, y);
-          headerX += colWidths[hc];
-        }
-        y += headerH - 4;
-        doc.setFillColor(255, 210, 0);
-        doc.rect(margin, y - 2, contentW, 1.5, 'F');
-        y += 6;
-
-        for (var tr = 1; tr < tableRows.length; tr++) {
-          var wrappedCells = [];
-          var lineCount = 1;
-          for (var tc = 0; tc < numCols; tc++) {
-            wrappedCells[tc] = doc.splitTextToSize(tableRows[tr][tc] || '', Math.max(minColWidth, colWidths[tc] - (cellPadX * 2)));
-            lineCount = Math.max(lineCount, wrappedCells[tc].length || 1);
-          }
-          var rowH = Math.max(16, lineCount * tableLineStep + 6);
-          checkPage(rowH + 4);
-          if (tr % 2 === 0) {
-            doc.setFillColor(243, 245, 252);
-            doc.rect(margin, y - 12, contentW, rowH, 'F');
-          }
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(tableFontSize);
-          doc.setTextColor(40, 48, 68);
-          var cellX = margin;
-          for (var td = 0; td < numCols; td++) {
-            doc.text(wrappedCells[td], cellX + cellPadX, y);
-            cellX += colWidths[td];
-          }
-          y += rowH;
-        }
-        y += 6;
-        doc.setTextColor(0, 0, 0);
-        continue;
-      }
-
-      // Bullet  -  *  •
-      if (/^[-*•]\s+/.test(line)) {
-        var bText = line.replace(/^[-*•]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
-        var bWrapped = doc.splitTextToSize(bText, contentW - 20);
-        checkPage(bWrapped.length * 14 + 4);
-        doc.setFillColor(255, 210, 0);
-        doc.circle(margin + 6, y - 3.5, 2, 'F');
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.setTextColor(40, 48, 68);
-        for (var bw = 0; bw < bWrapped.length; bw++) {
-          doc.text(bWrapped[bw], margin + 16, y);
-          y += 14;
-        }
-        y += 2;
-        doc.setTextColor(0, 0, 0);
-        continue;
-      }
-
-      // Numbered list  1.  2.
-      if (/^\d+\.\s+/.test(line)) {
-        var nm = line.match(/^(\d+)\.\s+(.*)/);
-        var numLabel = nm ? nm[1] + '.' : '';
-        var numText  = (nm ? nm[2] : line).replace(/\*\*([^*]+)\*\*/g, '$1');
-        var nWrapped = doc.splitTextToSize(numText, contentW - 24);
-        checkPage(nWrapped.length * 14 + 4);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.setTextColor(200, 140, 0);
-        doc.text(numLabel, margin + 4, y);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(40, 48, 68);
-        for (var nw = 0; nw < nWrapped.length; nw++) {
-          doc.text(nWrapped[nw], margin + 22, y);
-          y += 14;
-        }
-        y += 2;
-        doc.setTextColor(0, 0, 0);
-        continue;
-      }
-
-      // Empty line
-      if (!line.trim()) { y += 6; continue; }
-
-      // Regular paragraph
-      var cleanLine = line.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
-      var pWrapped = doc.splitTextToSize(cleanLine, contentW);
-      checkPage(pWrapped.length * 14 + 2);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(40, 48, 68);
-      for (var pw = 0; pw < pWrapped.length; pw++) {
-        doc.text(pWrapped[pw], margin, y);
-        y += 14;
-      }
-      y += 2;
-      doc.setTextColor(0, 0, 0);
-    }
-
-    var blobUrl = doc.output('bloburl');
-    window.open(blobUrl, '_blank');
-    portalSetAIStatus('Report opened in new tab — use your browser\'s download button to save.');
-    return;
-  }
-
-  // — Fallback: styled print window —
   var w = window.open('', '_blank');
   if (!w) { portalSetAIStatus('Popup blocked. Allow popups to export PDF.'); return; }
   var htmlBody = portalFmtAIMarkdown(reportText);
   w.document.write('<!doctype html><html><head><title>Transfer Portal Fit Report</title><style>' +
-    'body{font-family:system-ui,Arial,sans-serif;margin:0;color:#222;overflow-wrap:break-word;}' +
+    '@page{size:letter portrait;margin:0.55in;}' +
+    'html,body{margin:0;padding:0;background:#e7edf7;color:#222;}' +
+    'body{font-family:system-ui,Arial,sans-serif;padding:18px;box-sizing:border-box;}' +
+    '.page{width:100%;max-width:8.5in;margin:0 auto;background:#fff;box-shadow:0 16px 42px rgba(15,30,60,.16);overflow:hidden;}' +
     '.hdr{background:#0f1e3c;color:#fff;padding:28px 40px 22px;}' +
     '.hdr h1{margin:0 0 6px;font-size:22px;font-weight:700;}' +
     '.hdr .meta{margin:0;color:#bccce0;font-size:13px;}' +
     '.hdr .date{margin:4px 0 0;color:#8a9dbf;font-size:11px;}' +
     '.accent{height:3px;background:#ffd200;}' +
     '.body{padding:28px 40px;overflow-wrap:anywhere;}' +
-    'h3{background:#eef2fc;border-left:4px solid #ffd200;color:#0f1e3c;padding:9px 12px 9px 14px;margin:24px 0 10px;font-size:14px;}' +
-    'h4{color:#1e2d5a;margin-top:16px;font-size:12.5px;}' +
-    'li{margin:5px 0 5px 20px;line-height:1.6;font-size:13px;}' +
-    'p{font-size:13px;line-height:1.65;margin:8px 0;overflow-wrap:anywhere;}' +
-    'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px;table-layout:fixed;}' +
-    'th{background:#0f1e3c;color:#fff;text-align:left;padding:6px 8px;font-size:11px;white-space:normal;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;}' +
+    'h3{background:#eef2fc;border-left:4px solid #ffd200;color:#0f1e3c;padding:9px 12px 9px 14px;margin:24px 0 10px;font-size:14px;break-inside:avoid;page-break-inside:avoid;}' +
+    'h4{color:#1e2d5a;margin-top:16px;font-size:12.5px;break-inside:avoid;page-break-inside:avoid;}' +
+    'li{margin:5px 0 5px 20px;line-height:1.6;font-size:13px;overflow-wrap:anywhere;word-break:break-word;}' +
+    'p{font-size:13px;line-height:1.65;margin:8px 0;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;}' +
+    'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px;table-layout:fixed;max-width:100%;break-inside:auto;page-break-inside:auto;}' +
+    'thead{display:table-header-group;}' +
+    'tbody{display:table-row-group;}' +
+    'tr{break-inside:avoid;page-break-inside:avoid;}' +
+    'th{background:#0f1e3c;color:#fff;text-align:left;padding:6px 8px;font-size:11px;white-space:normal;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;}' +
     'td{padding:5px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;}' +
     'tr:nth-child(even) td{background:#f5f7fc;}' +
     '.portalAITable--cols-8 th:nth-child(1),.portalAITable--cols-8 td:nth-child(1){width:12%;}' +
@@ -2596,17 +2351,27 @@ async function portalDownloadAIReport() {
     '.portalAITable--cols-8 th:nth-child(6),.portalAITable--cols-8 td:nth-child(6){width:11%;}' +
     '.portalAITable--cols-8 th:nth-child(7),.portalAITable--cols-8 td:nth-child(7){width:22%;}' +
     '.portalAITable--cols-8 th:nth-child(8),.portalAITable--cols-8 td:nth-child(8){width:19%;}' +
-    '@media print{body{margin:0;}.hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '.portalAITable--cols-6 th:nth-child(1),.portalAITable--cols-6 td:nth-child(1){width:12%;}' +
+    '.portalAITable--cols-6 th:nth-child(2),.portalAITable--cols-6 td:nth-child(2){width:18%;}' +
+    '.portalAITable--cols-6 th:nth-child(3),.portalAITable--cols-6 td:nth-child(3){width:14%;}' +
+    '.portalAITable--cols-6 th:nth-child(4),.portalAITable--cols-6 td:nth-child(4){width:19%;}' +
+    '.portalAITable--cols-6 th:nth-child(5),.portalAITable--cols-6 td:nth-child(5){width:10%;}' +
+    '.portalAITable--cols-6 th:nth-child(6),.portalAITable--cols-6 td:nth-child(6){width:27%;}' +
+    '@media print{html,body{background:#fff;}body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{max-width:none;box-shadow:none;margin:0;} .hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
     '</style></head><body>' +
-    '<div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
+    '<div class="page"><div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
     '<p class="meta">' + teamName + ' &nbsp;·&nbsp; Season ' + season + ' &nbsp;·&nbsp; ' + mode + '</p>' +
     '<p class="date">Generated ' + dateStr + '</p></div>' +
     '<div class="accent"></div>' +
-    '<div class="body">' + htmlBody + '</div>' +
+    '<div class="body">' + htmlBody + '</div></div>' +
     '</body></html>');
   w.document.close();
-  w.focus();
-  w.print();
+  setTimeout(function () {
+    try {
+      w.focus();
+      w.print();
+    } catch (_) {}
+  }, 150);
   portalSetAIStatus('Print dialog opened. Choose Save as PDF.');
 }
 
