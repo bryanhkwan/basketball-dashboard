@@ -2435,7 +2435,16 @@ async function portalDownloadAIReport() {
         i = parsedTable.nextIndex;
         var tableRows = parsedTable.rows;
         var numCols = tableRows[0].length;
-        var colWeights = numCols === 6 ? [0.85, 1.15, 1.05, 1.35, 0.7, 1.9] : [];
+        var colWeights = [];
+        if (numCols === 6) {
+          colWeights = [0.85, 1.15, 1.05, 1.35, 0.7, 1.9];
+        } else if (numCols === 8) {
+          colWeights = [1.15, 0.95, 0.72, 0.82, 1.05, 1.1, 2.2, 2.01];
+        }
+        var tableFontSize = numCols >= 8 ? 6.8 : 7.5;
+        var tableLineStep = numCols >= 8 ? 7.2 : 8;
+        var cellPadX = numCols >= 8 ? 2.5 : 3;
+        var minColWidth = numCols >= 8 ? 18 : 20;
         var totalWeight = 0;
         var colWidths = [];
         for (var cw = 0; cw < numCols; cw++) totalWeight += (colWeights[cw] || 1);
@@ -2445,20 +2454,20 @@ async function portalDownloadAIReport() {
         var headerWrapped = [];
         var headerLineCount = 1;
         for (var hw = 0; hw < numCols; hw++) {
-          headerWrapped[hw] = doc.splitTextToSize(hdr[hw] || '', Math.max(20, colWidths[hw] - 6));
+          headerWrapped[hw] = doc.splitTextToSize(hdr[hw] || '', Math.max(minColWidth, colWidths[hw] - (cellPadX * 2)));
           headerLineCount = Math.max(headerLineCount, headerWrapped[hw].length || 1);
         }
-        var headerH = Math.max(20, headerLineCount * 8 + 8);
+        var headerH = Math.max(20, headerLineCount * tableLineStep + 8);
         checkPage(headerH + 18);
 
         doc.setFillColor(15, 30, 60);
         doc.rect(margin, y - 12, contentW, headerH, 'F');
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
+        doc.setFontSize(tableFontSize);
         doc.setTextColor(255, 255, 255);
         var headerX = margin;
         for (var hc = 0; hc < numCols; hc++) {
-          doc.text(headerWrapped[hc], headerX + 3, y);
+          doc.text(headerWrapped[hc], headerX + cellPadX, y);
           headerX += colWidths[hc];
         }
         y += headerH - 4;
@@ -2470,21 +2479,21 @@ async function portalDownloadAIReport() {
           var wrappedCells = [];
           var lineCount = 1;
           for (var tc = 0; tc < numCols; tc++) {
-            wrappedCells[tc] = doc.splitTextToSize(tableRows[tr][tc] || '', Math.max(20, colWidths[tc] - 6));
+            wrappedCells[tc] = doc.splitTextToSize(tableRows[tr][tc] || '', Math.max(minColWidth, colWidths[tc] - (cellPadX * 2)));
             lineCount = Math.max(lineCount, wrappedCells[tc].length || 1);
           }
-          var rowH = Math.max(16, lineCount * 8 + 6);
+          var rowH = Math.max(16, lineCount * tableLineStep + 6);
           checkPage(rowH + 4);
           if (tr % 2 === 0) {
             doc.setFillColor(243, 245, 252);
             doc.rect(margin, y - 12, contentW, rowH, 'F');
           }
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
+          doc.setFontSize(tableFontSize);
           doc.setTextColor(40, 48, 68);
           var cellX = margin;
           for (var td = 0; td < numCols; td++) {
-            doc.text(wrappedCells[td], cellX + 3, y);
+            doc.text(wrappedCells[td], cellX + cellPadX, y);
             cellX += colWidths[td];
           }
           y += rowH;
@@ -2564,21 +2573,29 @@ async function portalDownloadAIReport() {
   if (!w) { portalSetAIStatus('Popup blocked. Allow popups to export PDF.'); return; }
   var htmlBody = portalFmtAIMarkdown(reportText);
   w.document.write('<!doctype html><html><head><title>Transfer Portal Fit Report</title><style>' +
-    'body{font-family:system-ui,Arial,sans-serif;margin:0;color:#222;}' +
+    'body{font-family:system-ui,Arial,sans-serif;margin:0;color:#222;overflow-wrap:break-word;}' +
     '.hdr{background:#0f1e3c;color:#fff;padding:28px 40px 22px;}' +
     '.hdr h1{margin:0 0 6px;font-size:22px;font-weight:700;}' +
     '.hdr .meta{margin:0;color:#bccce0;font-size:13px;}' +
     '.hdr .date{margin:4px 0 0;color:#8a9dbf;font-size:11px;}' +
     '.accent{height:3px;background:#ffd200;}' +
-    '.body{padding:28px 40px;}' +
+    '.body{padding:28px 40px;overflow-wrap:anywhere;}' +
     'h3{background:#eef2fc;border-left:4px solid #ffd200;color:#0f1e3c;padding:9px 12px 9px 14px;margin:24px 0 10px;font-size:14px;}' +
     'h4{color:#1e2d5a;margin-top:16px;font-size:12.5px;}' +
     'li{margin:5px 0 5px 20px;line-height:1.6;font-size:13px;}' +
-    'p{font-size:13px;line-height:1.65;margin:8px 0;}' +
-    'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px;}' +
-    'th{background:#0f1e3c;color:#fff;text-align:left;padding:6px 8px;font-size:11px;}' +
-    'td{padding:5px 8px;border-bottom:1px solid #e0e0e0;}' +
+    'p{font-size:13px;line-height:1.65;margin:8px 0;overflow-wrap:anywhere;}' +
+    'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px;table-layout:fixed;}' +
+    'th{background:#0f1e3c;color:#fff;text-align:left;padding:6px 8px;font-size:11px;white-space:normal;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;}' +
+    'td{padding:5px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;}' +
     'tr:nth-child(even) td{background:#f5f7fc;}' +
+    '.portalAITable--cols-8 th:nth-child(1),.portalAITable--cols-8 td:nth-child(1){width:12%;}' +
+    '.portalAITable--cols-8 th:nth-child(2),.portalAITable--cols-8 td:nth-child(2){width:10%;}' +
+    '.portalAITable--cols-8 th:nth-child(3),.portalAITable--cols-8 td:nth-child(3){width:7%;}' +
+    '.portalAITable--cols-8 th:nth-child(4),.portalAITable--cols-8 td:nth-child(4){width:8%;}' +
+    '.portalAITable--cols-8 th:nth-child(5),.portalAITable--cols-8 td:nth-child(5){width:11%;}' +
+    '.portalAITable--cols-8 th:nth-child(6),.portalAITable--cols-8 td:nth-child(6){width:11%;}' +
+    '.portalAITable--cols-8 th:nth-child(7),.portalAITable--cols-8 td:nth-child(7){width:22%;}' +
+    '.portalAITable--cols-8 th:nth-child(8),.portalAITable--cols-8 td:nth-child(8){width:19%;}' +
     '@media print{body{margin:0;}.hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
     '</style></head><body>' +
     '<div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
@@ -2604,8 +2621,8 @@ function portalFmtAIMarkdown(text) {
       i = parsedTable.nextIndex;
       var tableRows = parsedTable.rows;
       var numCols = tableRows[0].length;
-      var cells = ln.split('|').slice(1, -1);
-      html += '<table class="portalAITable"><thead><tr>';
+      var tableClass = 'portalAITable portalAITable--cols-' + numCols;
+      html += '<table class="' + tableClass + '"><thead><tr>';
       for (var hc = 0; hc < numCols; hc++) {
         html += '<th>' + tableRows[0][hc] + '</th>';
       }
