@@ -1952,6 +1952,14 @@ function switchLeague(newLeague){
     }
   }).catch(() => {});
 
+  var portalPage = document.getElementById('pagePortal');
+  if (typeof loadPortalEntries === 'function' && portalPage && portalPage.style.display !== 'none') {
+    loadPortalEntries();
+  } else {
+    if (typeof portalRefreshTeamOptions === 'function') portalRefreshTeamOptions();
+    if (typeof portalRefreshScenarioRows === 'function') portalRefreshScenarioRows();
+  }
+
   // Notify AI chat that league changed (clears stale roster context from history)
   if (typeof window._chatOnLeagueSwitch === 'function') window._chatOnLeagueSwitch(newLeague);
   if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {

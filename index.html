@@ -597,8 +597,9 @@
               <th style="width:11%">Value</th>
               <th style="width:13%">Team</th>
               <th style="width:8%">Match</th>
-              <th style="width:5%">Profile</th>
-              <th style="width:6%">Source</th>
+              <th style="width:6%">Profile</th>
+              <th style="width:8%">Target</th>
+              <th style="width:7%">Source</th>
             </tr>
           </thead>
           <tbody id="portalTableBody"></tbody>
@@ -676,6 +677,36 @@
 
       <div class="portalTeamBand" id="portalRecTeamSummary">
         <span class="muted">Select a team to load profile.</span>
+      </div>
+
+      <div class="panel portalPanel portalTargetSection">
+        <div class="panelHead">Players in mind</div>
+        <div class="panelBody portalTargetsBody" style="padding:0">
+          <div class="portalTargetBand">
+            <span class="pill">Shortlist <b id="portalTargetCount">0</b></span>
+            <span id="portalTargetStatus" class="muted">Tag portal players from the board or recommendation list to score them as real-fit scenarios.</span>
+            <button id="portalTargetClearBtn" class="secondary" style="margin-left:auto" disabled>Clear shortlist</button>
+          </div>
+          <div class="portalTargetTableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:18%">Player</th>
+                  <th style="width:13%">Team</th>
+                  <th style="width:8%">Pos</th>
+                  <th style="width:10%">Fit</th>
+                  <th style="width:11%">Scenario</th>
+                  <th style="width:10%">Value</th>
+                  <th style="width:12%">Verdict</th>
+                  <th style="width:12%">Why</th>
+                  <th style="width:6%">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="portalTargetBody"></tbody>
+            </table>
+          </div>
+          <div id="portalTargetEmpty" class="hint portalEmptyState" style="margin:0;opacity:.75">No staff targets tagged yet. Use the board or recommendations to build a shortlist.</div>
+        </div>
       </div>
 
       <div class="portalRecGrid portalWorkspaceGrid">

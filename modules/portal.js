@@ -10,6 +10,7 @@ var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, port
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
+var portalTargetCountEl, portalTargetStatusEl, portalTargetBodyEl, portalTargetEmptyEl, portalTargetClearBtnEl;
 var portalRepResearchBtnEl, portalRepExportBtnEl, portalRepClearBtnEl, portalRepLimitEl;
 var portalRepStatusEl, portalRepBodyEl, portalRepEmptyEl, portalRepCountEl;
 var portalWatchAlertWrapEl, favsPortalAlertWrapEl, favsPortalBadgeEl;
@@ -23,6 +24,7 @@ var portalLastAIReportText = '';
 var portalDetectedDepartures = [];
 var portalSelectedDepartureNames = [];
 var portalWatchAlerts = [];
+var portalScenarioRows = [];
 var portalRepResults = [];
 var portalFilterTimer = null;
 var portalPlayerIndexRef = null;
@@ -61,6 +63,11 @@ function initPortalDOMRefs() {
   portalAIDownloadBtn = document.getElementById('portalAIDownloadBtn');
   portalAIStatusEl = document.getElementById('portalAIStatus');
   portalAIOutputEl = document.getElementById('portalAIOutput');
+  portalTargetCountEl = document.getElementById('portalTargetCount');
+  portalTargetStatusEl = document.getElementById('portalTargetStatus');
+  portalTargetBodyEl = document.getElementById('portalTargetBody');
+  portalTargetEmptyEl = document.getElementById('portalTargetEmpty');
+  portalTargetClearBtnEl = document.getElementById('portalTargetClearBtn');
   portalRepResearchBtnEl = document.getElementById('portalRepResearchBtn');
   portalRepExportBtnEl = document.getElementById('portalRepExportBtn');
   portalRepClearBtnEl = document.getElementById('portalRepClearBtn');
@@ -121,13 +128,13 @@ function portalSyncLeagueUI() {
   }
   if (portalFitSubtitleEl) {
     portalFitSubtitleEl.textContent = isWbb
-      ? 'Select your team, flag the players you could lose, and rank the best On3 portal fits for that roster.'
-      : 'Select your team, pick the player you know is leaving, and find the best portal upgrades for that spot — before it\'s official.';
+      ? 'Select your team, flag the players you could lose, shortlist the portal names you actually like, and score how cleanly they fit that WBB roster.'
+      : 'Select your team, flag the likely departures, shortlist the portal names you actually want, and score how cleanly they fit the roster before it\'s official.';
   }
   if (portalAISubtitleEl) {
     portalAISubtitleEl.textContent = isWbb
-      ? 'Deep analysis using WBB player stats, game logs, and team context from the dashboard data stack. Covers all selected departures.'
-      : 'Deep analysis using player stats, game logs, and team context from the dashboard data stack. Covers all selected departures.';
+      ? 'Deep analysis using WBB player stats, game logs, and team context from the dashboard data stack. If you tag players in mind, the AI grades those targets first.'
+      : 'Deep analysis using player stats, game logs, and team context from the dashboard data stack. If you tag players in mind, the AI grades those targets first.';
   }
 }
 
@@ -175,15 +182,25 @@ function portalGetPlayerIndex() {
   return { exact: portalPlayerIndexExact, loose: portalPlayerIndexLoose };
 }
 
-function portalFindPlayerMatch(name) {
+function portalFindPlayerMatch(name, teamName) {
   if (!name) return null;
   var needle = portalNorm(name);
+  var teamNeedle = portalNorm(teamName || '');
   if (!needle) return null;
+  var players = portalGetAllPlayers() || [];
+  if (teamNeedle) {
+    for (var i = 0; i < players.length; i++) {
+      var player = players[i];
+      if (portalNorm(player && (player.Player || player.Name || '')) !== needle) continue;
+      if (portalNorm(portalGetPlayerTeam(player)) === teamNeedle) return player;
+    }
+  }
   var index = portalGetPlayerIndex();
   if (index.exact[needle]) return index.exact[needle];
   for (var j = 0; j < index.loose.length; j++) {
     var n2 = index.loose[j].norm;
-    if (n2 && (n2.includes(needle) || needle.includes(n2))) return index.loose[j].player;
+    if (!n2 || !(n2.includes(needle) || needle.includes(n2))) continue;
+    if (!teamNeedle || portalNorm(portalGetPlayerTeam(index.loose[j].player)) === teamNeedle) return index.loose[j].player;
   }
   return null;
 }
@@ -783,6 +800,122 @@ function portalRepStorageKey() {
   return portalUserStorageKey('rep_research_' + portalCurrentSport() + '_' + portalGetSeason());
 }
 
+function portalTargetsStorageKey() {
+  return portalUserStorageKey('fit_targets_' + portalCurrentSport() + '_' + portalGetSeason());
+}
+
+function portalNormalizeTargetItem(raw) {
+  raw = raw && typeof raw === 'object' ? raw : {};
+  return {
+    key: String(raw.key || '').trim(),
+    playerName: String(raw.playerName || '').trim(),
+    fromTeam: String(raw.fromTeam || raw.team || '').trim(),
+    position: String(raw.position || '').trim(),
+    source: String(raw.source || 'portal').trim(),
+    url: String(raw.url || '').trim(),
+    addedAt: Number.isFinite(Date.parse(raw.addedAt || '')) ? String(raw.addedAt) : new Date().toISOString(),
+  };
+}
+
+function portalTargetKey(entry, player) {
+  var playerName = portalGetPlayerName(player) || (entry && entry.playerName) || '';
+  var fromTeam = portalGetPlayerTeam(player) || (entry && (entry.fromTeam || entry.team)) || '';
+  return [portalCurrentSport(), portalGetSeason(), portalNorm(playerName), portalNorm(fromTeam)].join('|');
+}
+
+function portalLoadTargetList() {
+  var out = [];
+  var seen = Object.create(null);
+  try {
+    var raw = JSON.parse(localStorage.getItem(portalTargetsStorageKey()) || '[]');
+    (Array.isArray(raw) ? raw : []).forEach(function (item) {
+      var normalized = portalNormalizeTargetItem(item);
+      if (!normalized.key || !normalized.playerName || seen[normalized.key]) return;
+      seen[normalized.key] = true;
+      out.push(normalized);
+    });
+  } catch (_) {}
+  return out;
+}
+
+function portalSaveTargetList(list) {
+  try {
+    localStorage.setItem(portalTargetsStorageKey(), JSON.stringify(Array.isArray(list) ? list : []));
+  } catch (_) {}
+}
+
+function portalTargetListToMap(list) {
+  var out = Object.create(null);
+  (Array.isArray(list) ? list : []).forEach(function (item) {
+    if (item && item.key) out[item.key] = item;
+  });
+  return out;
+}
+
+function portalBuildStoredTarget(entry, player) {
+  return portalNormalizeTargetItem({
+    key: portalTargetKey(entry, player),
+    playerName: portalGetPlayerName(player) || (entry && entry.playerName) || '',
+    fromTeam: portalGetPlayerTeam(player) || (entry && (entry.fromTeam || entry.team)) || '',
+    position: (entry && entry.position) || (player && (player.Position || player.Pos)) || '',
+    source: (entry && entry.source) || 'portal',
+    url: (entry && entry.url) || '',
+    addedAt: new Date().toISOString(),
+  });
+}
+
+function portalToggleTarget(entry, player) {
+  if (!entry || !player) return false;
+  var key = portalTargetKey(entry, player);
+  var list = portalLoadTargetList();
+  var next = [];
+  var removed = false;
+  list.forEach(function (item) {
+    if (item.key === key) {
+      removed = true;
+      return;
+    }
+    next.push(item);
+  });
+  if (!removed) next.unshift(portalBuildStoredTarget(entry, player));
+  portalSaveTargetList(next);
+  portalRefreshScenarioRows();
+  portalRenderTable();
+  portalRenderRecommendations();
+  portalShowToast((portalGetPlayerName(player) || entry.playerName || 'Player') + (removed ? ' removed from shortlist' : ' added to shortlist'));
+  return !removed;
+}
+
+function portalClearTargets() {
+  var list = portalLoadTargetList();
+  if (!list.length) return;
+  var ok = true;
+  try {
+    ok = window.confirm('Clear all tagged portal shortlist targets for the current league and season?');
+  } catch (_) {}
+  if (!ok) return;
+  portalSaveTargetList([]);
+  portalRefreshScenarioRows();
+  portalRenderTable();
+  portalRenderRecommendations();
+  portalShowToast('Portal shortlist cleared');
+}
+
+function portalGetActiveAnalysisRows(limit) {
+  var rows = (portalScenarioRows || []).filter(function (row) {
+    return row && row.player && !row.sameTeam;
+  });
+  if (rows.length) {
+    rows = rows.slice().sort(function (a, b) {
+      return (b.scenarioFit || b.fit || 0) - (a.scenarioFit || a.fit || 0);
+    });
+  } else {
+    rows = (portalRecRows || []).slice();
+  }
+  if (Number.isFinite(limit)) rows = rows.slice(0, Math.max(0, limit));
+  return rows;
+}
+
 function portalLoadRepCacheMap() {
   try {
     var raw = localStorage.getItem(portalRepStorageKey()) || '{}';
@@ -1366,6 +1499,7 @@ async function portalLoadTeamContext(teamName) {
     portalTeamCtx = null;
     if (portalRecTeamSummaryEl) portalRecTeamSummaryEl.innerHTML = '<span class="muted">Select a team to load profile.</span>';
     if (portalReplaceListEl) portalReplaceListEl.innerHTML = '';
+    portalRefreshScenarioRows();
     return null;
   }
 
@@ -1418,6 +1552,7 @@ async function portalLoadTeamContext(teamName) {
   if (portalRecContextEl) portalRecContextEl.style.display = 'none';
   portalDetectDepartures(roster);
   portalRenderDepartureCards(portalDetectedDepartures);
+  portalRefreshScenarioRows();
   return portalTeamCtx;
 }
 
@@ -1441,142 +1576,395 @@ function portalCandidateRisk(player) {
   return flags;
 }
 
-function portalComputeRecommendations() {
-  if (!portalTeamCtx || !portalTeamCtx.roster || !portalTeamCtx.roster.length) {
-    portalRecRows = [];
-    return [];
-  }
+function portalBuildRecommendationContext() {
+  if (!portalTeamCtx || !portalTeamCtx.roster || !portalTeamCtx.roster.length) return null;
+  if (!portalRecDist) portalRecDist = portalBuildDistributions(portalCollectAllPlayers());
 
   var removedNames = portalSelectedReplaceNames();
   var departurePlayers = portalSelectedDeparturePlayers();
-  var removedSet = {};
-  removedNames.forEach(function (n) { removedSet[portalNorm(n)] = true; });
+  var removedSet = Object.create(null);
+  removedNames.forEach(function (name) {
+    removedSet[portalNorm(name)] = true;
+  });
 
-  var baseRoster = portalTeamCtx.roster.filter(function (p) {
-    return !removedSet[portalNorm(portalGetPlayerName(p))];
+  var baseRoster = portalTeamCtx.roster.filter(function (player) {
+    return !removedSet[portalNorm(portalGetPlayerName(player))];
   });
   if (!baseRoster.length) baseRoster = portalTeamCtx.roster.slice();
 
   var defs = portalCategoryDefsForRoster(baseRoster);
   var catBase = portalCategoryScoresForRoster(baseRoster, defs, portalRecDist);
   var catRemoved = removedNames.length
-    ? portalCategoryScoresForRoster(portalTeamCtx.roster.filter(function (p) { return removedSet[portalNorm(portalGetPlayerName(p))]; }), defs, portalRecDist)
+    ? portalCategoryScoresForRoster(portalTeamCtx.roster.filter(function (player) {
+        return removedSet[portalNorm(portalGetPlayerName(player))];
+      }), defs, portalRecDist)
     : null;
-  var priority = portalCategoryPriorityFromTeamStats(portalTeamCtx.stats);
-  var targetValue = portalAverage(departurePlayers.map(function (player) {
-    return portalGetPlayerValuation(player);
-  }));
 
-  var rows = [];
-  portalFiltered.forEach(function (entry) {
-    var m = portalFindPlayerMatch(entry.playerName);
-    if (!m) return;
-    var playerTeam = portalNorm(portalGetPlayerTeam(m));
-    if (playerTeam === portalNorm(portalTeamCtx.team)) return;
+  return {
+    removedNames: removedNames,
+    removedSet: removedSet,
+    departurePlayers: departurePlayers,
+    departureImpactAvg: portalAverage(departurePlayers.map(function (player) {
+      return portalCandidateImpact(player, portalRecDist);
+    })),
+    baseRoster: baseRoster,
+    defs: defs,
+    catBase: catBase,
+    catRemoved: catRemoved,
+    priority: portalCategoryPriorityFromTeamStats(portalTeamCtx.stats),
+    targetValue: portalAverage(departurePlayers.map(function (player) {
+      return portalGetPlayerValuation(player);
+    })),
+  };
+}
 
-    var catPlayer = portalCategoryScoresForPlayer(m, defs, portalRecDist);
-    var needNum = 0;
-    var needDen = 0;
-    var reasonPool = [];
-    defs.forEach(function (cat) {
-      var b = catBase[cat.label];
-      var c = catPlayer[cat.label];
-      var baseNeed = Math.max(0.05, 1 - (Number.isFinite(b) ? b : 0.5));
-      var w = baseNeed * (priority[cat.label] || 1);
-      var contrib = w * (Number.isFinite(c) ? c : 0.5);
-      needNum += contrib;
-      needDen += w;
-      reasonPool.push({
-        label: cat.label,
-        contrib: contrib,
-        cand: c,
-        need: baseNeed,
-      });
-    });
+function portalBuildScenarioSummary(player, ctx, meta) {
+  var scenarioRoster = (ctx.baseRoster || []).concat([player]);
+  var catScenario = portalCategoryScoresForRoster(scenarioRoster, ctx.defs, portalRecDist);
+  var lifts = [];
+  var weightedDeltaNum = 0;
+  var weightedDeltaDen = 0;
 
-    var needFit = needDen > 0 ? (needNum / needDen) : 0.5;
-    var impact = portalCandidateImpact(m, portalRecDist);
-    var replaceGain = null;
-    if (catRemoved) {
-      var rgNum = 0;
-      var rgDen = 0;
-      defs.forEach(function (cat) {
-        var c = catPlayer[cat.label];
-        var r = catRemoved[cat.label];
-        var wt = priority[cat.label] || 1;
-        rgNum += wt * ((Number.isFinite(c) ? c : 0.5) - (Number.isFinite(r) ? r : 0.5));
-        rgDen += wt;
-      });
-      replaceGain = rgDen > 0 ? (rgNum / rgDen) : 0;
-    }
+  (ctx.defs || []).forEach(function (cat) {
+    var before = Number.isFinite(ctx.catBase[cat.label]) ? ctx.catBase[cat.label] : 0.5;
+    var after = Number.isFinite(catScenario[cat.label]) ? catScenario[cat.label] : 0.5;
+    var delta = after - before;
+    var weight = ctx.priority[cat.label] || 1;
+    weightedDeltaNum += weight * delta;
+    weightedDeltaDen += weight;
+    lifts.push({ label: cat.label, delta: delta });
+  });
 
-    var style = 0.5;
-    if (portalTeamCtx.zones && portalTeamCtx.zones.attemptsBreakdown) {
-      var threeShare = portalSafeNum(portalTeamCtx.zones.attemptsBreakdown.threePointJumpers);
-      var shooter = portalSafeNum(m['3P%']);
-      if (threeShare !== null && shooter !== null) {
-        style = (threeShare >= 35 && shooter >= 35) ? 0.72 : (threeShare < 30 && shooter >= 35 ? 0.62 : 0.5);
-      }
-    }
+  lifts.sort(function (a, b) { return b.delta - a.delta; });
+  var weightedDelta = weightedDeltaDen > 0 ? (weightedDeltaNum / weightedDeltaDen) : 0;
+  var impactEdge = (Number.isFinite(meta.impact) ? meta.impact : 0.5) - (ctx.departureImpactAvg == null ? 0.5 : ctx.departureImpactAvg);
+  var deltaMeter = portalClamp01(0.5 + weightedDelta * 4);
+  var impactMeter = portalClamp01(0.5 + impactEdge);
+  var scenarioFit = portalClamp01(
+    0.44 * meta.fit +
+    0.22 * deltaMeter +
+    0.12 * impactMeter +
+    0.12 * meta.valueFit +
+    0.10 * meta.positionFit
+  );
 
-    var positionFit = portalPositionFitScore(m, departurePlayers);
-    var valueFit = portalValueFitScore(m, impact, replaceGain, targetValue);
-    var upside = portalUpsideScore(m, impact, targetValue);
-    var candidateValue = portalGetPlayerValuation(m);
+  var verdict = 'Pass';
+  var tone = 'bad';
+  if (scenarioFit >= 0.78 && weightedDelta >= -0.01 && meta.positionFit >= 0.68) {
+    verdict = 'Strong fit';
+    tone = 'good';
+  } else if (scenarioFit >= 0.67 && weightedDelta >= -0.03) {
+    verdict = 'Solid pick';
+    tone = 'good';
+  } else if (scenarioFit >= 0.56) {
+    verdict = 'Situational';
+    tone = 'warn';
+  }
 
-    var final =
-      0.27 * needFit +
-      0.14 * style +
-      0.14 * impact +
-      0.16 * positionFit +
-      0.17 * valueFit +
-      0.08 * upside +
-      0.04 * 0.55;
-    if (replaceGain !== null) final += 0.16 * replaceGain;
+  var valueView = 'Price sensitive';
+  if (meta.candidateValue === null || meta.targetValue === null || meta.targetValue <= 0) {
+    valueView = meta.valueFit >= 0.72 ? 'Worth the price' : 'Price sensitive';
+  } else if (meta.candidateValue <= meta.targetValue * 0.9 && meta.valueFit >= 0.72) {
+    valueView = 'Value bet';
+  } else if (meta.candidateValue <= meta.targetValue * 1.12) {
+    valueView = meta.valueFit >= 0.68 ? 'Worth the price' : 'Price sensitive';
+  } else if (meta.candidateValue > meta.targetValue * 1.3) {
+    valueView = 'Overpay risk';
+  }
 
-    var risks = portalCandidateRisk(m);
-    if (risks.length) final -= Math.min(0.12, 0.03 * risks.length);
-    final = portalClamp01(final);
+  var reasons = [];
+  var improved = lifts.filter(function (item) { return item.delta > 0.01; }).slice(0, 2);
+  if (improved.length) {
+    reasons.push('Improves ' + improved.map(function (item) { return item.label; }).join(' + '));
+  } else if (weightedDelta < -0.01) {
+    reasons.push('Does not directly fix top team needs');
+  }
+  if (meta.valueFit >= 0.76) {
+    reasons.push(valueView === 'Value bet' ? 'Keeps the deal in a strong value band' : 'Talent jump looks worth the band');
+  } else if (valueView === 'Overpay risk') {
+    reasons.push('Price climbs above the departing value band');
+  }
+  if (meta.positionFit < 0.45) reasons.push('Cross-position swing');
+  if (meta.risks && meta.risks.length) reasons.push('Main risk: ' + meta.risks[0]);
 
-    var reasons = portalBuildRecommendationReasons(reasonPool, {
-      departurePlayers: departurePlayers,
-      positionFit: positionFit,
-      valueFit: valueFit,
-      upside: upside,
-      replaceGain: replaceGain,
-      targetValue: targetValue,
-      candidateValue: candidateValue
-    });
+  return {
+    weightedDelta: weightedDelta,
+    deltaPts: Math.round(weightedDelta * 100),
+    impactEdge: impactEdge,
+    scenarioFit: scenarioFit,
+    verdict: verdict,
+    tone: tone,
+    valueView: valueView,
+    reasons: reasons.slice(0, 3),
+  };
+}
 
-    rows.push({
-      entry: entry,
-      player: m,
-      fit: final,
-      needFit: needFit,
-      style: style,
-      impact: impact,
-      positionFit: positionFit,
-      valueFit: valueFit,
-      upside: upside,
-      replaceGain: replaceGain,
-      positionGroup: portalPlayerPosGroup(m),
-      replacementType: portalReplacementType(positionFit, valueFit, upside, replaceGain, targetValue, candidateValue),
-      candidateValue: candidateValue,
-      targetValue: targetValue,
-      reasons: reasons,
-      risks: risks,
+function portalScoreCandidateEntry(entry, player, ctx) {
+  if (!ctx || !entry || !player) return null;
+  var playerTeam = portalNorm(portalGetPlayerTeam(player));
+  if (playerTeam === portalNorm(portalTeamCtx.team)) return null;
+
+  var catPlayer = portalCategoryScoresForPlayer(player, ctx.defs, portalRecDist);
+  var needNum = 0;
+  var needDen = 0;
+  var reasonPool = [];
+  ctx.defs.forEach(function (cat) {
+    var baseVal = ctx.catBase[cat.label];
+    var candVal = catPlayer[cat.label];
+    var baseNeed = Math.max(0.05, 1 - (Number.isFinite(baseVal) ? baseVal : 0.5));
+    var weight = baseNeed * (ctx.priority[cat.label] || 1);
+    var contrib = weight * (Number.isFinite(candVal) ? candVal : 0.5);
+    needNum += contrib;
+    needDen += weight;
+    reasonPool.push({
+      label: cat.label,
+      contrib: contrib,
+      cand: candVal,
+      need: baseNeed,
     });
   });
 
+  var needFit = needDen > 0 ? (needNum / needDen) : 0.5;
+  var impact = portalCandidateImpact(player, portalRecDist);
+  var replaceGain = null;
+  if (ctx.catRemoved) {
+    var gainNum = 0;
+    var gainDen = 0;
+    ctx.defs.forEach(function (cat) {
+      var cand = catPlayer[cat.label];
+      var removed = ctx.catRemoved[cat.label];
+      var weight = ctx.priority[cat.label] || 1;
+      gainNum += weight * ((Number.isFinite(cand) ? cand : 0.5) - (Number.isFinite(removed) ? removed : 0.5));
+      gainDen += weight;
+    });
+    replaceGain = gainDen > 0 ? (gainNum / gainDen) : 0;
+  }
+
+  var style = 0.5;
+  if (portalTeamCtx.zones && portalTeamCtx.zones.attemptsBreakdown) {
+    var threeShare = portalSafeNum(portalTeamCtx.zones.attemptsBreakdown.threePointJumpers);
+    var shooter = portalSafeNum(player['3P%']);
+    if (threeShare !== null && shooter !== null) {
+      style = (threeShare >= 35 && shooter >= 35) ? 0.72 : (threeShare < 30 && shooter >= 35 ? 0.62 : 0.5);
+    }
+  }
+
+  var positionFit = portalPositionFitScore(player, ctx.departurePlayers);
+  var valueFit = portalValueFitScore(player, impact, replaceGain, ctx.targetValue);
+  var upside = portalUpsideScore(player, impact, ctx.targetValue);
+  var candidateValue = portalGetPlayerValuation(player);
+
+  var final =
+    0.27 * needFit +
+    0.14 * style +
+    0.14 * impact +
+    0.16 * positionFit +
+    0.17 * valueFit +
+    0.08 * upside +
+    0.04 * 0.55;
+  if (replaceGain !== null) final += 0.16 * replaceGain;
+
+  var risks = portalCandidateRisk(player);
+  if (risks.length) final -= Math.min(0.12, 0.03 * risks.length);
+  final = portalClamp01(final);
+
+  var reasons = portalBuildRecommendationReasons(reasonPool, {
+    departurePlayers: ctx.departurePlayers,
+    positionFit: positionFit,
+    valueFit: valueFit,
+    upside: upside,
+    replaceGain: replaceGain,
+    targetValue: ctx.targetValue,
+    candidateValue: candidateValue
+  });
+
+  var row = {
+    entry: entry,
+    player: player,
+    fit: final,
+    needFit: needFit,
+    style: style,
+    impact: impact,
+    positionFit: positionFit,
+    valueFit: valueFit,
+    upside: upside,
+    replaceGain: replaceGain,
+    positionGroup: portalPlayerPosGroup(player),
+    replacementType: portalReplacementType(positionFit, valueFit, upside, replaceGain, ctx.targetValue, candidateValue),
+    candidateValue: candidateValue,
+    targetValue: ctx.targetValue,
+    reasons: reasons,
+    risks: risks,
+  };
+
+  var scenario = portalBuildScenarioSummary(player, ctx, row);
+  row.scenario = scenario;
+  row.scenarioFit = scenario.scenarioFit;
+  row.scenarioVerdict = scenario.verdict;
+  row.scenarioTone = scenario.tone;
+  return row;
+}
+
+function portalRefreshScenarioRows() {
+  var targets = portalLoadTargetList();
+  var ctx = portalBuildRecommendationContext();
+  var rows = [];
+
+  targets.forEach(function (target) {
+    var entry = {
+      playerName: target.playerName,
+      fromTeam: target.fromTeam,
+      team: target.fromTeam,
+      position: target.position,
+      source: target.source,
+      url: target.url,
+    };
+    var player = portalFindPlayerMatch(target.playerName, target.fromTeam);
+    var sameTeam = player && portalTeamCtx && portalNorm(portalGetPlayerTeam(player)) === portalNorm(portalTeamCtx.team);
+    var scored = (!sameTeam && player && ctx) ? portalScoreCandidateEntry(entry, player, ctx) : null;
+    if (scored) {
+      scored.savedTarget = target;
+      rows.push(scored);
+      return;
+    }
+    rows.push({
+      entry: entry,
+      player: player,
+      savedTarget: target,
+      candidateValue: player ? portalGetPlayerValuation(player) : null,
+      targetMissing: !player,
+      sameTeam: !!sameTeam,
+    });
+  });
+
+  rows.sort(function (a, b) {
+    var left = a.scenarioFit || a.fit || 0;
+    var right = b.scenarioFit || b.fit || 0;
+    if (right !== left) return right - left;
+    return String((a.savedTarget && a.savedTarget.addedAt) || '').localeCompare(String((b.savedTarget && b.savedTarget.addedAt) || '')) * -1;
+  });
+
+  portalScenarioRows = rows;
+  portalRenderScenarioRows();
+  return rows;
+}
+
+function portalRenderScenarioRows() {
+  if (!portalTargetBodyEl) return;
+  portalTargetBodyEl.innerHTML = '';
+
+  var rows = portalScenarioRows || [];
+  if (portalTargetCountEl) portalTargetCountEl.textContent = String(rows.length);
+  if (portalTargetClearBtnEl) portalTargetClearBtnEl.disabled = !rows.length;
+
+  if (portalTargetStatusEl) {
+    if (!rows.length) {
+      portalTargetStatusEl.textContent = 'Tag portal players from the board or recommendation list to score them as real-fit scenarios.';
+    } else if (!portalTeamCtx || !portalTeamCtx.roster || !portalTeamCtx.roster.length) {
+      portalTargetStatusEl.textContent = 'Select a team to turn this shortlist into scored fit scenarios.';
+    } else if (!portalSelectedDepartureNames.length) {
+      portalTargetStatusEl.textContent = 'No departures selected. Scenario grades currently reflect overall fit for ' + portalTeamCtx.team + '.';
+    } else {
+      portalTargetStatusEl.textContent = 'Shortlist scored for ' + portalTeamCtx.team + ' against departures: ' + portalSelectedDepartureNames.join(', ') + '. AI analysis will grade these targets first.';
+    }
+  }
+
+  if (!rows.length) {
+    if (portalTargetEmptyEl) portalTargetEmptyEl.style.display = '';
+    return;
+  }
+  if (portalTargetEmptyEl) portalTargetEmptyEl.style.display = 'none';
+
+  rows.forEach(function (row) {
+    var tr = document.createElement('tr');
+    var playerName = row.entry.playerName || portalGetPlayerName(row.player) || 'Unknown';
+    var teamName = row.entry.fromTeam || portalGetPlayerTeam(row.player) || '—';
+    var posLabel = row.entry.position || (row.player && (row.player.Position || row.player.Pos)) || '—';
+    var fitPct = Number.isFinite(row.fit) ? Math.round(row.fit * 100) : null;
+    var scenarioPct = Number.isFinite(row.scenarioFit) ? Math.round(row.scenarioFit * 100) : null;
+    var deltaPts = row.scenario ? row.scenario.deltaPts : null;
+    var deltaClass = deltaPts === null ? 'portalScenarioDelta--flat' : (deltaPts > 0 ? 'portalScenarioDelta--pos' : (deltaPts < 0 ? 'portalScenarioDelta--neg' : 'portalScenarioDelta--flat'));
+    var verdict = row.scenario ? row.scenario.verdict : (row.targetMissing ? 'No match' : (row.sameTeam ? 'Same team' : 'Awaiting team'));
+    var tone = row.scenario ? row.scenario.tone : (row.targetMissing ? 'bad' : 'warn');
+    var valueText = portalFmtMoney(row.candidateValue);
+    if (row.targetValue != null && row.candidateValue != null && row.targetValue > 0) {
+      var pctDelta = Math.round(((row.candidateValue - row.targetValue) / row.targetValue) * 100);
+      valueText += '<div class="muted" style="font-size:10px">' + (pctDelta >= 0 ? '+' : '') + pctDelta + '% vs loss band</div>';
+    }
+
+    var whyText = 'Select a team to score this target.';
+    if (row.scenario && row.scenario.reasons && row.scenario.reasons.length) {
+      whyText = row.scenario.reasons.join(' · ');
+    } else if (row.scenario) {
+      whyText = 'Balanced fit profile with no major red flags from the current scenario model.';
+    } else if (row.sameTeam) {
+      whyText = 'This player is already on the selected team roster, so no portal scenario applies.';
+    } else if (row.targetMissing) {
+      whyText = 'No dashboard player match was found, so the model cannot score this portal target yet.';
+    }
+
+    tr.innerHTML =
+      '<td><b>' + portalEsc(playerName) + '</b><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Shortlist target') + '</div></td>' +
+      '<td>' + portalEsc(teamName) + '</td>' +
+      '<td>' + portalEsc(posLabel) + '</td>' +
+      '<td>' + (fitPct === null ? '—' : ('<span class="portalFitPill">' + fitPct + '</span>')) + '</td>' +
+      '<td>' + (scenarioPct === null ? '—' : ('<span class="portalFitPill">' + scenarioPct + '</span>')) +
+        '<div class="portalScenarioDelta ' + deltaClass + '">' + (deltaPts === null ? 'Awaiting team' : ((deltaPts >= 0 ? '+' : '') + deltaPts + ' need pts')) + '</div></td>' +
+      '<td>' + valueText + '</td>' +
+      '<td><span class="portalVerdictPill portalVerdictPill--' + tone + '">' + portalEsc(verdict) + '</span></td>' +
+      '<td><div style="font-size:11px">' + portalEsc(whyText) + '</div></td>' +
+      '<td><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        (row.player ? '<button class="secondary portalTargetOpen" style="padding:3px 8px;font-size:10px">Open</button>' : '') +
+        '<button class="secondary portalTargetRemove" style="padding:3px 8px;font-size:10px">Remove</button>' +
+      '</div></td>';
+
+    var openBtn = tr.querySelector('.portalTargetOpen');
+    if (openBtn) {
+      openBtn.addEventListener('click', function () {
+        if (typeof openProfile === 'function' && row.player) openProfile(row.player);
+      });
+    }
+    var removeBtn = tr.querySelector('.portalTargetRemove');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        portalToggleTarget(row.entry, row.player || {
+          Player: row.entry.playerName,
+          Team: row.entry.fromTeam,
+          Position: row.entry.position,
+          Pos: row.entry.position,
+        });
+      });
+    }
+
+    portalTargetBodyEl.appendChild(tr);
+  });
+}
+
+function portalComputeRecommendations() {
+  var ctx = portalBuildRecommendationContext();
+  if (!ctx) {
+    portalRecRows = [];
+    portalRefreshScenarioRows();
+    return [];
+  }
+
+  var rows = [];
+  portalFiltered.forEach(function (entry) {
+    var scored = portalScoreCandidateEntry(entry, portalFindPlayerMatch(entry.playerName, entry.fromTeam), ctx);
+    if (scored) rows.push(scored);
+  });
+
   rows.sort(function (a, b) { return b.fit - a.fit; });
-  rows = portalEnforcePositionBalance(rows, departurePlayers);
+  rows = portalEnforcePositionBalance(rows, ctx.departurePlayers);
   portalRecRows = rows.slice(0, 25);
+  portalRefreshScenarioRows();
   return portalRecRows;
 }
 
 function portalRenderRecommendations() {
   if (!portalRecBodyEl) return;
   portalRecBodyEl.innerHTML = '';
+  var targetMap = portalTargetListToMap(portalLoadTargetList());
 
   if (!portalRecRows.length) {
     if (portalRecEmptyEl) portalRecEmptyEl.style.display = '';
@@ -1592,6 +1980,8 @@ function portalRenderRecommendations() {
     var gainTxt = row.replaceGain === null ? '—' : ((row.replaceGain >= 0 ? '+' : '') + Math.round(row.replaceGain * 100) + ' pts');
     var perf = portalSafeNum(row.player.Score) || portalSafeNum(row.player.PerfScore_calc);
     var addDisabled = typeof tbAddPlayer !== 'function';
+    var targetKey = portalTargetKey(row.entry, row.player);
+    var isTargeted = !!targetMap[targetKey];
 
     tr.innerHTML =
       '<td>' + (idx + 1) + '</td>' +
@@ -1604,6 +1994,7 @@ function portalRenderRecommendations() {
       (row.risks.length ? ('<div class="portalRiskText">Risk: ' + row.risks.join(', ') + '</div>') : '') + '</td>' +
       '<td><div style="display:flex;gap:6px;flex-wrap:wrap">' +
       '<button class="tbAddBtn portalRecAdd" ' + (addDisabled ? 'disabled' : '') + '>+ Add</button>' +
+      '<button class="secondary portalRecTarget portalTargetBtn' + (isTargeted ? ' isActive' : '') + '" style="padding:3px 8px;font-size:10px">' + (isTargeted ? 'Targeted' : '+ Target') + '</button>' +
       '<button class="secondary portalRecOpen" style="padding:3px 8px;font-size:10px">Open</button>' +
       '</div></td>';
 
@@ -1621,6 +2012,12 @@ function portalRenderRecommendations() {
     if (btnOpen) {
       btnOpen.addEventListener('click', function () {
         if (typeof openProfile === 'function') openProfile(row.player);
+      });
+    }
+    var btnTarget = tr.querySelector('.portalRecTarget');
+    if (btnTarget) {
+      btnTarget.addEventListener('click', function () {
+        portalToggleTarget(row.entry, row.player);
       });
     }
     portalRecBodyEl.appendChild(tr);
@@ -2225,8 +2622,9 @@ function portalFmtAIMarkdown(text) {
 }
 
 async function portalRunAIAnalysis() {
-  if (!portalRecRows.length || !portalTeamCtx) {
-    portalSetAIStatus('Run recommendations first.');
+  var hasShortlist = (portalScenarioRows || []).some(function (row) { return row && row.player && !row.sameTeam; });
+  if ((!hasShortlist && !portalRecRows.length) || !portalTeamCtx) {
+    portalSetAIStatus(hasShortlist ? 'Select a team first so the shortlist can be analyzed.' : 'Run recommendations first.');
     return;
   }
   if (!portalAIOutputEl) return;
@@ -2243,7 +2641,15 @@ async function portalRunAIAnalysis() {
   var season = portalTeamCtx.season || portalTargetSeason;
   var departures = portalSelectedDepartureNames.slice();
   var topPickCount = Math.max(8, departures.length * 5 + 2);
-  var topPicks = (portalRecRows || []).slice(0, topPickCount);
+  var usingShortlist = hasShortlist;
+  var topPicks = portalGetActiveAnalysisRows(topPickCount);
+  if (!topPicks.length) topPicks = (portalRecRows || []).slice(0, topPickCount);
+  if (!topPicks.length) {
+    portalSetAIStatus('No scored portal targets available yet.');
+    portalAIAnalyzeBtn.disabled = false;
+    if (portalAIDownloadBtn) portalAIDownloadBtn.disabled = false;
+    return;
+  }
 
   // ── Phase 1: Fetch supporting player/team data for deep analysis ──
   portalSetAIStatus('Fetching player and team context for ' + teamName + '...');
@@ -2345,6 +2751,11 @@ async function portalRunAIAnalysis() {
       classYear: portalGetPlayerClass(p),
       valuation: row.candidateValue != null ? row.candidateValue : portalGetPlayerValuation(p),
       fitScore: Math.round((row.fit || 0) * 100),
+      scenarioFit: row.scenarioFit != null ? Math.round((row.scenarioFit || 0) * 100) : null,
+      scenarioDeltaPts: row.scenario ? row.scenario.deltaPts : null,
+      scenarioVerdict: row.scenario ? row.scenario.verdict : null,
+      scenarioValueView: row.scenario ? row.scenario.valueView : null,
+      scenarioReasons: row.scenario ? row.scenario.reasons : [],
       replaceGainPts: row.replaceGain == null ? null : Math.round(row.replaceGain * 100),
       replacementType: row.replacementType || 'Fit',
       reasons: row.reasons,
@@ -2377,7 +2788,7 @@ async function portalRunAIAnalysis() {
   });
   recommendedProfiles.forEach(function (r, i) { r.rank = i + 1; });
 
-  portalSetAIStatus('Fetching player trend context for departures and top fits...');
+  portalSetAIStatus(usingShortlist ? 'Fetching player trend context for shortlist targets...' : 'Fetching player trend context for departures and top fits...');
   var logTargets = departureProfiles.concat(recommendedProfiles);
   for (var li = 0; li < logTargets.length; li++) {
     var profile = logTargets[li];
@@ -2393,12 +2804,15 @@ async function portalRunAIAnalysis() {
   // ── Phase 2: Build deep analysis context ──
   portalSetAIStatus('Running ' + sportLabelShort + ' portal analysis with Gemini...');
   portalAIOutputEl.innerHTML = '<div class="thDeepLoading"><span class="thDeepSpinner"></span> Analyzing ' +
-    departures.length + ' departure' + (departures.length !== 1 ? 's' : '') +
-    ' and ' + recommendedProfiles.length + ' replacement candidates for ' + sportLabelShort + '...</div>';
+    (usingShortlist
+      ? (recommendedProfiles.length + ' shortlisted target' + (recommendedProfiles.length !== 1 ? 's' : '') + ' for ' + sportLabelShort)
+      : (departures.length + ' departure' + (departures.length !== 1 ? 's' : '') + ' and ' + recommendedProfiles.length + ' replacement candidates for ' + sportLabelShort)) +
+    '...</div>';
 
   var deepCtx = {
     team: teamName,
     season: season,
+    analysisMode: usingShortlist ? 'staff-shortlist' : 'replacement-board',
     teamRatings: portalTeamCtx.ratings || null,
     teamStats: portalTeamCtx.stats || null,
     teamShotProfile: portalTeamCtx.zones || null,
@@ -2407,56 +2821,95 @@ async function portalRunAIAnalysis() {
     recommendations: recommendedProfiles,
   };
 
-  var prompt =
-    'You are an elite ' + sportLabel + ' roster strategist and transfer portal analyst. ' +
-    'Analyze the following team situation in depth using ALL the structured data provided.\n\n' +
-    '## Context\n' +
-    '**' + teamName + '** (' + season + ' season, ' + leagueTag + ') has ' + departures.length +
-    ' player' + (departures.length !== 1 ? 's' : '') + ' departing via the transfer portal. ' +
-    'Your job is to evaluate the top ' + recommendedProfiles.length + ' portal replacement candidates.\n\n' +
-    '## Instructions\n' +
-    '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
-    '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
-    '- Treat position realism as a real constraint. If the team loses a guard, make sure the core replacement plan stays guard-focused unless there is a clear roster-level reason to pivot big/wing, and vice versa for frontcourt losses.\n' +
-    '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats, shooting profile, recent-game summary, valuation tier, and role against what was lost.\n' +
-    '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
-    '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
-    '- Do not blindly chase the highest raw performer. Weigh acquisition realism, similar valuation tiers, bang-for-buck, and upside/potential. Better players often cost materially more and may be unrealistic.\n' +
-    '- Use the fitBreakdown fields to separate direct replacements, value plays, upgrade bets, and upside swings.\n' +
-    '- If a candidate is notably more expensive than the departing player, say whether the talent jump is worth it or likely unrealistic for that value band.\n' +
-    '- Give a practical priority order: who to pursue first and why.\n' +
-    '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n' +
-    '- Use game-log trend context when it is available to call out consistency, late-season momentum, or volatility. Do not invent play-by-play data if it is not in the structured context.\n' +
-    '- If shooting or zone data is missing, do not guess. Say the data is thinner there and lean on box-score production, efficiency, role, lineup fit, and team context instead.\n' +
-    '- Be direct and business-minded: note where the team is clearly upgrading, treading water, or accepting risk.\n' +
-    (isWbb
-      ? '- On the women\'s side, call out backcourt/wing/post balance, ball security, shot volume, and rebounding load when they materially change the roster outlook.\n\n'
-      : '- On the men\'s side, call out spacing, rim pressure, defensive playmaking, and glass impact when they materially change the roster outlook.\n\n') +
-    'Return detailed markdown with these sections:\n' +
-    '## What You Lose (per departure)\n' +
-    '## Best Replacement Matches\n' +
-    'For EACH departing player, provide a markdown table with EXACTLY 5 replacement candidates ranked from the most premium/expensive option down to the most affordable bang-for-buck option.\n' +
-    'Use this exact table format for each departing player (one table per player):\n\n' +
-    '### Replacing [Departing Player Name]\n' +
-    '| Tier | Player | From | Key Stats | Cost | Why This Pick |\n' +
-    '|------|--------|------|-----------|------|---------------|\n' +
-    '| Premium | ... | ... | ... | $$$ | ... |\n' +
-    '| Upgrade | ... | ... | ... | $$ | ... |\n' +
-    '| Direct Fit | ... | ... | ... | $$ | ... |\n' +
-    '| Value Play | ... | ... | ... | $ | ... |\n' +
-    '| Sleeper | ... | ... | ... | $ | ... |\n\n' +
-    'Tier definitions:\n' +
-    '- Premium = highest-ceiling target, may cost more than the departing player\n' +
-    '- Upgrade = clear step up in at least one area, moderate cost\n' +
-    '- Direct Fit = closest statistical and role match to the departing player\n' +
-    '- Value Play = solid contributor at a lower valuation tier -- bang for your buck\n' +
-    '- Sleeper = under-the-radar upside pick, youngest or lowest-minute breakout candidate\n\n' +
-    'In the Key Stats column, include PPG/eFG%/APG or RPG as a compact slash-separated line (e.g. "14.2 PPG / 54% eFG / 4.1 APG"). Keep Why This Pick to 1-2 sentences max. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n' +
-    'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row. Do not insert blank lines between table rows.\n\n' +
-    '## Combined Impact (net team improvement or regression)\n' +
-    '## Portal Priority (ordered action plan — who to call first)\n' +
-    '## Risks & Watchouts\n\n' +
-    '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```';
+  var prompt = usingShortlist
+    ? (
+      'You are an elite ' + sportLabel + ' roster strategist and transfer portal analyst. ' +
+      'Analyze the following staff-shortlisted portal targets in depth using ALL the structured data provided.\n\n' +
+      '## Context\n' +
+      '**' + teamName + '** (' + season + ' season, ' + leagueTag + ') is evaluating ' + recommendedProfiles.length +
+      ' portal target' + (recommendedProfiles.length !== 1 ? 's' : '') + ' the staff already has in mind.' +
+      (departures.length
+        ? (' The staff is also planning around ' + departures.length + ' likely departure' + (departures.length !== 1 ? 's' : '') + ': ' + departures.join(', ') + '.')
+        : ' No departures are locked in, so judge each target against the full current roster fit.') + '\n\n' +
+      '## Instructions\n' +
+      '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
+      '- Treat fitScore, scenarioFit, scenarioVerdict, scenarioDeltaPts, scenarioValueView, fitBreakdown, replaceGainPts, valueDeltaPct, reasons, scenarioReasons, and risks as quantitative guardrails.\n' +
+      '- Do NOT simply repeat the deterministic verdict. Use it as a starting point, then explain whether you agree or disagree and why.\n' +
+      '- For EACH shortlisted target, clearly say whether the player is a Strong Fit, Solid Pick, Situational, or Pass.\n' +
+      '- Explain what real roster problem the player solves, whether the price band looks justified, and what the biggest risk is.\n' +
+      '- If departures are selected, explain how directly each target replaces what is leaving. If no departures are selected, focus on overall team need and roster balance.\n' +
+      '- Use game-log trend context when it is available to call out consistency, late-season momentum, or volatility. Do not invent play-by-play data if it is not in the structured context.\n' +
+      '- If shooting or zone data is missing, do not guess. Say the data is thinner there and lean on box-score production, efficiency, role, lineup fit, and team context instead.\n' +
+      '- Be direct and business-minded: note where the staff is clearly buying a real answer, overpaying for a name, or taking an upside gamble.\n' +
+      (isWbb
+        ? '- On the women\'s side, call out backcourt/wing/post balance, ball security, shot volume, and rebounding load when they materially change the roster outlook.\n\n'
+        : '- On the men\'s side, call out spacing, rim pressure, defensive playmaking, and glass impact when they materially change the roster outlook.\n\n') +
+      'Return detailed markdown with these sections:\n' +
+      '## Shortlist Verdicts\n' +
+      'Use this exact table format:\n\n' +
+      '| Player | From | Model Fit | Scenario | AI Verdict | Value View | Why It Works | Main Risk |\n' +
+      '|--------|------|-----------|----------|------------|------------|--------------|-----------|\n' +
+      '| ... | ... | 82 | 79 | Solid Pick | Price sensitive | ... | ... |\n\n' +
+      'AI Verdict must be one of: Strong Fit, Solid Pick, Situational, Pass.\n' +
+      'Value View must be one of: Worth the price, Price sensitive, Value bet, Overpay risk.\n' +
+      'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row. Do not insert blank lines between table rows.\n\n' +
+      '## Best Overall Pick\n' +
+      '## Best Budget Swing\n' +
+      '## If The Asking Price Climbs\n' +
+      '## Final Priority Order\n\n' +
+      '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```'
+    )
+    : (
+      'You are an elite ' + sportLabel + ' roster strategist and transfer portal analyst. ' +
+      'Analyze the following team situation in depth using ALL the structured data provided.\n\n' +
+      '## Context\n' +
+      '**' + teamName + '** (' + season + ' season, ' + leagueTag + ') has ' + departures.length +
+      ' player' + (departures.length !== 1 ? 's' : '') + ' departing via the transfer portal. ' +
+      'Your job is to evaluate the top ' + recommendedProfiles.length + ' portal replacement candidates.\n\n' +
+      '## Instructions\n' +
+      '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
+      '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
+      '- Treat position realism as a real constraint. If the team loses a guard, make sure the core replacement plan stays guard-focused unless there is a clear roster-level reason to pivot big/wing, and vice versa for frontcourt losses.\n' +
+      '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats, shooting profile, recent-game summary, valuation tier, and role against what was lost.\n' +
+      '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
+      '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
+      '- Do not blindly chase the highest raw performer. Weigh acquisition realism, similar valuation tiers, bang-for-buck, and upside/potential. Better players often cost materially more and may be unrealistic.\n' +
+      '- Use the fitBreakdown fields to separate direct replacements, value plays, upgrade bets, and upside swings.\n' +
+      '- If a candidate is notably more expensive than the departing player, say whether the talent jump is worth it or likely unrealistic for that value band.\n' +
+      '- Give a practical priority order: who to pursue first and why.\n' +
+      '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n' +
+      '- Use game-log trend context when it is available to call out consistency, late-season momentum, or volatility. Do not invent play-by-play data if it is not in the structured context.\n' +
+      '- If shooting or zone data is missing, do not guess. Say the data is thinner there and lean on box-score production, efficiency, role, lineup fit, and team context instead.\n' +
+      '- Be direct and business-minded: note where the team is clearly upgrading, treading water, or accepting risk.\n' +
+      (isWbb
+        ? '- On the women\'s side, call out backcourt/wing/post balance, ball security, shot volume, and rebounding load when they materially change the roster outlook.\n\n'
+        : '- On the men\'s side, call out spacing, rim pressure, defensive playmaking, and glass impact when they materially change the roster outlook.\n\n') +
+      'Return detailed markdown with these sections:\n' +
+      '## What You Lose (per departure)\n' +
+      '## Best Replacement Matches\n' +
+      'For EACH departing player, provide a markdown table with EXACTLY 5 replacement candidates ranked from the most premium/expensive option down to the most affordable bang-for-buck option.\n' +
+      'Use this exact table format for each departing player (one table per player):\n\n' +
+      '### Replacing [Departing Player Name]\n' +
+      '| Tier | Player | From | Key Stats | Cost | Why This Pick |\n' +
+      '|------|--------|------|-----------|------|---------------|\n' +
+      '| Premium | ... | ... | ... | $$$ | ... |\n' +
+      '| Upgrade | ... | ... | ... | $$ | ... |\n' +
+      '| Direct Fit | ... | ... | ... | $$ | ... |\n' +
+      '| Value Play | ... | ... | ... | $ | ... |\n' +
+      '| Sleeper | ... | ... | ... | $ | ... |\n\n' +
+      'Tier definitions:\n' +
+      '- Premium = highest-ceiling target, may cost more than the departing player\n' +
+      '- Upgrade = clear step up in at least one area, moderate cost\n' +
+      '- Direct Fit = closest statistical and role match to the departing player\n' +
+      '- Value Play = solid contributor at a lower valuation tier -- bang for your buck\n' +
+      '- Sleeper = under-the-radar upside pick, youngest or lowest-minute breakout candidate\n\n' +
+      'In the Key Stats column, include PPG/eFG%/APG or RPG as a compact slash-separated line (e.g. "14.2 PPG / 54% eFG / 4.1 APG"). Keep Why This Pick to 1-2 sentences max. Use the fitScore, valuation, stats, and fitBreakdown to assign tiers accurately. Do NOT repeat the same player across multiple departing-player tables unless they genuinely fit both roles.\n' +
+      'IMPORTANT: Every table row MUST start and end with a pipe character |. Always include the trailing | on every row. Do not insert blank lines between table rows.\n\n' +
+      '## Combined Impact (net team improvement or regression)\n' +
+      '## Portal Priority (ordered action plan — who to call first)\n' +
+      '## Risks & Watchouts\n\n' +
+      '```json\n' + JSON.stringify(deepCtx, null, 2) + '\n```'
+    );
 
   try {
     var res = await fetch(PORTAL_GEMINI_PROXY_URL, {
@@ -2476,7 +2929,11 @@ async function portalRunAIAnalysis() {
       .trim();
     if (!text) throw new Error('Empty AI response');
     portalLastAIReportText = text;
-    portalSetAIStatus('Done - analyzed ' + departures.length + ' departure(s) using ' + sportLabelShort + ' team and player context');
+    portalSetAIStatus(
+      usingShortlist
+        ? ('Done - graded ' + recommendedProfiles.length + ' shortlist target(s) using ' + sportLabelShort + ' team and player context')
+        : ('Done - analyzed ' + departures.length + ' departure(s) using ' + sportLabelShort + ' team and player context')
+    );
     portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' + portalFmtAIMarkdown(text) + '</div>';
   } catch (e) {
     portalLastAIReportText = '';
@@ -2658,12 +3115,13 @@ function portalRenderTable() {
   portalTableBodyEl.innerHTML = '';
 
   var matched = 0;
+  var targetMap = portalTargetListToMap(portalLoadTargetList());
   var frag = document.createDocumentFragment();
   portalFiltered.forEach(function (it) {
     var tr = document.createElement('tr');
     tr.id = portalAlertDomId(portalEntryKey(it));
 
-    var match = portalFindPlayerMatch(it.playerName);
+    var match = portalFindPlayerMatch(it.playerName, it.fromTeam);
     if (match) matched++;
     var ls = (it.status || '').toLowerCase();
     var statusColor = ls === 'entered' ? 'var(--good)' : ls === 'expected' ? 'var(--warn)' : 'var(--muted)';
@@ -2727,6 +3185,23 @@ function portalRenderTable() {
       tdProfile.textContent = '—';
     }
 
+    var tdTarget = document.createElement('td');
+    if (match) {
+      var targetKey = portalTargetKey(it, match);
+      var isTargeted = !!targetMap[targetKey];
+      var targetBtn = document.createElement('button');
+      targetBtn.className = 'secondary portalTargetBtn' + (isTargeted ? ' isActive' : '');
+      targetBtn.textContent = isTargeted ? 'Targeted' : '+ Target';
+      targetBtn.title = isTargeted ? 'Remove from Portal Fit Lab shortlist' : 'Add to Portal Fit Lab shortlist';
+      targetBtn.addEventListener('click', function () {
+        portalToggleTarget(it, match);
+      });
+      tdTarget.appendChild(targetBtn);
+    } else {
+      tdTarget.textContent = 'No data';
+      tdTarget.className = 'muted';
+    }
+
     var tdSrc = document.createElement('td');
     var a = document.createElement('a');
     a.href = it.url || '#';
@@ -2748,6 +3223,7 @@ function portalRenderTable() {
     tr.appendChild(tdTeam);
     tr.appendChild(tdMatch);
     tr.appendChild(tdProfile);
+    tr.appendChild(tdTarget);
     tr.appendChild(tdSrc);
     frag.appendChild(tr);
   });
@@ -2876,12 +3352,14 @@ async function loadPortalEntries() {
     portalRefreshWatchAlerts();
     portalNotifyNewWatchAlerts();
     portalRefreshTeamOptions();
+    portalRefreshScenarioRows();
   } catch (e) {
     portalItems = [];
     portalFiltered = [];
     portalWatchAlerts = [];
     portalRenderTable();
     portalRenderWatchAlerts();
+    portalRefreshScenarioRows();
     portalSetStatus('Load failed');
     if (portalEmptyEl) {
       portalEmptyEl.style.display = '';
@@ -2971,9 +3449,16 @@ function initPortalPage() {
     });
   }
 
+  if (portalTargetClearBtnEl) {
+    portalTargetClearBtnEl.addEventListener('click', function () {
+      portalClearTargets();
+    });
+  }
+
   portalRefreshTeamOptions();
   portalRenderWatchAlerts();
   portalRenderRepResults();
+  portalRefreshScenarioRows();
 }
 
 window.TransferPortal = {
