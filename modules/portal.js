@@ -1825,19 +1825,38 @@ function portalBuildReportFileName() {
   return safe + '.pdf';
 }
 
+function portalPrepMarkdownTableLine(line) {
+  return String(line || '')
+    .trim()
+    .replace(/^[-*+]\s+/, '')
+    .replace(/^\d+\.\s+/, '')
+    .trim();
+}
+
 function portalIsMarkdownTableLine(line) {
-  var trimmed = (line || '').trim();
+  var trimmed = portalPrepMarkdownTableLine(line);
   if (!trimmed || /^```/.test(trimmed)) return false;
+  if (/^#{1,6}\s+/.test(trimmed)) return false;
   var pipeCount = (trimmed.match(/\|/g) || []).length;
-  return pipeCount >= 2 && (/^\|/.test(trimmed) || /\s\|\s/.test(trimmed));
+  if (pipeCount < 2) return false;
+  return /^\|/.test(trimmed) || /\|$/.test(trimmed) || /\s\|\s/.test(trimmed) || pipeCount >= 4;
 }
 
 function portalNormalizeMarkdownTableLine(line) {
-  var trimmed = (line || '').trim();
+  var trimmed = portalPrepMarkdownTableLine(line);
   if (!portalIsMarkdownTableLine(trimmed)) return '';
   if (trimmed.charAt(0) !== '|') trimmed = '| ' + trimmed;
   if (trimmed.charAt(trimmed.length - 1) !== '|') trimmed += ' |';
   return trimmed;
+}
+
+function portalIsMarkdownTableSeparatorRow(cells) {
+  if (!cells || !cells.length) return false;
+  for (var i = 0; i < cells.length; i++) {
+    var compact = String(cells[i] || '').replace(/\s+/g, '');
+    if (!compact || !/^:?-{3,}:?$/.test(compact)) return false;
+  }
+  return true;
 }
 
 function portalParseMarkdownTable(lines, startIndex) {
@@ -1860,7 +1879,7 @@ function portalParseMarkdownTable(lines, startIndex) {
     var cells = normalized.split('|').slice(1, -1).map(function(c) {
       return c.trim().replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1');
     });
-    if (/^[\s:|-]+$/.test(cells.join('|'))) {
+    if (portalIsMarkdownTableSeparatorRow(cells)) {
       sawSeparator = true;
       idx++;
       continue;
@@ -1868,7 +1887,7 @@ function portalParseMarkdownTable(lines, startIndex) {
     rows.push(cells);
     idx++;
   }
-  if (!rows.length || (!sawSeparator && rows.length < 2)) return null;
+  if (rows.length < 2) return null;
   var columnCount = rows[0].length;
   for (var r = 1; r < rows.length; r++) {
     if (rows[r].length > columnCount) {
