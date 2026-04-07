@@ -61,6 +61,8 @@
     #playersGrid{align-items:start;grid-template-columns:minmax(0,1fr)}
     .playersBoardCard{display:flex;flex-direction:column;gap:14px;padding:20px 20px 18px}
     .playersBoardMeta{align-items:flex-start;padding:0 2px}
+    .playersViewControl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .playersViewControl label{margin:0}
     .playersSnapshotStrip{margin-top:0}
     .playersSnapshotStrip .pill{background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));border-color:rgba(255,255,255,.08);border-top-color:rgba(var(--accent-rgb),.34)}
     .playersTableShell{border-radius:18px;background:rgba(5,11,20,.34);border:1px solid rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
@@ -184,6 +186,16 @@
     .scrollY table{border:none;border-radius:0}
     .link{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;transition:opacity .15s}
     .link:hover{opacity:.8;text-decoration:underline}
+    .playersNameCell{display:flex;flex-direction:column;gap:4px;white-space:normal}
+    .playersProjectionBadges{display:flex;gap:4px;flex-wrap:wrap}
+    .playersProjectionBadge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;border:1px solid transparent;font-size:9.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase}
+    .playersProjectionBadge--good{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.3);color:#7ff0bb}
+    .playersProjectionBadge--warn{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.26);color:#fde68a}
+    .playersProjectionBadge--bad{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.22);color:#fecaca}
+    .playersProjectionBadge--neutral{background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.22);color:#dbe6f3}
+    .playersProjectionValueCell{white-space:normal}
+    .playersProjectionValueMain{font-weight:800;color:#f3f8ff}
+    .playersProjectionValueSub{margin-top:3px;font-size:10px;color:var(--muted)}
     .rightstack{display:flex;flex-direction:column;gap:16px;min-width:0}
     .rightstack.rightstackHidden{display:none}
     .weights{max-height:300px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
@@ -227,6 +239,23 @@
     .panel{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
     .panelHead{padding:10px 16px;border-bottom:1px solid var(--line);border-left:3px solid rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.03);font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     .panelBody{padding:14px}
+    .profileProjectionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+    .profileProjectionStat{padding:12px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.025)}
+    .profileProjectionStat--good{border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.07)}
+    .profileProjectionStat--warn{border-color:rgba(250,204,21,.24);background:rgba(250,204,21,.07)}
+    .profileProjectionStat--bad{border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.06)}
+    .profileProjectionStatLabel{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+    .profileProjectionStatValue{margin-top:8px;font-size:20px;font-weight:800;color:#f4f8ff}
+    .profileProjectionStatSub{margin-top:4px;font-size:11px;line-height:1.5;color:var(--muted)}
+    .profileProjectionRangeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    .profileProjectionRangeCard{padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025)}
+    .profileProjectionRangeCard--good{border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.07)}
+    .profileProjectionRangeCard--warn{border-color:rgba(250,204,21,.24);background:rgba(250,204,21,.07)}
+    .profileProjectionRangeCard--bad{border-color:rgba(248,113,113,.2);background:rgba(248,113,113,.06)}
+    .profileProjectionRangeLabel{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+    .profileProjectionRangeValue{margin-top:8px;font-size:20px;font-weight:800;color:#f4f8ff}
+    .profileProjectionRangeSub{margin-top:4px;font-size:11px;line-height:1.5;color:var(--muted)}
+    .profileProjectionNote{margin-top:12px;font-size:11.5px;line-height:1.6;color:var(--muted)}
     .scoreRow{display:flex;justify-content:space-between;gap:16px;align-items:end}
     .big{font-size:30px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
     .muted{color:var(--muted)}.mini{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
@@ -243,6 +272,7 @@
     .learnMoreBtn:hover{background:rgba(var(--accent-rgb),.18);border-color:rgba(var(--accent-rgb),.5);transform:translateY(-1px);box-shadow:0 4px 12px rgba(var(--accent-rgb),.12)}
     .learnMoreBtn:active{transform:translateY(0)}
     .learnMoreBtn svg{flex-shrink:0}
+    @media(max-width:720px){.profileProjectionGrid,.profileProjectionRangeGrid{grid-template-columns:1fr}}
     /* Conference multiplier panel */
     .confScroll{max-height:280px;overflow:auto;border-radius:var(--r);border:1px solid var(--line)}
     .confScroll table{border:none;border-radius:0;table-layout:fixed;width:100%}

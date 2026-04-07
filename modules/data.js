@@ -19,6 +19,12 @@ var sort = { key:'ActualValuation_calc', dir:'desc' };
 var baseStatsAll = [];
 var lastPerfAvg = NaN, lastPerfStar = NaN;
 var leagueRosters = {MBB:{tb:[],opp:[]}, WBB:{tb:[],opp:[]}};
+var playerValueView = 'production';
+
+try {
+  var _savedPlayerValueView = localStorage.getItem('players_value_view_v1');
+  if (_savedPlayerValueView === 'projection') playerValueView = 'projection';
+} catch (_) {}
 
 // Career history cache — keyed by player name (lowercase), value: [{_season, ...stats}, …]
 var careerData = {};
@@ -63,6 +69,7 @@ var confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
 var gsUrlInput, gsKeyInput, loadGsBtn, recalcBtn, exportBtn, resetWeightsBtn, resetValBtn;
 var searchInput, warn, fitPresetEl, weightsBody, showSelectedOnlyEl, advancedDirEl;
 var playersHead, playersBody, activeSheetEl, activeFitEl;
+var playerValueViewEl, activeProjectionEl;
 var wTotalLocalEl, wRemainingEl, wOverBoxEl, wOverEl;
 var kpiPlayers, kpiStats, kpiTotalW, kpiAvgPerf, kpiStarPerf;
 var avgPayEl, minPayEl, maxPayEl, starValueEl, starPctEl, mpModeEl, mpPctEl;
@@ -89,6 +96,8 @@ function initDataDOMRefs(){
   playersBody = document.getElementById('playersBody');
   activeSheetEl = document.getElementById('activeSheet');
   activeFitEl = document.getElementById('activeFit');
+  playerValueViewEl = document.getElementById('playerValueView');
+  activeProjectionEl = document.getElementById('activeProjection');
   wTotalLocalEl = document.getElementById('wTotalLocal');
   wRemainingEl = document.getElementById('wRemaining');
   wOverBoxEl = document.getElementById('wOverBox');
@@ -426,6 +435,255 @@ function getMpMultiplier(mp, mpPctl){
   return Math.min(1, Math.sqrt(mp / mpPctl));
 }
 
+function setPlayerValueView(mode, opts){
+  const next = mode === 'projection' ? 'projection' : 'production';
+  playerValueView = next;
+  if(activeProjectionEl) activeProjectionEl.textContent = next === 'projection' ? 'Projection' : 'Production';
+  if(playerValueViewEl && playerValueViewEl.value !== next) playerValueViewEl.value = next;
+  if(!(opts && opts.skipPersist)){
+    try { localStorage.setItem('players_value_view_v1', next); } catch (_) {}
+  }
+  return playerValueView;
+}
+
+function projectionGetGamesPlayed(row){
+  const keys = ['G', 'GP', 'Games', 'GamesPlayed', 'gamesPlayed'];
+  for(const key of keys){
+    const value = safeNum(row[key]);
+    if(Number.isFinite(value)) return value;
+  }
+  return NaN;
+}
+
+function projectionGetMinutesPerGame(row){
+  const keys = ['MP', 'MPG', 'Minutes', 'MinutesPerGame', 'avgMinutes'];
+  for(const key of keys){
+    const value = safeNum(row[key]);
+    if(Number.isFinite(value)) return value;
+  }
+  return NaN;
+}
+
+function projectionGetTotalMinutes(row){
+  const games = projectionGetGamesPlayed(row);
+  const minutes = projectionGetMinutesPerGame(row);
+  if(Number.isFinite(games) && Number.isFinite(minutes)) return games * minutes;
+  if(Number.isFinite(minutes)) return minutes;
+  return NaN;
+}
+
+function projectionNormalizeClass(value){
+  const raw = (value || '').toString().trim().toLowerCase();
+  if(!raw) return '';
+  if(raw.startsWith('gr') || raw.startsWith('5')) return 'Gr';
+  if(raw.startsWith('sr') || raw === '4' || raw === 'senior') return 'Sr';
+  if(raw.startsWith('jr') || raw === '3' || raw === 'junior') return 'Jr';
+  if(raw.startsWith('so') || raw === '2' || raw === 'sophomore') return 'So';
+  if(raw.startsWith('fr') || raw === '1' || raw === 'freshman') return 'Fr';
+  return value.toString().trim();
+}
+
+function projectionClassConfidence(cls){
+  switch(projectionNormalizeClass(cls)){
+    case 'Fr': return 0.62;
+    case 'So': return 0.74;
+    case 'Jr': return 0.86;
+    case 'Sr': return 0.92;
+    case 'Gr': return 0.95;
+    default: return 0.78;
+  }
+}
+
+function projectionGetPriorCareerEntries(row){
+  const key = normalizeName(row.Player || row.Name || '');
+  if(!key || !careerData[key] || !careerData[key].length) return [];
+  return careerData[key].filter(entry => Number(entry && entry._season) < Number(_currentDataSeason || 0));
+}
+
+function projectionGetStatusText(row){
+  const keys = ['Injury Status', 'Injury_Status', 'InjuryStatus', 'Medical Risk', 'Medical_Risk', 'Availability', 'Status'];
+  for(const key of keys){
+    const value = (row[key] ?? '').toString().trim();
+    if(value) return value;
+  }
+  return '';
+}
+
+function projectionGetManualBoost(row){
+  const keys = ['ProjectionBoost', 'Projection Boost', 'FilmBoost', 'Film Boost', 'ScoutBoost', 'Scout Boost', 'ProjectionUpside'];
+  for(const key of keys){
+    const numeric = safeNum(row[key]);
+    if(Number.isFinite(numeric)){
+      const normalized = Math.abs(numeric) > 1 ? numeric / 100 : numeric;
+      return clamp(normalized, -0.2, 0.35);
+    }
+    const text = (row[key] ?? '').toString().trim().toLowerCase();
+    if(text === 'high') return 0.18;
+    if(text === 'medium') return 0.10;
+    if(text === 'low') return 0.05;
+  }
+  return 0;
+}
+
+function projectionComputePriorPerf(entries, confMultOn){
+  if(!entries || !entries.length) return NaN;
+  let num = 0;
+  let den = 0;
+  entries.forEach((entry, idx) => {
+    const perf = scoreRow(entry);
+    if(!Number.isFinite(perf)) return;
+    const conf = (entry['Conference'] ?? entry['Conf'] ?? '').toString().trim();
+    const cm = confMultOn ? getConfMultiplier(conf) : 1;
+    const recencyWeight = 0.9 + (idx / Math.max(1, entries.length - 1)) * 0.55;
+    num += (perf * cm) * recencyWeight;
+    den += recencyWeight;
+  });
+  return den ? (num / den) : NaN;
+}
+
+function projectionComputeConfidence(row, games, totalMinutes, priorCount){
+  const gamesFactor = Number.isFinite(games) ? clamp01(games / 18) : 0;
+  const minutesFactor = Number.isFinite(totalMinutes) ? clamp01(totalMinutes / 420) : 0;
+  const sampleFactor = 0.55 * gamesFactor + 0.45 * minutesFactor;
+  const classFactor = projectionClassConfidence(row.Class || row.Yr || row.Year || '');
+  const priorFactor = clamp01((priorCount || 0) / 3);
+  let confidence = 0.18 + 0.5 * sampleFactor + 0.2 * classFactor + 0.12 * priorFactor;
+  if(Number.isFinite(games) && games <= 5) confidence -= 0.1;
+  if(Number.isFinite(totalMinutes) && totalMinutes < 160) confidence -= 0.06;
+  return clamp(confidence, 0.18, 0.98);
+}
+
+function projectionComputeMedicalRisk(row, games, totalMinutes, priorCount){
+  const statusText = projectionGetStatusText(row).toLowerCase();
+  if(statusText){
+    if(/out|surgery|acl|season|redshirt|medical redshirt|torn|fracture|broken/.test(statusText)){
+      return { value: 0.78, label: 'High', source: 'status', detail: statusText };
+    }
+    if(/questionable|doubtful|day.?to.?day|monitor|rehab|recover|returning|limited|ankle|knee|foot|hamstring|injur/.test(statusText)){
+      return { value: 0.48, label: 'Moderate', source: 'status', detail: statusText };
+    }
+    if(/healthy|available|active|full go|cleared/.test(statusText)){
+      return { value: 0.12, label: 'Low', source: 'status', detail: statusText };
+    }
+  }
+  if((priorCount || 0) >= 2 && Number.isFinite(games) && Number.isFinite(totalMinutes) && games <= 8 && totalMinutes >= 140){
+    return { value: 0.42, label: 'Moderate', source: 'derived', detail: 'short season sample after prior seasons' };
+  }
+  if(Number.isFinite(games) && Number.isFinite(totalMinutes) && games <= 5 && totalMinutes >= 80){
+    return { value: 0.34, label: 'Moderate', source: 'derived', detail: 'very short season sample' };
+  }
+  return { value: 0.14, label: 'Low', source: 'model', detail: '' };
+}
+
+function projectionConfidenceLabel(confidence){
+  if(!Number.isFinite(confidence)) return 'Unknown';
+  if(confidence >= 0.82) return 'High';
+  if(confidence >= 0.64) return 'Moderate';
+  return 'Low';
+}
+
+function projectionConfidenceTone(confidence){
+  if(!Number.isFinite(confidence)) return 'neutral';
+  if(confidence >= 0.82) return 'good';
+  if(confidence >= 0.64) return 'warn';
+  return 'bad';
+}
+
+function projectionMedicalRiskTone(label){
+  if(label === 'High') return 'bad';
+  if(label === 'Moderate') return 'warn';
+  return 'good';
+}
+
+function projectionTalentLabel(healthyPerf, perfPool){
+  if(!Number.isFinite(healthyPerf)) return 'Needs more data';
+  const pct = Array.isArray(perfPool) && perfPool.length >= 5
+    ? clamp(percentileRank(perfPool.slice().sort((a,b)=>a-b), healthyPerf), 0, 1)
+    : NaN;
+  if(Number.isFinite(pct)){
+    if(pct >= 0.9) return 'Star-caliber';
+    if(pct >= 0.78) return 'Impact starter';
+    if(pct >= 0.58) return 'Starter';
+    if(pct >= 0.42) return 'Rotation';
+  }
+  return 'Developmental';
+}
+
+function projectionCalcMetrics(row, ctx){
+  const games = projectionGetGamesPlayed(row);
+  const totalMinutes = projectionGetTotalMinutes(row);
+  const priorEntries = projectionGetPriorCareerEntries(row);
+  const priorPerf = projectionComputePriorPerf(priorEntries, ctx.confMultOn);
+  const confidence = projectionComputeConfidence(row, games, totalMinutes, priorEntries.length);
+  const medicalRisk = projectionComputeMedicalRisk(row, games, totalMinutes, priorEntries.length);
+  const manualBoost = projectionGetManualBoost(row);
+  const productionPerf = safeNum(row.PerfScore_calc);
+  const productionValue = safeNum(row.ActualValuation_calc);
+
+  let healthyPerf = productionPerf;
+  if(Number.isFinite(priorPerf) && Number.isFinite(productionPerf)){
+    const currentWeight = clamp(0.42 + confidence * 0.42, 0.42, 0.88);
+    healthyPerf = productionPerf * currentWeight + priorPerf * (1 - currentWeight);
+  } else if(!Number.isFinite(healthyPerf) && Number.isFinite(priorPerf)){
+    healthyPerf = priorPerf;
+  }
+  if(Number.isFinite(healthyPerf) && manualBoost !== 0){
+    healthyPerf = healthyPerf * (1 + manualBoost * 0.2);
+  }
+
+  let healthyValue = NaN;
+  if(Number.isFinite(healthyPerf) && Number.isFinite(ctx.avgPay) && ctx.avgPay > 0){
+    healthyValue = ctx.avgPay * Math.exp(ctx.k * (healthyPerf - ctx.lastPerfAvg));
+    healthyValue = clamp(healthyValue, ctx.minPay, ctx.maxPay);
+  }
+
+  let medianValue = productionValue;
+  if(Number.isFinite(productionValue) && Number.isFinite(healthyValue)){
+    const blend = clamp(0.18 + 0.62 * confidence - 0.24 * medicalRisk.value + (priorEntries.length ? 0.08 : 0), 0.12, 0.9);
+    medianValue = clamp((productionValue * (1 - blend)) + (healthyValue * blend), ctx.minPay, ctx.maxPay);
+  } else if(Number.isFinite(healthyValue)){
+    medianValue = healthyValue;
+  }
+
+  const uncertainty = clamp((1 - confidence) * 0.75 + medicalRisk.value * 0.6, 0.12, 0.5);
+  let floorValue = Number.isFinite(medianValue) ? clamp(medianValue * (1 - uncertainty), ctx.minPay, ctx.maxPay) : NaN;
+  const ceilingBase = Number.isFinite(healthyValue) ? Math.max(healthyValue, medianValue) : medianValue;
+  const ceilingBoost = clamp(1 + uncertainty * 0.68 + manualBoost * 0.16, 1.06, 1.45);
+  let ceilingValue = Number.isFinite(ceilingBase) ? clamp(ceilingBase * ceilingBoost, ctx.minPay, ctx.maxPay) : NaN;
+  if(Number.isFinite(floorValue) && Number.isFinite(medianValue) && floorValue > medianValue) floorValue = medianValue;
+  if(Number.isFinite(ceilingValue) && Number.isFinite(medianValue) && ceilingValue < medianValue) ceilingValue = medianValue;
+
+  const reasons = [];
+  if(Number.isFinite(games) && games < 12) reasons.push('limited current-season sample');
+  if(Number.isFinite(totalMinutes) && totalMinutes < 250) reasons.push('light total minutes');
+  if(priorEntries.length) reasons.push('blended with ' + priorEntries.length + ' prior season' + (priorEntries.length === 1 ? '' : 's'));
+  if(medicalRisk.label !== 'Low') reasons.push('medical risk ' + medicalRisk.label.toLowerCase());
+  if(manualBoost > 0) reasons.push('scout upside boost applied');
+  if(!reasons.length) reasons.push('stable projection profile');
+
+  return {
+    ProjectionGames_calc: games,
+    ProjectionMinutesSample_calc: totalMinutes,
+    ProjectionPriorSeasons_calc: priorEntries.length,
+    ProjectionPerf_calc: healthyPerf,
+    ProjectionHealthyValue_calc: healthyValue,
+    ProjectionMedianValue_calc: medianValue,
+    ProjectionFloorValue_calc: floorValue,
+    ProjectionCeilingValue_calc: ceilingValue,
+    ProjectionConfidence_calc: confidence,
+    ProjectionConfidenceLabel_calc: projectionConfidenceLabel(confidence),
+    ProjectionConfidenceTone_calc: projectionConfidenceTone(confidence),
+    ProjectionMedicalRisk_calc: medicalRisk.value,
+    ProjectionMedicalRiskLabel_calc: medicalRisk.label,
+    ProjectionMedicalRiskTone_calc: projectionMedicalRiskTone(medicalRisk.label),
+    ProjectionMedicalRiskSource_calc: medicalRisk.source,
+    ProjectionHealthyTalentLabel_calc: projectionTalentLabel(healthyPerf, ctx.perfPool),
+    ProjectionReasonSummary_calc: reasons.join(' • '),
+    ProjectionManualBoost_calc: manualBoost,
+    ProjectionDelta_calc: (Number.isFinite(medianValue) && Number.isFinite(productionValue)) ? (medianValue - productionValue) : NaN,
+  };
+}
+
 function buildStatDistributions(){
   statDist = {};
   const fromWeights = (currentWeights[pos] || []).map(x => x.stat);
@@ -646,6 +904,17 @@ function computeAll(){
       ActualValuation_calc: final
     };
   });
+
+  const projectionCtx = {
+    confMultOn,
+    avgPay,
+    minPay,
+    maxPay,
+    k,
+    lastPerfAvg,
+    perfPool: perfArr,
+  };
+  computed = computed.map(r => ({...r, ...projectionCalcMetrics(r, projectionCtx)}));
 
   buildStatDistributions();
   computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)}));
@@ -1044,7 +1313,8 @@ async function loadCareerSeasons() {
   // Infer class from career history and apply to all player pools
   _inferClassFromCareerData();
   _applyInferredClassAll();
-  if (typeof renderPlayers === 'function') renderPlayers();
+  if (rows && rows.length) computeAll();
+  else if (typeof renderPlayers === 'function') renderPlayers();
 
   if (typeof window._onCareerDataReady === 'function') {
     window._onCareerDataReady();
@@ -2038,7 +2308,7 @@ function reloadActiveSheet(){
 }
 
 function exportCSV(){
-  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','FitScore_calc','PredictedValue_calc','MinMultiplier_calc','ActualValuation_calc'];
+  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc'];
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {
@@ -2062,6 +2332,7 @@ class DataManager {
   get pos(){ return pos; }
   get rows(){ return rows; }
   get computed(){ return computed; }
+  get playerValueView(){ return playerValueView; }
   get statDist(){ return statDist; }
   get currentWeights(){ return currentWeights; }
   get tbAllComputed(){ return tbAllComputed; }
@@ -2076,6 +2347,7 @@ class DataManager {
   exportCSV(){ return exportCSV(); }
   showWarn(msg){ return showWarn(msg); }
   clearWarn(){ return clearWarn(); }
+  setPlayerValueView(mode, opts){ return setPlayerValueView(mode, opts); }
   setActiveTab(el, sel){ return setActiveTab(el, sel); }
   applyLeagueTheme(lg){ return applyLeagueTheme(lg); }
   switchLeague(lg){ return switchLeague(lg); }

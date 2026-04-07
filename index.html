@@ -304,8 +304,16 @@
         <div class="row">
           <span class="badge">Sheet: <strong id="activeSheet">—</strong></span>
           <span class="badge">Fit: <strong id="activeFit">Balanced</strong></span>
+          <span class="badge">View: <strong id="activeProjection">Production</strong></span>
         </div>
-        <span class="pill">Sort headers • Click player for profile</span>
+        <div class="playersViewControl">
+          <label for="playerValueView">Board view</label>
+          <select id="playerValueView" style="width:160px">
+            <option value="production" selected>Production</option>
+            <option value="projection">Projection</option>
+          </select>
+          <span class="pill">Sort headers • Click player for profile</span>
+        </div>
       </div>
 
       <div class="kpis playersSnapshotStrip">
@@ -2160,7 +2168,7 @@
           <div class="panelBody">
             <div class="scoreRow">
               <div>
-                <div class="muted mini">PerfScore</div>
+                <div class="muted mini" id="mScoreLabel">Production</div>
                 <div class="big" id="mScore">—</div>
               </div>
               <div style="text-align:right">
@@ -2173,7 +2181,7 @@
 
             <div class="scoreRow">
               <div>
-                <div class="muted mini">Final valuation</div>
+                <div class="muted mini" id="mValLabel">Median value</div>
                 <div class="big" id="mVal">—</div>
               </div>
               <div style="text-align:right">
@@ -2181,6 +2189,8 @@
                 <div class="big" id="mMult">—</div>
               </div>
             </div>
+
+            <div id="mProjectionSummary" class="profileProjectionGrid"></div>
 
             <div id="mConfMultRow" style="margin-top:8px;display:none">
               <div class="scoreRow">
@@ -2209,6 +2219,13 @@
           <div class="panelBody">
             <div class="bars" id="mBars"></div>
           </div>
+        </div>
+      </div>
+
+      <div id="mProjectionPanel" style="margin-top:12px" class="panel">
+        <div class="panelHead">Projection Range</div>
+        <div class="panelBody" id="mProjectionRange">
+          <div class="muted" style="font-size:12px">Open a player to view their projection band.</div>
         </div>
       </div>
 

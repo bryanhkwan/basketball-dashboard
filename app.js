@@ -315,6 +315,14 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   refreshGuestDemoUI();
 
+  if (typeof setPlayerValueView === 'function') setPlayerValueView(playerValueView, { skipPersist: true });
+  if (typeof playerValueViewEl !== 'undefined' && playerValueViewEl) {
+    playerValueViewEl.addEventListener('change', () => {
+      if (typeof setPlayerValueView === 'function') setPlayerValueView(playerValueViewEl.value);
+      renderPlayers();
+    });
+  }
+
   [avgPayEl,minPayEl,maxPayEl,starValueEl,starPctEl,mpModeEl,mpPctEl].forEach(el=>{
     if(!el) return;
     el.addEventListener('input', ()=>{ if(wb) requestComputeAll(120); });

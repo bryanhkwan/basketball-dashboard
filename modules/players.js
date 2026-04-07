@@ -24,9 +24,30 @@ const LIST_COLS = [
   {key:'_draft_prob', label:'Draft'},
 ];
 
+function playersDisplayMoney(value){
+  return typeof demoFormatMoney === 'function' ? demoFormatMoney(value) : fmtMoney(value);
+}
+
+function playerBoardSortKey(key){
+  if(playerValueView === 'projection'){
+    if(key === 'Score') return 'ProjectionPerf_calc';
+    if(key === 'ActualValuation_calc') return 'ProjectionMedianValue_calc';
+  }
+  return key;
+}
+
+function playerBoardColLabel(col){
+  if(col.key === 'Score') return playerValueView === 'projection' ? 'Projection' : 'Production';
+  if(col.key === 'ActualValuation_calc'){
+    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()) return playerValueView === 'projection' ? 'Median band' : 'Value band';
+    return playerValueView === 'projection' ? 'Median $' : col.label;
+  }
+  return col.label;
+}
+
 // --- Sort ---
 function sortData(data){
-  const k = sort.key;
+  const k = playerBoardSortKey(sort.key);
   const dir = sort.dir;
   return data.slice().sort((a,b)=>{
     const av = a[k]; const bv = b[k];
@@ -70,9 +91,7 @@ function renderPlayersPage(){
     const frag = document.createDocumentFragment();
     colsToShow.forEach(c => {
       const th = document.createElement('th');
-      th.textContent = (c.key === 'ActualValuation_calc' && typeof demoIsGuestMode === 'function' && demoIsGuestMode())
-        ? 'Value band'
-        : c.label;
+      th.textContent = playerBoardColLabel(c);
       if(c.key === 'Score') th.classList.add('playersPerfHead');
       th.addEventListener('click', ()=>{
         if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
@@ -120,7 +139,22 @@ function renderPlayersPage(){
           td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); if(typeof oppAddPlayer !== 'undefined') oppAddPlayer(r); });
         }
       }else if(c.key === 'Player'){
-        td.innerHTML = `<span class="link">${(v ?? '').toString()}</span>`;
+        const playerName = (v ?? '').toString();
+        if(playerValueView === 'projection'){
+          const badges = [];
+          const conf = safeNum(r.ProjectionConfidence_calc);
+          const riskLabel = (r.ProjectionMedicalRiskLabel_calc || '').toString();
+          if(Number.isFinite(conf)){
+            badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${projectionConfidenceTone(conf)}">Conf ${Math.round(conf*100)}%</span>`);
+          }
+          if(riskLabel){
+            badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${projectionMedicalRiskTone(riskLabel)}">Risk ${riskLabel}</span>`);
+          }
+          td.innerHTML = `<div class="playersNameCell"><span class="link">${playerName}</span>${badges.length ? `<div class="playersProjectionBadges">${badges.join('')}</div>` : ''}</div>`;
+          td.title = (r.ProjectionReasonSummary_calc || '').toString();
+        } else {
+          td.innerHTML = `<span class="link">${playerName}</span>`;
+        }
         td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
       }else if(c.key === 'ConfMult_calc'){
         const cm = safeNum(r.ConfMult_calc);
@@ -136,15 +170,27 @@ function renderPlayersPage(){
         if(Number.isFinite(h) && h > 0) td.textContent = Math.floor(h/12) + "'" + (h%12) + '"';
         else td.textContent = r.Height || '\u2014';
         td.style.color = 'var(--muted)';
-      }else if(c.key === 'Score' && Number.isFinite(Number(r.Score))){
-        td.textContent = Number(r.Score).toFixed(2);
+      }else if(c.key === 'Score'){
+        const scoreValue = playerValueView === 'projection' ? safeNum(r.ProjectionPerf_calc) : Number(r.Score);
+        td.textContent = Number.isFinite(scoreValue) ? scoreValue.toFixed(2) : '\u2014';
       }else if(c.key === 'FitScore_calc'){
         td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '\u2014';
       }else if(c.key === 'ActualValuation_calc'){
-        const modelValue = safeNum(r.ActualValuation_calc);
-        td.textContent = Number.isFinite(modelValue)
-          ? (typeof demoFormatMoney === 'function' ? demoFormatMoney(modelValue) : fmtMoney(modelValue))
-          : '\u2014';
+        if(playerValueView === 'projection'){
+          const medianValue = safeNum(r.ProjectionMedianValue_calc);
+          const floorValue = safeNum(r.ProjectionFloorValue_calc);
+          const ceilingValue = safeNum(r.ProjectionCeilingValue_calc);
+          td.classList.add('playersProjectionValueCell');
+          td.innerHTML = Number.isFinite(medianValue)
+            ? `<div class="playersProjectionValueMain">${playersDisplayMoney(medianValue)}</div>${(Number.isFinite(floorValue) && Number.isFinite(ceilingValue)) ? `<div class="playersProjectionValueSub">${playersDisplayMoney(floorValue)} - ${playersDisplayMoney(ceilingValue)}</div>` : ''}`
+            : '\u2014';
+          td.title = (r.ProjectionReasonSummary_calc || '').toString();
+        } else {
+          const modelValue = safeNum(r.ActualValuation_calc);
+          td.textContent = Number.isFinite(modelValue)
+            ? playersDisplayMoney(modelValue)
+            : '\u2014';
+        }
       }else if(c.key === '_draft_prob'){
         if(typeof draftBadgeHtml === 'function'){
           td.innerHTML = draftBadgeHtml(r);

@@ -18,6 +18,58 @@ function profileDisplayMoney(value) {
   return fmtMoney(value);
 }
 
+function profileProjectionCard(label, value, subtext, tone) {
+  var toneClass = tone ? (' profileProjectionStat--' + tone) : '';
+  return '<div class="profileProjectionStat' + toneClass + '">'
+    + '<div class="profileProjectionStatLabel">' + label + '</div>'
+    + '<div class="profileProjectionStatValue">' + value + '</div>'
+    + '<div class="profileProjectionStatSub">' + subtext + '</div>'
+    + '</div>';
+}
+
+function profileProjectionRangeCard(label, value, subtext, tone) {
+  var toneClass = tone ? (' profileProjectionRangeCard--' + tone) : '';
+  return '<div class="profileProjectionRangeCard' + toneClass + '">'
+    + '<div class="profileProjectionRangeLabel">' + label + '</div>'
+    + '<div class="profileProjectionRangeValue">' + value + '</div>'
+    + '<div class="profileProjectionRangeSub">' + subtext + '</div>'
+    + '</div>';
+}
+
+function renderProjectionDetails(r) {
+  var summaryEl = document.getElementById('mProjectionSummary');
+  var rangeEl = document.getElementById('mProjectionRange');
+  if (!summaryEl && !rangeEl) return;
+
+  var projectionPerf = safeNum(r.ProjectionPerf_calc);
+  var confidence = safeNum(r.ProjectionConfidence_calc);
+  var riskLabel = (r.ProjectionMedicalRiskLabel_calc || 'Low').toString();
+  var talentLabel = (r.ProjectionHealthyTalentLabel_calc || 'Needs more data').toString();
+  var reasonText = (r.ProjectionReasonSummary_calc || 'Projection range is still thin.').toString();
+  var riskTone = projectionMedicalRiskTone(riskLabel);
+  var confidenceTone = projectionConfidenceTone(confidence);
+
+  if (summaryEl) {
+    summaryEl.innerHTML = ''
+      + profileProjectionCard('Projection', Number.isFinite(projectionPerf) ? projectionPerf.toFixed(2) : '—', 'blended healthy-talent score', 'neutral')
+      + profileProjectionCard('Confidence', Number.isFinite(confidence) ? (Math.round(confidence * 100) + '%') : '—', (r.ProjectionConfidenceLabel_calc || 'Unknown').toString(), confidenceTone)
+      + profileProjectionCard('Medical Risk', riskLabel, (r.ProjectionMedicalRiskSource_calc || 'model').toString(), riskTone)
+      + profileProjectionCard('Healthy Talent', talentLabel, 'fully healthy role read', 'neutral');
+  }
+
+  if (rangeEl) {
+    var floorValue = safeNum(r.ProjectionFloorValue_calc);
+    var medianValue = safeNum(r.ProjectionMedianValue_calc);
+    var ceilingValue = safeNum(r.ProjectionCeilingValue_calc);
+    rangeEl.innerHTML = '<div class="profileProjectionRangeGrid">'
+      + profileProjectionRangeCard('Floor', Number.isFinite(floorValue) ? profileDisplayMoney(floorValue) : '—', 'conservative outcome if risk wins', 'bad')
+      + profileProjectionRangeCard('Median', Number.isFinite(medianValue) ? profileDisplayMoney(medianValue) : '—', 'fair operating expectation', 'warn')
+      + profileProjectionRangeCard('Ceiling', Number.isFinite(ceilingValue) ? profileDisplayMoney(ceilingValue) : '—', 'fully healthy upside case', 'good')
+      + '</div>'
+      + '<div class="profileProjectionNote">Why the band is wide: ' + reasonText + '</div>';
+  }
+}
+
 function profileShotTier(value, high, medium) {
   if (!Number.isFinite(value)) return 'Unknown';
   if (value >= high) return 'High';
@@ -79,9 +131,13 @@ function openProfile(r){
   const height = (Number.isFinite(_hin) && _hin > 0) ? Math.floor(_hin/12) + "'" + (_hin%12) + '"' : (r['Height'] || '').toString().trim();
   mSub.textContent = [team, conf, position, height].filter(Boolean).join(' • ');
   document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
+  var mScoreLabel = document.getElementById('mScoreLabel');
+  var mValLabel = document.getElementById('mValLabel');
+  if (mScoreLabel) mScoreLabel.textContent = 'Production';
+  if (mValLabel) mValLabel.textContent = 'Median value';
   mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
   mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
-  mVal.textContent = profileDisplayMoney(r.ActualValuation_calc);
+  mVal.textContent = profileDisplayMoney(safeNum(r.ProjectionMedianValue_calc) ?? r.ActualValuation_calc);
   mMult.textContent = Number.isFinite(r.MinMultiplier_calc) ? r.MinMultiplier_calc.toFixed(2) : '—';
 
   const mConfMultRow = document.getElementById('mConfMultRow');
@@ -103,8 +159,6 @@ function openProfile(r){
     const pctTxt = Number.isFinite(deltaPct) ? ` (${(deltaPct*100).toFixed(1)}%)` : '';
     bossLine = `Actual valuation: <b>${profileDisplayMoney(bossVal)}</b> • Model vs Boss: <b>${sign}${profileDisplayMoney(delta).replace('$','')}</b>${pctTxt}`;
   }
-
-  if(bossLine){ mMeta.innerHTML = `<div class="muted">${bossLine}</div>`; }
 
   mTags.innerHTML = '';
 
@@ -152,23 +206,39 @@ function openProfile(r){
   const avgPay = Number(avgPayEl.value);
   const starValue = Number(starValueEl.value);
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
+  const projectionNote = (r.ProjectionReasonSummary_calc || '').toString();
+  const metaBlocks = [];
+  if (bossLine) metaBlocks.push(`<div class="muted">${bossLine}</div>`);
   if (profileIsGuestDemo()) {
-    mMeta.innerHTML = `
+    metaBlocks.push(`
       <div class="muted">
         Demo mode keeps the player profile and decision outputs visible, but the exact valuation curve, weighting recipe, and shot-detail internals stay limited to approved staff accounts.
       </div>
-    `;
+    `);
   } else {
-    mMeta.innerHTML = `
+    metaBlocks.push(`
       <div class="muted">
         Star anchor: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
         predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
         More starValue means a steeper curve (bigger top-end).
       </div>
-    `;
+    `);
   }
+  if (projectionNote) {
+    metaBlocks.push(`<div class="muted">Projection note: <b>${projectionNote}</b>.</div>`);
+  }
+  mMeta.innerHTML = metaBlocks.join('');
 
-  const exclude = new Set(['PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc']);
+  renderProjectionDetails(r);
+
+  const exclude = new Set([
+    'PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
+    'ProjectionGames_calc','ProjectionMinutesSample_calc','ProjectionPriorSeasons_calc','ProjectionPerf_calc',
+    'ProjectionHealthyValue_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc',
+    'ProjectionConfidence_calc','ProjectionConfidenceLabel_calc','ProjectionConfidenceTone_calc',
+    'ProjectionMedicalRisk_calc','ProjectionMedicalRiskLabel_calc','ProjectionMedicalRiskTone_calc','ProjectionMedicalRiskSource_calc',
+    'ProjectionHealthyTalentLabel_calc','ProjectionReasonSummary_calc','ProjectionManualBoost_calc','ProjectionDelta_calc'
+  ]);
   const all = Object.keys(r).filter(k => !exclude.has(k));
   const container = document.createElement('div');
   container.className = 'panel';
