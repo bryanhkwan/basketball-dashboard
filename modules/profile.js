@@ -767,6 +767,7 @@ function renderCareerHistory(r) {
 
   if (!_careerDataReady) {
     el.innerHTML = '<div class="muted" style="padding:14px 16px;font-size:12px">Loading career history…</div>';
+    if (typeof loadCareerSeasons === 'function') loadCareerSeasons().catch(() => {});
     window._onCareerDataReady = () => renderCareerHistory(_currentProfilePlayer);
     return;
   }
@@ -852,6 +853,7 @@ function renderTeamContext(r) {
 
   if (!_ratingsReady) {
     el.innerHTML = '<div class="muted" style="font-size:12px;padding:8px 0">Loading team ratings…</div>';
+    if (typeof loadTeamRatings === 'function') loadTeamRatings(_currentDataSeason).catch(() => {});
     window._onRatingsReady = () => { if (_currentProfilePlayer) renderTeamContext(_currentProfilePlayer); };
     return;
   }

@@ -298,6 +298,69 @@ function portalGetPlayerValuation(player) {
   return value;
 }
 
+function portalGetPlayerProjectionPerf(player) {
+  if (!player) return null;
+  var perf = portalSafeNum(player.ProjectionPerf_calc);
+  if (perf === null) perf = portalGetPlayerPerf(player);
+  return perf;
+}
+
+function portalGetPlayerMedianValue(player) {
+  if (!player) return null;
+  var value = portalSafeNum(player.ProjectionMedianValue_calc);
+  if (value === null) value = portalGetPlayerValuation(player);
+  return value;
+}
+
+function portalGetPlayerFloorValue(player) {
+  if (!player) return null;
+  var value = portalSafeNum(player.ProjectionFloorValue_calc);
+  if (value === null) value = portalGetPlayerMedianValue(player);
+  return value;
+}
+
+function portalGetPlayerCeilingValue(player) {
+  if (!player) return null;
+  var value = portalSafeNum(player.ProjectionCeilingValue_calc);
+  if (value === null) value = portalGetPlayerMedianValue(player);
+  return value;
+}
+
+function portalGetPlayerConfidence(player) {
+  if (!player) return null;
+  return portalSafeNum(player.ProjectionConfidence_calc);
+}
+
+function portalGetPlayerConfidenceLabel(player) {
+  if (!player) return 'Unknown';
+  if (player.ProjectionConfidenceLabel_calc) return String(player.ProjectionConfidenceLabel_calc);
+  var confidence = portalGetPlayerConfidence(player);
+  if (typeof projectionConfidenceLabel === 'function') return projectionConfidenceLabel(confidence);
+  return 'Unknown';
+}
+
+function portalGetPlayerConfidenceTone(player) {
+  var confidence = portalGetPlayerConfidence(player);
+  if (typeof projectionConfidenceTone === 'function') return projectionConfidenceTone(confidence);
+  return 'neutral';
+}
+
+function portalGetPlayerMedicalRiskLabel(player) {
+  if (!player) return 'Low';
+  return String(player.ProjectionMedicalRiskLabel_calc || 'Low');
+}
+
+function portalGetPlayerMedicalRiskTone(player) {
+  var label = portalGetPlayerMedicalRiskLabel(player);
+  if (typeof projectionMedicalRiskTone === 'function') return projectionMedicalRiskTone(label);
+  return label === 'High' ? 'bad' : (label === 'Moderate' ? 'warn' : 'good');
+}
+
+function portalGetPlayerProjectionSummary(player) {
+  if (!player) return '';
+  return String(player.ProjectionReasonSummary_calc || '').trim();
+}
+
 function portalClamp01(v) {
   var n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -362,7 +425,7 @@ function portalPositionFitScore(player, departurePlayers) {
 }
 
 function portalValueFitScore(player, impact, replaceGain, targetValue) {
-  var candidateValue = portalGetPlayerValuation(player);
+  var candidateValue = portalGetPlayerMedianValue(player);
   var replaceEdge = replaceGain === null ? 0.5 : portalClamp01(0.5 + replaceGain);
   impact = portalClamp01(impact);
 
@@ -398,7 +461,7 @@ function portalUpsideScore(player, impact, targetValue) {
 
   var mp = portalSafeNum(player && player.MP);
   var minuteBase = mp === null ? 0.6 : (mp < 12 ? 0.42 : (mp < 18 ? 0.72 : (mp < 28 ? 0.86 : 0.68)));
-  var candidateValue = portalGetPlayerValuation(player);
+  var candidateValue = portalGetPlayerMedianValue(player);
   var valueLeverage = 0.55;
   if (targetValue !== null && targetValue > 0 && candidateValue !== null && candidateValue > 0) {
     valueLeverage = candidateValue <= targetValue
@@ -545,6 +608,7 @@ function portalBuildDistributions(players) {
   });
   allStats['PerfScore_calc'] = true;
   allStats['Score'] = true;
+  allStats['ProjectionPerf_calc'] = true;
 
   var out = {};
   Object.keys(allStats).forEach(function (stat) {
@@ -1559,10 +1623,10 @@ async function portalLoadTeamContext(teamName) {
 }
 
 function portalCandidateImpact(player, dist) {
-  var p = portalSafeNum(player.Score);
-  if (p === null) p = portalSafeNum(player.PerfScore_calc);
+  var p = portalGetPlayerProjectionPerf(player);
   if (p === null) return 0.45;
-  var pct = portalStatPercentile('Score', p, dist);
+  var pct = portalStatPercentile('ProjectionPerf_calc', p, dist);
+  if (pct === null) pct = portalStatPercentile('Score', p, dist);
   if (pct === null) pct = portalStatPercentile('PerfScore_calc', p, dist);
   return pct === null ? 0.45 : pct;
 }
@@ -1572,9 +1636,14 @@ function portalCandidateRisk(player) {
   var mp = portalSafeNum(player.MP) || portalSafeNum(player.MP_num);
   var topg = portalSafeNum(player.TOPG);
   var ft = portalSafeNum(player['FT%']);
+  var confidence = portalGetPlayerConfidence(player);
+  var medicalRisk = portalGetPlayerMedicalRiskLabel(player);
   if (mp !== null && mp < 15) flags.push('low-minute sample');
   if (topg !== null && topg > 2.8) flags.push('turnover risk');
   if (ft !== null && ft < 65) flags.push('FT variance');
+  if (Number.isFinite(confidence) && confidence < 0.64) flags.push('low confidence');
+  if (medicalRisk === 'High') flags.push('high medical risk');
+  else if (medicalRisk === 'Moderate') flags.push('medical watch');
   return flags;
 }
 
@@ -1615,7 +1684,7 @@ function portalBuildRecommendationContext() {
     catRemoved: catRemoved,
     priority: portalCategoryPriorityFromTeamStats(portalTeamCtx.stats),
     targetValue: portalAverage(departurePlayers.map(function (player) {
-      return portalGetPlayerValuation(player);
+      return portalGetPlayerMedianValue(player);
     })),
   };
 }
@@ -1642,12 +1711,16 @@ function portalBuildScenarioSummary(player, ctx, meta) {
   var impactEdge = (Number.isFinite(meta.impact) ? meta.impact : 0.5) - (ctx.departureImpactAvg == null ? 0.5 : ctx.departureImpactAvg);
   var deltaMeter = portalClamp01(0.5 + weightedDelta * 4);
   var impactMeter = portalClamp01(0.5 + impactEdge);
+  var confidenceMeter = Number.isFinite(meta.confidence) ? portalClamp01(meta.confidence) : 0.58;
+  var medicalMeter = meta.medicalRiskLabel === 'High' ? 0.18 : (meta.medicalRiskLabel === 'Moderate' ? 0.38 : 0.6);
   var scenarioFit = portalClamp01(
-    0.44 * meta.fit +
-    0.22 * deltaMeter +
-    0.12 * impactMeter +
-    0.12 * meta.valueFit +
-    0.10 * meta.positionFit
+    0.40 * meta.fit +
+    0.20 * deltaMeter +
+    0.10 * impactMeter +
+    0.10 * meta.valueFit +
+    0.08 * meta.positionFit +
+    0.07 * confidenceMeter +
+    0.05 * medicalMeter
   );
 
   var verdict = 'Pass';
@@ -1687,6 +1760,9 @@ function portalBuildScenarioSummary(player, ctx, meta) {
     reasons.push('Price climbs above the departing value band');
   }
   if (meta.positionFit < 0.45) reasons.push('Cross-position swing');
+  if (meta.medicalRiskLabel === 'High') reasons.push('High medical risk widens the downside case');
+  else if (meta.medicalRiskLabel === 'Moderate') reasons.push('Medical risk keeps the floor volatile');
+  else if (Number.isFinite(meta.confidence) && meta.confidence < 0.64) reasons.push('Projection is more upside-led than proven');
   if (meta.risks && meta.risks.length) reasons.push('Main risk: ' + meta.risks[0]);
 
   return {
@@ -1754,7 +1830,16 @@ function portalScoreCandidateEntry(entry, player, ctx) {
   var positionFit = portalPositionFitScore(player, ctx.departurePlayers);
   var valueFit = portalValueFitScore(player, impact, replaceGain, ctx.targetValue);
   var upside = portalUpsideScore(player, impact, ctx.targetValue);
-  var candidateValue = portalGetPlayerValuation(player);
+  var candidateValue = portalGetPlayerMedianValue(player);
+  var floorValue = portalGetPlayerFloorValue(player);
+  var ceilingValue = portalGetPlayerCeilingValue(player);
+  var projectionPerf = portalGetPlayerProjectionPerf(player);
+  var confidence = portalGetPlayerConfidence(player);
+  var confidenceLabel = portalGetPlayerConfidenceLabel(player);
+  var confidenceTone = portalGetPlayerConfidenceTone(player);
+  var medicalRiskLabel = portalGetPlayerMedicalRiskLabel(player);
+  var medicalRiskTone = portalGetPlayerMedicalRiskTone(player);
+  var projectionSummary = portalGetPlayerProjectionSummary(player);
 
   var final =
     0.27 * needFit +
@@ -1794,6 +1879,15 @@ function portalScoreCandidateEntry(entry, player, ctx) {
     positionGroup: portalPlayerPosGroup(player),
     replacementType: portalReplacementType(positionFit, valueFit, upside, replaceGain, ctx.targetValue, candidateValue),
     candidateValue: candidateValue,
+    floorValue: floorValue,
+    ceilingValue: ceilingValue,
+    projectionPerf: projectionPerf,
+    confidence: confidence,
+    confidenceLabel: confidenceLabel,
+    confidenceTone: confidenceTone,
+    medicalRiskLabel: medicalRiskLabel,
+    medicalRiskTone: medicalRiskTone,
+    projectionSummary: projectionSummary,
     targetValue: ctx.targetValue,
     reasons: reasons,
     risks: risks,
@@ -1889,9 +1983,15 @@ function portalRenderScenarioRows() {
     var verdict = row.scenario ? row.scenario.verdict : (row.targetMissing ? 'No match' : (row.sameTeam ? 'Same team' : 'Awaiting team'));
     var tone = row.scenario ? row.scenario.tone : (row.targetMissing ? 'bad' : 'warn');
     var valueText = portalFmtMoney(row.candidateValue);
+    var projectionMeta = row.player
+      ? ('Median ' + portalFmtMoney(row.candidateValue) + ' · Confidence ' + portalGetPlayerConfidenceLabel(row.player) + ' · Risk ' + portalGetPlayerMedicalRiskLabel(row.player))
+      : 'Median — · Confidence — · Risk —';
     if (row.targetValue != null && row.candidateValue != null && row.targetValue > 0) {
       var pctDelta = Math.round(((row.candidateValue - row.targetValue) / row.targetValue) * 100);
       valueText += '<div class="muted" style="font-size:10px">' + (pctDelta >= 0 ? '+' : '') + pctDelta + '% vs loss band</div>';
+    }
+    if (row.floorValue != null && row.ceilingValue != null) {
+      valueText += '<div class="muted" style="font-size:10px">' + portalFmtMoney(row.floorValue) + ' / ' + portalFmtMoney(row.candidateValue) + ' / ' + portalFmtMoney(row.ceilingValue) + '</div>';
     }
 
     var whyText = 'Select a team to score this target.';
@@ -1914,12 +2014,19 @@ function portalRenderScenarioRows() {
         '<div class="portalScenarioDelta ' + deltaClass + '">' + (deltaPts === null ? 'Awaiting team' : ((deltaPts >= 0 ? '+' : '') + deltaPts + ' need pts')) + '</div></td>' +
       '<td>' + valueText + '</td>' +
       '<td><span class="portalVerdictPill portalVerdictPill--' + tone + '">' + portalEsc(verdict) + '</span></td>' +
-      '<td><div style="font-size:11px">' + portalEsc(whyText) + '</div></td>' +
+      '<td><div style="font-size:11px">' + portalEsc(whyText) + '</div><div class="portalProjectionMeta">' + portalEsc(projectionMeta) + '</div></td>' +
       '<td><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        (row.player ? '<button class="secondary portalTargetScout" style="padding:3px 8px;font-size:10px">Scout</button>' : '') +
         (row.player ? '<button class="secondary portalTargetOpen" style="padding:3px 8px;font-size:10px">Open</button>' : '') +
         '<button class="secondary portalTargetRemove" style="padding:3px 8px;font-size:10px">Remove</button>' +
       '</div></td>';
 
+    var scoutBtn = tr.querySelector('.portalTargetScout');
+    if (scoutBtn) {
+      scoutBtn.addEventListener('click', function () {
+        if (typeof openProjectionScoutModal === 'function' && row.player) openProjectionScoutModal(row.player);
+      });
+    }
     var openBtn = tr.querySelector('.portalTargetOpen');
     if (openBtn) {
       openBtn.addEventListener('click', function () {
@@ -1987,22 +2094,25 @@ function portalRenderRecommendations() {
     var team = row.entry.fromTeam || portalGetPlayerTeam(row.player) || '—';
     var fitPct = Math.max(0, Math.min(100, Math.round(row.fit * 100)));
     var gainTxt = row.replaceGain === null ? '—' : ((row.replaceGain >= 0 ? '+' : '') + Math.round(row.replaceGain * 100) + ' pts');
-    var perf = portalSafeNum(row.player.Score) || portalSafeNum(row.player.PerfScore_calc);
+    var perf = portalGetPlayerProjectionPerf(row.player);
+    var projectionLine = 'Projection ' + (perf === null ? '—' : portalFmtNum(perf, 1)) + ' · Median ' + portalFmtMoney(row.candidateValue) + ' · Confidence ' + row.confidenceLabel + ' · Risk ' + row.medicalRiskLabel;
     var addDisabled = typeof tbAddPlayer !== 'function';
     var targetKey = portalTargetKey(row.entry, row.player);
     var isTargeted = !!targetMap[targetKey];
 
     tr.innerHTML =
       '<td>' + (idx + 1) + '</td>' +
-      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">Perf ' + (perf === null ? '—' : portalFmtNum(perf, 1)) + ' · ' + portalEsc(row.replacementType || 'Fit') + '</div></td>' +
+      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">' + portalEsc(projectionLine) + '</div><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Fit') + '</div></td>' +
       '<td>' + team + '</td>' +
       '<td>' + (row.entry.position || row.player.Position || row.player.Pos || '—') + '</td>' +
       '<td><span class="portalFitPill">' + fitPct + '</span></td>' +
       '<td>' + gainTxt + '</td>' +
       '<td><div style="font-size:11px">' + row.reasons.join(' · ') + '</div>' +
+      '<div class="portalProjectionMeta">Median ' + portalFmtMoney(row.candidateValue) + ' · ' + portalFmtMoney(row.floorValue) + ' / ' + portalFmtMoney(row.candidateValue) + ' / ' + portalFmtMoney(row.ceilingValue) + '</div>' +
       (row.risks.length ? ('<div class="portalRiskText">Risk: ' + row.risks.join(', ') + '</div>') : '') + '</td>' +
       '<td><div style="display:flex;gap:6px;flex-wrap:wrap">' +
       '<button class="tbAddBtn portalRecAdd" ' + (addDisabled ? 'disabled' : '') + '>+ Add</button>' +
+      '<button class="secondary portalRecScout" style="padding:3px 8px;font-size:10px">Scout</button>' +
       '<button class="secondary portalRecTarget portalTargetBtn' + (isTargeted ? ' isActive' : '') + '" style="padding:3px 8px;font-size:10px">' + (isTargeted ? 'Targeted' : '+ Target') + '</button>' +
       '<button class="secondary portalRecOpen" style="padding:3px 8px;font-size:10px">Open</button>' +
       '</div></td>';
@@ -2021,6 +2131,12 @@ function portalRenderRecommendations() {
     if (btnOpen) {
       btnOpen.addEventListener('click', function () {
         if (typeof openProfile === 'function') openProfile(row.player);
+      });
+    }
+    var btnScout = tr.querySelector('.portalRecScout');
+    if (btnScout) {
+      btnScout.addEventListener('click', function () {
+        if (typeof openProjectionScoutModal === 'function') openProjectionScoutModal(row.player);
       });
     }
     var btnTarget = tr.querySelector('.portalRecTarget');
@@ -2505,7 +2621,14 @@ async function portalRunAIAnalysis() {
       profile.position = rosterP.Position || rosterP.Pos || null;
       profile.positionGroup = portalPlayerPosGroup(rosterP);
       profile.classYear = portalGetPlayerClass(rosterP);
-      profile.valuation = portalGetPlayerValuation(rosterP);
+      profile.floor = portalGetPlayerFloorValue(rosterP);
+      profile.median = portalGetPlayerMedianValue(rosterP);
+      profile.ceiling = portalGetPlayerCeilingValue(rosterP);
+      profile.confidence = portalGetPlayerConfidenceLabel(rosterP);
+      profile.medicalRisk = portalGetPlayerMedicalRiskLabel(rosterP);
+      profile.projectionNote = portalGetPlayerProjectionSummary(rosterP);
+      profile.scoutNote = String(rosterP.ProjectionScoutNote_calc || '');
+      profile.valuation = profile.median;
       profile.stats = {
         ppg: portalSafeNum(rosterP.PPG), rpg: portalSafeNum(rosterP.RPG),
         apg: portalSafeNum(rosterP.APG), spg: portalSafeNum(rosterP.SPG),
@@ -2515,7 +2638,8 @@ async function portalRunAIAnalysis() {
         bpm: portalSafeNum(rosterP.BPM), drtg: portalSafeNum(rosterP.DRtg),
         ws40: portalSafeNum(rosterP['WS/40']), usg: portalSafeNum(rosterP['USG%']),
         orPct: portalSafeNum(rosterP['OR%']), drPct: portalSafeNum(rosterP['DR%']),
-        perf: portalSafeNum(rosterP.Score) || portalSafeNum(rosterP.PerfScore_calc),
+        production: portalSafeNum(rosterP.Score) || portalSafeNum(rosterP.PerfScore_calc),
+        projection: portalGetPlayerProjectionPerf(rosterP),
       };
       profile._playerRef = rosterP;
     }
@@ -2540,7 +2664,15 @@ async function portalRunAIAnalysis() {
       position: row.entry.position || p.Position || p.Pos || null,
       positionGroup: row.positionGroup || portalPlayerPosGroup(p),
       classYear: portalGetPlayerClass(p),
-      valuation: row.candidateValue != null ? row.candidateValue : portalGetPlayerValuation(p),
+      projection: row.projectionPerf != null ? row.projectionPerf : portalGetPlayerProjectionPerf(p),
+      floor: row.floorValue != null ? row.floorValue : portalGetPlayerFloorValue(p),
+      median: row.candidateValue != null ? row.candidateValue : portalGetPlayerMedianValue(p),
+      ceiling: row.ceilingValue != null ? row.ceilingValue : portalGetPlayerCeilingValue(p),
+      confidence: row.confidenceLabel || portalGetPlayerConfidenceLabel(p),
+      medicalRisk: row.medicalRiskLabel || portalGetPlayerMedicalRiskLabel(p),
+      projectionNote: row.projectionSummary || portalGetPlayerProjectionSummary(p),
+      scoutNote: String(p.ProjectionScoutNote_calc || ''),
+      valuation: row.candidateValue != null ? row.candidateValue : portalGetPlayerMedianValue(p),
       fitScore: Math.round((row.fit || 0) * 100),
       scenarioFit: row.scenarioFit != null ? Math.round((row.scenarioFit || 0) * 100) : null,
       scenarioDeltaPts: row.scenario ? row.scenario.deltaPts : null,
@@ -2571,7 +2703,8 @@ async function portalRunAIAnalysis() {
         bpm: portalSafeNum(p.BPM), drtg: portalSafeNum(p.DRtg),
         ws40: portalSafeNum(p['WS/40']), usg: portalSafeNum(p['USG%']),
         orPct: portalSafeNum(p['OR%']), drPct: portalSafeNum(p['DR%']),
-        perf: portalSafeNum(p.Score) || portalSafeNum(p.PerfScore_calc),
+        production: portalSafeNum(p.Score) || portalSafeNum(p.PerfScore_calc),
+        projection: row.projectionPerf != null ? row.projectionPerf : portalGetPlayerProjectionPerf(p),
       },
       shooting: recShooting || null,
       _playerRef: p
@@ -2627,6 +2760,7 @@ async function portalRunAIAnalysis() {
       '- Treat fitScore, scenarioFit, scenarioVerdict, scenarioDeltaPts, scenarioValueView, fitBreakdown, replaceGainPts, valueDeltaPct, reasons, scenarioReasons, and risks as quantitative guardrails.\n' +
       '- Do NOT simply repeat the deterministic verdict. Use it as a starting point, then explain whether you agree or disagree and why.\n' +
       '- For EACH shortlisted target, clearly say whether the player is a Strong Fit, Solid Pick, Situational, or Pass.\n' +
+      '- For any target with non-High confidence, elevated medical risk, or a wide projection band, use the exact labels Projection, Confidence, Medical Risk, Floor, Median, and Ceiling in the written evaluation.\n' +
       '- Explain what real roster problem the player solves, whether the price band looks justified, and what the biggest risk is.\n' +
       '- If departures are selected, explain how directly each target replaces what is leaving. If no departures are selected, focus on overall team need and roster balance.\n' +
       '- Use game-log trend context when it is available to call out consistency, late-season momentum, or volatility. Do not invent play-by-play data if it is not in the structured context.\n' +
@@ -2666,6 +2800,7 @@ async function portalRunAIAnalysis() {
       '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
       '- Do not blindly chase the highest raw performer. Weigh acquisition realism, similar valuation tiers, bang-for-buck, and upside/potential. Better players often cost materially more and may be unrealistic.\n' +
       '- Use the fitBreakdown fields to separate direct replacements, value plays, upgrade bets, and upside swings.\n' +
+      '- For any flagged uncertainty player, use the exact labels Projection, Confidence, Medical Risk, Floor, Median, and Ceiling in the written evaluation.\n' +
       '- If a candidate is notably more expensive than the departing player, say whether the talent jump is worth it or likely unrealistic for that value band.\n' +
       '- Give a practical priority order: who to pursue first and why.\n' +
       '- Flag any risks (low-minute sample, turnover-prone, FT issues, style mismatch).\n' +

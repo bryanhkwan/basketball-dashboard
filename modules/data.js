@@ -20,6 +20,10 @@ var baseStatsAll = [];
 var lastPerfAvg = NaN, lastPerfStar = NaN;
 var leagueRosters = {MBB:{tb:[],opp:[]}, WBB:{tb:[],opp:[]}};
 var playerValueView = 'production';
+var _projectionScoutOverrideMap = null;
+var _projectionScoutOverrideKey = '';
+var _projectionScoutTarget = null;
+var _projectionScoutModalBound = false;
 
 try {
   var _savedPlayerValueView = localStorage.getItem('players_value_view_v1');
@@ -29,10 +33,15 @@ try {
 // Career history cache — keyed by player name (lowercase), value: [{_season, ...stats}, …]
 var careerData = {};
 var _careerDataReady = false;
+var _careerDataPromise = null;
 
 // Class inference — inferred from multi-season career appearances
 var _inferredClassMap = {};   // {playerNameLower: 'Fr'|'So'|'Jr'|'Sr'}
 var _currentDataSeason = 2026;
+var _leagueDataStatus = {
+  MBB: { season: '', ready: false, loading: false, error: '', promise: null },
+  WBB: { season: '', ready: false, loading: false, error: '', promise: null },
+};
 
 // ── Team intelligence caches (loaded in background after player data) ────────
 var teamRatings    = {};  // keyed by lowercase team name → {team, adjO, adjD, adjEM, adjT, srs, sos, conference}
@@ -70,6 +79,9 @@ var gsUrlInput, gsKeyInput, loadGsBtn, recalcBtn, exportBtn, resetWeightsBtn, re
 var searchInput, warn, fitPresetEl, weightsBody, showSelectedOnlyEl, advancedDirEl;
 var playersHead, playersBody, activeSheetEl, activeFitEl;
 var playerValueViewEl, activeProjectionEl;
+var projectionScoutModalBackEl, projectionScoutTitleEl, projectionScoutSubEl;
+var projectionFilmBoostEl, projectionMedicalFlagEl, projectionScoutNoteEl;
+var projectionScoutSaveBtnEl, projectionScoutClearBtnEl, projectionScoutCloseBtnEl;
 var wTotalLocalEl, wRemainingEl, wOverBoxEl, wOverEl;
 var kpiPlayers, kpiStats, kpiTotalW, kpiAvgPerf, kpiStarPerf;
 var avgPayEl, minPayEl, maxPayEl, starValueEl, starPctEl, mpModeEl, mpPctEl;
@@ -77,6 +89,66 @@ var modalBack, mClose, mTitle, mSub, mScore, mFit, mVal, mMult, mMeta, mBars, mA
 var confMultToggleEl, confMultBodyEl, confMultTableBody, confMultRangeEl, confMultLeagueNote, resetConfMultBtn;
 var _computeAllTimer = null;
 var _xlsxLoadPromise = null;
+
+function scheduleNonCriticalWork(fn, timeoutMs){
+  if(typeof fn !== 'function') return null;
+  const timeout = Number.isFinite(timeoutMs) ? Math.max(0, timeoutMs) : 1000;
+  if(typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function'){
+    return window.requestIdleCallback(function(){ fn(); }, { timeout });
+  }
+  return setTimeout(fn, timeout);
+}
+
+function _dataSeasonKey(season){
+  return typeof normalizeDashboardSeason === 'function'
+    ? normalizeDashboardSeason(season, String(_currentDataSeason || 2026))
+    : String(season || _currentDataSeason || 2026);
+}
+
+function _dataPlaceholderSheet(){
+  return { __aoa: [['Player','Team','Conference','Pos']] };
+}
+
+function _dataEnsureWorkbookShell(){
+  if(!wb || !wb.Sheets){
+    wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
+  }
+  if(!Array.isArray(wb.SheetNames)) wb.SheetNames = [];
+  [SHEET_MAP.MBB, SHEET_MAP.WBB].forEach(function(name){
+    if(!wb.SheetNames.includes(name)) wb.SheetNames.push(name);
+    if(!wb.Sheets[name]) wb.Sheets[name] = _dataPlaceholderSheet();
+  });
+}
+
+function _dataResetWorkbookShell(season){
+  const seasonKey = _dataSeasonKey(season);
+  wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
+  wb.Sheets[SHEET_MAP.MBB] = _dataPlaceholderSheet();
+  wb.Sheets[SHEET_MAP.WBB] = _dataPlaceholderSheet();
+  _leagueDataStatus.MBB = { season: seasonKey, ready: false, loading: false, error: '', promise: null };
+  _leagueDataStatus.WBB = { season: seasonKey, ready: false, loading: false, error: '', promise: null };
+  tbAllComputed = {};
+  if(typeof _cachedAllPlayers !== 'undefined') _cachedAllPlayers = null;
+}
+
+function _isLeagueDataLoaded(targetLeague, season){
+  const status = _leagueDataStatus[targetLeague];
+  return !!(status && status.ready && status.season === _dataSeasonKey(season));
+}
+
+function _dataCommitLeaguePlayers(targetLeague, players){
+  _dataEnsureWorkbookShell();
+  const headers = (players && players.length)
+    ? Object.keys(players[0]).filter(function(k){ return !k.startsWith('_'); })
+    : ['Player','Team','Conference','Pos'];
+  const aoa = [headers];
+  if(players && players.length){
+    players.forEach(function(player){
+      aoa.push(headers.map(function(header){ return player[header] !== undefined ? player[header] : ''; }));
+    });
+  }
+  wb.Sheets[SHEET_MAP[targetLeague]] = { __aoa: aoa };
+}
 
 function initDataDOMRefs(){
   gsUrlInput = document.getElementById('gsUrl');
@@ -98,6 +170,15 @@ function initDataDOMRefs(){
   activeFitEl = document.getElementById('activeFit');
   playerValueViewEl = document.getElementById('playerValueView');
   activeProjectionEl = document.getElementById('activeProjection');
+  projectionScoutModalBackEl = document.getElementById('projectionScoutModalBack');
+  projectionScoutTitleEl = document.getElementById('projectionScoutTitle');
+  projectionScoutSubEl = document.getElementById('projectionScoutSub');
+  projectionFilmBoostEl = document.getElementById('projectionFilmBoost');
+  projectionMedicalFlagEl = document.getElementById('projectionMedicalFlag');
+  projectionScoutNoteEl = document.getElementById('projectionScoutNote');
+  projectionScoutSaveBtnEl = document.getElementById('projectionScoutSaveBtn');
+  projectionScoutClearBtnEl = document.getElementById('projectionScoutClearBtn');
+  projectionScoutCloseBtnEl = document.getElementById('projectionScoutCloseBtn');
   wTotalLocalEl = document.getElementById('wTotalLocal');
   wRemainingEl = document.getElementById('wRemaining');
   wOverBoxEl = document.getElementById('wOverBox');
@@ -132,6 +213,14 @@ function initDataDOMRefs(){
   confMultRangeEl = document.getElementById('confMultRange');
   confMultLeagueNote = document.getElementById('confMultLeagueNote');
   resetConfMultBtn = document.getElementById('resetConfMult');
+
+  if(!_projectionScoutModalBound && projectionScoutModalBackEl){
+    if(projectionScoutCloseBtnEl) projectionScoutCloseBtnEl.addEventListener('click', closeProjectionScoutModal);
+    projectionScoutModalBackEl.addEventListener('click', function(e){ if(e.target === projectionScoutModalBackEl) closeProjectionScoutModal(); });
+    if(projectionScoutSaveBtnEl) projectionScoutSaveBtnEl.addEventListener('click', saveProjectionScoutOverride);
+    if(projectionScoutClearBtnEl) projectionScoutClearBtnEl.addEventListener('click', clearProjectionScoutOverride);
+    _projectionScoutModalBound = true;
+  }
 }
 
 // --- Helper functions ---
@@ -446,6 +535,268 @@ function setPlayerValueView(mode, opts){
   return playerValueView;
 }
 
+function projectionCurrentUserKey(){
+  let user = '';
+  try {
+    if(typeof authGetUser === 'function') user = authGetUser() || '';
+    if(!user && typeof authIsGuest === 'function' && authIsGuest()) user = 'guest';
+  } catch (_) {}
+  return normalizeName(user || 'local') || 'local';
+}
+
+function projectionScoutStorageKey(){
+  return ['projection_scout_overrides_v1', projectionCurrentUserKey(), league, String(_currentDataSeason || 2026)].join('::');
+}
+
+function projectionScoutPlayerKey(rowOrName, teamName){
+  const playerName = typeof rowOrName === 'object'
+    ? (rowOrName.Player || rowOrName.Name || '')
+    : (rowOrName || '');
+  const team = typeof rowOrName === 'object'
+    ? (rowOrName.Team || rowOrName.team || teamName || '')
+    : (teamName || '');
+  return [league, String(_currentDataSeason || 2026), normalizeName(playerName), normalizeName(team)].join('||');
+}
+
+function projectionNormalizeFilmBoost(value){
+  const numeric = safeNum(value);
+  if(Number.isFinite(numeric)){
+    const normalized = Math.abs(numeric) > 1 ? numeric / 100 : numeric;
+    return clamp(normalized, -0.2, 0.35);
+  }
+  const text = (value ?? '').toString().trim().toLowerCase();
+  if(text === 'high' || text === 'strong') return 0.18;
+  if(text === 'medium' || text === 'moderate') return 0.10;
+  if(text === 'low' || text === 'slight') return 0.05;
+  if(text === 'off' || text === 'none' || text === 'model') return 0;
+  return NaN;
+}
+
+function projectionSnapFilmBoost(value){
+  const numeric = projectionNormalizeFilmBoost(value);
+  if(!Number.isFinite(numeric) || numeric <= 0.001) return 0;
+  const options = [0.05, 0.10, 0.18];
+  let best = options[0];
+  let dist = Math.abs(options[0] - numeric);
+  options.forEach(option => {
+    const nextDist = Math.abs(option - numeric);
+    if(nextDist < dist){
+      best = option;
+      dist = nextDist;
+    }
+  });
+  return best;
+}
+
+function projectionManualBoostLabel(value){
+  const numeric = projectionNormalizeFilmBoost(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return 'Off';
+  if(numeric < 0) return 'Fade';
+  if(numeric >= 0.16) return 'High';
+  if(numeric >= 0.09) return 'Moderate';
+  return 'Low';
+}
+
+function projectionNormalizeMedicalFlag(value){
+  const label = (value ?? '').toString().trim().toLowerCase();
+  if(!label || label === 'model' || label === 'default' || label === 'auto') return '';
+  if(label === 'high') return 'High';
+  if(label === 'moderate' || label === 'medium') return 'Moderate';
+  if(label === 'low') return 'Low';
+  return '';
+}
+
+function projectionManualMedicalRisk(label){
+  switch(projectionNormalizeMedicalFlag(label)){
+    case 'High': return { value: 0.78, label: 'High', source: 'manual', detail: 'manual scout medical flag' };
+    case 'Moderate': return { value: 0.48, label: 'Moderate', source: 'manual', detail: 'manual scout medical flag' };
+    case 'Low': return { value: 0.12, label: 'Low', source: 'manual', detail: 'manual scout medical flag' };
+    default: return null;
+  }
+}
+
+function projectionNormalizeScoutOverride(raw){
+  raw = raw && typeof raw === 'object' ? raw : {};
+  const filmBoostRaw = projectionSnapFilmBoost(raw.filmBoost);
+  const medicalFlag = projectionNormalizeMedicalFlag(raw.medicalFlag);
+  const note = (raw.note ?? '').toString().trim();
+  return {
+    key: String(raw.key || '').trim(),
+    playerName: (raw.playerName ?? '').toString().trim(),
+    teamName: (raw.teamName ?? '').toString().trim(),
+    filmBoost: filmBoostRaw > 0 ? filmBoostRaw : 0,
+    filmLabel: projectionManualBoostLabel(filmBoostRaw),
+    medicalFlag: medicalFlag,
+    note: note,
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+  };
+}
+
+function projectionLoadScoutOverrideMap(force){
+  const key = projectionScoutStorageKey();
+  if(!force && _projectionScoutOverrideMap && _projectionScoutOverrideKey === key) return _projectionScoutOverrideMap;
+  let parsed = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || '{}');
+    parsed = raw && typeof raw === 'object' ? raw : {};
+  } catch (_) {
+    parsed = {};
+  }
+  const normalized = {};
+  Object.keys(parsed).forEach(id => {
+    const next = projectionNormalizeScoutOverride(parsed[id]);
+    if(next.key) normalized[next.key] = next;
+  });
+  _projectionScoutOverrideKey = key;
+  _projectionScoutOverrideMap = normalized;
+  return normalized;
+}
+
+function projectionSaveScoutOverrideMap(map){
+  const key = projectionScoutStorageKey();
+  _projectionScoutOverrideKey = key;
+  _projectionScoutOverrideMap = map || {};
+  try {
+    localStorage.setItem(key, JSON.stringify(_projectionScoutOverrideMap));
+  } catch (_) {}
+}
+
+function projectionGetScoutOverride(row){
+  if(!row) return null;
+  const key = projectionScoutPlayerKey(row);
+  const map = projectionLoadScoutOverrideMap();
+  return key && map[key] ? map[key] : null;
+}
+
+function projectionApplyScoutOverride(row){
+  if(!row) return row;
+  const override = projectionGetScoutOverride(row);
+  if(!override) return row;
+  const next = {...row};
+  if(override.filmBoost > 0) next.ProjectionBoost = override.filmBoost;
+  if(override.medicalFlag) next.ProjectionMedicalFlag = override.medicalFlag;
+  if(override.note) next.ProjectionScoutNote = override.note;
+  return next;
+}
+
+function projectionFindMatchingPlayer(row){
+  if(!row || typeof tbGetAllPlayers !== 'function') return null;
+  const key = projectionScoutPlayerKey(row);
+  return (tbGetAllPlayers(league) || tbGetAllPlayers() || []).find(candidate => projectionScoutPlayerKey(candidate) === key) || null;
+}
+
+function projectionRefreshAfterScoutOverride(row){
+  projectionLoadScoutOverrideMap(true);
+  if(wb) reloadActiveSheet();
+  else computeAll();
+
+  if(window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+    window.ValueLab.handleDataChange();
+  }
+
+  if(typeof portalRecDist !== 'undefined') portalRecDist = null;
+  if(typeof portalCollectAllPlayers === 'function') portalCollectAllPlayers();
+  if(typeof portalRefreshTeamOptions === 'function') portalRefreshTeamOptions();
+
+  if(typeof portalLoadTeamContext === 'function' && typeof portalTeamCtx !== 'undefined' && portalTeamCtx && portalTeamCtx.team){
+    portalLoadTeamContext(portalTeamCtx.team).then(function(){
+      if(typeof portalComputeRecommendations === 'function') portalComputeRecommendations();
+      if(typeof portalRenderRecommendations === 'function') portalRenderRecommendations();
+      if(typeof portalRefreshScenarioRows === 'function') portalRefreshScenarioRows();
+    }).catch(function(){
+      if(typeof portalRenderRecommendations === 'function') portalRenderRecommendations();
+      if(typeof portalRefreshScenarioRows === 'function') portalRefreshScenarioRows();
+    });
+  } else {
+    if(typeof portalRenderRecommendations === 'function') portalRenderRecommendations();
+    if(typeof portalRefreshScenarioRows === 'function') portalRefreshScenarioRows();
+  }
+
+  if(typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer && typeof openProfile === 'function'){
+    const updated = projectionFindMatchingPlayer(_currentProfilePlayer);
+    if(updated) openProfile(updated);
+  }
+
+  if(row && typeof renderPlayers === 'function') renderPlayers();
+}
+
+function openProjectionScoutModal(row){
+  if(!projectionScoutModalBackEl || !row) return false;
+  const override = projectionGetScoutOverride(row);
+  _projectionScoutTarget = {
+    key: projectionScoutPlayerKey(row),
+    playerName: (row.Player || row.Name || '').toString(),
+    teamName: (row.Team || '').toString(),
+    row: row,
+  };
+
+  if(projectionScoutTitleEl) projectionScoutTitleEl.textContent = _projectionScoutTarget.playerName || 'Projection scout inputs';
+  if(projectionScoutSubEl) projectionScoutSubEl.textContent = [_projectionScoutTarget.teamName || '—', league + ' ' + String(_currentDataSeason || 2026)].join(' • ');
+  if(projectionFilmBoostEl) {
+    const effectiveBoost = override ? override.filmBoost : projectionSnapFilmBoost(row.ProjectionBoost || row['Projection Boost'] || row.FilmBoost || row['Film Boost'] || row.ScoutBoost || row['Scout Boost']);
+    projectionFilmBoostEl.value = effectiveBoost > 0 ? String(effectiveBoost.toFixed(2)) : '0';
+  }
+  if(projectionMedicalFlagEl) {
+    const effectiveFlag = override ? override.medicalFlag : projectionNormalizeMedicalFlag(row.ProjectionMedicalFlag || row['Projection Medical Flag']);
+    projectionMedicalFlagEl.value = effectiveFlag || '';
+  }
+  if(projectionScoutNoteEl) {
+    projectionScoutNoteEl.value = override ? (override.note || '') : ((row.ProjectionScoutNote || '').toString());
+  }
+
+  projectionScoutModalBackEl.style.display = 'flex';
+  return true;
+}
+
+function closeProjectionScoutModal(){
+  if(!projectionScoutModalBackEl) return;
+  projectionScoutModalBackEl.style.display = 'none';
+  _projectionScoutTarget = null;
+}
+
+function saveProjectionScoutOverride(){
+  if(!_projectionScoutTarget) return false;
+  const targetRow = _projectionScoutTarget.row || null;
+  const label = _projectionScoutTarget.playerName || 'Player';
+  const map = {...projectionLoadScoutOverrideMap()};
+  const filmBoost = projectionSnapFilmBoost(projectionFilmBoostEl ? projectionFilmBoostEl.value : 0);
+  const medicalFlag = projectionNormalizeMedicalFlag(projectionMedicalFlagEl ? projectionMedicalFlagEl.value : '');
+  const note = projectionScoutNoteEl ? projectionScoutNoteEl.value.trim() : '';
+  if(filmBoost <= 0 && !medicalFlag && !note){
+    delete map[_projectionScoutTarget.key];
+  } else {
+    map[_projectionScoutTarget.key] = projectionNormalizeScoutOverride({
+      key: _projectionScoutTarget.key,
+      playerName: _projectionScoutTarget.playerName,
+      teamName: _projectionScoutTarget.teamName,
+      filmBoost: filmBoost,
+      medicalFlag: medicalFlag,
+      note: note,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  projectionSaveScoutOverrideMap(map);
+  closeProjectionScoutModal();
+  projectionRefreshAfterScoutOverride(targetRow);
+  if(typeof showWarn === 'function') clearWarn();
+  if(typeof valueLabSetStatus === 'function') valueLabSetStatus(label + ' projection inputs saved.', 'good');
+  return true;
+}
+
+function clearProjectionScoutOverride(){
+  if(!_projectionScoutTarget) return false;
+  const targetRow = _projectionScoutTarget.row || null;
+  const label = _projectionScoutTarget.playerName || 'Player';
+  const map = {...projectionLoadScoutOverrideMap()};
+  delete map[_projectionScoutTarget.key];
+  projectionSaveScoutOverrideMap(map);
+  closeProjectionScoutModal();
+  projectionRefreshAfterScoutOverride(targetRow);
+  if(typeof showWarn === 'function') clearWarn();
+  if(typeof valueLabSetStatus === 'function') valueLabSetStatus(label + ' projection inputs cleared.', 'good');
+  return true;
+}
+
 function projectionGetGamesPlayed(row){
   const keys = ['G', 'GP', 'Games', 'GamesPlayed', 'gamesPlayed'];
   for(const key of keys){
@@ -509,18 +860,29 @@ function projectionGetStatusText(row){
   return '';
 }
 
+function projectionGetManualMedicalFlag(row){
+  const keys = ['ProjectionMedicalFlag', 'Projection Medical Flag', 'ProjectionMedicalRisk', 'Projection Medical Risk', 'ScoutMedicalFlag'];
+  for(const key of keys){
+    const value = projectionNormalizeMedicalFlag(row[key]);
+    if(value) return value;
+  }
+  return '';
+}
+
+function projectionGetManualScoutNote(row){
+  const keys = ['ProjectionScoutNote', 'Projection Scout Note', 'ScoutNote', 'Scout Note'];
+  for(const key of keys){
+    const value = (row[key] ?? '').toString().trim();
+    if(value) return value;
+  }
+  return '';
+}
+
 function projectionGetManualBoost(row){
   const keys = ['ProjectionBoost', 'Projection Boost', 'FilmBoost', 'Film Boost', 'ScoutBoost', 'Scout Boost', 'ProjectionUpside'];
   for(const key of keys){
-    const numeric = safeNum(row[key]);
-    if(Number.isFinite(numeric)){
-      const normalized = Math.abs(numeric) > 1 ? numeric / 100 : numeric;
-      return clamp(normalized, -0.2, 0.35);
-    }
-    const text = (row[key] ?? '').toString().trim().toLowerCase();
-    if(text === 'high') return 0.18;
-    if(text === 'medium') return 0.10;
-    if(text === 'low') return 0.05;
+    const normalized = projectionNormalizeFilmBoost(row[key]);
+    if(Number.isFinite(normalized)) return normalized;
   }
   return 0;
 }
@@ -554,6 +916,8 @@ function projectionComputeConfidence(row, games, totalMinutes, priorCount){
 }
 
 function projectionComputeMedicalRisk(row, games, totalMinutes, priorCount){
+  const manualRisk = projectionManualMedicalRisk(projectionGetManualMedicalFlag(row));
+  if(manualRisk) return manualRisk;
   const statusText = projectionGetStatusText(row).toLowerCase();
   if(statusText){
     if(/out|surgery|acl|season|redshirt|medical redshirt|torn|fracture|broken/.test(statusText)){
@@ -617,6 +981,8 @@ function projectionCalcMetrics(row, ctx){
   const confidence = projectionComputeConfidence(row, games, totalMinutes, priorEntries.length);
   const medicalRisk = projectionComputeMedicalRisk(row, games, totalMinutes, priorEntries.length);
   const manualBoost = projectionGetManualBoost(row);
+  const manualMedicalFlag = projectionGetManualMedicalFlag(row);
+  const manualScoutNote = projectionGetManualScoutNote(row);
   const productionPerf = safeNum(row.PerfScore_calc);
   const productionValue = safeNum(row.ActualValuation_calc);
 
@@ -646,6 +1012,10 @@ function projectionCalcMetrics(row, ctx){
   }
 
   const uncertainty = clamp((1 - confidence) * 0.75 + medicalRisk.value * 0.6, 0.12, 0.5);
+  let floorPerf = Number.isFinite(healthyPerf) ? Math.max(0, healthyPerf * (1 - uncertainty * 0.54)) : NaN;
+  let ceilingPerf = Number.isFinite(healthyPerf) ? healthyPerf * (1 + uncertainty * 0.42 + Math.max(0, manualBoost) * 0.08) : NaN;
+  if(Number.isFinite(floorPerf) && Number.isFinite(healthyPerf) && floorPerf > healthyPerf) floorPerf = healthyPerf;
+  if(Number.isFinite(ceilingPerf) && Number.isFinite(healthyPerf) && ceilingPerf < healthyPerf) ceilingPerf = healthyPerf;
   let floorValue = Number.isFinite(medianValue) ? clamp(medianValue * (1 - uncertainty), ctx.minPay, ctx.maxPay) : NaN;
   const ceilingBase = Number.isFinite(healthyValue) ? Math.max(healthyValue, medianValue) : medianValue;
   const ceilingBoost = clamp(1 + uncertainty * 0.68 + manualBoost * 0.16, 1.06, 1.45);
@@ -659,6 +1029,8 @@ function projectionCalcMetrics(row, ctx){
   if(priorEntries.length) reasons.push('blended with ' + priorEntries.length + ' prior season' + (priorEntries.length === 1 ? '' : 's'));
   if(medicalRisk.label !== 'Low') reasons.push('medical risk ' + medicalRisk.label.toLowerCase());
   if(manualBoost > 0) reasons.push('scout upside boost applied');
+  if(manualMedicalFlag) reasons.push('manual medical flag ' + manualMedicalFlag.toLowerCase());
+  if(manualScoutNote) reasons.push('scout note attached');
   if(!reasons.length) reasons.push('stable projection profile');
 
   return {
@@ -666,6 +1038,8 @@ function projectionCalcMetrics(row, ctx){
     ProjectionMinutesSample_calc: totalMinutes,
     ProjectionPriorSeasons_calc: priorEntries.length,
     ProjectionPerf_calc: healthyPerf,
+    ProjectionFloorPerf_calc: floorPerf,
+    ProjectionCeilingPerf_calc: ceilingPerf,
     ProjectionHealthyValue_calc: healthyValue,
     ProjectionMedianValue_calc: medianValue,
     ProjectionFloorValue_calc: floorValue,
@@ -680,6 +1054,9 @@ function projectionCalcMetrics(row, ctx){
     ProjectionHealthyTalentLabel_calc: projectionTalentLabel(healthyPerf, ctx.perfPool),
     ProjectionReasonSummary_calc: reasons.join(' • '),
     ProjectionManualBoost_calc: manualBoost,
+    ProjectionManualBoostLabel_calc: projectionManualBoostLabel(manualBoost),
+    ProjectionManualMedicalFlag_calc: manualMedicalFlag,
+    ProjectionScoutNote_calc: manualScoutNote,
     ProjectionDelta_calc: (Number.isFinite(medianValue) && Number.isFinite(productionValue)) ? (medianValue - productionValue) : NaN,
   };
 }
@@ -845,14 +1222,20 @@ function requestComputeAll(delayMs){
 
 // --- computeAll ---
 
-function computeAll(){
+function computeAll(options){
+  options = options && typeof options === 'object' ? options : {};
+  const skipRender = !!options.skipRender;
   if(_computeAllTimer){
     clearTimeout(_computeAllTimer);
     _computeAllTimer = null;
   }
   ensureWeightsCoverStats(pos, rows);
 
-  if(!rows.length) { computed = []; renderPlayers(); return; }
+  if(!rows.length) {
+    computed = [];
+    if(!skipRender) renderPlayers();
+    return;
+  }
 
   const confMultOn = confMultToggleEl && confMultToggleEl.checked && sheetHasConference();
 
@@ -956,7 +1339,7 @@ function computeAll(){
   _applyInferredClassToPool(computed);
   _applyInferredClassToPool(rows);
 
-  renderPlayers();
+  if(!skipRender) renderPlayers();
 }
 
 // --- Google Sheets load ---
@@ -1141,97 +1524,166 @@ async function loadFromCBData(year) {
   }
 }
 
+async function _loadMbbSheetData(year) {
+  const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  let res;
+  let data = {};
+  try {
+    res = await fetch(WORKER + '/api/cbdata/players?season=' + encodeURIComponent(year));
+    data = await res.json().catch(function(){ return {}; });
+  } catch (err) {
+    return { players: [], warning: 'Could not load MBB data: ' + (err && err.message ? err.message : err) };
+  }
+  if (!res || !res.ok) {
+    return { players: [], warning: (data && (data.error || data.message)) || ('Could not load MBB data (HTTP ' + (res ? res.status : 'network') + ')') };
+  }
+  if (!data.players || !data.players.length) {
+    return { players: [], warning: 'No MBB players returned from API (season ' + year + ').' };
+  }
+  return { players: data.players, warning: '' };
+}
+
+async function _loadWbbSheetData(year) {
+  const warnings = [];
+  const [wbbPlayersSettled, wbbTeamsSettled] = await Promise.allSettled([
+    _wbbLoadAllPlayerPages(year),
+    fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(year)).then(function(r){ return r.json(); }),
+  ]);
+
+  if (!(wbbPlayersSettled.status === 'fulfilled' && wbbPlayersSettled.value && wbbPlayersSettled.value.length)) {
+    const errText = wbbPlayersSettled.reason ? String(wbbPlayersSettled.reason) : 'ESPN byathlete fetch failed';
+    return { players: [], warning: 'Could not load WBB data: ' + errText };
+  }
+
+  const players = wbbPlayersSettled.value;
+  if (wbbTeamsSettled.status === 'fulfilled' && wbbTeamsSettled.value && wbbTeamsSettled.value.teams) {
+    const teamsMap = wbbTeamsSettled.value.teams;
+    const nameToTeamData = {};
+    Object.values(teamsMap).forEach(function(td){
+      if (td.location)     nameToTeamData[td.location.toLowerCase()] = td;
+      if (td.displayName)  nameToTeamData[td.displayName.toLowerCase()] = td;
+      if (td.abbreviation) nameToTeamData[td.abbreviation.toLowerCase()] = td;
+      if (td.name)         nameToTeamData[td.name.toLowerCase()] = td;
+    });
+    players.forEach(function(player){
+      const tid = String(player.TeamId || '');
+      let teamData = tid ? teamsMap[tid] : null;
+      if (!teamData && player.Team) teamData = nameToTeamData[player.Team.toLowerCase()] || null;
+      if (teamData) {
+        player.Team = teamData.location || teamData.displayName || player.Team;
+        player.Conference = teamData.conference || '';
+      }
+    });
+  } else {
+    warnings.push('WBB team mapping was unavailable during load.');
+  }
+
+  players.forEach(_calcWbbDerivedStats);
+  return { players: players, warning: warnings.join(' | ') };
+}
+
+async function ensureLeagueDataLoaded(targetLeague, year, opts) {
+  opts = opts && typeof opts === 'object' ? opts : {};
+  const seasonKey = _dataSeasonKey(year);
+  if (!_leagueDataStatus[targetLeague] || _leagueDataStatus[targetLeague].season !== seasonKey) {
+    _leagueDataStatus[targetLeague] = { season: seasonKey, ready: false, loading: false, error: '', promise: null };
+  }
+  const status = _leagueDataStatus[targetLeague];
+  if (status.ready && status.season === seasonKey) return { loaded: true, warning: '' };
+  if (status.loading && status.promise) return status.promise;
+
+  _dataEnsureWorkbookShell();
+  status.loading = true;
+  status.error = '';
+  status.promise = (async function(){
+    try {
+      const result = targetLeague === 'WBB'
+        ? await _loadWbbSheetData(seasonKey)
+        : await _loadMbbSheetData(seasonKey);
+
+      if (_leagueDataStatus[targetLeague] !== status || status.season !== seasonKey) return { loaded: false, warning: '' };
+
+      if (result.players && result.players.length) {
+        if (targetLeague === 'MBB') _mbbActivePlayersRef = result.players;
+        else _wbbActivePlayersRef = result.players;
+        _dataCommitLeaguePlayers(targetLeague, result.players);
+        status.ready = true;
+
+        if (opts.refreshIfActive && targetLeague === league) {
+          clearWarn();
+          reloadActiveSheet();
+          if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
+            window.EvalPresets.applyActiveForCurrentLeague(true);
+          }
+          if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+        }
+
+        if (result.players.length) {
+          if (targetLeague === 'WBB') {
+            scheduleNonCriticalWork(function(){ _wbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 1400 : 800);
+          } else {
+            scheduleNonCriticalWork(function(){ _mbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 1400 : 800);
+          }
+        }
+
+        if (result.warning) console.warn(result.warning);
+        return { loaded: true, warning: result.warning || '' };
+      }
+
+      status.ready = false;
+      status.error = result.warning || ('Could not load ' + targetLeague + ' data.');
+      _dataCommitLeaguePlayers(targetLeague, []);
+      if (opts.userVisible && targetLeague === league && typeof showWarn === 'function') showWarn(status.error);
+      else if (status.error) console.warn(status.error);
+      return { loaded: false, warning: status.error };
+    } catch (err) {
+      if (_leagueDataStatus[targetLeague] !== status || status.season !== seasonKey) return { loaded: false, warning: '' };
+      status.ready = false;
+      status.error = targetLeague + ' load error: ' + (err && err.message ? err.message : err);
+      _dataCommitLeaguePlayers(targetLeague, []);
+      if (opts.userVisible && targetLeague === league && typeof showWarn === 'function') showWarn(status.error);
+      else console.warn(status.error);
+      return { loaded: false, warning: status.error };
+    } finally {
+      if (_leagueDataStatus[targetLeague] === status && status.season === seasonKey) {
+        status.loading = false;
+        status.promise = null;
+      }
+    }
+  })();
+
+  return status.promise;
+}
+
 // ── loadAllData — MBB from CBD API, WBB from ESPN/worker-backed sources ──────
 async function loadAllData(year) {
   year = typeof normalizeDashboardSeason === 'function' ? normalizeDashboardSeason(year, '2026') : String(year || '2026');
   _currentDataSeason = parseInt(year, 10) || 2026;
-  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
   var loadingOverlayEl = document.getElementById('loadingOverlay');
   var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
+  var primaryLeague = league === 'WBB' ? 'WBB' : 'MBB';
+  var secondaryLeague = primaryLeague === 'MBB' ? 'WBB' : 'MBB';
 
   function finishIfInitial() {
     if (isInitialLoad && typeof authFinishLoading === 'function') authFinishLoading();
   }
 
   try {
-    if (!isInitialLoad) showWarn('Loading data…');
+    _dataResetWorkbookShell(year);
+    teamRatings = {};
+    allRatingsData = [];
+    _ratingsReady = false;
 
-    // Fetch MBB (CBD API), WBB (direct ESPN byathlete), and WBB teams (Worker) in parallel
-    const [mbbSettled, wbbPlayersSettled, wbbTeamsSettled] = await Promise.allSettled([
-      fetch(WORKER + '/api/cbdata/players?season=' + encodeURIComponent(year)),
-      _wbbLoadAllPlayerPages(year),
-      fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(year)).then(r => r.json()),
-    ]);
+    if (!isInitialLoad) showWarn('Loading ' + primaryLeague + ' data…');
 
-    wb = { SheetNames: [SHEET_MAP.MBB, SHEET_MAP.WBB], Sheets: {} };
-    const warnings = [];
+    const primaryResult = await ensureLeagueDataLoaded(primaryLeague, year, {
+      userVisible: !isInitialLoad,
+      refreshIfActive: false,
+      background: false,
+    });
 
-    var _mbbLoadedPlayers = null; // keep ref for background height loading
-    _mbbActivePlayersRef = null;
-
-    // — MBB from CBD API —
-    if (mbbSettled.status === 'fulfilled' && mbbSettled.value.ok) {
-      const data = await mbbSettled.value.json();
-      if (data.players && data.players.length) {
-        const players = data.players;
-        _mbbActivePlayersRef = players;
-        const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
-        const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
-        wb.Sheets[SHEET_MAP.MBB] = { __aoa: aoa };
-        _mbbLoadedPlayers = players;
-      } else {
-        warnings.push('No MBB players returned from API (season ' + year + ').');
-        wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
-      }
-    } else {
-      const errText = mbbSettled.reason ? String(mbbSettled.reason) : 'HTTP ' + (mbbSettled.value && mbbSettled.value.status);
-      warnings.push('Could not load MBB data: ' + errText);
-      wb.Sheets[SHEET_MAP.MBB] = { __aoa: [['Player','Team','Conference','Pos']] };
-    }
-
-    // — WBB from ESPN byathlete API (direct browser fetch, CORS-friendly) —
-    var _wbbLoadedPlayers = null; // keep ref for background height loading
-    _wbbActivePlayersRef = null;
-    if (wbbPlayersSettled.status === 'fulfilled' && wbbPlayersSettled.value && wbbPlayersSettled.value.length) {
-      const players = wbbPlayersSettled.value;
-      _wbbActivePlayersRef = players;
-      // Enrich Team name + Conference from /api/wbb/teams response
-      // Always overwrite ath.teamName (which is mascot-only like "Huskies") with proper school name
-      if (wbbTeamsSettled.status === 'fulfilled' && wbbTeamsSettled.value && wbbTeamsSettled.value.teams) {
-        const teamsMap = wbbTeamsSettled.value.teams;
-        // Build a name→teamData lookup as fallback for when TeamId is missing
-        const nameToTeamData = {};
-        Object.values(teamsMap).forEach(td => {
-          if (td.location)     nameToTeamData[td.location.toLowerCase()]     = td;
-          if (td.displayName)  nameToTeamData[td.displayName.toLowerCase()]  = td;
-          if (td.abbreviation) nameToTeamData[td.abbreviation.toLowerCase()] = td;
-          if (td.name)         nameToTeamData[td.name.toLowerCase()]         = td; // mascot fallback
-        });
-        players.forEach(p => {
-          const tid = String(p.TeamId || '');
-          let td = tid ? teamsMap[tid] : null;
-          // Fallback: look up by current team name string if TeamId didn't resolve
-          if (!td && p.Team) td = nameToTeamData[p.Team.toLowerCase()] || null;
-          if (td) {
-            p.Team       = td.location || td.displayName || p.Team;
-            p.Conference = td.conference || '';
-          }
-        });
-      }
-      // Compute derived advanced stats (eFG%, TS%, A/TO, BPM, WS/40) in-place
-      players.forEach(_calcWbbDerivedStats);
-      const headers = Object.keys(players[0]).filter(k => !k.startsWith('_'));
-      const aoa = [headers].concat(players.map(p => headers.map(h => p[h] !== undefined ? p[h] : '')));
-      wb.Sheets[SHEET_MAP.WBB] = { __aoa: aoa };
-      _wbbLoadedPlayers = players;
-    } else {
-      const errText = wbbPlayersSettled.reason ? String(wbbPlayersSettled.reason) : 'ESPN byathlete fetch failed';
-      warnings.push('Could not load WBB data: ' + errText);
-      wb.Sheets[SHEET_MAP.WBB] = { __aoa: [['Player','Team','Conference','Pos']] };
-    }
-
-    if (warnings.length) showWarn(warnings.join(' | '));
-    else clearWarn();
+    if (primaryResult && primaryResult.loaded) clearWarn();
+    else if (primaryResult && primaryResult.warning) showWarn(primaryResult.warning);
 
     resetWeightsBtn.disabled = false;
     recalcBtn.disabled       = false;
@@ -1240,37 +1692,37 @@ async function loadAllData(year) {
     applyLeagueDefaults(true);
     renderWeights();
     activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+    if (_careerDataReady) _inferClassFromCareerData();
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     reloadActiveSheet();
     if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
       window.EvalPresets.applyActiveForCurrentLeague(true);
     }
-    // Refresh Teams Hub team dropdown whenever data reloads
     if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
-    // Populate career history in background — does not block initial render
-    _careerDataReady = false;
-    loadCareerSeasons().catch(() => {});
-    // Populate team ratings in background — used by profiles and Team Hub
-    _ratingsReady = false;
-    loadTeamRatings(year).then(() => {
-      // Second refresh after ratings load so team search has full team list
-      if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
-      if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-        window.ValueLab.handleDataChange();
-      }
-    }).catch(() => {});
     finishIfInitial();
 
-    // Background height loading for WBB — fetches rosters from ESPN after initial render
-    if (_wbbLoadedPlayers && _wbbLoadedPlayers.length) {
-      _wbbLoadHeightsBackground(_wbbLoadedPlayers, year).catch(() => {});
+    scheduleNonCriticalWork(function(){
+      loadTeamRatings(year).then(() => {
+        if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+        if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+          window.ValueLab.handleDataChange();
+        }
+      }).catch(() => {});
+    }, 500);
+
+    if (!_careerDataReady && !_careerDataPromise) {
+      scheduleNonCriticalWork(function(){ loadCareerSeasons().catch(() => {}); }, 1200);
     }
 
-    // Background height loading for MBB — fetches rosters from ESPN after initial render
-    if (_mbbLoadedPlayers && _mbbLoadedPlayers.length) {
-      _mbbLoadHeightsBackground(_mbbLoadedPlayers, year).catch(() => {});
-    }
+    scheduleNonCriticalWork(function(){
+      ensureLeagueDataLoaded(secondaryLeague, year, {
+        userVisible: false,
+        refreshIfActive: true,
+        background: true,
+      }).catch(() => {});
+    }, 900);
+
     if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
       window.ValueLab.handleDataChange();
     }
@@ -1283,42 +1735,52 @@ async function loadAllData(year) {
 
 // ── loadCareerSeasons — background-fetch 2022–2026 for career history ────────
 async function loadCareerSeasons() {
-  const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
-  const years = [2022, 2023, 2024, 2025, 2026];
+  if (_careerDataReady) return careerData;
+  if (_careerDataPromise) return _careerDataPromise;
 
-  const results = await Promise.allSettled(
-    years.map(y => fetch(WORKER + '/api/cbdata/players?season=' + y).then(r => r.json()))
-  );
+  _careerDataPromise = (async function(){
+    const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+    const years = [2022, 2023, 2024, 2025, 2026];
 
-  careerData = {};
-  results.forEach((result, i) => {
-    if (result.status !== 'fulfilled') return;
-    const year = years[i];
-    const players = result.value.players || [];
-    players.forEach(p => {
-      const key = (p.Player || '').toLowerCase().trim();
-      if (!key) return;
-      if (!careerData[key]) careerData[key] = [];
-      careerData[key].push(Object.assign({}, p, { _season: year }));
+    const results = await Promise.allSettled(
+      years.map(y => fetch(WORKER + '/api/cbdata/players?season=' + y).then(r => r.json()))
+    );
+
+    careerData = {};
+    results.forEach((result, i) => {
+      if (result.status !== 'fulfilled') return;
+      const seasonYear = years[i];
+      const players = result.value.players || [];
+      players.forEach(p => {
+        const key = (p.Player || '').toLowerCase().trim();
+        if (!key) return;
+        if (!careerData[key]) careerData[key] = [];
+        careerData[key].push(Object.assign({}, p, { _season: seasonYear }));
+      });
     });
-  });
 
-  // Sort each player's history oldest → newest
-  Object.keys(careerData).forEach(k => {
-    careerData[k].sort((a, b) => a._season - b._season);
-  });
+    Object.keys(careerData).forEach(k => {
+      careerData[k].sort((a, b) => a._season - b._season);
+    });
 
-  _careerDataReady = true;
+    _careerDataReady = true;
+    _inferClassFromCareerData();
+    _applyInferredClassAll();
+    if (rows && rows.length) scheduleNonCriticalWork(function(){ computeAll(); }, 180);
+    else if (typeof renderPlayers === 'function') scheduleNonCriticalWork(function(){ renderPlayers(); }, 120);
 
-  // Infer class from career history and apply to all player pools
-  _inferClassFromCareerData();
-  _applyInferredClassAll();
-  if (rows && rows.length) computeAll();
-  else if (typeof renderPlayers === 'function') renderPlayers();
+    if (typeof window._onCareerDataReady === 'function') {
+      window._onCareerDataReady();
+      window._onCareerDataReady = null;
+    }
 
-  if (typeof window._onCareerDataReady === 'function') {
-    window._onCareerDataReady();
-    window._onCareerDataReady = null;
+    return careerData;
+  })();
+
+  try {
+    return await _careerDataPromise;
+  } finally {
+    _careerDataPromise = null;
   }
 }
 
@@ -1344,7 +1806,7 @@ function _applyInferredClassToPool(pool) {
   if (!pool || !pool.length || !Object.keys(_inferredClassMap).length) return;
   for (var i = 0; i < pool.length; i++) {
     var r = pool[i];
-    if (r.Class) continue; // already has class from API
+    if (r.Class) continue;
     var key = (r.Player || '').toLowerCase().trim();
     if (_inferredClassMap[key]) {
       r.Class = _inferredClassMap[key];
@@ -1359,7 +1821,7 @@ function _applyInferredClassAll() {
   for (var i = 0; i < keys.length; i++) {
     _applyInferredClassToPool(tbAllComputed[keys[i]]);
   }
-  _cachedAllPlayers = null; // invalidate cache so AI chat sees updated class
+  _cachedAllPlayers = null;
 }
 
 // ── Shared worker URL ──────────────────────────────────────────────────────
@@ -1375,8 +1837,6 @@ async function loadTeamRatings(year) {
     const r = await fetch(endpoint);
     if (!r.ok) return;
     const data = await r.json();
-    // Filter to requested season only — API returns all historical seasons,
-    // keeping only the target year ensures teamRatings and percentiles are correct.
     allRatingsData = (data.teams || []).filter(t => +t.season === +year);
     teamRatings = {};
     allRatingsData.forEach(t => {
@@ -2200,6 +2660,14 @@ function switchLeague(newLeague){
   renderWeights();
   renderConfMultTable();
   reloadActiveSheet();
+  if(!_isLeagueDataLoaded(newLeague, _currentDataSeason)){
+    showWarn('Loading ' + newLeague + ' data…');
+    ensureLeagueDataLoaded(newLeague, _currentDataSeason, {
+      userVisible: true,
+      refreshIfActive: true,
+      background: false,
+    }).catch(() => {});
+  }
   if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
     window.EvalPresets.applyActiveForCurrentLeague(true);
   }
@@ -2272,7 +2740,7 @@ function reloadActiveSheet(){
     } else {
       out['3PT_Rating'] = 0;
     }
-    return out;
+    return projectionApplyScoutOverride(out);
   });
 
   const guards = normalized.filter(r => r.Position === 'Guards');
@@ -2281,7 +2749,7 @@ function reloadActiveSheet(){
   rows = pos === 'Guards' ? guards : bigs;
   ensureWeightsCoverStats(pos, rows);
   renderWeights();
-  computeAll();
+  computeAll({ skipRender: true });
 
   const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
   const sibRows = pos === 'Guards' ? bigs : guards;
@@ -2291,24 +2759,20 @@ function reloadActiveSheet(){
       pos = sibPos;
       rows = sibRows;
       ensureWeightsCoverStats(pos, rows);
-      computeAll();
-      console.log(`Auto-cached ${league}_${sibPos}: ${tbAllComputed[league+'_'+sibPos]?.length || 0} players`);
+      computeAll({ skipRender: true });
       pos = savedPos; rows = savedRows; computed = savedComputed;
       ensureWeightsCoverStats(pos, rows);
       renderWeights();
-      renderPlayers();
     }catch(e){
       console.error('Sibling computation failed:', e);
       pos = pos === sibPos ? (sibPos === 'Guards' ? 'Bigs' : 'Guards') : pos;
     }
-  } else {
-    console.warn(`No ${sibPos} rows found for ${league}`);
   }
-  console.log('tbAllComputed keys:', Object.keys(tbAllComputed), 'sizes:', Object.fromEntries(Object.entries(tbAllComputed).map(([k,v])=>[k,v.length])));
+  renderPlayers();
 }
 
 function exportCSV(){
-  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc'];
+  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {
@@ -2348,6 +2812,9 @@ class DataManager {
   showWarn(msg){ return showWarn(msg); }
   clearWarn(){ return clearWarn(); }
   setPlayerValueView(mode, opts){ return setPlayerValueView(mode, opts); }
+  openProjectionScoutModal(row){ return openProjectionScoutModal(row); }
+  closeProjectionScoutModal(){ return closeProjectionScoutModal(); }
+  getProjectionScoutOverride(row){ return projectionGetScoutOverride(row); }
   setActiveTab(el, sel){ return setActiveTab(el, sel); }
   applyLeagueTheme(lg){ return applyLeagueTheme(lg); }
   switchLeague(lg){ return switchLeague(lg); }

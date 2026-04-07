@@ -1119,11 +1119,11 @@
           <h2 class="valueLabHeroTitle">Value Lab</h2>
           <span class="valueLabHeroBadge">Director View</span>
         </div>
-        <p class="valueLabHeroText">Build investment cases, compare model value to real contracts, and see whether a roster is producing enough basketball value for what you are spending.</p>
+        <p class="valueLabHeroText">Build investment cases, compare projection median to real contracts, and see whether a roster is buying enough basketball value once floor, ceiling, confidence, and medical risk are all on the table.</p>
         <div class="valueLabHeroTags">
           <span class="valueLabHeroTag">Budget planning</span>
           <span class="valueLabHeroTag">Contract efficiency</span>
-          <span class="valueLabHeroTag">Outcome forecasting</span>
+          <span class="valueLabHeroTag">Projection range</span>
           <span class="valueLabHeroTag">Portal value watch</span>
         </div>
       </div>
@@ -1261,12 +1261,13 @@
               <th>Team</th>
               <th>Pos</th>
               <th>Class</th>
-              <th class="playersPerfHead">Perf</th>
-              <th>Model Value</th>
+              <th class="playersPerfHead">Production</th>
+              <th>Median $</th>
               <th>Actual Spend</th>
               <th>Delta</th>
-              <th>Expected Perf</th>
+              <th>Projection</th>
               <th>Surplus</th>
+              <th>Confidence</th>
               <th>ROI Call</th>
               <th>Action</th>
             </tr>
@@ -2299,6 +2300,55 @@
 
 <!-- Shot hover tooltip -->
 <div id="pShotTooltip"></div>
+
+<!-- Projection scout input modal -->
+<div class="modalBack" id="projectionScoutModalBack" style="display:none;z-index:65">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:560px;width:94%">
+    <div class="modalHead">
+      <div>
+        <div class="modalTitle" id="projectionScoutTitle">Projection scout inputs</div>
+        <div class="modalSub" id="projectionScoutSub">—</div>
+      </div>
+      <button class="close" id="projectionScoutCloseBtn">Close</button>
+    </div>
+    <div class="modalBody">
+      <div class="panel">
+        <div class="panelHead">Manual adjustment</div>
+        <div class="panelBody">
+          <div class="hint" style="margin-top:0">Film should move the projection band and confidence, not replace the stat base. Use these inputs when the current season sample is distorted by injury, role, or usage context.</div>
+          <div class="projectionScoutGrid">
+            <div>
+              <label for="projectionFilmBoost">Film upside</label>
+              <select id="projectionFilmBoost">
+                <option value="0">Model only</option>
+                <option value="0.05">Low boost</option>
+                <option value="0.10">Moderate boost</option>
+                <option value="0.18">High boost</option>
+              </select>
+            </div>
+            <div>
+              <label for="projectionMedicalFlag">Medical flag</label>
+              <select id="projectionMedicalFlag">
+                <option value="">Model default</option>
+                <option value="Low">Low risk</option>
+                <option value="Moderate">Moderate risk</option>
+                <option value="High">High risk</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <label for="projectionScoutNote">Scout note</label>
+            <textarea id="projectionScoutNote" placeholder="Optional context for why the film or medical read differs from the raw sample." style="width:100%;min-height:88px;resize:vertical"></textarea>
+          </div>
+          <div class="projectionScoutActions">
+            <button id="projectionScoutClearBtn" type="button" class="secondary">Clear inputs</button>
+            <button id="projectionScoutSaveBtn" type="button" class="primary">Save inputs</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Comparison Modal -->
 <div class="modalBack" id="compareBack" style="z-index:55">

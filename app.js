@@ -210,7 +210,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Profile modal close handlers
   mClose.addEventListener('click', closeProfile);
   modalBack.addEventListener('click', (e)=>{ if(e.target === modalBack) closeProfile(); });
-  window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeProfile(); closeStatInfo(); } });
+  window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape'){ closeProfile(); closeStatInfo(); if(typeof closeProjectionScoutModal === 'function') closeProjectionScoutModal(); } });
 
   // League toggle switch (header pill)
   const leagueSwitchInput = document.getElementById('leagueSwitchInput');
@@ -390,6 +390,7 @@ window._app = {
   getHeadToHead,
   openProfile,
   openCompare,
+  openProjectionScoutModal,
   safeNum,
   fmtMoney,
   demoIsGuestMode,

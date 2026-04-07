@@ -651,8 +651,8 @@ function valueLabBuildTeamProjectionRows() {
       };
     }
     var bucket = rowsByTeam[key];
-    var perf = valueLabNum(row.Score);
-    var modelValue = valueLabNum(row.ActualValuation_calc);
+    var perf = valueLabDecisionPerf(row);
+    var modelValue = valueLabDecisionMedianValue(row);
     bucket.count += 1;
     if (Number.isFinite(perf)) bucket.perfSum += perf;
     if (Number.isFinite(modelValue)) {
@@ -678,21 +678,90 @@ function valueLabFindProjectionRow(rows, teamName) {
   return (rows || []).find(function (row) { return valueLabNorm(row.team) === target; }) || null;
 }
 
+function valueLabDecisionPerf(row) {
+  var projection = valueLabNum(row && row.ProjectionPerf_calc);
+  if (Number.isFinite(projection)) return projection;
+  return valueLabNum(row && row.Score);
+}
+
+function valueLabDecisionFloorPerf(row) {
+  var floorPerf = valueLabNum(row && row.ProjectionFloorPerf_calc);
+  if (Number.isFinite(floorPerf)) return floorPerf;
+  return valueLabDecisionPerf(row);
+}
+
+function valueLabDecisionCeilingPerf(row) {
+  var ceilingPerf = valueLabNum(row && row.ProjectionCeilingPerf_calc);
+  if (Number.isFinite(ceilingPerf)) return ceilingPerf;
+  return valueLabDecisionPerf(row);
+}
+
+function valueLabDecisionMedianValue(row) {
+  var medianValue = valueLabNum(row && row.ProjectionMedianValue_calc);
+  if (Number.isFinite(medianValue)) return medianValue;
+  return valueLabNum(row && row.ActualValuation_calc);
+}
+
+function valueLabDecisionFloorValue(row) {
+  var floorValue = valueLabNum(row && row.ProjectionFloorValue_calc);
+  if (Number.isFinite(floorValue)) return floorValue;
+  return valueLabDecisionMedianValue(row);
+}
+
+function valueLabDecisionCeilingValue(row) {
+  var ceilingValue = valueLabNum(row && row.ProjectionCeilingValue_calc);
+  if (Number.isFinite(ceilingValue)) return ceilingValue;
+  return valueLabDecisionMedianValue(row);
+}
+
+function valueLabConfidenceLabel(value) {
+  if (typeof projectionConfidenceLabel === 'function') return projectionConfidenceLabel(value);
+  value = valueLabNum(value);
+  if (!Number.isFinite(value)) return 'Unknown';
+  if (value >= 0.82) return 'High';
+  if (value >= 0.64) return 'Moderate';
+  return 'Low';
+}
+
+function valueLabConfidenceTone(value) {
+  if (typeof projectionConfidenceTone === 'function') return projectionConfidenceTone(value);
+  value = valueLabNum(value);
+  if (!Number.isFinite(value)) return 'neutral';
+  if (value >= 0.82) return 'good';
+  if (value >= 0.64) return 'warn';
+  return 'bad';
+}
+
+function valueLabRiskLabel(row) {
+  return String((row && row.ProjectionMedicalRiskLabel_calc) || 'Low');
+}
+
+function valueLabRiskTone(label) {
+  if (typeof projectionMedicalRiskTone === 'function') return projectionMedicalRiskTone(label);
+  return label === 'High' ? 'bad' : (label === 'Moderate' ? 'warn' : 'good');
+}
+
+function valueLabRangeText(floorValue, medianValue, ceilingValue) {
+  if (!Number.isFinite(valueLabNum(medianValue))) return '—';
+  if (!Number.isFinite(valueLabNum(floorValue)) || !Number.isFinite(valueLabNum(ceilingValue))) return valueLabFmtMoney(medianValue);
+  return valueLabFmtMoney(floorValue) + ' / ' + valueLabFmtMoney(medianValue) + ' / ' + valueLabFmtMoney(ceilingValue);
+}
+
 function valueLabExpectedPerfAtSpend(row, peerPools) {
-  var spendBasis = Number.isFinite(valueLabNum(row.actualSpend)) ? valueLabNum(row.actualSpend) : valueLabNum(row.ActualValuation_calc);
+  var spendBasis = Number.isFinite(valueLabNum(row.actualSpend)) ? valueLabNum(row.actualSpend) : valueLabDecisionMedianValue(row);
   if (!Number.isFinite(spendBasis)) return NaN;
   var posGroup = valueLabPosGroup(row);
   var peers = (peerPools[posGroup] && peerPools[posGroup].length ? peerPools[posGroup] : peerPools.all || []).filter(function (peer) {
-    var peerVal = valueLabNum(peer.ActualValuation_calc);
-    var peerScore = valueLabNum(peer.Score);
+    var peerVal = valueLabDecisionMedianValue(peer);
+    var peerScore = valueLabDecisionPerf(peer);
     return Number.isFinite(peerVal) && Number.isFinite(peerScore) && valueLabPlayerKey(peer) !== valueLabPlayerKey(row);
   });
   if (!peers.length) return NaN;
   peers.sort(function (a, b) {
-    return Math.abs((valueLabNum(a.ActualValuation_calc) || 0) - spendBasis) - Math.abs((valueLabNum(b.ActualValuation_calc) || 0) - spendBasis);
+    return Math.abs((valueLabDecisionMedianValue(a) || 0) - spendBasis) - Math.abs((valueLabDecisionMedianValue(b) || 0) - spendBasis);
   });
   return valueLabAverage(peers.slice(0, Math.min(60, peers.length)).map(function (peer) {
-    return valueLabNum(peer.Score);
+    return valueLabDecisionPerf(peer);
   }));
 }
 
@@ -764,44 +833,78 @@ function valueLabBuildAnalysis(bundle) {
     big: currentPool.filter(function (row) { return valueLabPosGroup(row) !== 'guard'; }),
   };
 
-  var poolValSorted = currentPool.map(function (row) { return valueLabNum(row.ActualValuation_calc); }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
-  var poolScoreSorted = currentPool.map(function (row) { return valueLabNum(row.Score); }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
+  var poolValSorted = currentPool.map(function (row) { return valueLabDecisionMedianValue(row); }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
+  var poolScoreSorted = currentPool.map(function (row) { return valueLabDecisionPerf(row); }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
   var richSpendCutoff = typeof percentileInc === 'function' ? percentileInc(poolValSorted, 0.8) : NaN;
   var budgetTotal = valueLabNum(bundle.valueCase && bundle.valueCase.payload ? bundle.valueCase.payload.budgetTotal : null);
 
   var detailed = players.map(function (row) {
-    var valuation = valueLabNum(row.ActualValuation_calc);
+    var valuation = valueLabDecisionMedianValue(row);
+    var floorValue = valueLabDecisionFloorValue(row);
+    var ceilingValue = valueLabDecisionCeilingValue(row);
     var actualSpend = valueLabNum(row.actualSpend);
     var spendBasis = Number.isFinite(actualSpend) ? actualSpend : valuation;
-    var perf = valueLabNum(row.Score);
+    var perf = valueLabDecisionPerf(row);
+    var productionPerf = valueLabNum(row.Score);
+    var floorPerf = valueLabDecisionFloorPerf(row);
+    var ceilingPerf = valueLabDecisionCeilingPerf(row);
     var expectedPerf = valueLabExpectedPerfAtSpend(row, peerPools);
     var surplus = (Number.isFinite(perf) && Number.isFinite(expectedPerf)) ? (perf - expectedPerf) : NaN;
     var delta = (Number.isFinite(actualSpend) && Number.isFinite(valuation)) ? (actualSpend - valuation) : NaN;
     var roi = valueLabRoiCall({ surplus: surplus, ActualValuation_calc: valuation, actualSpend: actualSpend }, richSpendCutoff);
+    var confidence = valueLabNum(row.ProjectionConfidence_calc);
+    var riskLabel = valueLabRiskLabel(row);
+    var projectionDelta = valueLabNum(row.ProjectionDelta_calc);
+    var manualBoost = valueLabNum(row.ProjectionManualBoost_calc);
+    var projectionLed = Number.isFinite(projectionDelta) && projectionDelta > 0 && (
+      !Number.isFinite(confidence) || confidence < 0.82 || riskLabel !== 'Low' || (Number.isFinite(manualBoost) && manualBoost > 0)
+    );
     return Object.assign({}, row, {
       valuation: valuation,
+      floorValue: floorValue,
+      ceilingValue: ceilingValue,
       actualSpend: actualSpend,
       spendBasis: spendBasis,
       delta: delta,
       deltaPct: (Number.isFinite(delta) && Number.isFinite(valuation) && valuation > 0) ? (delta / valuation) : NaN,
       perf: perf,
+      productionPerf: productionPerf,
+      floorPerf: floorPerf,
+      ceilingPerf: ceilingPerf,
       expectedPerf: expectedPerf,
       surplus: surplus,
       roiLabel: roi.label,
       roiTone: roi.tone,
       classBucket: valueLabClassBucket(row),
       posLabel: valueLabPosLabel(row),
+      confidence: confidence,
+      confidenceLabel: valueLabConfidenceLabel(confidence),
+      confidenceTone: valueLabConfidenceTone(confidence),
+      riskLabel: riskLabel,
+      riskTone: valueLabRiskTone(riskLabel),
+      projectionDelta: projectionDelta,
+      projectionLed: projectionLed,
+      manualBoost: manualBoost,
+      projectionNote: String(row.ProjectionReasonSummary_calc || ''),
+      scoutNote: String(row.ProjectionScoutNote_calc || ''),
     });
   }).sort(function (a, b) {
     return (b.spendBasis || b.valuation || 0) - (a.spendBasis || a.valuation || 0);
   });
 
   var valuations = detailed.map(function (row) { return row.valuation; }).filter(Number.isFinite);
+  var floorValues = detailed.map(function (row) { return row.floorValue; }).filter(Number.isFinite);
+  var ceilingValues = detailed.map(function (row) { return row.ceilingValue; }).filter(Number.isFinite);
   var actualSpends = detailed.map(function (row) { return row.actualSpend; }).filter(Number.isFinite);
   var spendBasisValues = detailed.map(function (row) { return row.spendBasis; }).filter(Number.isFinite);
   var scores = detailed.map(function (row) { return row.perf; }).filter(Number.isFinite);
+  var productionScores = detailed.map(function (row) { return row.productionPerf; }).filter(Number.isFinite);
+  var floorScores = detailed.map(function (row) { return row.floorPerf; }).filter(Number.isFinite);
+  var ceilingScores = detailed.map(function (row) { return row.ceilingPerf; }).filter(Number.isFinite);
   var totalSpend = spendBasisValues.reduce(function (sum, value) { return sum + value; }, 0);
   var totalModelValue = valuations.reduce(function (sum, value) { return sum + value; }, 0);
+  var totalFloorValue = floorValues.reduce(function (sum, value) { return sum + value; }, 0);
+  var totalCeilingValue = ceilingValues.reduce(function (sum, value) { return sum + value; }, 0);
   var totalActualSpend = actualSpends.reduce(function (sum, value) { return sum + value; }, 0);
   var totalPerf = scores.reduce(function (sum, value) { return sum + value; }, 0);
   var avgPerf = valueLabAverage(scores);
@@ -826,6 +929,18 @@ function valueLabBuildAnalysis(bundle) {
   var overMarketTotal = detailed.reduce(function (sum, row) { return sum + (Number.isFinite(row.delta) && row.delta > 0 ? row.delta : 0); }, 0);
   var underMarketTotal = detailed.reduce(function (sum, row) { return sum + (Number.isFinite(row.delta) && row.delta < 0 ? Math.abs(row.delta) : 0); }, 0);
   var budgetRemaining = Number.isFinite(budgetTotal) ? (budgetTotal - totalActualSpend) : NaN;
+  var confidenceNum = 0;
+  var confidenceDen = 0;
+  detailed.forEach(function (row) {
+    if (!Number.isFinite(row.confidence)) return;
+    var weight = Number.isFinite(row.spendBasis) && row.spendBasis > 0 ? row.spendBasis : (Number.isFinite(row.valuation) && row.valuation > 0 ? row.valuation : 1);
+    confidenceNum += row.confidence * weight;
+    confidenceDen += weight;
+  });
+  var caseConfidence = confidenceDen > 0 ? (confidenceNum / confidenceDen) : valueLabAverage(detailed.map(function (row) { return row.confidence; }));
+  var projectionBetCount = detailed.filter(function (row) { return row.projectionLed; }).length;
+  var elevatedMedicalCount = detailed.filter(function (row) { return row.riskLabel && row.riskLabel !== 'Low'; }).length;
+  var highMedicalCount = detailed.filter(function (row) { return row.riskLabel === 'High'; }).length;
 
   return {
     empty: false,
@@ -837,9 +952,14 @@ function valueLabBuildAnalysis(bundle) {
     budgetTotal: budgetTotal,
     totalSpend: totalSpend,
     totalModelValue: totalModelValue,
+    totalFloorValue: totalFloorValue,
+    totalCeilingValue: totalCeilingValue,
     totalActualSpend: totalActualSpend,
     avgSpend: avgSpend,
     avgPerf: avgPerf,
+    avgProductionPerf: valueLabAverage(productionScores),
+    avgFloorPerf: valueLabAverage(floorScores),
+    avgCeilingPerf: valueLabAverage(ceilingScores),
     corePerf: valueLabAverage(topPerf),
     perfPer100k: totalSpend > 0 ? (totalPerf / totalSpend) * 100000 : NaN,
     perfPer100kActual: totalActualSpend > 0 ? (totalPerf / totalActualSpend) * 100000 : NaN,
@@ -856,6 +976,12 @@ function valueLabBuildAnalysis(bundle) {
     overMarketTotal: overMarketTotal,
     underMarketTotal: underMarketTotal,
     budgetRemaining: budgetRemaining,
+    caseConfidence: caseConfidence,
+    caseConfidenceLabel: valueLabConfidenceLabel(caseConfidence),
+    caseConfidenceTone: valueLabConfidenceTone(caseConfidence),
+    projectionBetCount: projectionBetCount,
+    elevatedMedicalCount: elevatedMedicalCount,
+    highMedicalCount: highMedicalCount,
     dominantTeam: teamContext,
     breakdowns: {
       position: valueLabAggregateBy(detailed.map(function (row) { return Object.assign({}, row, { ActualValuation_calc: row.spendBasis }); }), function (row) { return valueLabPosGroup(row) === 'guard' ? 'Guards' : 'Bigs'; }),
@@ -872,6 +998,7 @@ function valueLabBuildInsightList(analysis) {
   var items = [];
   var teamCtx = analysis.dominantTeam;
   if (teamCtx && teamCtx.team) items.push('Team context is anchored to ' + teamCtx.team + ', so Value Lab can connect this case back to real outcomes instead of only roster theory.');
+  items.push('Projection mode is locked to median for director decisions. Case confidence reads ' + analysis.caseConfidenceLabel + ' (' + Math.round((analysis.caseConfidence || 0) * 100) + '%), with ' + analysis.projectionBetCount + ' projection-led bet' + (analysis.projectionBetCount === 1 ? '' : 's') + ' and ' + analysis.elevatedMedicalCount + ' player' + (analysis.elevatedMedicalCount === 1 ? '' : 's') + ' carrying elevated medical risk.');
   items.push('Contract coverage is ' + analysis.enteredContracts + '/' + analysis.rosterSize + ' players (' + Math.round((analysis.contractCoverage || 0) * 100) + '%). Any player without actual spend still falls back to model value for planning math.');
   if (Number.isFinite(analysis.budgetTotal)) {
     items.push('Case budget is ' + valueLabFmtMoney(analysis.budgetTotal) + '. With ' + valueLabFmtMoney(analysis.totalActualSpend) + ' entered in real contracts, you are ' + (Number.isFinite(analysis.budgetRemaining) && analysis.budgetRemaining < 0 ? 'over budget by ' + valueLabFmtMoney(Math.abs(analysis.budgetRemaining)) : 'sitting on ' + valueLabFmtMoney(analysis.budgetRemaining) + ' in remaining room') + '.');
@@ -888,6 +1015,9 @@ function valueLabBuildInsightList(analysis) {
     items.push('Actual contracts are running ' + avgDeltaText + ' per player versus model on average. Over-market commitments total ' + valueLabFmtMoney(analysis.overMarketTotal) + ', while under-market wins total ' + valueLabFmtMoney(analysis.underMarketTotal) + '.');
   }
   items.push('Top 3 players account for ' + Math.round((analysis.top3SpendShare || 0) * 100) + '% of total spend, which reads as ' + (((analysis.top3SpendShare || 0) >= 0.5) ? 'top-heavy' : 'fairly balanced') + '.');
+  if (analysis.highMedicalCount) {
+    items.push('Medical exposure check: ' + analysis.highMedicalCount + ' player' + (analysis.highMedicalCount === 1 ? '' : 's') + ' sit in the high-risk tier, so the floor case needs to be respected in retention and portal planning.');
+  }
   if (analysis.steals && analysis.steals[0]) {
     items.push('Best value signal: ' + analysis.steals[0].Player + ' is running ' + ((analysis.steals[0].surplus >= 0 ? '+' : '') + analysis.steals[0].surplus.toFixed(1)) + ' Perf vs peers at the same pay band.');
   }
@@ -1023,7 +1153,25 @@ async function valueLabBuildOutcome(analysis) {
   }
   projectedAdjEM = valueLabClamp(projectedAdjEM, -25, 35);
 
+  var floorAdjEM = NaN;
+  if (Number.isFinite(baselineAdjEM) && baselineRow && perfModel && Number.isFinite(analysis.avgFloorPerf)) {
+    floorAdjEM = baselineAdjEM + ((analysis.avgFloorPerf - baselineRow.avgPerf) * perfModel.slope);
+  } else if (perfModel && Number.isFinite(analysis.avgFloorPerf)) {
+    floorAdjEM = perfModel.predict(analysis.avgFloorPerf);
+  }
+  floorAdjEM = valueLabClamp(floorAdjEM, -25, 35);
+
+  var ceilingAdjEM = NaN;
+  if (Number.isFinite(baselineAdjEM) && baselineRow && perfModel && Number.isFinite(analysis.avgCeilingPerf)) {
+    ceilingAdjEM = baselineAdjEM + ((analysis.avgCeilingPerf - baselineRow.avgPerf) * perfModel.slope);
+  } else if (perfModel && Number.isFinite(analysis.avgCeilingPerf)) {
+    ceilingAdjEM = perfModel.predict(analysis.avgCeilingPerf);
+  }
+  ceilingAdjEM = valueLabClamp(ceilingAdjEM, -25, 35);
+
   var scheduleProjection = valueLabProjectScheduleWins(games, teamName, projectedAdjEM, baselineAdjEM);
+  var floorScheduleProjection = valueLabProjectScheduleWins(games, teamName, floorAdjEM, baselineAdjEM);
+  var ceilingScheduleProjection = valueLabProjectScheduleWins(games, teamName, ceilingAdjEM, baselineAdjEM);
   var projectedWinDelta = (Number.isFinite(scheduleProjection.caseFullWins) && Number.isFinite(scheduleProjection.baselineFullWins))
     ? (scheduleProjection.caseFullWins - scheduleProjection.baselineFullWins)
     : NaN;
@@ -1035,14 +1183,17 @@ async function valueLabBuildOutcome(analysis) {
     ? (spendBasis / actualRecord.wins)
     : NaN;
   var confidence = 'Low';
-  if (teamCtx.ratio >= 0.7 && analysis.contractCoverage >= 0.65) confidence = 'High';
-  else if (teamCtx.ratio >= 0.5 || analysis.contractCoverage >= 0.4) confidence = 'Medium';
+  if (analysis.caseConfidence >= 0.82 && teamCtx.ratio >= 0.7 && analysis.contractCoverage >= 0.65) confidence = 'High';
+  else if (analysis.caseConfidence >= 0.64 || teamCtx.ratio >= 0.5 || analysis.contractCoverage >= 0.4) confidence = 'Medium';
 
   var note = [];
   if (Number.isFinite(scheduleProjection.caseFullWins) && Number.isFinite(scheduleProjection.baselineFullWins)) {
-    note.push('Projection uses the detected team schedule and maps roster Perf onto team adjEM using current-season team/player trends.');
+    note.push('Projection uses the detected team schedule and maps roster projection performance onto team adjEM using current-season team/player trends.');
   } else {
     note.push('Schedule was found, but there was not enough rating coverage to project wins cleanly.');
+  }
+  if (Number.isFinite(floorScheduleProjection.caseFullWins) || Number.isFinite(ceilingScheduleProjection.caseFullWins)) {
+    note.push('Floor and ceiling outcomes are driven by player-level projection confidence and medical-risk bands rather than a single-point estimate.');
   }
   if (analysis.sourceType === 'teamImport' || analysis.sourceType === 'teamHub') note.push('Because this case mirrors one real team, the outcome view is closer to a true executive review.');
   if (analysis.sourceType === 'teamBuilder' || analysis.sourceType === 'manual') note.push('Because this case is custom, projected wins should be treated as directional planning rather than a literal forecast.');
@@ -1056,9 +1207,13 @@ async function valueLabBuildOutcome(analysis) {
     actualLosses: actualRecord.losses,
     gamesPlayed: actualRecord.played,
     baselineAdjEM: baselineAdjEM,
+    floorAdjEM: floorAdjEM,
     projectedAdjEM: projectedAdjEM,
+    ceilingAdjEM: ceilingAdjEM,
     baselineFullWins: scheduleProjection.baselineFullWins,
+    floorProjectedWins: floorScheduleProjection.caseFullWins,
     projectedFullWins: scheduleProjection.caseFullWins,
+    ceilingProjectedWins: ceilingScheduleProjection.caseFullWins,
     projectedWinDelta: projectedWinDelta,
     ratedGames: scheduleProjection.ratedGames,
     totalGames: scheduleProjection.totalGames,
@@ -1074,6 +1229,8 @@ function valueLabRenderKpis(analysis) {
   var items = (!analysis || analysis.empty)
     ? [
         ['Players', '—'],
+        ['Projection Mode', '—'],
+        ['Case Confidence', '—'],
         ['Model value', '—'],
         ['Actual spend', '—'],
         ['Budget left', '—'],
@@ -1083,6 +1240,8 @@ function valueLabRenderKpis(analysis) {
       ]
     : [
         ['Players', String(analysis.rosterSize)],
+      ['Projection Mode', 'Median'],
+      ['Case Confidence', analysis.caseConfidenceLabel + (Number.isFinite(analysis.caseConfidence) ? (' (' + Math.round(analysis.caseConfidence * 100) + '%)') : '')],
         ['Model value', valueLabFmtMoney(analysis.totalModelValue)],
         ['Actual spend', analysis.enteredContracts ? valueLabFmtMoney(analysis.totalActualSpend) : '—'],
         ['Budget left', Number.isFinite(analysis.budgetRemaining) ? valueLabFmtMoney(analysis.budgetRemaining) : '—'],
@@ -1141,11 +1300,21 @@ function valueLabRenderOutcome(analysis) {
     pills.push('<span class="pill"><span>Projected AdjEM</span><b>' + ((outcome.projectedAdjEM >= 0 ? '+' : '') + outcome.projectedAdjEM.toFixed(1)) + '</b></span>');
   }
 
+  var outcomeBand = '';
+  if (Number.isFinite(outcome.floorProjectedWins) || Number.isFinite(outcome.projectedFullWins) || Number.isFinite(outcome.ceilingProjectedWins)) {
+    outcomeBand = '<div class="valueLabOutcomeBand">' +
+      '<div class="valueLabOutcomeRangeCard valueLabOutcomeRangeCard--bad"><small>Floor Outcome</small><strong>' + valueLabFmtWins(outcome.floorProjectedWins) + '</strong><span>risk case</span></div>' +
+      '<div class="valueLabOutcomeRangeCard valueLabOutcomeRangeCard--warn"><small>Median Outcome</small><strong>' + valueLabFmtWins(outcome.projectedFullWins) + '</strong><span>operating case</span></div>' +
+      '<div class="valueLabOutcomeRangeCard valueLabOutcomeRangeCard--good"><small>Ceiling Outcome</small><strong>' + valueLabFmtWins(outcome.ceilingProjectedWins) + '</strong><span>fully healthy case</span></div>' +
+    '</div>';
+  }
+
   valueLabOutcomeEl.innerHTML =
     '<div class="kpis valueLabMiniKpis">' + pills.join('') + '</div>' +
+    outcomeBand +
     '<div class="valueLabOutcomeNote">' +
       '<div><strong>Roster share:</strong> ' + outcome.detectedShare + ' slots from ' + outcome.teamName + ' · confidence ' + outcome.confidence + '.</div>' +
-      '<div><strong>Business read:</strong> This case currently spends ' + valueLabFmtMoney(outcome.spendBasis) + ' using actual contracts when entered, otherwise model value, so the spend-per-win view stays actionable even before every deal is filled in.</div>' +
+      '<div><strong>Business read:</strong> This case currently spends ' + valueLabFmtMoney(outcome.spendBasis) + ' using actual contracts when entered, otherwise projection median value, so the spend-per-win view stays actionable even before every deal is filled in.</div>' +
       '<div><strong>Projection logic:</strong> ' + outcome.note + '</div>' +
      '</div>';
 }
@@ -1203,12 +1372,28 @@ function valueLabGetComparisonMetrics(currentAnalysis, compareAnalysis) {
       preferLower: false,
     },
     {
+      label: 'Floor wins',
+      current: currentOutcome.floorProjectedWins,
+      compare: compareOutcome.floorProjectedWins,
+      format: valueLabFmtWins,
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? valueLabNum(value).toFixed(1) + ' wins' : '—'; },
+      preferLower: false,
+    },
+    {
       label: 'Spend / projected win',
       current: currentOutcome.spendPerProjectedWin,
       compare: compareOutcome.spendPerProjectedWin,
       format: valueLabFmtMoney,
       deltaFormat: valueLabFmtMoney,
       preferLower: true,
+    },
+    {
+      label: 'Case confidence',
+      current: currentAnalysis ? (currentAnalysis.caseConfidence || NaN) * 100 : NaN,
+      compare: compareAnalysis ? (compareAnalysis.caseConfidence || NaN) * 100 : NaN,
+      format: function (value) { return Number.isFinite(valueLabNum(value)) ? Math.round(valueLabNum(value)) + '%' : '—'; },
+      deltaFormat: function (value) { return Number.isFinite(valueLabNum(value)) ? Math.round(valueLabNum(value)) + ' pts' : '—'; },
+      preferLower: false,
     },
     {
       label: 'Top-3 spend share',
@@ -1259,6 +1444,16 @@ function valueLabBuildCompareRecommendation(currentAnalysis, compareAnalysis) {
     }
   });
   addSignal({
+    current: currentAnalysis.outcome && currentAnalysis.outcome.floorProjectedWins,
+    compare: compareAnalysis.outcome && compareAnalysis.outcome.floorProjectedWins,
+    threshold: 0.35,
+    weight: 3,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' holds the stronger downside case by about ' + diff.toFixed(1) + ' floor wins.';
+    }
+  });
+  addSignal({
     current: currentAnalysis.outcome && currentAnalysis.outcome.spendPerProjectedWin,
     compare: compareAnalysis.outcome && compareAnalysis.outcome.spendPerProjectedWin,
     threshold: 15000,
@@ -1306,6 +1501,16 @@ function valueLabBuildCompareRecommendation(currentAnalysis, compareAnalysis) {
     preferLower: true,
     text: function (diff, winner) {
       return (winner === 'active' ? currentName : compareName) + ' spreads spend more evenly with a top-3 concentration gap of ' + diff.toFixed(0) + ' points.';
+    }
+  });
+  addSignal({
+    current: currentAnalysis.caseConfidence,
+    compare: compareAnalysis.caseConfidence,
+    threshold: 0.06,
+    weight: 2,
+    preferLower: false,
+    text: function (diff, winner) {
+      return (winner === 'active' ? currentName : compareName) + ' carries about ' + Math.round(diff * 100) + ' points more case confidence across its rotation bets.';
     }
   });
   addSignal({
@@ -1499,6 +1704,9 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
     outcome.spendBasis = valueLabMoneyForAI(outcome.spendBasis);
     outcome.spendPerProjectedWin = valueLabMoneyForAI(outcome.spendPerProjectedWin);
     outcome.spendPerActualWin = valueLabMoneyForAI(outcome.spendPerActualWin);
+    outcome.floorProjectedWins = valueLabNum(outcome.floorProjectedWins);
+    outcome.projectedFullWins = valueLabNum(outcome.projectedFullWins);
+    outcome.ceilingProjectedWins = valueLabNum(outcome.ceilingProjectedWins);
   }
   return {
     caseName: analysis.bundle && analysis.bundle.label ? analysis.bundle.label : 'Value Lab Case',
@@ -1511,6 +1719,13 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
     totalActualSpend: valueLabMoneyForAI(analysis.totalActualSpend),
     effectiveSpend: valueLabMoneyForAI(analysis.totalSpend),
     contractCoverage: analysis.contractCoverage,
+    projectionMode: 'Median',
+    caseConfidence: {
+      pct: Number.isFinite(analysis.caseConfidence) ? Math.round(analysis.caseConfidence * 100) : null,
+      label: analysis.caseConfidenceLabel,
+    },
+    projectionBetCount: analysis.projectionBetCount,
+    elevatedMedicalCount: analysis.elevatedMedicalCount,
     avgPerf: analysis.avgPerf,
     perfPer100kActual: analysis.perfPer100kActual,
     perfPer100k: analysis.perfPer100k,
@@ -1524,9 +1739,14 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         player: row.Player,
         team: row.Team,
         perf: row.perf,
+        productionPerf: row.productionPerf,
         surplus: row.surplus,
         modelValue: valueLabMoneyForAI(row.valuation),
-        actualSpend: valueLabMoneyForAI(row.actualSpend)
+        floorValue: valueLabMoneyForAI(row.floorValue),
+        ceilingValue: valueLabMoneyForAI(row.ceilingValue),
+        actualSpend: valueLabMoneyForAI(row.actualSpend),
+        confidence: row.confidenceLabel,
+        medicalRisk: row.riskLabel,
       };
     }),
     topRisks: (analysis.overpays || []).slice(0, 4).map(function (row) {
@@ -1534,9 +1754,14 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         player: row.Player,
         team: row.Team,
         perf: row.perf,
+        productionPerf: row.productionPerf,
         surplus: row.surplus,
         modelValue: valueLabMoneyForAI(row.valuation),
-        actualSpend: valueLabMoneyForAI(row.actualSpend)
+        floorValue: valueLabMoneyForAI(row.floorValue),
+        ceilingValue: valueLabMoneyForAI(row.ceilingValue),
+        actualSpend: valueLabMoneyForAI(row.actualSpend),
+        confidence: row.confidenceLabel,
+        medicalRisk: row.riskLabel,
       };
     }),
     roster: analysis.players.map(function (row) {
@@ -1545,11 +1770,21 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         team: row.Team,
         position: row.posLabel,
         classLabel: row.classBucket,
-        perf: row.perf,
+        production: row.productionPerf,
+        projection: row.perf,
         expectedPerf: row.expectedPerf,
-        modelValue: valueLabMoneyForAI(row.valuation),
+        floorValue: valueLabMoneyForAI(row.floorValue),
+        medianValue: valueLabMoneyForAI(row.valuation),
+        ceilingValue: valueLabMoneyForAI(row.ceilingValue),
         actualSpend: valueLabMoneyForAI(row.actualSpend),
         delta: valueLabMoneyForAI(row.delta),
+        confidence: row.confidenceLabel,
+        confidencePct: Number.isFinite(row.confidence) ? Math.round(row.confidence * 100) : null,
+        medicalRisk: row.riskLabel,
+        projectionBet: !!row.projectionLed,
+        scoutBoost: row.manualBoost,
+        scoutNote: row.scoutNote || '',
+        projectionNote: row.projectionNote || '',
         roiCall: row.roiLabel,
       };
     }),
@@ -1559,10 +1794,14 @@ function valueLabBuildAICaseContext(analysis, portalCtx) {
         fromTeam: target.fromTeam,
         position: target.position,
         classLabel: target.classLabel,
-        perf: target.perf,
-        modelValue: valueLabMoneyForAI(target.valuation),
+        projection: target.perf,
+        floorValue: valueLabMoneyForAI(target.floorValue),
+        medianValue: valueLabMoneyForAI(target.valuation),
+        ceilingValue: valueLabMoneyForAI(target.ceilingValue),
         expectedPerf: target.expectedPerf,
         surplus: target.surplus,
+        confidence: target.confidenceLabel,
+        medicalRisk: target.riskLabel,
         withinBudget: target.withinBudget,
         fitsNeed: target.fitsNeed,
       };
@@ -1656,8 +1895,10 @@ function valueLabBuildPortalTargets(analysis, portalPack) {
   (portalPack.items || []).forEach(function (entry) {
     var player = typeof portalFindPlayerMatch === 'function' ? portalFindPlayerMatch(entry.playerName || '') : null;
     if (!player) return;
-    var valuation = valueLabNum(player.ActualValuation_calc);
-    var perf = valueLabNum(player.Score);
+    var valuation = valueLabDecisionMedianValue(player);
+    var floorValue = valueLabDecisionFloorValue(player);
+    var ceilingValue = valueLabDecisionCeilingValue(player);
+    var perf = valueLabDecisionPerf(player);
     if (!Number.isFinite(valuation) || !Number.isFinite(perf)) return;
     var key = valueLabPlayerKey(player);
     if (!key || seen[key]) return;
@@ -1668,7 +1909,9 @@ function valueLabBuildPortalTargets(analysis, portalPack) {
     var fitsNeed = weakestLabel && posLabel === weakestLabel;
     var withinBudget = !Number.isFinite(budgetLeft) || budgetLeft <= 0 ? true : valuation <= budgetLeft;
     var valueScore = (perf / Math.max(1, valuation)) * 100000;
-    var rankScore = valueScore + (Number.isFinite(surplus) ? (surplus * 4) : 0) + (fitsNeed ? 8 : 0) + (withinBudget ? 6 : -4);
+    var confidence = valueLabNum(player.ProjectionConfidence_calc);
+    var riskLabel = valueLabRiskLabel(player);
+    var rankScore = valueScore + (Number.isFinite(surplus) ? (surplus * 4) : 0) + (fitsNeed ? 8 : 0) + (withinBudget ? 6 : -4) + (Number.isFinite(confidence) ? confidence * 6 : 0) - (riskLabel === 'High' ? 5 : (riskLabel === 'Moderate' ? 2 : 0));
     targets.push({
       key: key,
       name: player.Player || entry.playerName || '',
@@ -1677,8 +1920,13 @@ function valueLabBuildPortalTargets(analysis, portalPack) {
       classLabel: player.Class || player.Yr || '—',
       perf: perf,
       valuation: valuation,
+      floorValue: floorValue,
+      ceilingValue: ceilingValue,
       expectedPerf: expectedPerf,
       surplus: surplus,
+      confidence: confidence,
+      confidenceLabel: valueLabConfidenceLabel(confidence),
+      riskLabel: riskLabel,
       withinBudget: withinBudget,
       fitsNeed: fitsNeed,
       source: entry.source || 'portal',
@@ -1711,10 +1959,10 @@ function valueLabRenderPortalWatch(portalCtx) {
     return;
   }
   valueLabPortalWatchEl.innerHTML = portalCtx.targets.slice(0, 4).map(function (target) {
-    var tone = target.withinBudget ? 'good' : 'warn';
+    var tone = target.riskLabel === 'High' ? 'warn' : (target.withinBudget ? 'good' : 'warn');
     return '<span class="valueLabPortalPill valueLabPortalPill--' + tone + '">' +
       '<span><b>' + valueLabEsc(target.name) + '</b> <small>' + valueLabEsc(target.fromTeam || 'Portal') + ' · ' + valueLabEsc(target.position || '—') + '</small></span>' +
-      '<span>' + valueLabFmtMoney(target.valuation) + ' · Perf ' + target.perf.toFixed(1) + (target.fitsNeed ? ' · fills ' + valueLabEsc(portalCtx.weakestLabel || 'need') : '') + '</span>' +
+      '<span>' + valueLabFmtMoney(target.floorValue) + ' / ' + valueLabFmtMoney(target.valuation) + ' / ' + valueLabFmtMoney(target.ceilingValue) + ' · Conf ' + valueLabEsc(target.confidenceLabel) + ' · Risk ' + valueLabEsc(target.riskLabel) + (target.fitsNeed ? ' · fills ' + valueLabEsc(portalCtx.weakestLabel || 'need') : '') + '</span>' +
     '</span>';
   }).join('');
 }
@@ -1784,10 +2032,10 @@ function valueLabRenderScatter(analysis) {
       '<line x1="' + avgX.toFixed(1) + '" y1="' + padT + '" x2="' + avgX.toFixed(1) + '" y2="' + (height - padB) + '" class="valueLabAvgLine"></line>' +
       '<line x1="' + padL + '" y1="' + avgY.toFixed(1) + '" x2="' + (width - padR) + '" y2="' + avgY.toFixed(1) + '" class="valueLabAvgLine"></line>' +
       xTicks + yTicks + circles +
-      '<text x="' + ((width + padL - padR) / 2).toFixed(1) + '" y="' + (height - 4) + '" class="valueLabAxisTitle" text-anchor="middle">Actual Spend (model fallback)</text>' +
-      '<text x="12" y="' + ((height + padT - padB) / 2).toFixed(1) + '" class="valueLabAxisTitle" transform="rotate(-90 12 ' + ((height + padT - padB) / 2).toFixed(1) + ')" text-anchor="middle">Perf</text>' +
+      '<text x="' + ((width + padL - padR) / 2).toFixed(1) + '" y="' + (height - 4) + '" class="valueLabAxisTitle" text-anchor="middle">Actual Spend (median model fallback)</text>' +
+      '<text x="12" y="' + ((height + padT - padB) / 2).toFixed(1) + '" class="valueLabAxisTitle" transform="rotate(-90 12 ' + ((height + padT - padB) / 2).toFixed(1) + ')" text-anchor="middle">Projection</text>' +
     '</svg>' +
-    '<div class="valueLabScatterLegend">X-axis uses actual contract spend when entered, otherwise model value. Green = beating price, gold = fair/rich, red = overpay.</div>';
+    '<div class="valueLabScatterLegend">X-axis uses actual contract spend when entered, otherwise projection median value. Y-axis uses projection performance. Green = beating price, gold = fair/rich, red = overpay.</div>';
 }
 
 function valueLabBreakdownBlock(title, items, totalSpend) {
@@ -1938,8 +2186,9 @@ async function valueLabRunAIBrief() {
         'Build a director-facing college basketball Value Lab comparison brief using ONLY the structured JSON below.\n\n' +
         'Goals:\n' +
         '- Pick which case is the better director-side choice right now and explain why.\n' +
-        '- Compare contract health, budget flexibility, projected wins, and spend efficiency.\n' +
+        '- Compare contract health, budget flexibility, projected wins, floor/median/ceiling range, and spend efficiency.\n' +
         '- Call out where the active case is stronger, where the compare case is stronger, and what would change the recommendation.\n' +
+        '- Use the exact labels Projection, Confidence, Medical Risk, Floor, Median, and Ceiling whenever you discuss flagged uncertainty players or risky bets.\n' +
         '- Use the transfer portal targets as business-side suggestions for whichever case looks most actionable.\n' +
         '- If contract coverage is incomplete, say that clearly and lower confidence.\n\n' +
         'Return markdown with these sections:\n' +
@@ -1947,6 +2196,7 @@ async function valueLabRunAIBrief() {
         '## Head-to-Head Decision\n' +
         '## Budget & Contract Health\n' +
         '## Outcome vs Spend\n' +
+        '## Projection Bets\n' +
         '## Portal Value Targets\n' +
         '## Director Action Plan\n\n' +
         'JSON:\n```json\n' + JSON.stringify(promptCtx, null, 2) + '\n```';
@@ -1960,7 +2210,8 @@ async function valueLabRunAIBrief() {
         'Goals:\n' +
         '- Evaluate whether this roster investment is healthy on the business side.\n' +
         '- Explain if current contracts are under market, fair, or rich.\n' +
-        '- Interpret projected wins and whether spend is justified.\n' +
+        '- Interpret projected wins, floor/median/ceiling range, and whether spend is justified.\n' +
+        '- Use the exact labels Projection, Confidence, Medical Risk, Floor, Median, and Ceiling whenever you discuss flagged uncertainty players or risky bets.\n' +
         '- Point out budget flexibility and where the money is too concentrated.\n' +
         '- Use the provided transfer portal targets to suggest best bang-for-buck additions when relevant.\n' +
         '- If contract coverage is incomplete, say that clearly and lower confidence.\n\n' +
@@ -1968,6 +2219,7 @@ async function valueLabRunAIBrief() {
         '## Executive Verdict\n' +
         '## Budget & Contract Health\n' +
         '## Outcome vs Spend\n' +
+        '## Projection Bets\n' +
         '## Portal Value Targets\n' +
         '## Director Action Plan\n\n' +
         'JSON:\n```json\n' + JSON.stringify(promptCtx, null, 2) + '\n```';
@@ -3097,18 +3349,29 @@ function valueLabRenderRosterTable(analysis) {
     var tr = document.createElement('tr');
     var deltaText = Number.isFinite(row.delta) ? ((row.delta >= 0 ? '+' : '-') + valueLabFmtMoney(Math.abs(row.delta))) : '—';
     var surplusText = Number.isFinite(row.surplus) ? ((row.surplus >= 0 ? '+' : '') + row.surplus.toFixed(1)) : '—';
-    tr.innerHTML = '<td><span class="link valueLabPlayerLink">' + (row.Player || '—') + '</span></td>' +
+    var playerBadges = [];
+    if (row.riskLabel && row.riskLabel !== 'Low') {
+      playerBadges.push('<span class="playersProjectionBadge playersProjectionBadge--' + row.riskTone + '">Risk ' + valueLabEsc(row.riskLabel) + '</span>');
+    }
+    if (row.projectionLed) {
+      playerBadges.push('<span class="playersProjectionBadge playersProjectionBadge--' + row.confidenceTone + '">Projection bet</span>');
+    }
+    tr.innerHTML = '<td><div class="valueLabPlayerCell"><span class="link valueLabPlayerLink">' + (row.Player || '—') + '</span>' +
+      (playerBadges.length ? '<div class="playersProjectionBadges valueLabPlayerBadges">' + playerBadges.join('') + '</div>' : '') +
+      (row.projectionNote ? '<div class="valueLabPlayerMeta">' + valueLabEsc(row.projectionNote) + '</div>' : '') +
+      '</div></td>' +
       '<td>' + (row.Team || '—') + '</td>' +
       '<td>' + (row.posLabel || '—') + '</td>' +
       '<td>' + (row.classBucket || '—') + '</td>' +
-      '<td class="playersPerfCell">' + (Number.isFinite(row.perf) ? row.perf.toFixed(1) : '—') + '</td>' +
+      '<td class="playersPerfCell"><div>' + (Number.isFinite(row.productionPerf) ? row.productionPerf.toFixed(1) : '—') + '</div><div class="valueLabCellSub">Projection ' + (Number.isFinite(row.perf) ? row.perf.toFixed(1) : '—') + '</div></td>' +
       '<td>' + valueLabFmtMoney(row.valuation) + '</td>' +
       '<td><input class="valueLabSpendInput" type="number" min="0" step="1000" placeholder="-" value="' + (Number.isFinite(row.actualSpend) ? Math.round(row.actualSpend) : '') + '"></td>' +
       '<td class="' + valueLabDeltaToneClass(row) + '">' + deltaText + '</td>' +
-      '<td>' + (Number.isFinite(row.expectedPerf) ? row.expectedPerf.toFixed(1) : '—') + '</td>' +
+      '<td class="valueLabProjectionCell" title="' + valueLabEsc(row.projectionNote || 'Projection range') + '"><div class="valueLabProjectionMain">' + valueLabFmtMoney(row.floorValue) + ' / ' + valueLabFmtMoney(row.valuation) + ' / ' + valueLabFmtMoney(row.ceilingValue) + '</div><div class="valueLabCellSub">Floor / Median / Ceiling</div></td>' +
       '<td style="font-weight:800;color:' + (row.roiTone === 'good' ? 'var(--good)' : row.roiTone === 'bad' ? 'var(--bad)' : row.roiTone === 'warn' ? 'var(--warn)' : 'var(--muted)') + '">' + surplusText + '</td>' +
+      '<td><span class="playersProjectionBadge playersProjectionBadge--' + row.confidenceTone + '">' + valueLabEsc(row.confidenceLabel) + '</span><div class="valueLabCellSub">' + (Number.isFinite(row.confidence) ? Math.round(row.confidence * 100) + '%' : '—') + '</div></td>' +
       '<td><span class="valueLabRoiTag valueLabRoiTag--' + row.roiTone + '" title="' + valueLabEsc(valueLabRoiTooltipText(row)) + '" aria-label="' + valueLabEsc(valueLabRoiTooltipText(row)) + '">' + row.roiLabel + '</span></td>' +
-      '<td><button class="tbRemoveBtn valueLabRemoveBtn" type="button">✕</button></td>';
+      '<td><div class="valueLabActionStack"><button class="secondary valueLabScoutBtn" type="button">Scout</button><button class="tbRemoveBtn valueLabRemoveBtn" type="button">✕</button></div></td>';
     var link = tr.querySelector('.valueLabPlayerLink');
     if (link) link.addEventListener('click', function () { if (typeof openProfile === 'function') openProfile(row); });
     var spendInput = tr.querySelector('.valueLabSpendInput');
@@ -3122,6 +3385,10 @@ function valueLabRenderRosterTable(analysis) {
       valueLabCaseState.dirty = true;
       valueLabSetStatus((row.Player || 'Player') + ' contract updated.', 'good');
       valueLabRefresh(false);
+    });
+    var scoutBtn = tr.querySelector('.valueLabScoutBtn');
+    if (scoutBtn) scoutBtn.addEventListener('click', function () {
+      if (typeof openProjectionScoutModal === 'function') openProjectionScoutModal(row);
     });
     var removeBtn = tr.querySelector('.valueLabRemoveBtn');
     if (removeBtn) removeBtn.addEventListener('click', function () {

@@ -504,6 +504,7 @@
     .portalScenarioDelta--neg{color:#fda4af}
     .portalScenarioDelta--flat{color:var(--muted)}
     .portalRiskText{font-size:10px;color:var(--warn);margin-top:4px}
+    .portalProjectionMeta{margin-top:4px;font-size:10px;line-height:1.45;color:var(--muted)}
     .portalAIMarkdown{font-size:12px;line-height:1.6}
     .portalAIMarkdown h4{margin:10px 0 6px;color:var(--accent);font-size:13px}
     .portalAIBullet{margin:3px 0 0 8px}
@@ -4480,6 +4481,14 @@ body.helpPanelOpen {
 .valueLabMiniKpis { margin-top: 0; }
 .valueLabMiniKpis .pill { min-width: 0; }
 .valueLabMiniKpis b { font-size: 14px; }
+.valueLabOutcomeBand { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.valueLabOutcomeRangeCard { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+.valueLabOutcomeRangeCard small { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.valueLabOutcomeRangeCard strong { font-size: 18px; font-weight: 800; color: var(--text); }
+.valueLabOutcomeRangeCard span { font-size: 11px; color: var(--muted); }
+.valueLabOutcomeRangeCard--bad { border-color: rgba(248,113,113,.22); }
+.valueLabOutcomeRangeCard--warn { border-color: rgba(251,191,36,.24); }
+.valueLabOutcomeRangeCard--good { border-color: rgba(52,211,153,.24); }
 .valueLabOutcomeNote { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .valueLabAIHero { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .valueLabPortalWatch { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -4518,6 +4527,17 @@ body.helpPanelOpen {
 .valueLabRoiTag--warn { background: rgba(251,191,36,.10); border-color: rgba(251,191,36,.28); color: var(--warn); }
 .valueLabRoiTag--bad { background: rgba(248,113,113,.10); border-color: rgba(248,113,113,.28); color: var(--bad); }
 .valueLabRoiTag--neutral { background: rgba(96,165,250,.10); border-color: rgba(96,165,250,.22); color: #93c5fd; }
+.valueLabPlayerCell { display: flex; flex-direction: column; gap: 4px; }
+.valueLabPlayerBadges { gap: 6px; }
+.valueLabPlayerMeta { font-size: 10px; line-height: 1.45; color: var(--muted); }
+.valueLabCellSub { margin-top: 4px; font-size: 10px; line-height: 1.4; color: var(--muted); }
+.valueLabProjectionCell { min-width: 160px; }
+.valueLabProjectionMain { font-weight: 700; color: var(--text); }
+.valueLabActionStack { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.valueLabScoutBtn { padding: 4px 9px; font-size: 10px; }
+
+.projectionScoutGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.projectionScoutActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 
 @media (max-width: 1180px) {
   .valueLabHero { grid-template-columns: 1fr; }
@@ -4525,6 +4545,7 @@ body.helpPanelOpen {
   .valueLabTopGrid, .valueLabChartGrid { grid-template-columns: 1fr; }
   .valueLabBreakdownGrid { grid-template-columns: 1fr; }
   .valueLabCompareTop, .valueLabCompareSplit { grid-template-columns: 1fr; }
+  .valueLabOutcomeBand { grid-template-columns: 1fr; }
   .valueLabCompareVs { min-height: 24px; }
   .valueLabCompareRecommendation { flex-direction: column; }
 }
@@ -4532,6 +4553,7 @@ body.helpPanelOpen {
   .valueLabControlGrid { grid-template-columns: 1fr; }
   .valueLabControlActions { justify-content: flex-start; }
   .valueLabCompareMetricGrid { grid-template-columns: 1fr; }
+  .projectionScoutGrid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .valueLabHero { padding: 22px; }
