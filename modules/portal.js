@@ -5,7 +5,7 @@ var portalItems = [];
 var portalFiltered = [];
 var portalRecRows = [];
 
-var portalSearchInputEl, portalStatusFilterEl, portalRefreshBtnEl, portalUseSnapshotEl;
+var portalSearchInputEl, portalStatusFilterEl, portalNeedFilterEl, portalRefreshBtnEl, portalUseSnapshotEl;
 var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, portalEmptyEl;
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
@@ -43,6 +43,7 @@ var PORTAL_STAT_DIR = {
 function initPortalDOMRefs() {
   portalSearchInputEl = document.getElementById('portalSearchInput');
   portalStatusFilterEl = document.getElementById('portalStatusFilter');
+  portalNeedFilterEl = document.getElementById('portalNeedFilter');
   portalRefreshBtnEl = document.getElementById('portalRefreshBtn');
   portalUseSnapshotEl = document.getElementById('portalUseSnapshot');
   portalCountEl = document.getElementById('portalCount');
@@ -136,6 +137,66 @@ function portalSyncLeagueUI() {
       ? 'Deep analysis using WBB player stats, game logs, and team context from the dashboard data stack. If you tag players in mind, the AI grades those targets first.'
       : 'Deep analysis using player stats, game logs, and team context from the dashboard data stack. If you tag players in mind, the AI grades those targets first.';
   }
+  portalLoadNeedFilterPref();
+  portalUpdateRecContext();
+}
+
+function portalNeedFilterStorageKey() {
+  return portalUserStorageKey('need_filter_' + portalCurrentSport());
+}
+
+function portalGetSelectedNeedGroup() {
+  var value = portalNeedFilterEl && portalNeedFilterEl.value
+    ? String(portalNeedFilterEl.value).toLowerCase()
+    : 'all';
+  if (value === 'guard' || value === 'big') return value;
+  return 'all';
+}
+
+function portalNeedGroupLabel(group) {
+  if (group === 'guard') return 'Guards';
+  if (group === 'big') return 'Bigs';
+  return 'All positions';
+}
+
+function portalLoadNeedFilterPref() {
+  if (!portalNeedFilterEl) return;
+  var saved = 'all';
+  try {
+    saved = localStorage.getItem(portalNeedFilterStorageKey()) || 'all';
+  } catch (_) {}
+  portalNeedFilterEl.value = (saved === 'guard' || saved === 'big') ? saved : 'all';
+}
+
+function portalSaveNeedFilterPref() {
+  try {
+    localStorage.setItem(portalNeedFilterStorageKey(), portalGetSelectedNeedGroup());
+  } catch (_) {}
+}
+
+function portalUpdateRecContext() {
+  if (!portalRecContextEl) return;
+  var parts = [];
+  var needGroup = portalGetSelectedNeedGroup();
+
+  if (needGroup !== 'all') {
+    parts.push('Position need: ' + portalNeedGroupLabel(needGroup));
+  }
+  if (portalSelectedDepartureNames.length) {
+    parts.push('Finding upgrades to replace ' +
+      portalSelectedDepartureNames.length + ' departure' +
+      (portalSelectedDepartureNames.length > 1 ? 's' : '') + ': ' +
+      portalSelectedDepartureNames.join(', '));
+  }
+
+  if (!parts.length) {
+    portalRecContextEl.style.display = 'none';
+    portalRecContextEl.textContent = '';
+    return;
+  }
+
+  portalRecContextEl.style.display = '';
+  portalRecContextEl.textContent = parts.join(' · ');
 }
 
 function portalNorm(s) {
@@ -374,6 +435,15 @@ function portalPlayerPosGroup(player) {
   if (typeof tbPosGroup === 'function') return tbPosGroup(player);
   var pos = String(player.Position || player.Pos || '').toLowerCase();
   return (pos.indexOf('g') >= 0 || pos.indexOf('guard') >= 0) ? 'guard' : 'big';
+}
+
+function portalEntryPosGroup(entry, player) {
+  if (player) return portalPlayerPosGroup(player);
+  var raw = portalNorm(entry && entry.position);
+  if (!raw) return '';
+  if (raw.indexOf('guard') >= 0 || /\b(pg|sg|g)\b/.test(raw)) return 'guard';
+  if (raw.indexOf('center') >= 0 || raw.indexOf('forward') >= 0 || raw.indexOf('post') >= 0 || /\b(c|f)\b/.test(raw)) return 'big';
+  return '';
 }
 
 function portalClassBucket(player) {
@@ -633,7 +703,19 @@ function portalStatPercentile(stat, val, dist) {
   return p < 0 ? 0 : (p > 1 ? 1 : p);
 }
 
-function portalCategoryDefsForRoster(roster) {
+function portalCategoryDefsForRoster(roster, forcedGroup) {
+  if (forcedGroup === 'guard') {
+    var guardDefs = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Guards) ? GAP_CATEGORIES.Guards : [];
+    return guardDefs.filter(function (d, idx, arr) {
+      return arr.findIndex(function (item) { return item.label === d.label; }) === idx;
+    });
+  }
+  if (forcedGroup === 'big') {
+    var bigDefs = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Bigs) ? GAP_CATEGORIES.Bigs : [];
+    return bigDefs.filter(function (d, idx, arr) {
+      return arr.findIndex(function (item) { return item.label === d.label; }) === idx;
+    });
+  }
   var guards = (roster || []).some(function (r) {
     return typeof tbPosGroup === 'function' ? tbPosGroup(r) === 'guard' : true;
   });
@@ -818,18 +900,7 @@ function portalToggleDeparture(name) {
       c.classList.toggle('selected', portalSelectedDepartureNames.indexOf(cn) >= 0);
     });
   }
-  // Update context banner
-  if (portalRecContextEl) {
-    if (portalSelectedDepartureNames.length) {
-      portalRecContextEl.style.display = '';
-      portalRecContextEl.textContent = 'Finding upgrades to replace ' +
-        portalSelectedDepartureNames.length + ' departure' +
-        (portalSelectedDepartureNames.length > 1 ? 's' : '') + ': ' +
-        portalSelectedDepartureNames.join(', ');
-    } else {
-      portalRecContextEl.style.display = 'none';
-    }
-  }
+  portalUpdateRecContext();
   // Rerun recommendations
   if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length) {
     var players = portalCollectAllPlayers();
@@ -971,12 +1042,18 @@ function portalGetActiveAnalysisRows(limit) {
   var rows = (portalScenarioRows || []).filter(function (row) {
     return row && row.player && !row.sameTeam;
   });
+  var needGroup = portalGetSelectedNeedGroup();
   if (rows.length) {
     rows = rows.slice().sort(function (a, b) {
       return (b.scenarioFit || b.fit || 0) - (a.scenarioFit || a.fit || 0);
     });
   } else {
     rows = (portalRecRows || []).slice();
+  }
+  if (needGroup !== 'all') {
+    rows = rows.filter(function (row) {
+      return row && row.positionGroup === needGroup;
+    });
   }
   if (Number.isFinite(limit)) rows = rows.slice(0, Math.max(0, limit));
   return rows;
@@ -1563,8 +1640,10 @@ function portalNotifyNewWatchAlerts() {
 async function portalLoadTeamContext(teamName) {
   if (!teamName) {
     portalTeamCtx = null;
+    portalSelectedDepartureNames = [];
     if (portalRecTeamSummaryEl) portalRecTeamSummaryEl.innerHTML = '<span class="muted">Select a team to load profile.</span>';
     if (portalReplaceListEl) portalReplaceListEl.innerHTML = '';
+    portalUpdateRecContext();
     portalRefreshScenarioRows();
     return null;
   }
@@ -1615,7 +1694,7 @@ async function portalLoadTeamContext(teamName) {
 
   if (portalRecTeamSummaryEl) portalRecTeamSummaryEl.innerHTML = portalBuildTeamSummary(teamName, ratings, stats, games, roster);
   portalSelectedDepartureNames = [];
-  if (portalRecContextEl) portalRecContextEl.style.display = 'none';
+  portalUpdateRecContext();
   portalDetectDepartures(roster);
   portalRenderDepartureCards(portalDetectedDepartures);
   portalRefreshScenarioRows();
@@ -1650,6 +1729,8 @@ function portalCandidateRisk(player) {
 function portalBuildRecommendationContext() {
   if (!portalTeamCtx || !portalTeamCtx.roster || !portalTeamCtx.roster.length) return null;
   if (!portalRecDist) portalRecDist = portalBuildDistributions(portalCollectAllPlayers());
+  var selectedNeedGroup = portalGetSelectedNeedGroup();
+  var forcedNeedGroup = selectedNeedGroup !== 'all' ? selectedNeedGroup : '';
 
   var removedNames = portalSelectedReplaceNames();
   var departurePlayers = portalSelectedDeparturePlayers();
@@ -1663,7 +1744,7 @@ function portalBuildRecommendationContext() {
   });
   if (!baseRoster.length) baseRoster = portalTeamCtx.roster.slice();
 
-  var defs = portalCategoryDefsForRoster(baseRoster);
+  var defs = portalCategoryDefsForRoster(baseRoster, forcedNeedGroup);
   var catBase = portalCategoryScoresForRoster(baseRoster, defs, portalRecDist);
   var catRemoved = removedNames.length
     ? portalCategoryScoresForRoster(portalTeamCtx.roster.filter(function (player) {
@@ -1686,6 +1767,8 @@ function portalBuildRecommendationContext() {
     targetValue: portalAverage(departurePlayers.map(function (player) {
       return portalGetPlayerMedianValue(player);
     })),
+    positionNeed: forcedNeedGroup,
+    positionNeedLabel: portalNeedGroupLabel(forcedNeedGroup),
   };
 }
 
@@ -1781,6 +1864,8 @@ function portalScoreCandidateEntry(entry, player, ctx) {
   if (!ctx || !entry || !player) return null;
   var playerTeam = portalNorm(portalGetPlayerTeam(player));
   if (playerTeam === portalNorm(portalTeamCtx.team)) return null;
+  var candidateGroup = portalPlayerPosGroup(player);
+  if (ctx.positionNeed && candidateGroup !== ctx.positionNeed) return null;
 
   var catPlayer = portalCategoryScoresForPlayer(player, ctx.defs, portalRecDist);
   var needNum = 0;
@@ -1828,6 +1913,9 @@ function portalScoreCandidateEntry(entry, player, ctx) {
   }
 
   var positionFit = portalPositionFitScore(player, ctx.departurePlayers);
+  if (ctx.positionNeed && candidateGroup === ctx.positionNeed) {
+    positionFit = Math.max(positionFit, 0.92);
+  }
   var valueFit = portalValueFitScore(player, impact, replaceGain, ctx.targetValue);
   var upside = portalUpsideScore(player, impact, ctx.targetValue);
   var candidateValue = portalGetPlayerMedianValue(player);
@@ -1864,6 +1952,8 @@ function portalScoreCandidateEntry(entry, player, ctx) {
     targetValue: ctx.targetValue,
     candidateValue: candidateValue
   });
+  if (ctx.positionNeed) reasons.unshift('Matches staff position need');
+  reasons = reasons.slice(0, 4);
 
   var row = {
     entry: entry,
@@ -1876,7 +1966,7 @@ function portalScoreCandidateEntry(entry, player, ctx) {
     valueFit: valueFit,
     upside: upside,
     replaceGain: replaceGain,
-    positionGroup: portalPlayerPosGroup(player),
+    positionGroup: candidateGroup,
     replacementType: portalReplacementType(positionFit, valueFit, upside, replaceGain, ctx.targetValue, candidateValue),
     candidateValue: candidateValue,
     floorValue: floorValue,
@@ -1950,18 +2040,20 @@ function portalRenderScenarioRows() {
   portalTargetBodyEl.innerHTML = '';
 
   var rows = portalScenarioRows || [];
+  var needGroup = portalGetSelectedNeedGroup();
+  var needSuffix = needGroup !== 'all' ? (' Current need: ' + portalNeedGroupLabel(needGroup) + '.') : '';
   if (portalTargetCountEl) portalTargetCountEl.textContent = String(rows.length);
   if (portalTargetClearBtnEl) portalTargetClearBtnEl.disabled = !rows.length;
 
   if (portalTargetStatusEl) {
     if (!rows.length) {
-      portalTargetStatusEl.textContent = 'Tag portal players from the board or recommendation list to score them as real-fit scenarios.';
+      portalTargetStatusEl.textContent = 'Tag portal players from the board or recommendation list to score them as real-fit scenarios.' + needSuffix;
     } else if (!portalTeamCtx || !portalTeamCtx.roster || !portalTeamCtx.roster.length) {
-      portalTargetStatusEl.textContent = 'Select a team to turn this shortlist into scored fit scenarios.';
+      portalTargetStatusEl.textContent = 'Select a team to turn this shortlist into scored fit scenarios.' + needSuffix;
     } else if (!portalSelectedDepartureNames.length) {
-      portalTargetStatusEl.textContent = 'No departures selected. Scenario grades currently reflect overall fit for ' + portalTeamCtx.team + '.';
+      portalTargetStatusEl.textContent = 'No departures selected. Scenario grades currently reflect overall fit for ' + portalTeamCtx.team + '.' + needSuffix;
     } else {
-      portalTargetStatusEl.textContent = 'Shortlist scored for ' + portalTeamCtx.team + ' against departures: ' + portalSelectedDepartureNames.join(', ') + '. AI analysis will grade these targets first.';
+      portalTargetStatusEl.textContent = 'Shortlist scored for ' + portalTeamCtx.team + ' against departures: ' + portalSelectedDepartureNames.join(', ') + '. AI analysis will grade these targets first.' + needSuffix;
     }
   }
 
@@ -2064,7 +2156,7 @@ function portalComputeRecommendations() {
   });
 
   rows.sort(function (a, b) { return b.fit - a.fit; });
-  rows = portalEnforcePositionBalance(rows, ctx.departurePlayers);
+  if (!ctx.positionNeed) rows = portalEnforcePositionBalance(rows, ctx.departurePlayers);
   portalRecRows = rows.slice(0, 25);
   portalRefreshScenarioRows();
   return portalRecRows;
@@ -2074,6 +2166,8 @@ function portalRenderRecommendations() {
   if (!portalRecBodyEl) return;
   portalRecBodyEl.innerHTML = '';
   var targetMap = portalTargetListToMap(portalLoadTargetList());
+  var needGroup = portalGetSelectedNeedGroup();
+  var needLabel = portalNeedGroupLabel(needGroup);
 
   if (!portalRecRows.length) {
     if (portalRecEmptyEl) {
@@ -2081,7 +2175,9 @@ function portalRenderRecommendations() {
       if (!portalRecEmptyEl.textContent || portalRecEmptyEl.textContent === 'Scoring fit candidates...') {
         portalRecEmptyEl.textContent = !portalFiltered.length
           ? 'No portal entries are available for the current board filters.'
-          : 'No matched portal fit candidates were found for the current board and team context.';
+          : (needGroup !== 'all'
+            ? ('No matched ' + needLabel.toLowerCase() + ' portal fit candidates were found for the current board and team context.')
+            : 'No matched portal fit candidates were found for the current board and team context.');
       }
     }
     return;
@@ -2547,12 +2643,19 @@ async function portalRunAIAnalysis() {
   var teamName = portalTeamCtx.team;
   var season = portalTeamCtx.season || portalTargetSeason;
   var departures = portalSelectedDepartureNames.slice();
+  var needGroup = portalGetSelectedNeedGroup();
+  var needLabel = portalNeedGroupLabel(needGroup);
+  var needContextLine = needGroup !== 'all'
+    ? ('Primary staff need: ' + needLabel + '. Only prioritize ' + needLabel.toLowerCase() + ' unless the value case is overwhelming.\n\n')
+    : '';
   var topPickCount = Math.max(8, departures.length * 5 + 2);
   var usingShortlist = hasShortlist;
   var topPicks = portalGetActiveAnalysisRows(topPickCount);
   if (!topPicks.length) topPicks = (portalRecRows || []).slice(0, topPickCount);
   if (!topPicks.length) {
-    portalSetAIStatus('No scored portal targets available yet.');
+    portalSetAIStatus(needGroup !== 'all'
+      ? ('No scored ' + needLabel.toLowerCase() + ' portal targets available under the current need filter.')
+      : 'No scored portal targets available yet.');
     portalAIAnalyzeBtn.disabled = false;
     if (portalAIDownloadBtn) portalAIDownloadBtn.disabled = false;
     return;
@@ -2737,6 +2840,7 @@ async function portalRunAIAnalysis() {
     team: teamName,
     season: season,
     analysisMode: usingShortlist ? 'staff-shortlist' : 'replacement-board',
+    positionNeed: needGroup !== 'all' ? needLabel : null,
     teamRatings: portalTeamCtx.ratings || null,
     teamStats: portalTeamCtx.stats || null,
     teamShotProfile: portalTeamCtx.zones || null,
@@ -2755,6 +2859,7 @@ async function portalRunAIAnalysis() {
       (departures.length
         ? (' The staff is also planning around ' + departures.length + ' likely departure' + (departures.length !== 1 ? 's' : '') + ': ' + departures.join(', ') + '.')
         : ' No departures are locked in, so judge each target against the full current roster fit.') + '\n\n' +
+      needContextLine +
       '## Instructions\n' +
       '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
       '- Treat fitScore, scenarioFit, scenarioVerdict, scenarioDeltaPts, scenarioValueView, fitBreakdown, replaceGainPts, valueDeltaPct, reasons, scenarioReasons, and risks as quantitative guardrails.\n' +
@@ -2791,6 +2896,7 @@ async function portalRunAIAnalysis() {
       '**' + teamName + '** (' + season + ' season, ' + leagueTag + ') has ' + departures.length +
       ' player' + (departures.length !== 1 ? 's' : '') + ' departing via the transfer portal. ' +
       'Your job is to evaluate the top ' + recommendedProfiles.length + ' portal replacement candidates.\n\n' +
+      needContextLine +
       '## Instructions\n' +
       '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
       '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
@@ -2941,8 +3047,12 @@ async function portalRunRecommendations() {
     portalRenderRecommendations();
 
     if (!portalRecRows.length && portalRecEmptyEl) {
+      var needGroup = portalGetSelectedNeedGroup();
+      var needLabel = portalNeedGroupLabel(needGroup);
       portalRecEmptyEl.style.display = '';
-      portalRecEmptyEl.textContent = 'No scored fit candidates were found from the current portal board. This usually means the live portal names did not match the loaded player pool cleanly enough yet.';
+      portalRecEmptyEl.textContent = needGroup !== 'all'
+        ? ('No scored ' + needLabel.toLowerCase() + ' fit candidates were found from the current portal board. This usually means the live portal names did not match the loaded player pool cleanly enough yet.')
+        : 'No scored fit candidates were found from the current portal board. This usually means the live portal names did not match the loaded player pool cleanly enough yet.';
     }
   } finally {
     if (portalRecRunBtn) portalRecRunBtn.disabled = false;
@@ -3373,6 +3483,21 @@ function initPortalPage() {
     portalRecTeamEl.addEventListener('change', async function () {
       if (!portalRecTeamEl.value) return;
       await portalLoadTeamContext(portalRecTeamEl.value);
+    });
+  }
+
+  if (portalNeedFilterEl) {
+    portalNeedFilterEl.addEventListener('change', function () {
+      portalSaveNeedFilterPref();
+      portalUpdateRecContext();
+      if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length && portalItems.length) {
+        var players = portalCollectAllPlayers();
+        portalRecDist = portalBuildDistributions(players);
+        portalComputeRecommendations();
+        portalRenderRecommendations();
+      } else {
+        portalRefreshScenarioRows();
+      }
     });
   }
 
