@@ -320,20 +320,23 @@ function authFinishLoading() {
   }
 }
 
-/* Transition out of loading when data is ready.
-   If the video is still playing, skip it. Minimum 1.5s display so the screen isn't a flash. */
+/* Transition out of loading when BOTH data is ready AND video has finished.
+   If data is ready before the video, we wait for the video to end for a polished entrance.
+   If video ends first (or stalls), we wait for data. Safety cap: 12s max from start. */
 function _checkLoadingComplete() {
-  if (!_loadDataReady || _loadTransitionStarted) return;
-  // Enforce minimum display time so loading screen isn't a flash
-  var elapsed = Date.now() - _loadStartTime;
-  var MIN_DISPLAY = 1500;
-  if (_loadStartTime && elapsed < MIN_DISPLAY) {
-    setTimeout(_checkLoadingComplete, MIN_DISPLAY - elapsed + 50);
-    return;
+  if (_loadTransitionStarted) return;
+  // Need both data and video to be done
+  if (!_loadDataReady || !_loadVideoEnded) {
+    // Safety cap: if we've been loading for 12+ seconds, force transition regardless
+    if (_loadStartTime && (Date.now() - _loadStartTime) >= 12000) {
+      _loadDataReady = true;
+      _loadVideoEnded = true;
+    } else {
+      return;
+    }
   }
   _loadTransitionStarted = true;
-  _loadVideoEnded = true; // stop video if still playing
-  // Actually pause the video element to free resources
+  // Pause the video element to free resources
   var _v = authGetIntroVideo();
   if (_v) { try { _v.pause(); } catch (_) {} }
   if (_loadVideoStallTimer) {

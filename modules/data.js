@@ -2681,8 +2681,7 @@ function switchLeague(newLeague){
   applyLeagueDefaults(false);
   applyLeagueTheme(newLeague);
   loadScoringWeight();   // Pick WBB or MBB scoring defaults
-  renderWeights();
-  renderConfMultTable();
+  // reloadActiveSheet calls renderWeights + computeAll + renderPlayers internally
   reloadActiveSheet();
   if(!_isLeagueDataLoaded(newLeague, _currentDataSeason)){
     showWarn('Loading ' + newLeague + ' data…');
@@ -2700,19 +2699,26 @@ function switchLeague(newLeague){
   leagueRosters[newLeague].tb.forEach(r => tbRoster.push(r));
   leagueRosters[newLeague].opp.forEach(r => oppRoster.push(r));
 
-  // Refresh Team Builder and Opponent UI with restored rosters
-  tbRefresh();
-  oppRefresh();
+  // Defer heavy Team Builder and Opponent UI refresh to next frame
+  requestAnimationFrame(function(){
+    tbRefresh();
+    oppRefresh();
+  });
 
-  // Reload team ratings for the new league so Teams Hub shows correct data
-  teamRatings = {};
-  allRatingsData = [];
-  loadTeamRatings(_currentDataSeason).then(() => {
-    if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
-    if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-      window.ValueLab.handleDataChange();
-    }
-  }).catch(() => {});
+  // Defer team ratings + team list refresh to avoid blocking the thread
+  scheduleNonCriticalWork(function(){
+    teamRatings = {};
+    allRatingsData = [];
+    loadTeamRatings(_currentDataSeason).then(() => {
+      if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+      if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+        window.ValueLab.handleDataChange();
+      }
+    }).catch(() => {});
+  }, 300);
+
+  // Defer conference multiplier table render
+  requestAnimationFrame(function(){ renderConfMultTable(); });
 
   var portalPage = document.getElementById('pagePortal');
   if (typeof loadPortalEntries === 'function' && portalPage && portalPage.style.display !== 'none') {
