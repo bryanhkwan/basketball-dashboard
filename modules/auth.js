@@ -206,10 +206,11 @@ function authHandleUnauthorized(message) {
   if (loginErr) loginErr.textContent = message || 'Your session expired. Please log in again.';
 }
 
-// Loading coordination -- loading screen exits as soon as the intro video ends
+// Loading coordination -- exit when data is ready (video is decorative; don't block on it)
 var _loadDataReady = false;
 var _loadVideoEnded = false;
 var _loadTransitionStarted = false;
+var _loadStartTime = 0;
 var _loadVideoLastTick = 0;
 var _loadVideoStallTimer = null;
 
@@ -248,6 +249,7 @@ function authStartLoading() {
   _loadDataReady = false;
   _loadVideoEnded = false;
   _loadTransitionStarted = false;
+  _loadStartTime = Date.now();
   _loadVideoLastTick = Date.now();
   if (_loadVideoStallTimer) {
     clearTimeout(_loadVideoStallTimer);
@@ -285,14 +287,14 @@ function authStartLoading() {
     _loadVideoEnded = true;
   }
 
-  // Trigger data load in parallel -- MBB from CBD API, WBB from ESPN/worker-backed sources
+  // Trigger data load immediately — no setTimeout delay
   if (typeof loadAllData === 'function') {
     var season = typeof getDashboardSelectedSeason === 'function'
       ? getDashboardSelectedSeason('2026')
       : '2026';
-    setTimeout(function () { loadAllData(season); }, 50);
+    loadAllData(season);
   } else if (typeof loadFromGoogleSheets === 'function') {
-    setTimeout(function () { loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY); }, 50);
+    loadFromGoogleSheets(DEFAULT_GS_URL, DEFAULT_GS_API_KEY);
   }
 }
 
@@ -318,10 +320,22 @@ function authFinishLoading() {
   }
 }
 
-/* Show Welcome overlay once the intro video is done; data can continue loading in background */
+/* Transition out of loading when data is ready.
+   If the video is still playing, skip it. Minimum 1.5s display so the screen isn't a flash. */
 function _checkLoadingComplete() {
-  if (!_loadVideoEnded || _loadTransitionStarted) return;
+  if (!_loadDataReady || _loadTransitionStarted) return;
+  // Enforce minimum display time so loading screen isn't a flash
+  var elapsed = Date.now() - _loadStartTime;
+  var MIN_DISPLAY = 1500;
+  if (_loadStartTime && elapsed < MIN_DISPLAY) {
+    setTimeout(_checkLoadingComplete, MIN_DISPLAY - elapsed + 50);
+    return;
+  }
   _loadTransitionStarted = true;
+  _loadVideoEnded = true; // stop video if still playing
+  // Actually pause the video element to free resources
+  var _v = authGetIntroVideo();
+  if (_v) { try { _v.pause(); } catch (_) {} }
   if (_loadVideoStallTimer) {
     clearTimeout(_loadVideoStallTimer);
     _loadVideoStallTimer = null;

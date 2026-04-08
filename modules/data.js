@@ -1721,6 +1721,8 @@ async function loadAllData(year) {
     if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
     finishIfInitial();
 
+    // Stagger background work to avoid concurrent heavy operations
+    // Phase 1 (2s): Team ratings — lightweight API fetch + index build
     scheduleNonCriticalWork(function(){
       loadTeamRatings(year).then(() => {
         if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
@@ -1728,19 +1730,21 @@ async function loadAllData(year) {
           window.ValueLab.handleDataChange();
         }
       }).catch(() => {});
-    }, 500);
+    }, 2000);
 
-    if (!_careerDataReady && !_careerDataPromise) {
-      scheduleNonCriticalWork(function(){ loadCareerSeasons().catch(() => {}); }, 1200);
-    }
-
+    // Phase 2 (5s): Secondary league — API fetch + parse + possibly reloadActiveSheet
     scheduleNonCriticalWork(function(){
       ensureLeagueDataLoaded(secondaryLeague, year, {
         userVisible: false,
         refreshIfActive: true,
         background: true,
       }).catch(() => {});
-    }, 900);
+    }, 5000);
+
+    // Phase 3 (8s): Career data — 5 API fetches, heavyweight. Deferred until user is settled.
+    if (!_careerDataReady && !_careerDataPromise) {
+      scheduleNonCriticalWork(function(){ loadCareerSeasons().catch(() => {}); }, 8000);
+    }
 
     if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
       window.ValueLab.handleDataChange();
@@ -1785,8 +1789,9 @@ async function loadCareerSeasons() {
     _careerDataReady = true;
     _inferClassFromCareerData();
     _applyInferredClassAll();
-    if (rows && rows.length) scheduleNonCriticalWork(function(){ computeAll(); }, 180);
-    else if (typeof renderPlayers === 'function') scheduleNonCriticalWork(function(){ renderPlayers(); }, 120);
+    // Class inference is display-only — no need to re-run the full scoring pipeline.
+    // Just re-render the player table to show updated class labels.
+    if (typeof renderPlayers === 'function') scheduleNonCriticalWork(function(){ renderPlayers(); }, 120);
 
     if (typeof window._onCareerDataReady === 'function') {
       window._onCareerDataReady();

@@ -18,6 +18,7 @@ This is a vanilla JS app (no framework) with ~20 script modules loaded via `<scr
 
 | Hot Path | File | Function | Impact |
 |----------|------|----------|--------|
+| Loading screen | `modules/auth.js` | `_checkLoadingComplete()` | Blocks dashboard entry until data is ready (min 1.5s) |
 | Scoring pipeline | `modules/data.js` | `computeAll()` | Runs on every data load, league/pos switch, weight change |
 | Player table render | `modules/players.js` | `renderPlayersPage()` | 200 rows × 12+ columns per page |
 | Stat distributions | `modules/data.js` | `buildStatDistributions()` | Array sort per stat, called inside computeAll |
@@ -26,6 +27,12 @@ This is a vanilla JS app (no framework) with ~20 script modules loaded via `<scr
 | Reload sheet | `modules/data.js` | `reloadActiveSheet()` | Parse + compute current + sibling position |
 
 ## Optimization Checklist
+
+### 0. Loading Screen (`auth.js`)
+- **Data-driven exit**: `_checkLoadingComplete()` exits on `_loadDataReady`, NOT on video end. Video is decorative — don't block on it.
+- **Never add setTimeout for data load**: Call `loadAllData()` immediately from `authStartLoading()`. The old `setTimeout(..., 50)` added 50ms for no benefit.
+- **Video preload**: Set `preload="none"` on the `<video>` element in HTML. The auth module loads the video when needed via `authPlayIntroVideo()`. This prevents the video from competing with API fetches for bandwidth.
+- **Minimum display time**: 1.5s enforced via `_loadStartTime` + `MIN_DISPLAY` check, so loading screen isn't a visual flash.
 
 ### 1. Computation (`computeAll`)
 - **Merge array passes**: Never chain `.map()` calls that create intermediate arrays. Use a single `for` loop with `Object.assign` or mutation.
@@ -64,9 +71,15 @@ This is a vanilla JS app (no framework) with ~20 script modules loaded via `<scr
 
 ### 4. Data Loading
 - **Stage critical vs non-critical**: Load the primary league first, render immediately, then load secondary league / ratings / career data via `requestIdleCallback` with staggered timeouts.
+- **Stagger background work**: Never fire multiple heavy background tasks concurrently. Current stagger schedule:
+  - Phase 1 (2s after load): Team ratings — lightweight API fetch + index build
+  - Phase 2 (5s after load): Secondary league — API fetch + parse + sheet reload
+  - Phase 3 (8s after load): Career data — 5 API fetches (heavyweight)
+- **Career data should NOT trigger computeAll**: Class inference is display-only. Just call `renderPlayers()`, not `computeAll()`.
 - **Deduplication**: Track loading state per-league with `_leagueDataStatus` to prevent duplicate fetches.
 - **On-demand loading**: Career data and team ratings should load when first needed (profile open, Teams Hub), not eagerly on startup.
 - **Cache with TTL**: Use object caches (`teamStatsCache`, `playerShotsCache`) keyed by `"team:season"`. Check before fetching.
+- **Table header caching**: Track a `_lastHeaderKey` and only rebuild headers when columns actually change (league switch, etc.). Don't clear `playersHead.innerHTML` on every `renderPlayers()` call.
 
 ### 5. Search & Filter
 - **Debounce search input**: 150ms minimum (`debouncedSearch`).
@@ -85,9 +98,15 @@ This is a vanilla JS app (no framework) with ~20 script modules loaded via `<scr
 | `el.addEventListener(...)` per row | 200+ closures per render; memory leak | Event delegation |
 | `el.innerHTML = ''; el.appendChild(frag)` | Two reflows; clear is unnecessary with fragment | Just `el.innerHTML = ''; el.appendChild(frag)` (single batch) |
 | `document.getElementById()` in hot loop | DOM lookup per iteration | Cache in variable |
-| `backdrop-filter: blur(28px)` on sticky | GPU-heavy per scroll frame | ≤10px or use solid background |
+| `backdrop-filter: blur(20px)` on any element | GPU-heavy repaints; ≤8px is safe | ≤6-8px or use solid background |
 | `el.style.color = ...; el.textContent = ...` interleaved with reads | Layout thrashing | Group all writes together |
 | Per-profile `statPercentile()` calls | Binary search per stat per open | Pre-cache in `_pct_` fields |
+| `_checkLoadingComplete` waiting on video | Users wait for full video before seeing dashboard | Exit on `_loadDataReady` instead |
+| `setTimeout(loadAllData, 50)` in auth | Delays data fetch by 50ms for no benefit | Call `loadAllData()` directly |
+| `video preload="auto"` in HTML | Competes with API fetches for bandwidth | Use `preload="none"`; auth module loads when needed |
+| Background `computeAll()` from career data | Full scoring pipeline re-run just for display-only class labels | Just call `renderPlayers()` |
+| Multiple `scheduleNonCriticalWork` at same timing | Concurrent heavy tasks cause UI stalls | Stagger with 2s/5s/8s delays |
+| `playersHead.innerHTML = ''` on every render | Forces header rebuild + re-attaches click listeners | Cache `_lastHeaderKey`; only clear when columns change |
 
 ## Diagnostic Steps
 
@@ -101,9 +120,13 @@ This is a vanilla JS app (no framework) with ~20 script modules loaded via `<scr
 
 | Variable | Module | Purpose |
 |---|---|---|
+| `_loadDataReady` | auth.js | True when primary league data is loaded and rendered |
+| `_loadStartTime` | auth.js | Timestamp of loading screen display (for min display enforcement) |
+| `_loadTransitionStarted` | auth.js | Guard against double-transition |
 | `computed` | data.js | Current position's scored player array |
 | `tbAllComputed` | data.js | Cache: `{MBB_Guards:[], MBB_Bigs:[], ...}` |
 | `statDist` | data.js | `{stat: {sorted:[], invert:bool}}` for percentiles |
 | `_playersPageData` | players.js | Current page's row array (for delegation) |
+| `_lastHeaderKey` | players.js | Tracks column config to avoid unnecessary header rebuilds |
 | `_cachedAllPlayers` | teambuilder.js | Merged player pool cache |
 | `_tbCachedEls` | teambuilder.js | Cached DOM element references |

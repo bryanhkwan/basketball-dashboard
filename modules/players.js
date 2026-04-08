@@ -61,6 +61,7 @@ function sortData(data){
 }
 
 // --- Render ---
+var _lastHeaderKey = '';
 function renderPlayers(){
   const q = (searchInput.value || '').toLowerCase().trim();
   let data = computed;
@@ -71,7 +72,12 @@ function renderPlayers(){
   }
   filteredData = sortData(data);
   currentPage = 0;
-  playersHead.innerHTML = '';
+  // Only rebuild headers when the column set actually changes (league switch, etc.)
+  var headerKey = (typeof league !== 'undefined' ? league : '') + '|' + (typeof oppAddPlayer !== 'undefined' ? '1' : '0') + '|' + (typeof draftBadgeHtml === 'function' ? '1' : '0') + '|' + playerValueView;
+  if(headerKey !== _lastHeaderKey){
+    playersHead.innerHTML = '';
+    _lastHeaderKey = headerKey;
+  }
   const playersPage = document.getElementById('pagePlayers');
   if(playersPage && playersPage.style.display === 'none'){
     playersBody.innerHTML = '';
