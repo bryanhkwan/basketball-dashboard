@@ -24,6 +24,7 @@ var _projectionScoutOverrideMap = null;
 var _projectionScoutOverrideKey = '';
 var _projectionScoutTarget = null;
 var _projectionScoutModalBound = false;
+var _projectionScoutOverrideVersion = 0;
 
 try {
   var _savedPlayerValueView = localStorage.getItem('players_value_view_v1');
@@ -70,6 +71,14 @@ var _mbbHeightLoadsBySeason  = {}; // season → active roster fetch promise
 var _mbbActivePlayersRef     = null; // latest MBB player array backing the visible workbook
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
+var _leagueRowsCache = {
+  MBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] },
+  WBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] },
+};
+var _ratingsCache = {};     // keyed "LEAGUE:season" -> team ratings array
+var _ratingsLoads = {};     // keyed "LEAGUE:season" -> active promise
+var _teamListRefreshTimer = null;
+var _valueLabDataTimer = null;
 
 // Live working copy (user-editable) — keyed by canonical name only
 var confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
@@ -99,6 +108,46 @@ function scheduleNonCriticalWork(fn, timeoutMs){
   return setTimeout(fn, timeout);
 }
 
+function _evalPresetsLoaded(){
+  return !!(window.EvalPresets && typeof window.EvalPresets.isLoaded === 'function' && window.EvalPresets.isLoaded());
+}
+
+function _scheduleTeamListRefresh(delayMs){
+  if(_teamListRefreshTimer) clearTimeout(_teamListRefreshTimer);
+  _teamListRefreshTimer = setTimeout(function(){
+    _teamListRefreshTimer = null;
+    if(typeof thRefreshTeamList === 'function') thRefreshTeamList();
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 120);
+}
+
+function _scheduleValueLabDataChange(delayMs){
+  if(_valueLabDataTimer) clearTimeout(_valueLabDataTimer);
+  _valueLabDataTimer = setTimeout(function(){
+    _valueLabDataTimer = null;
+    if(window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
+      window.ValueLab.handleDataChange();
+    }
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 140);
+}
+
+function _dataApplyActiveLeagueConfig(opts){
+  opts = opts && typeof opts === 'object' ? opts : {};
+  const forceDefaults = !!opts.forceDefaults;
+  const alwaysReloadData = opts.alwaysReloadData !== false;
+  if(activeFitEl && fitPresetEl && fitPresetEl.selectedIndex >= 0){
+    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
+  }
+  if(_evalPresetsLoaded() && window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function'){
+    const presetChanged = !!window.EvalPresets.applyActiveForCurrentLeague();
+    if(alwaysReloadData && !presetChanged) reloadActiveSheet();
+    return;
+  }
+  loadScoringWeight();
+  applyLeagueDefaults(forceDefaults);
+  renderWeights();
+  if(alwaysReloadData) reloadActiveSheet();
+}
+
 function _dataSeasonKey(season){
   return typeof normalizeDashboardSeason === 'function'
     ? normalizeDashboardSeason(season, String(_currentDataSeason || 2026))
@@ -107,6 +156,15 @@ function _dataSeasonKey(season){
 
 function _dataPlaceholderSheet(){
   return { __aoa: [['Player','Team','Conference','Pos']] };
+}
+
+function _dataResetLeagueRowsCache(targetLeague){
+  if(targetLeague){
+    _leagueRowsCache[targetLeague] = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
+    return;
+  }
+  _leagueRowsCache.MBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
+  _leagueRowsCache.WBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
 }
 
 function _dataEnsureWorkbookShell(){
@@ -129,6 +187,7 @@ function _dataResetWorkbookShell(season){
   _leagueDataStatus.WBB = { season: seasonKey, ready: false, loading: false, error: '', promise: null };
   tbAllComputed = {};
   if(typeof _cachedAllPlayers !== 'undefined') _cachedAllPlayers = null;
+  _dataResetLeagueRowsCache();
 }
 
 function _isLeagueDataLoaded(targetLeague, season){
@@ -148,6 +207,54 @@ function _dataCommitLeaguePlayers(targetLeague, players){
     });
   }
   wb.Sheets[SHEET_MAP[targetLeague]] = { __aoa: aoa };
+}
+
+function _dataGetLeagueRows(targetLeague){
+  const leagueKey = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  const sheetName = findSheetLike(SHEET_MAP[leagueKey]) || SHEET_MAP[leagueKey];
+  const ws = wb && wb.Sheets ? wb.Sheets[sheetName] : null;
+  if(!ws) return null;
+
+  const cache = _leagueRowsCache[leagueKey] || (_leagueRowsCache[leagueKey] = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] });
+  const seasonKey = _dataSeasonKey(_currentDataSeason);
+  if(cache.season === seasonKey && cache.wsRef === ws && cache.overrideVersion === _projectionScoutOverrideVersion){
+    return cache;
+  }
+
+  const allRows = parseSheetToRows(ws);
+  const guards = [];
+  const bigs = [];
+
+  for(let i = 0; i < allRows.length; i++){
+    const r = allRows[i];
+    const out = {...r};
+    out.Position = bucketPosition(r.Pos);
+    if(out['TOV/G'] != null && out['TOPG'] == null) out['TOPG'] = out['TOV/G'];
+    if(out['ORB%'] != null && out['OR%'] == null) out['OR%'] = out['ORB%'];
+    if(out['DRB%'] != null && out['DR%'] == null) out['DR%'] = out['DRB%'];
+    if(!out.Conference) out.Conference = '';
+    if(out['3PA/G'] == null && out['3PA'] != null && out['G'] != null && +out['G'] > 0){
+      out['3PA/G'] = +(+out['3PA'] / +out['G']).toFixed(2);
+    }
+    const tpp = +(out['3P%']) || 0;
+    const tpag = +(out['3PA/G']) || 0;
+    const gp = +(out['G']) || 0;
+    if(tpp > 0 && tpag > 0){
+      out['3PT_Rating'] = +(tpp * Math.min(1, tpag / 2.0) * Math.min(1, gp / 10)).toFixed(3);
+    } else {
+      out['3PT_Rating'] = 0;
+    }
+    const normalizedRow = projectionApplyScoutOverride(out);
+    if(normalizedRow.Position === 'Bigs') bigs.push(normalizedRow);
+    else guards.push(normalizedRow);
+  }
+
+  cache.season = seasonKey;
+  cache.wsRef = ws;
+  cache.overrideVersion = _projectionScoutOverrideVersion;
+  cache.guards = guards;
+  cache.bigs = bigs;
+  return cache;
 }
 
 function initDataDOMRefs(){
@@ -656,6 +763,7 @@ function projectionSaveScoutOverrideMap(map){
   const key = projectionScoutStorageKey();
   _projectionScoutOverrideKey = key;
   _projectionScoutOverrideMap = map || {};
+  _projectionScoutOverrideVersion++;
   try {
     localStorage.setItem(key, JSON.stringify(_projectionScoutOverrideMap));
   } catch (_) {}
@@ -1429,17 +1537,11 @@ async function loadFromGoogleSheets(url, apiKey){
     exportBtn.disabled = false;
 
     setProgress(65, 'Computing player scores…');
-    applyLeagueDefaults(true);
-    renderWeights();
-    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
 
     // Use requestAnimationFrame to let the progress bar paint before heavy computation
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    reloadActiveSheet();
-    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
-      window.EvalPresets.applyActiveForCurrentLeague(true);
-    }
+    _dataApplyActiveLeagueConfig({ forceDefaults: true, alwaysReloadData: true });
 
     setProgress(90, 'Caching all positions…');
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -1510,10 +1612,6 @@ async function loadFromCBData(year) {
     recalcBtn.disabled       = false;
     exportBtn.disabled       = false;
 
-    applyLeagueDefaults(true);
-    renderWeights();
-    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
-
     // Force MBB (API covers MBB only)
     if (league !== 'MBB') {
       league = 'MBB';
@@ -1526,10 +1624,8 @@ async function loadFromCBData(year) {
       if (typeof applyLeagueTheme === 'function') applyLeagueTheme('MBB');
     }
 
-    reloadActiveSheet();
-    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
-      window.EvalPresets.applyActiveForCurrentLeague(true);
-    }
+    _dataApplyActiveLeagueConfig({ forceDefaults: true, alwaysReloadData: true });
+
     finishIfInitial();
 
     // Background enrichment for MBB — fills Height from ESPN rosters.
@@ -1630,11 +1726,8 @@ async function ensureLeagueDataLoaded(targetLeague, year, opts) {
 
         if (opts.refreshIfActive && targetLeague === league) {
           clearWarn();
-          reloadActiveSheet();
-          if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
-            window.EvalPresets.applyActiveForCurrentLeague(true);
-          }
-          if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+          _dataApplyActiveLeagueConfig({ forceDefaults: false, alwaysReloadData: true });
+          _scheduleTeamListRefresh(120);
         }
 
         if (result.players.length) {
@@ -1708,47 +1801,43 @@ async function loadAllData(year) {
     recalcBtn.disabled       = false;
     exportBtn.disabled       = false;
 
-    applyLeagueDefaults(true);
-    renderWeights();
-    activeFitEl.textContent = fitPresetEl.options[fitPresetEl.selectedIndex].text;
     if (_careerDataReady) _inferClassFromCareerData();
 
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    reloadActiveSheet();
-    if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
-      window.EvalPresets.applyActiveForCurrentLeague(true);
-    }
-    if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
+    _dataApplyActiveLeagueConfig({ forceDefaults: true, alwaysReloadData: true });
+    _scheduleTeamListRefresh(160);
     finishIfInitial();
 
-    // Stagger background work to avoid concurrent heavy operations
-    // Phase 1 (2s): Team ratings — lightweight API fetch + index build
+    // Use the remaining intro-video time to prefetch non-critical data before the user interacts.
+    // Phase 1 (~0.35s): active league ratings
     scheduleNonCriticalWork(function(){
-      loadTeamRatings(year).then(() => {
-        if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
-        if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-          window.ValueLab.handleDataChange();
-        }
+      loadTeamRatings(year, primaryLeague).then(() => {
+        _scheduleTeamListRefresh(120);
+        _scheduleValueLabDataChange(160);
       }).catch(() => {});
-    }, 2000);
+    }, isInitialLoad ? 350 : 700);
 
-    // Phase 2 (5s): Secondary league — API fetch + parse + possibly reloadActiveSheet
+    // Phase 2 (~1.2s): secondary league player data so MBB↔WBB switches are already warm
     scheduleNonCriticalWork(function(){
       ensureLeagueDataLoaded(secondaryLeague, year, {
         userVisible: false,
         refreshIfActive: true,
         background: true,
+      }).then(function(result){
+        if (result && result.loaded) {
+          scheduleNonCriticalWork(function(){
+            loadTeamRatings(year, secondaryLeague, { applyToGlobals: false }).catch(() => {});
+          }, 700);
+        }
       }).catch(() => {});
-    }, 5000);
+    }, isInitialLoad ? 1200 : 2200);
 
     // Phase 3 (8s): Career data — 5 API fetches, heavyweight. Deferred until user is settled.
     if (!_careerDataReady && !_careerDataPromise) {
       scheduleNonCriticalWork(function(){ loadCareerSeasons().catch(() => {}); }, 8000);
     }
 
-    if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-      window.ValueLab.handleDataChange();
-    }
+    _scheduleValueLabDataChange(isInitialLoad ? 260 : 120);
 
   } catch (err) {
     showWarn('Data load error: ' + (err.message || err));
@@ -1853,27 +1942,55 @@ var WORKER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
 
 // ── loadTeamRatings — adjusted efficiency + SRS for all teams ─────────────
 async function loadTeamRatings(year) {
+  var targetLeague = arguments.length > 1 && (arguments[1] === 'MBB' || arguments[1] === 'WBB')
+    ? arguments[1]
+    : (league === 'WBB' ? 'WBB' : 'MBB');
+  var opts = arguments.length > 2 && arguments[2] && typeof arguments[2] === 'object' ? arguments[2] : {};
   year = year || 2026;
-  try {
-    const endpoint = league === 'WBB'
-      ? WORKER_URL + '/api/wbb/ratings?season=' + year
-      : WORKER_URL + '/api/cbdata/ratings?season=' + year;
-    const r = await fetch(endpoint);
-    if (!r.ok) return;
-    const data = await r.json();
-    allRatingsData = (data.teams || []).filter(t => +t.season === +year);
+  const seasonKey = _dataSeasonKey(year);
+  const cacheKey = targetLeague + ':' + seasonKey;
+  const applyToGlobals = opts.applyToGlobals !== false;
+
+  function applyTeams(teams){
+    allRatingsData = Array.isArray(teams) ? teams.slice() : [];
     teamRatings = {};
-    allRatingsData.forEach(t => {
-      if (t.team) teamRatings[t.team.toLowerCase()] = t;
+    allRatingsData.forEach(function(t){
+      if (t && t.team) teamRatings[t.team.toLowerCase()] = t;
     });
-    _ratingsReady = true;
+    _ratingsReady = allRatingsData.length > 0;
     if (typeof window._onRatingsReady === 'function') {
       window._onRatingsReady();
       window._onRatingsReady = null;
     }
-  } catch (e) {
-    console.warn('loadTeamRatings failed:', e);
   }
+
+  if (_ratingsCache[cacheKey]) {
+    if (applyToGlobals) applyTeams(_ratingsCache[cacheKey]);
+    return _ratingsCache[cacheKey];
+  }
+
+  if (!_ratingsLoads[cacheKey]) {
+    _ratingsLoads[cacheKey] = (async function(){
+      const endpoint = targetLeague === 'WBB'
+        ? WORKER_URL + '/api/wbb/ratings?season=' + seasonKey
+        : WORKER_URL + '/api/cbdata/ratings?season=' + seasonKey;
+      const r = await fetch(endpoint);
+      if (!r.ok) return [];
+      const data = await r.json();
+      const teams = (data.teams || []).filter(function(t){ return +t.season === +seasonKey; });
+      _ratingsCache[cacheKey] = teams;
+      return teams;
+    })().catch(function(e){
+      console.warn('loadTeamRatings failed:', e);
+      return [];
+    }).finally(function(){
+      delete _ratingsLoads[cacheKey];
+    });
+  }
+
+  const teams = await _ratingsLoads[cacheKey];
+  if (applyToGlobals) applyTeams(teams);
+  return teams;
 }
 
 // ── loadShootingForTeam — shot-type breakdown for a team's players ───────────
@@ -2678,11 +2795,8 @@ function switchLeague(newLeague){
   // Switch league
   league = newLeague;
   setActiveTab(document.getElementById(`tab${newLeague}`), '.tab[data-league]');
-  applyLeagueDefaults(false);
   applyLeagueTheme(newLeague);
-  loadScoringWeight();   // Pick WBB or MBB scoring defaults
-  // reloadActiveSheet calls renderWeights + computeAll + renderPlayers internally
-  reloadActiveSheet();
+  _dataApplyActiveLeagueConfig({ forceDefaults: false, alwaysReloadData: true });
   if(!_isLeagueDataLoaded(newLeague, _currentDataSeason)){
     showWarn('Loading ' + newLeague + ' data…');
     ensureLeagueDataLoaded(newLeague, _currentDataSeason, {
@@ -2690,9 +2804,6 @@ function switchLeague(newLeague){
       refreshIfActive: true,
       background: false,
     }).catch(() => {});
-  }
-  if (window.EvalPresets && typeof window.EvalPresets.applyActiveForCurrentLeague === 'function') {
-    window.EvalPresets.applyActiveForCurrentLeague(true);
   }
 
   // Restore new league's saved rosters
@@ -2707,18 +2818,14 @@ function switchLeague(newLeague){
 
   // Defer team ratings + team list refresh to avoid blocking the thread
   scheduleNonCriticalWork(function(){
-    teamRatings = {};
-    allRatingsData = [];
-    loadTeamRatings(_currentDataSeason).then(() => {
-      if (typeof thRefreshTeamList === 'function') thRefreshTeamList();
-      if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-        window.ValueLab.handleDataChange();
-      }
+    loadTeamRatings(_currentDataSeason, newLeague).then(() => {
+      _scheduleTeamListRefresh(120);
+      _scheduleValueLabDataChange(160);
     }).catch(() => {});
   }, 300);
 
   // Defer conference multiplier table render
-  requestAnimationFrame(function(){ renderConfMultTable(); });
+  requestAnimationFrame(function(){ if(!_evalPresetsLoaded()) renderConfMultTable(); });
 
   var portalPage = document.getElementById('pagePortal');
   if (typeof loadPortalEntries === 'function' && portalPage && portalPage.style.display !== 'none') {
@@ -2730,9 +2837,7 @@ function switchLeague(newLeague){
 
   // Notify AI chat that league changed (clears stale roster context from history)
   if (typeof window._chatOnLeagueSwitch === 'function') window._chatOnLeagueSwitch(newLeague);
-  if (window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
-    window.ValueLab.handleDataChange();
-  }
+  _scheduleValueLabDataChange(120);
 }
 
 function switchPos(newPos){
@@ -2750,31 +2855,12 @@ function reloadActiveSheet(){
     showWarn(`Could not find sheet "${sheetName}" in the workbook. Check sheet names.`);
     rows = []; computed = []; renderPlayers(); return;
   }
-  const allRows = parseSheetToRows(ws);
-
-  const normalized = allRows.map(r => {
-    const out = {...r};
-    out.Position = bucketPosition(r.Pos);
-    if(out['TOV/G'] != null && out['TOPG'] == null) out['TOPG'] = out['TOV/G'];
-    if(out['ORB%'] != null && out['OR%'] == null) out['OR%'] = out['ORB%'];
-    if(out['DRB%'] != null && out['DR%'] == null) out['DR%'] = out['DRB%'];
-    if(!out.Conference) out.Conference = '';
-    if(out['3PA/G'] == null && out['3PA'] != null && out['G'] != null && +out['G'] > 0){
-      out['3PA/G'] = +(+out['3PA'] / +out['G']).toFixed(2);
-    }
-    const tpp = +(out['3P%']) || 0;
-    const tpag = +(out['3PA/G']) || 0;
-    const gp = +(out['G']) || 0;
-    if(tpp > 0 && tpag > 0){
-      out['3PT_Rating'] = +(tpp * Math.min(1, tpag / 2.0) * Math.min(1, gp / 10)).toFixed(3);
-    } else {
-      out['3PT_Rating'] = 0;
-    }
-    return projectionApplyScoutOverride(out);
-  });
-
-  const guards = normalized.filter(r => r.Position === 'Guards');
-  const bigs = normalized.filter(r => r.Position === 'Bigs');
+  const cachedRows = _dataGetLeagueRows(league);
+  if(!cachedRows){
+    rows = []; computed = []; renderPlayers(); return;
+  }
+  const guards = cachedRows.guards || [];
+  const bigs = cachedRows.bigs || [];
 
   rows = pos === 'Guards' ? guards : bigs;
   ensureWeightsCoverStats(pos, rows);
@@ -2792,7 +2878,6 @@ function reloadActiveSheet(){
       computeAll({ skipRender: true });
       pos = savedPos; rows = savedRows; computed = savedComputed;
       ensureWeightsCoverStats(pos, rows);
-      renderWeights();
     }catch(e){
       console.error('Sibling computation failed:', e);
       pos = pos === sibPos ? (sibPos === 'Guards' ? 'Bigs' : 'Guards') : pos;

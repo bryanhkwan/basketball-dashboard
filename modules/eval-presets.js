@@ -231,8 +231,98 @@ function evalPresetSerializeCurrent() {
   };
 }
 
+function evalPresetComparableWeights(rows) {
+  return evalPresetSanitizeWeights(rows).filter(function (row) {
+    return Number(row.w) !== 0;
+  }).sort(function (a, b) {
+    return String(a.stat || '').localeCompare(String(b.stat || ''));
+  });
+}
+
+function evalPresetDefaultValuationForLeague(leagueName) {
+  if (leagueName === 'WBB') {
+    return {
+      avgPay: 35000,
+      minPay: 5000,
+      maxPay: 100000,
+      starValue: 70000,
+      starPct: 0.95,
+      mpMode: 'on',
+      mpPct: 0.95,
+    };
+  }
+  return {
+    avgPay: 70000,
+    minPay: 10000,
+    maxPay: 300000,
+    starValue: 150000,
+    starPct: 0.95,
+    mpMode: 'on',
+    mpPct: 0.95,
+  };
+}
+
+function evalPresetNormalizeComparablePayload(payload, leagueName) {
+  var cleanPayload = payload && typeof payload === 'object' ? payload : {};
+  var defaults = evalPresetDefaultsForLeague(leagueName);
+  var valuationDefaults = evalPresetDefaultValuationForLeague(leagueName);
+  var valuation = cleanPayload.valuation || {};
+  var savedConf = cleanPayload.conferenceMultiplier && cleanPayload.conferenceMultiplier.values;
+  var confValues = evalPresetClone(DEFAULT_CONF_VALUES);
+
+  if (savedConf && typeof savedConf === 'object') {
+    Object.keys(savedConf).forEach(function (key) {
+      var num = Number(savedConf[key]);
+      if (Number.isFinite(num)) confValues[key] = num;
+    });
+  }
+
+  return {
+    version: 1,
+    positionWeights: {
+      Guards: evalPresetComparableWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Guards) || defaults.Guards),
+      Bigs: evalPresetComparableWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Bigs) || defaults.Bigs),
+    },
+    valuation: {
+      avgPay: Number.isFinite(Number(valuation.avgPay)) ? Number(valuation.avgPay) : valuationDefaults.avgPay,
+      minPay: Number.isFinite(Number(valuation.minPay)) ? Number(valuation.minPay) : valuationDefaults.minPay,
+      maxPay: Number.isFinite(Number(valuation.maxPay)) ? Number(valuation.maxPay) : valuationDefaults.maxPay,
+      starValue: Number.isFinite(Number(valuation.starValue)) ? Number(valuation.starValue) : valuationDefaults.starValue,
+      starPct: Number.isFinite(Number(valuation.starPct)) ? Number(valuation.starPct) : valuationDefaults.starPct,
+      mpMode: String(valuation.mpMode || valuationDefaults.mpMode).toLowerCase() === 'off' ? 'off' : 'on',
+      mpPct: Number.isFinite(Number(valuation.mpPct)) ? Number(valuation.mpPct) : valuationDefaults.mpPct,
+    },
+    conferenceMultiplier: {
+      enabled: !(cleanPayload.conferenceMultiplier && cleanPayload.conferenceMultiplier.enabled === false),
+      values: confValues,
+    },
+  };
+}
+
+function evalPresetCurrentComparableSignature(leagueName) {
+  return JSON.stringify(evalPresetNormalizeComparablePayload(evalPresetSerializeCurrent(), leagueName));
+}
+
+function evalPresetTargetComparableSignature(payload, leagueName) {
+  return JSON.stringify(evalPresetNormalizeComparablePayload(payload, leagueName));
+}
+
+function evalPresetRenderConfTableDeferred() {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { renderConfMultTable(); });
+  } else {
+    renderConfMultTable();
+  }
+}
+
 function evalPresetApplySystemDefault(opts) {
   opts = opts || {};
+  var leagueName = opts.league || evalPresetCurrentLeague();
+  if (evalPresetCurrentComparableSignature(leagueName) === evalPresetTargetComparableSignature(null, leagueName)) {
+    evalPresetState.selectedByLeague[leagueName] = '__default__';
+    evalPresetState.dirtyByLeague[leagueName] = false;
+    return false;
+  }
   evalPresetState.applying = true;
   try {
     loadScoringWeight();
@@ -243,22 +333,26 @@ function evalPresetApplySystemDefault(opts) {
     confMultipliers = evalPresetClone(DEFAULT_CONF_VALUES);
     if (confMultToggleEl) confMultToggleEl.checked = true;
     renderWeights();
-    renderConfMultTable();
+    evalPresetRenderConfTableDeferred();
     if (wb) reloadActiveSheet();
     else updateWeightFooter();
   } finally {
     evalPresetState.applying = false;
   }
 
-  var leagueName = opts.league || evalPresetCurrentLeague();
   evalPresetState.selectedByLeague[leagueName] = '__default__';
   evalPresetState.dirtyByLeague[leagueName] = false;
+  return true;
 }
 
 function evalPresetApplyPayload(payload, opts) {
   opts = opts || {};
   var leagueName = opts.league || evalPresetCurrentLeague();
   var cleanPayload = payload && typeof payload === 'object' ? payload : {};
+  if (evalPresetCurrentComparableSignature(leagueName) === evalPresetTargetComparableSignature(cleanPayload, leagueName)) {
+    evalPresetState.dirtyByLeague[leagueName] = false;
+    return false;
+  }
   var defaults = evalPresetDefaultsForLeague(leagueName);
 
   evalPresetState.applying = true;
@@ -292,7 +386,7 @@ function evalPresetApplyPayload(payload, opts) {
     }
 
     renderWeights();
-    renderConfMultTable();
+    evalPresetRenderConfTableDeferred();
     if (wb) reloadActiveSheet();
     else updateWeightFooter();
   } finally {
@@ -300,6 +394,7 @@ function evalPresetApplyPayload(payload, opts) {
   }
 
   evalPresetState.dirtyByLeague[leagueName] = false;
+  return true;
 }
 
 function evalPresetFindById(leagueName, idValue) {
@@ -451,25 +546,26 @@ async function evalPresetBootstrap(force) {
   }
 }
 
-async function evalPresetApplyActiveForCurrentLeague(force) {
+function evalPresetApplyActiveForCurrentLeague(force) {
   var leagueName = evalPresetCurrentLeague();
   if (!evalPresetState.loaded && !force) return;
   var activeId = evalPresetState.activeByLeague[leagueName];
   if (activeId == null) {
-    evalPresetApplySystemDefault({ league: leagueName });
+    var changedDefault = evalPresetApplySystemDefault({ league: leagueName });
     evalPresetRender();
-    return;
+    return changedDefault;
   }
   var preset = evalPresetFindById(leagueName, activeId);
   if (!preset) {
-    evalPresetApplySystemDefault({ league: leagueName });
+    var changed = evalPresetApplySystemDefault({ league: leagueName });
     evalPresetState.activeByLeague[leagueName] = null;
     evalPresetRender();
-    return;
+    return changed;
   }
-  evalPresetApplyPayload(preset.payload, { league: leagueName });
+  var changed = evalPresetApplyPayload(preset.payload, { league: leagueName });
   evalPresetState.selectedByLeague[leagueName] = String(preset.id);
   evalPresetRender();
+  return changed;
 }
 
 async function evalPresetApplySelection() {
@@ -755,6 +851,7 @@ function initEvalPresetDOM() {
 window.EvalPresets = {
   bootstrap: evalPresetBootstrap,
   applyActiveForCurrentLeague: evalPresetApplyActiveForCurrentLeague,
+  isLoaded: function () { return !!evalPresetState.loaded; },
   refreshUI: evalPresetRender,
   markDirty: evalPresetMarkDirty,
   resetSession: evalPresetResetSession,
