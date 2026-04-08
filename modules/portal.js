@@ -311,7 +311,12 @@ function portalSetAIStatus(msg) {
   if (portalAIStatusEl) portalAIStatusEl.textContent = msg || '';
 }
 
+function portalRepFeatureEnabled() {
+  return !!(portalRepBodyEl || portalRepResearchBtnEl || portalRepStatusEl || portalRepExportBtnEl || portalRepClearBtnEl);
+}
+
 function portalSetRepStatus(msg) {
+  if (!portalRepFeatureEnabled()) return;
   if (portalRepStatusEl) portalRepStatusEl.textContent = msg || '';
 }
 
@@ -1284,6 +1289,10 @@ function portalRepSourcesMarkup(item) {
 }
 
 function portalRenderRepResults() {
+  if (!portalRepFeatureEnabled()) {
+    portalRepResults = [];
+    return;
+  }
   if (!portalRepBodyEl) return;
   portalRepBodyEl.innerHTML = '';
 
@@ -1317,6 +1326,10 @@ function portalRenderRepResults() {
 }
 
 function portalSyncRepResultsFromCache() {
+  if (!portalRepFeatureEnabled()) {
+    portalRepResults = [];
+    return;
+  }
   var cache = portalLoadRepCacheMap();
   var seen = {};
   portalRepResults = portalFiltered.map(function (entry) {
@@ -1335,6 +1348,7 @@ function portalCsvEscape(value) {
 }
 
 function portalExportRepResearchCsv() {
+  if (!portalRepFeatureEnabled()) return;
   var rows = (portalRepResults || []).slice();
   if (!rows.length) {
     portalSetRepStatus('No representation research results to export.');
@@ -1374,6 +1388,7 @@ function portalExportRepResearchCsv() {
 }
 
 function portalClearRepResearch() {
+  if (!portalRepFeatureEnabled()) return;
   var ok = true;
   try {
     ok = window.confirm('Clear cached public representation research for the current portal season?');
@@ -1388,6 +1403,7 @@ function portalClearRepResearch() {
 }
 
 async function portalRunRepResearch(forceRefresh) {
+  if (!portalRepFeatureEnabled()) return;
   if (portalRepBusy) return;
   if (!portalFiltered.length) {
     portalSetRepStatus('No filtered portal players to research.');
@@ -3178,9 +3194,10 @@ function portalRenderTable() {
   var matched = 0;
   var targetMap = portalTargetListToMap(portalLoadTargetList());
   var frag = document.createDocumentFragment();
-  portalFiltered.forEach(function (it) {
+  portalFiltered.forEach(function (it, idx) {
     var tr = document.createElement('tr');
     tr.id = portalAlertDomId(portalEntryKey(it));
+    tr.dataset.ri = idx;
 
     var match = portalFindPlayerMatch(it.playerName, it.fromTeam);
     if (match) matched++;
@@ -3219,12 +3236,9 @@ function portalRenderTable() {
     var tdMatch = document.createElement('td');
     if (match) {
       var addBtn = document.createElement('button');
-      addBtn.className = 'tbAddBtn';
+      addBtn.className = 'tbAddBtn portalBoardAddBtn';
       addBtn.textContent = '+ Add';
       addBtn.title = 'Add matched player to roster';
-      addBtn.addEventListener('click', function () {
-        if (typeof tbAddPlayer === 'function') tbAddPlayer(match);
-      });
       tdMatch.appendChild(addBtn);
     } else {
       tdMatch.textContent = 'No match';
@@ -3234,13 +3248,10 @@ function portalRenderTable() {
     var tdProfile = document.createElement('td');
     if (match) {
       var profBtn = document.createElement('button');
-      profBtn.className = 'secondary';
+      profBtn.className = 'secondary portalBoardOpenBtn';
       profBtn.style.padding = '4px 8px';
       profBtn.style.fontSize = '11px';
       profBtn.textContent = 'Open';
-      profBtn.addEventListener('click', function () {
-        if (typeof openProfile === 'function') openProfile(match);
-      });
       tdProfile.appendChild(profBtn);
     } else {
       tdProfile.textContent = '—';
@@ -3251,12 +3262,9 @@ function portalRenderTable() {
       var targetKey = portalTargetKey(it, match);
       var isTargeted = !!targetMap[targetKey];
       var targetBtn = document.createElement('button');
-      targetBtn.className = 'secondary portalTargetBtn' + (isTargeted ? ' isActive' : '');
+      targetBtn.className = 'secondary portalTargetBtn portalBoardTargetBtn' + (isTargeted ? ' isActive' : '');
       targetBtn.textContent = isTargeted ? 'Targeted' : '+ Target';
       targetBtn.title = isTargeted ? 'Remove from Portal Fit Lab shortlist' : 'Add to Portal Fit Lab shortlist';
-      targetBtn.addEventListener('click', function () {
-        portalToggleTarget(it, match);
-      });
       tdTarget.appendChild(targetBtn);
     } else {
       tdTarget.textContent = 'No data';
@@ -3289,6 +3297,29 @@ function portalRenderTable() {
     frag.appendChild(tr);
   });
   portalTableBodyEl.appendChild(frag);
+
+  if (!portalTableBodyEl._delegated) {
+    portalTableBodyEl._delegated = true;
+    portalTableBodyEl.addEventListener('click', function (e) {
+      var tr = e.target.closest('tr');
+      if (!tr) return;
+      var idx = Number(tr.dataset.ri);
+      if (!Number.isFinite(idx) || idx < 0 || idx >= portalFiltered.length) return;
+      var entry = portalFiltered[idx];
+      var match = portalFindPlayerMatch(entry.playerName, entry.fromTeam);
+      if (e.target.closest('.portalBoardAddBtn')) {
+        if (match && typeof tbAddPlayer === 'function') tbAddPlayer(match);
+        return;
+      }
+      if (e.target.closest('.portalBoardOpenBtn')) {
+        if (match && typeof openProfile === 'function') openProfile(match);
+        return;
+      }
+      if (e.target.closest('.portalBoardTargetBtn')) {
+        if (match) portalToggleTarget(entry, match);
+      }
+    });
+  }
 
   if (portalCountEl) portalCountEl.textContent = String(portalFiltered.length);
   if (portalMatchedCountEl) portalMatchedCountEl.textContent = String(matched);

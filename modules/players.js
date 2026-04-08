@@ -67,7 +67,12 @@ function renderPlayers(){
   let data = computed;
   if(q){
     data = data.filter(r => {
-      return ['Player','Team','Conference','Position','Height'].some(k => (r[k] ?? '').toString().toLowerCase().includes(q));
+      var hay = r._searchStr;
+      if(typeof hay !== 'string'){
+        hay = ((r.Player || '') + ' ' + (r.Team || '') + ' ' + (r.Conference || r.Conf || '') + ' ' + (r.Position || r.Pos || '') + ' ' + (r.Height || '')).toLowerCase();
+        r._searchStr = hay;
+      }
+      return hay.includes(q);
     });
   }
   filteredData = sortData(data);

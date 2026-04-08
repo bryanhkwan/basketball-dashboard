@@ -617,51 +617,6 @@
       <div id="portalBoardHint" class="portalSectionFootnote">Shows real transfer portal entries from live feed and auto-merges your saved 247 snapshot by default so watched names surface faster.</div>
     </div>
 
-    <div class="card portalStageCard" id="portalRepResearchSection">
-      <div class="portalSectionHead">
-        <div>
-          <div class="portalSectionEyebrow">Public representation research</div>
-          <div class="portalSectionTitle">Agent / Advisor Intel</div>
-          <div class="portalSectionSub">Runs public web research on the filtered portal board and extracts representation signals, agency names, and publicly listed business contact channels only. Verify any outreach path with compliance before acting.</div>
-        </div>
-        <div class="portalControlCluster">
-          <div>
-            <label>Max players</label><br/>
-            <input id="portalRepLimit" type="number" min="1" max="60" value="20" style="width:110px">
-          </div>
-          <div class="portalFitActions">
-            <button id="portalRepClearBtn" class="secondary">Clear cache</button>
-            <button id="portalRepExportBtn" class="secondary" disabled>Export CSV</button>
-            <button id="portalRepResearchBtn" class="primary">Research filtered</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="portalTeamBand portalRepSummaryBand">
-        <span class="pill">Research rows: <b id="portalRepCount">0</b></span>
-        <span id="portalRepStatus" class="muted">Idle. Public business contact channels only.</span>
-      </div>
-
-      <div class="portalRepTableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:16%">Player</th>
-              <th style="width:13%">Team</th>
-              <th style="width:18%">Rep / Org</th>
-              <th style="width:18%">Public Contact</th>
-              <th style="width:8%">Confidence</th>
-              <th style="width:15%">Sources</th>
-              <th style="width:12%">Notes</th>
-            </tr>
-          </thead>
-          <tbody id="portalRepBody"></tbody>
-        </table>
-      </div>
-      <div id="portalRepEmpty" class="hint portalEmptyState" style="display:block;opacity:.8">No representation research cached for the current filtered portal board yet.</div>
-      <div class="portalSectionFootnote">This workspace is intentionally limited to publicly visible representation signals and public business contact paths. It does not attempt to collect private or personal contact details.</div>
-    </div>
-
     <div class="card portalStageCard" id="portalFitLabSection">
       <div class="portalSectionHead">
         <div>

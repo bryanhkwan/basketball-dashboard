@@ -8,6 +8,9 @@
 // --- Module-level state (global) ---
 var _currentProfilePlayer = null;
 var _lastCompare = null;
+var _profileSimilarCacheRef = null;
+var _profileSimilarCacheKey = '';
+var _profileSimilarCacheRows = [];
 
 function profileIsGuestDemo() {
   return typeof demoIsGuestMode === 'function' && demoIsGuestMode();
@@ -16,6 +19,42 @@ function profileIsGuestDemo() {
 function profileDisplayMoney(value) {
   if (typeof demoFormatMoney === 'function') return demoFormatMoney(value);
   return fmtMoney(value);
+}
+
+function profilePctOrNull(player, stat) {
+  var cached = player && player['_pct_' + stat];
+  if (Number.isFinite(cached)) return cached;
+  var value = safeNum(player && player[stat]);
+  if (value === null) return null;
+  var pct = statPercentile(stat, value);
+  return Number.isFinite(pct) ? pct : null;
+}
+
+function profilePctOrMid(player, stat) {
+  var pct = profilePctOrNull(player, stat);
+  return pct == null ? 0.5 : pct;
+}
+
+function profileGetSimilarVectorRows(allPlayers, posGroup, keyStats) {
+  var cacheKey = posGroup + '|' + keyStats.join('|');
+  if (_profileSimilarCacheRef === allPlayers && _profileSimilarCacheKey === cacheKey) {
+    return _profileSimilarCacheRows;
+  }
+
+  var rows = [];
+  (allPlayers || []).forEach(function(player) {
+    if (bucketPosition(player.Pos || player.Position) !== posGroup) return;
+    rows.push({
+      player: player,
+      key: typeof tbPlayerKey === 'function' ? tbPlayerKey(player) : ((player.Player || '') + '||' + (player.Team || '')),
+      vec: keyStats.map(function(stat) { return profilePctOrMid(player, stat); })
+    });
+  });
+
+  _profileSimilarCacheRef = allPlayers;
+  _profileSimilarCacheKey = cacheKey;
+  _profileSimilarCacheRows = rows;
+  return rows;
 }
 
 function profileProjectionCard(label, value, subtext, tone) {
@@ -260,21 +299,17 @@ function openProfile(r){
   if(mSimilar){
     const allPlayers = tbGetAllPlayers();
     const curPos = bucketPosition(r.Pos || r.Position);
-    const samePos = allPlayers.filter(x => bucketPosition(x.Pos || x.Position) === curPos && tbPlayerKey(x) !== tbPlayerKey(r));
     const keyStats = curPos === 'Guards'
       ? ['PPG','eFG%','3P%','APG','A/TO','SPG','BPM','DRtg']
       : ['PPG','eFG%','BPG','RPG','DRtg','BPM','FT%','A/TO'];
-    function pctVec(p){
-      return keyStats.map(s => {
-        // Use pre-computed percentile cache if available
-        var cached = p['_pct_' + s];
-        if(Number.isFinite(cached)) return cached;
-        const v = safeNum(p[s]); const pt = statPercentile(s,v); return Number.isFinite(pt)?pt:0.5;
-      });
-    }
-    const curVec = pctVec(r);
-    const scored = samePos.map(x => {
-      const xVec = pctVec(x);
+    const curVec = keyStats.map(function(stat) { return profilePctOrMid(r, stat); });
+    const currentKey = tbPlayerKey(r);
+    const samePos = profileGetSimilarVectorRows(allPlayers, curPos, keyStats).filter(function(entry) {
+      return entry.key !== currentKey;
+    });
+    const scored = samePos.map(entry => {
+      const x = entry.player;
+      const xVec = entry.vec;
       let dist = 0;
       for(let i=0;i<curVec.length;i++) dist += (curVec[i]-xVec[i])**2;
       return {r:x, dist: Math.sqrt(dist), upgrade: (x.Score||0) > (r.Score||0)};
@@ -1173,8 +1208,7 @@ function openCompare(name1, name2){
   const lowerBetter = new Set(['DRtg','TOPG']);
 
   function pct(r, stat){
-    const x = safeNum(r[stat]);
-    const p = statPercentile(stat, x);
+    const p = profilePctOrNull(r, stat);
     return Number.isFinite(p) ? Math.round(p * 100) : null;
   }
 

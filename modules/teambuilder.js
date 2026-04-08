@@ -24,6 +24,7 @@ var _tbBatchMode = false;
 var _cachedAllPlayers = null;
 var _cachedAllPlayersLg = '';
 var _tbRefreshTimer = null;
+var _tbSuggestRows = [];
 
 function tbDisplayMoney(value) {
   if (typeof demoFormatMoney === 'function') return demoFormatMoney(value);
@@ -176,15 +177,16 @@ function oppRemovePlayer(idx){
 
 function oppRefresh(){
   if(!oppRosterBody) return;
-  oppRosterBody.innerHTML = '';
   if(oppRosterEmpty) oppRosterEmpty.style.display = oppRoster.length ? 'none' : 'block';
 
   const totalCost = oppRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
   if(oppCountEl) oppCountEl.textContent = oppRoster.length;
   if(oppCostEl) oppCostEl.textContent = tbDisplayMoney(totalCost);
 
+  const frag = document.createDocumentFragment();
   oppRoster.forEach((r, i) => {
     const tr = document.createElement('tr');
+    tr.dataset.ri = i;
     tr.innerHTML = `
       <td style="font-size:11px;color:var(--muted)">${i+1}</td>
       <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span></td>
@@ -194,10 +196,22 @@ function oppRefresh(){
       <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
     `;
-    tr.querySelector('.link').addEventListener('click', () => openProfile(r));
-    tr.querySelector('.tbRemoveBtn').addEventListener('click', () => oppRemovePlayer(i));
-    oppRosterBody.appendChild(tr);
+    frag.appendChild(tr);
   });
+  oppRosterBody.innerHTML = '';
+  oppRosterBody.appendChild(frag);
+
+  if(!oppRosterBody._delegated){
+    oppRosterBody._delegated = true;
+    oppRosterBody.addEventListener('click', function(e){
+      var tr = e.target.closest('tr');
+      if(!tr) return;
+      var idx = Number(tr.dataset.ri);
+      if(!Number.isFinite(idx) || idx < 0 || idx >= oppRoster.length) return;
+      if(e.target.closest('.tbRemoveBtn')){ oppRemovePlayer(idx); return; }
+      if(e.target.closest('.link')) openProfile(oppRoster[idx]);
+    });
+  }
 
   if(oppGapBars && oppGapEmpty && oppGapTags){
     tbRenderGapBarsForRoster(oppRoster, oppGapBars, oppGapEmpty, oppGapTags);
@@ -904,6 +918,7 @@ function tbRenderGaps(){
 
 function tbRenderSuggestions(){
   tbSuggestBody.innerHTML = '';
+  _tbSuggestRows = [];
   const allPool = tbGetAllPlayers();
   if(!tbRoster.length || !allPool.length){ tbSuggestEmpty.style.display = 'block'; return; }
   tbSuggestEmpty.style.display = 'none';
@@ -966,8 +981,12 @@ function tbRenderSuggestions(){
 
   scored.sort((a,b) => b.avg - a.avg);
 
-  scored.slice(0, 30).forEach(({r, avg, bestGap}) => {
+  const topSuggestions = scored.slice(0, 30);
+  _tbSuggestRows = topSuggestions.map(item => item.r);
+  const frag = document.createDocumentFragment();
+  topSuggestions.forEach(({r, avg, bestGap}, idx) => {
     const tr = document.createElement('tr');
+    tr.dataset.ri = idx;
     const pct = Math.round(avg * 100);
     const gapColor = avg >= 0.7 ? 'var(--good)' : avg >= 0.5 ? 'var(--warn)' : 'var(--muted)';
     const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'Guard':'Big');
@@ -980,10 +999,22 @@ function tbRenderSuggestions(){
       <td style="font-size:11px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><span class="tbAddBtn" title="Add to roster">＋</span></td>
     `;
-    tr.querySelector('.link').addEventListener('click', () => openProfile(r));
-    tr.querySelector('.tbAddBtn').addEventListener('click', () => tbAddPlayer(r));
-    tbSuggestBody.appendChild(tr);
+    frag.appendChild(tr);
   });
+  tbSuggestBody.appendChild(frag);
+
+  if(!tbSuggestBody._delegated){
+    tbSuggestBody._delegated = true;
+    tbSuggestBody.addEventListener('click', function(e){
+      var tr = e.target.closest('tr');
+      if(!tr) return;
+      var idx = Number(tr.dataset.ri);
+      if(!Number.isFinite(idx) || idx < 0 || idx >= _tbSuggestRows.length) return;
+      var player = _tbSuggestRows[idx];
+      if(e.target.closest('.tbAddBtn')){ tbAddPlayer(player); return; }
+      if(e.target.closest('.link')) openProfile(player);
+    });
+  }
 }
 
 // --- Page navigation ---

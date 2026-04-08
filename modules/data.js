@@ -1427,6 +1427,7 @@ function computeAll(options){
       BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
     });
     Object.assign(out, projectionCalcMetrics(out, projectionCtx));
+    out._searchStr = ((out.Player || '') + ' ' + (out.Team || '') + ' ' + (out.Conference || out.Conf || '') + ' ' + (out.Position || out.Pos || '') + ' ' + (out.Height || '')).toLowerCase();
     computed[i] = out;
   }
 
