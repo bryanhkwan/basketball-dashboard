@@ -1239,85 +1239,104 @@ function computeAll(options){
 
   const confMultOn = confMultToggleEl && confMultToggleEl.checked && sheetHasConference();
 
-  computed = rows.map(r => {
+  // --- Pass 1: score + value in a single map (avoids 4 intermediate arrays) ---
+  const perfArr = [];
+  const mpArr = [];
+
+  // Pre-read valuation params once
+  const _starP = clamp(Number(starPctEl.value), 0.5, 0.999);
+  const _mpP = clamp(Number(mpPctEl.value), 0.5, 0.999);
+  const _avgPay = Number(avgPayEl.value);
+  const _minPay = Number(minPayEl.value);
+  const _maxPay = Number(maxPayEl.value);
+  const _starValue = Number(starValueEl.value);
+
+  // First light pass to get perfArr/mpArr for percentile anchors
+  const _tempPerfs = new Float64Array(rows.length);
+  const _tempRawPerfs = new Float64Array(rows.length);
+  const _tempMps = new Float64Array(rows.length);
+  const _tempCms = new Float64Array(rows.length);
+  for(let i = 0; i < rows.length; i++){
+    const r = rows[i];
     const perf = scoreRow(r);
-    const mp = safeNum(r['MP']);
-    const conf = (r['Conference'] ?? r['Conf'] ?? '').toString().trim();
-    const cm = confMultOn ? getConfMultiplier(conf) : 1;
+    const cm = confMultOn ? getConfMultiplier((r['Conference'] ?? r['Conf'] ?? '').toString().trim()) : 1;
     const adjPerf = perf * cm;
-    return {...r, PerfScore_calc: adjPerf, PerfScore_raw: perf, ConfMult_calc: cm, MP_num: mp};
-  });
+    const mp = safeNum(r['MP']);
+    _tempRawPerfs[i] = perf;
+    _tempPerfs[i] = adjPerf;
+    _tempCms[i] = cm;
+    _tempMps[i] = Number.isFinite(mp) ? mp : NaN;
+    if(Number.isFinite(adjPerf)) perfArr.push(adjPerf);
+    if(Number.isFinite(mp)) mpArr.push(mp);
+  }
 
-  const perfArr = computed.map(r => r.PerfScore_calc).filter(Number.isFinite);
-  lastPerfAvg = perfArr.reduce((a,b)=>a+b,0) / (perfArr.length || 1);
-
-  const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
-  lastPerfStar = percentileInc(perfArr, starP);
-
-  const mpP = clamp(Number(mpPctEl.value), 0.5, 0.999);
-  const mpArr = computed.map(r => r.MP_num).filter(Number.isFinite);
-  const mpPctl = percentileInc(mpArr, mpP);
-
-  const avgPay = Number(avgPayEl.value);
-  const minPay = Number(minPayEl.value);
-  const maxPay = Number(maxPayEl.value);
-  const starValue = Number(starValueEl.value);
+  lastPerfAvg = perfArr.length ? perfArr.reduce((a,b)=>a+b,0) / perfArr.length : NaN;
+  lastPerfStar = percentileInc(perfArr, _starP);
+  const mpPctl = percentileInc(mpArr, _mpP);
 
   let k = 0;
   const denom = (lastPerfStar - lastPerfAvg);
-  if(Number.isFinite(starValue) && Number.isFinite(avgPay) && avgPay > 0 && Number.isFinite(denom) && Math.abs(denom) > 1e-9){
-    k = Math.log(starValue / avgPay) / denom;
+  if(Number.isFinite(_starValue) && Number.isFinite(_avgPay) && _avgPay > 0 && Number.isFinite(denom) && Math.abs(denom) > 1e-9){
+    k = Math.log(_starValue / _avgPay) / denom;
   }
 
-  computed = computed.map(r => {
-    const perf = r.PerfScore_calc;
-    const mp = r.MP_num;
-
-    let pred = NaN, final = NaN, mult = 1;
-    if(Number.isFinite(perf) && Number.isFinite(avgPay) && avgPay > 0){
-      pred = avgPay * Math.exp(k * (perf - lastPerfAvg));
-      pred = clamp(pred, minPay, maxPay);
-      mult = getMpMultiplier(mp, mpPctl);
-      final = clamp(pred * mult, minPay, maxPay);
-    }
-    return {...r,
-      Score: perf,
-      PredictedValue_calc: pred,
-      MinMultiplier_calc: mult,
-      ActualValuation_calc: final
-    };
-  });
-
-  const projectionCtx = {
-    confMultOn,
-    avgPay,
-    minPay,
-    maxPay,
-    k,
-    lastPerfAvg,
-    perfPool: perfArr,
-  };
-  computed = computed.map(r => ({...r, ...projectionCalcMetrics(r, projectionCtx)}));
-
-  buildStatDistributions();
-  computed = computed.map(r => ({...r, FitScore_calc: fitScoreForRow(r)}));
-
-  function pickActualValuation(row){
-    const keys = ['Valuation','Value','ActualValuation','ActualValuation','PredictedValue','Pay','Salary'];
-    for(const k of keys){
-      const v = safeNum(row[k]);
+  const _pickValKeys = ['Valuation','Value','ActualValuation','PredictedValue','Pay','Salary'];
+  function _pickActualValuation(row){
+    for(let j = 0; j < _pickValKeys.length; j++){
+      const v = safeNum(row[_pickValKeys[j]]);
       if(Number.isFinite(v)) return v;
     }
     return NaN;
   }
 
-  computed = computed.map(r => {
+  const projectionCtx = { confMultOn, avgPay: _avgPay, minPay: _minPay, maxPay: _maxPay, k, lastPerfAvg, perfPool: perfArr };
+
+  // Main single-pass: score + valuation + projection + boss delta
+  computed = new Array(rows.length);
+  for(let i = 0; i < rows.length; i++){
+    const r = rows[i];
+    const adjPerf = _tempPerfs[i];
+    const rawPerf = _tempRawPerfs[i];
+    const mp = _tempMps[i];
+    const cm = _tempCms[i];
+
+    let pred = NaN, final = NaN, mult = 1;
+    if(Number.isFinite(adjPerf) && Number.isFinite(_avgPay) && _avgPay > 0){
+      pred = _avgPay * Math.exp(k * (adjPerf - lastPerfAvg));
+      pred = clamp(pred, _minPay, _maxPay);
+      mult = getMpMultiplier(mp, mpPctl);
+      final = clamp(pred * mult, _minPay, _maxPay);
+    }
+
     const bossRank = safeNum(r['Rank']);
-    const bossVal = pickActualValuation(r);
-    const delta = (Number.isFinite(bossVal) && Number.isFinite(r.ActualValuation_calc)) ? (r.ActualValuation_calc - bossVal) : NaN;
-    const deltaPct = (Number.isFinite(delta) && Number.isFinite(bossVal) && bossVal !== 0) ? (delta / bossVal) : NaN;
-    return {...r, BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct};
-  });
+    const bossVal = _pickActualValuation(r);
+    const delta = (Number.isFinite(bossVal) && Number.isFinite(final)) ? (final - bossVal) : NaN;
+    const deltaPct = (Number.isFinite(delta) && bossVal !== 0) ? (delta / bossVal) : NaN;
+
+    const out = Object.assign({}, r, {
+      PerfScore_calc: adjPerf, PerfScore_raw: rawPerf, ConfMult_calc: cm, MP_num: mp,
+      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuation_calc: final,
+      BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
+    });
+    Object.assign(out, projectionCalcMetrics(out, projectionCtx));
+    computed[i] = out;
+  }
+
+  // --- Pass 2: stat distributions → fit score + cached percentiles ---
+  buildStatDistributions();
+
+  // Pre-compute percentiles for key stats used in scout report / profile
+  var _pctStats = Object.keys(statDist);
+  for(let i = 0; i < computed.length; i++){
+    var _r = computed[i];
+    _r.FitScore_calc = fitScoreForRow(_r);
+    // Cache percentiles as _pct_<stat> on each player row
+    for(var _si = 0; _si < _pctStats.length; _si++){
+      var _s = _pctStats[_si];
+      var _x = safeNum(_r[_s]);
+      _r['_pct_' + _s] = (_x !== null) ? statPercentile(_s, _x) : NaN;
+    }
+  }
 
   const ranked = computed.slice().sort((a,b)=>{
     const pa = a.PerfScore_calc, pb = b.PerfScore_calc;

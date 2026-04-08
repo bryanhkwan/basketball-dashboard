@@ -6,6 +6,7 @@
 // --- Module-level state (global) ---
 var currentPage = 0;
 var filteredData = [];
+var _playersPageData = [];
 
 // --- Constants ---
 const LIST_COLS = [
@@ -114,9 +115,36 @@ function renderPlayersPage(){
   const _rosterKeySet = new Set(tbRoster.map(tbPlayerKey));
   const _oppKeySet = (typeof oppRoster !== 'undefined') ? new Set(oppRoster.map(tbPlayerKey)) : new Set();
 
+  // Store pageData ref for event delegation
+  _playersPageData = pageData;
+
+  // Set up event delegation ONCE on the table body
+  if(!playersBody._delegated){
+    playersBody._delegated = true;
+    playersBody.addEventListener('click', function(e){
+      var btn = e.target.closest('.tbAddBtn');
+      var link = e.target.closest('.link');
+      var tr = e.target.closest('tr');
+      if(!tr) return;
+      var idx = Number(tr.dataset.ri);
+      var pd = _playersPageData;
+      if(!pd || !Number.isFinite(idx) || idx < 0 || idx >= pd.length) return;
+      var r = pd[idx];
+      if(btn){
+        e.stopPropagation();
+        if(btn.classList.contains('on-roster')) return;
+        if(btn.dataset.action === 'tb'){ tbAddPlayer(r); }
+        else if(btn.dataset.action === 'opp' && typeof oppAddPlayer !== 'undefined'){ oppAddPlayer(r); }
+      } else if(link){
+        openProfile(r);
+      }
+    });
+  }
+
   const frag = document.createDocumentFragment();
-  pageData.forEach(r => {
+  pageData.forEach((r, ri) => {
     const tr = document.createElement('tr');
+    tr.dataset.ri = ri;
     const _rk = tbPlayerKey(r);
     colsToShow.forEach(c => {
       const td = document.createElement('td');
@@ -127,16 +155,14 @@ function renderPlayersPage(){
         if(onRoster){
           td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">&#10003;</span>`;
         } else {
-          td.innerHTML = `<span class="tbAddBtn" title="Add to roster">&#65291;</span>`;
-          td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); tbAddPlayer(r); });
+          td.innerHTML = `<span class="tbAddBtn" data-action="tb" title="Add to roster">&#65291;</span>`;
         }
       }else if(c.key === '_opp_add'){
         const onOpp = _oppKeySet.has(_rk);
         if(onOpp){
           td.innerHTML = `<span class="tbAddBtn on-roster" title="Already in opponent">&#10003;</span>`;
         } else {
-          td.innerHTML = `<span class="tbAddBtn" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">&#9876;</span>`;
-          td.querySelector('.tbAddBtn').addEventListener('click', (e)=>{ e.stopPropagation(); if(typeof oppAddPlayer !== 'undefined') oppAddPlayer(r); });
+          td.innerHTML = `<span class="tbAddBtn" data-action="opp" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">&#9876;</span>`;
         }
       }else if(c.key === 'Player'){
         const playerName = (v ?? '').toString();
@@ -155,7 +181,6 @@ function renderPlayersPage(){
         } else {
           td.innerHTML = `<span class="link">${playerName}</span>`;
         }
-        td.querySelector('.link').addEventListener('click', ()=> openProfile(r));
       }else if(c.key === 'ConfMult_calc'){
         const cm = safeNum(r.ConfMult_calc);
         if(Number.isFinite(cm) && cm !== 1){

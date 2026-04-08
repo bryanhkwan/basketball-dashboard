@@ -186,22 +186,24 @@ function openProfile(r){
   const stats = Array.from(new Set([...usedStats, ...fallback])).filter(s => r[s] !== undefined).slice(0, 10);
 
   mBars.innerHTML = '';
+  var _barFrag = document.createDocumentFragment();
+  var _fitText = fitPresetEl.options[fitPresetEl.selectedIndex].text;
   stats.forEach(stat=>{
     const x = safeNum(r[stat]);
-    const pct = statPercentile(stat, x);
+    // Use cached percentile when available
+    var cached = r['_pct_' + stat];
+    const pct = Number.isFinite(cached) ? cached : statPercentile(stat, x);
     const item = document.createElement('div');
     item.className = 'barItem';
     const pctLabel = Number.isFinite(pct) ? `${Math.round(pct*100)}th` : '—';
     item.innerHTML = `
       <div class="barTop"><div><b>${stat}</b> <span class="muted">${(r[stat] ?? '—')}</span></div><div>${pctLabel}</div></div>
-      <div class="barTrack"><div class="barFill"></div></div>
-      <div class="barMeta"><span>${getInvertForStat(stat) ? 'Lower is better' : 'Higher is better'}</span><span class="muted">${fitPresetEl.options[fitPresetEl.selectedIndex].text}</span></div>
+      <div class="barTrack"><div class="barFill" style="width:${Number.isFinite(pct) ? Math.round(pct*100) : 0}%;background:linear-gradient(90deg, ${barColor(pct)}, var(--accent2))"></div></div>
+      <div class="barMeta"><span>${getInvertForStat(stat) ? 'Lower is better' : 'Higher is better'}</span><span class="muted">${_fitText}</span></div>
     `;
-    const fill = item.querySelector('.barFill');
-    fill.style.width = Number.isFinite(pct) ? `${Math.round(pct*100)}%` : `0%`;
-    fill.style.background = `linear-gradient(90deg, ${barColor(pct)}, var(--accent2))`;
-    mBars.appendChild(item);
+    _barFrag.appendChild(item);
   });
+  mBars.appendChild(_barFrag);
 
   const avgPay = Number(avgPayEl.value);
   const starValue = Number(starValueEl.value);
@@ -263,7 +265,12 @@ function openProfile(r){
       ? ['PPG','eFG%','3P%','APG','A/TO','SPG','BPM','DRtg']
       : ['PPG','eFG%','BPG','RPG','DRtg','BPM','FT%','A/TO'];
     function pctVec(p){
-      return keyStats.map(s => { const v = safeNum(p[s]); const pct = statPercentile(s,v); return Number.isFinite(pct)?pct:0.5; });
+      return keyStats.map(s => {
+        // Use pre-computed percentile cache if available
+        var cached = p['_pct_' + s];
+        if(Number.isFinite(cached)) return cached;
+        const v = safeNum(p[s]); const pt = statPercentile(s,v); return Number.isFinite(pt)?pt:0.5;
+      });
     }
     const curVec = pctVec(r);
     const scored = samePos.map(x => {
@@ -430,6 +437,9 @@ function renderScoutReport(r) {
 
   const posGroup = bucketPosition(r.Pos || r.Position || '');
   function pct(stat) {
+    // Use pre-computed percentile if available (cached in computeAll)
+    var cached = r['_pct_' + stat];
+    if(Number.isFinite(cached)) return cached;
     const v = safeNum(r[stat]);
     if (!Number.isFinite(v)) return null;
     const p = statPercentile(stat, v);

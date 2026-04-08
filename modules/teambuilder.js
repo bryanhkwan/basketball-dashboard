@@ -535,6 +535,25 @@ function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
 
 // --- tbRefresh (main roster refresh) ---
 
+// Cache DOM lookups that tbRefresh reads every call
+var _tbCachedEls = null;
+function _tbGetCachedEls(){
+  if(!_tbCachedEls){
+    _tbCachedEls = {
+      badge: document.getElementById('tbLeagueBadge'),
+      guardCount: document.getElementById('tbGuardCount'),
+      guardTarget: document.getElementById('tbGuardTarget'),
+      bigCount: document.getElementById('tbBigCount'),
+      bigTarget: document.getElementById('tbBigTarget'),
+      targetGuards: document.getElementById('tbTargetGuards'),
+      targetBigs: document.getElementById('tbTargetBigs'),
+      rebalSection: document.getElementById('tbRebalanceSection'),
+      rebalInfo: document.getElementById('tbRebalanceInfo'),
+    };
+  }
+  return _tbCachedEls;
+}
+
 function tbRefresh(){
   if(_tbRefreshTimer){
     clearTimeout(_tbRefreshTimer);
@@ -544,7 +563,7 @@ function tbRefresh(){
   const budget = Number(tbBudgetEl.value) || 0;
   const totalCost = tbRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
 
-  const badge = document.getElementById('tbLeagueBadge');
+  const badge = _tbGetCachedEls().badge;
   if(badge){
     const rosterLg = tbRoster.length > 0 ? tbPlayerLeague(tbRoster[0]) : league;
     badge.textContent = rosterLg;
@@ -566,18 +585,19 @@ function tbRefresh(){
     else bigs++;
   });
 
-  const targetG = Number(document.getElementById('tbTargetGuards').value) || 0;
-  const targetB = Number(document.getElementById('tbTargetBigs').value) || 0;
-  document.getElementById('tbGuardCount').textContent = guards;
-  document.getElementById('tbGuardTarget').textContent = targetG;
-  document.getElementById('tbBigCount').textContent = bigs;
-  document.getElementById('tbBigTarget').textContent = targetB;
+  const _ce = _tbGetCachedEls();
+  const targetG = Number(_ce.targetGuards.value) || 0;
+  const targetB = Number(_ce.targetBigs.value) || 0;
+  _ce.guardCount.textContent = guards;
+  _ce.guardTarget.textContent = targetG;
+  _ce.bigCount.textContent = bigs;
+  _ce.bigTarget.textContent = targetB;
 
-  document.getElementById('tbGuardCount').style.color = guards > targetG ? 'var(--bad)' : guards < targetG ? 'var(--warn)' : 'var(--good)';
-  document.getElementById('tbBigCount').style.color = bigs > targetB ? 'var(--bad)' : bigs < targetB ? 'var(--warn)' : 'var(--good)';
+  _ce.guardCount.style.color = guards > targetG ? 'var(--bad)' : guards < targetG ? 'var(--warn)' : 'var(--good)';
+  _ce.bigCount.style.color = bigs > targetB ? 'var(--bad)' : bigs < targetB ? 'var(--warn)' : 'var(--good)';
 
-  const rebalanceSection = document.getElementById('tbRebalanceSection');
-  const rebalanceInfo = document.getElementById('tbRebalanceInfo');
+  const rebalanceSection = _ce.rebalSection;
+  const rebalanceInfo = _ce.rebalInfo;
   const excessGuards = guards - targetG;
   const excessBigs = bigs - targetB;
 
@@ -724,11 +744,17 @@ function tbScheduleRefresh(delayMs){
 // --- Roster render ---
 
 function tbRenderRoster(){
-  tbRosterBody.innerHTML = '';
   tbRosterEmpty.style.display = tbRoster.length ? 'none' : 'block';
-  const weakestSection = document.getElementById('tbWeakestSection');
-  const weakestInfo = document.getElementById('tbWeakestInfo');
-  const weakCountEl = document.getElementById('tbWeakCount');
+  if(!_tbCachedEls) _tbGetCachedEls();
+  var _weakSection = _tbCachedEls._weakSection || (
+    _tbCachedEls._weakSection = document.getElementById('tbWeakestSection'));
+  var _weakInfo = _tbCachedEls._weakInfo || (
+    _tbCachedEls._weakInfo = document.getElementById('tbWeakestInfo'));
+  var _weakCount = _tbCachedEls._weakCount || (
+    _tbCachedEls._weakCount = document.getElementById('tbWeakCount'));
+  const weakestSection = _weakSection;
+  const weakestInfo = _weakInfo;
+  const weakCountEl = _weakCount;
 
   const threshold = (Number(tbWeakThreshEl.value) || 40) / 100;
 
@@ -736,10 +762,12 @@ function tbRenderRoster(){
   const weakPlayers = rosterScored.filter(x => x.avgPct < threshold);
   const weakIdxSet = new Set(weakPlayers.map(x => x.i));
 
+  var _rosterFrag = document.createDocumentFragment();
   tbRoster.forEach((r, i) => {
     const tr = document.createElement('tr');
     const isWeak = weakIdxSet.has(i);
     tr.className = 'tbRosterRow' + (isWeak ? ' tbWeakest' : '');
+    tr.dataset.ri = i;
     const pctVal = rosterScored[i]?.avgPct ?? 0;
     const pctStr = Math.round(pctVal * 100) + 'th';
     tr.innerHTML = `
@@ -751,10 +779,23 @@ function tbRenderRoster(){
       <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
     `;
-    tr.querySelector('.link').addEventListener('click', () => openProfile(r));
-    tr.querySelector('.tbRemoveBtn').addEventListener('click', () => tbRemovePlayer(i));
-    tbRosterBody.appendChild(tr);
+    _rosterFrag.appendChild(tr);
   });
+  tbRosterBody.innerHTML = '';
+  tbRosterBody.appendChild(_rosterFrag);
+
+  // Event delegation for roster table (set up once)
+  if(!tbRosterBody._delegated){
+    tbRosterBody._delegated = true;
+    tbRosterBody.addEventListener('click', function(e){
+      var tr = e.target.closest('tr');
+      if(!tr) return;
+      var idx = Number(tr.dataset.ri);
+      if(!Number.isFinite(idx) || idx < 0 || idx >= tbRoster.length) return;
+      if(e.target.closest('.tbRemoveBtn')){ tbRemovePlayer(idx); return; }
+      if(e.target.closest('.link')){ openProfile(tbRoster[idx]); }
+    });
+  }
 
   if(weakPlayers.length > 0 && computed.length){
     weakestSection.style.display = '';
