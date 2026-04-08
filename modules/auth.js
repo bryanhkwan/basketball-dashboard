@@ -233,6 +233,7 @@ function authQueuePostLoadTask(fn, delayMs) {
 function authSchedulePostLoadTasks() {
   if (_postLoadTasksScheduled) return;
   _postLoadTasksScheduled = true;
+  if (authIsGuest()) return;
   authQueuePostLoadTask(function () {
     if (typeof favsLoad === 'function') favsLoad();
   }, 180);
@@ -443,10 +444,11 @@ function _authSetupHeader() {
     window.TeamBuilder.showDashboardPage('pagePlayers', 'pagePlayers');
   }
 
-  if (window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
+  var currentPageId = window._dashboardCurrentPageId || 'pagePlayers';
+  if ((currentPageId === 'pageLab' || currentPageId === 'pageWarRoom') && window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
     window.TeamHub.refreshTournamentLauncher();
   }
-  if (window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
+  if (currentPageId === 'pageWarRoom' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
     window.TeamHub.refreshTournamentHub();
   }
   if (window.EvalPresets && typeof window.EvalPresets.refreshUI === 'function') {
@@ -455,10 +457,10 @@ function _authSetupHeader() {
   if (window.DashboardPrefs && typeof window.DashboardPrefs.refreshUI === 'function') {
     window.DashboardPrefs.refreshUI();
   }
-  if (window.AdminPanel && typeof window.AdminPanel.refreshUI === 'function') {
+  if (currentPageId === 'pageAdmin' && window.AdminPanel && typeof window.AdminPanel.refreshUI === 'function') {
     window.AdminPanel.refreshUI();
   }
-  if (window.SharesManager && typeof window.SharesManager.refreshUI === 'function') {
+  if (currentPageId === 'pageCollaborate' && window.SharesManager && typeof window.SharesManager.refreshUI === 'function') {
     window.SharesManager.refreshUI();
   }
   if (window.HelpPanel && typeof window.HelpPanel.refreshCurrentPage === 'function') {

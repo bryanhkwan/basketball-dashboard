@@ -918,6 +918,10 @@ function initSharesPage(){
   var colNavBtn=document.querySelector('[data-page="pageCollaborate"]');
   if(colNavBtn){
     colNavBtn.addEventListener('click',function(){
+      if (chatIsGuestPreview()) {
+        chatRefreshGuestUI();
+        return;
+      }
       // Always start polling when Collaborate tab is opened
       chatLoad().then(function(){chatStartPolling();});
     });

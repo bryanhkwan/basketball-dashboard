@@ -3400,6 +3400,7 @@ function portalRenderTable() {
 async function loadPortalEntries(opts) {
   opts = opts && typeof opts === 'object' ? opts : {};
   var force = !!opts.force;
+  var preview = !!opts.preview;
   if (!portalTableBodyEl) return;
   portalSyncLeagueUI();
 
@@ -3410,7 +3411,7 @@ async function loadPortalEntries(opts) {
   var preferredSource = 'on3';
   portalTargetSeason = year;
   var apiPageLimit = 100;
-  var loadKey = portalGetLoadKey();
+  var loadKey = portalGetLoadKey() + (preview ? '|preview' : '');
   var loadNonce = ++portalLoadNonce;
 
   if (!force && portalItems.length && portalLastLoadKey === loadKey && portalLastLoadedAt && (Date.now() - portalLastLoadedAt) < PORTAL_FEED_CACHE_MS) {
@@ -3444,6 +3445,32 @@ async function loadPortalEntries(opts) {
     };
   }
 
+  async function loadSnapshotPreview() {
+    if (sport === 'wbb') return false;
+    var snapshotInfo = await portalLoadSnapshot(year);
+    if (!snapshotInfo.items.length) return false;
+    snapshotInfo.items = snapshotInfo.items.filter(function (it) {
+      if (!portalStatusMatchesFilter(it && it.status, st)) return false;
+      return true;
+    });
+    snapshotInfo.items.forEach(function (it) {
+      it.source = '247snapshot';
+    });
+    applyPortalLoadResult(
+      [],
+      {
+        source: '247snapshot',
+        sourceRequested: '247snapshot',
+        sourceSummary: { '247snapshot': snapshotInfo.items.length },
+      },
+      null,
+      '247snapshot',
+      snapshotInfo,
+      false
+    );
+    return true;
+  }
+
   function applyPortalLoadResult(apiItems, data, resp, usedSource, snapshotInfo, isPartial) {
     if (portalLoadNonce !== loadNonce) return;
     portalItems = portalMergeItems(apiItems, snapshotInfo.items);
@@ -3472,7 +3499,9 @@ async function loadPortalEntries(opts) {
     var errorSuffix = sourceErrors.length
       ? ' ⚠ ' + sourceErrors.map(function (e) { return (e.source || 'src') + ': ' + (e.error || 'failed'); }).join('; ')
       : '';
-    var cacheText = resp && resp.headers && resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live';
+    var cacheText = usedSource === '247snapshot'
+      ? 'Snapshot'
+      : (resp && resp.headers && resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live');
     var countText = isPartial ? (portalItems.length + ' loaded') : (portalItems.length + ' rows');
     portalSetStatus(cacheText + ' · ' + sourcePart + ' · ' + countText + errorSuffix);
     if (portalEmptyEl) portalEmptyEl.textContent = 'No portal entries found for current filters.';
@@ -3520,7 +3549,7 @@ async function loadPortalEntries(opts) {
 
     applyPortalLoadResult(firstPageItems, data, resp, usedSource, snapshotInfo, totalPages > 1);
 
-    if (totalPages > 1) {
+    if (totalPages > 1 && !preview) {
       var remainingPromises = [];
       for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
         remainingPromises.push(fetchPortalPage(usedSource, pageNum));
@@ -3540,6 +3569,10 @@ async function loadPortalEntries(opts) {
       });
     }
   } catch (e) {
+    if (preview) {
+      var snapshotLoaded = await loadSnapshotPreview();
+      if (snapshotLoaded) return;
+    }
     portalItems = [];
     portalFiltered = [];
     portalMatchedCount = 0;

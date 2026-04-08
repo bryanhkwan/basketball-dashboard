@@ -1019,7 +1019,8 @@ function tbRenderSuggestions(){
 
 // --- Page navigation ---
 
-function showDashboardPage(targetId, activeNavId){
+function showDashboardPage(targetId, activeNavId, opts){
+  opts = opts && typeof opts === 'object' ? opts : {};
   if (targetId === 'pageMethodology' && typeof authIsGuest === 'function' && authIsGuest()) {
     if (typeof authPromptUpgrade === 'function') {
       authPromptUpgrade('Full methodology is reserved for approved staff accounts. Guest mode keeps the dashboard outputs visible without exposing the internal model recipe.');
@@ -1028,11 +1029,12 @@ function showDashboardPage(targetId, activeNavId){
     activeNavId = 'pagePlayers';
   }
   var prefsIsCustomizing = !!(window.DashboardPrefs && typeof window.DashboardPrefs.isCustomizing === 'function' && window.DashboardPrefs.isCustomizing());
-  if (!prefsIsCustomizing && window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
+  if (!opts.forcePage && !prefsIsCustomizing && window.DashboardPrefs && typeof window.DashboardPrefs.isPageVisible === 'function' && !window.DashboardPrefs.isPageVisible(targetId)) {
     targetId = (window.DashboardPrefs.getFirstVisiblePage && window.DashboardPrefs.getFirstVisiblePage()) || 'pagePlayers';
     activeNavId = targetId;
   }
   var activeId = activeNavId || targetId;
+  var skipHeavyLoad = !!opts.skipHeavyLoad;
   window._dashboardCurrentPageId = targetId;
   document.querySelectorAll('.pageNavBtn').forEach(function(b){
     b.classList.toggle('active', b.dataset.page === activeId);
@@ -1047,22 +1049,25 @@ function showDashboardPage(targetId, activeNavId){
   }
 
   if(targetId === 'pagePlayers') renderPlayersPage();
-  if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries();
-  if(targetId === 'pageValueLab' && window.ValueLab && typeof window.ValueLab.refresh === 'function') {
+  if(targetId === 'pagePortal' && typeof loadPortalEntries === 'function') loadPortalEntries(skipHeavyLoad ? { preview: true } : undefined);
+  if(targetId === 'pageValueLab' && !skipHeavyLoad && window.ValueLab && typeof window.ValueLab.refresh === 'function') {
     window.ValueLab.refresh();
   }
   if(targetId === 'pageLab' && window.TeamHub && typeof window.TeamHub.refreshTournamentLauncher === 'function') {
     window.TeamHub.refreshTournamentLauncher();
   }
-  if(targetId === 'pageWarRoom' && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
+  if(targetId === 'pageWarRoom' && !skipHeavyLoad && window.TeamHub && typeof window.TeamHub.refreshTournamentHub === 'function') {
     requestAnimationFrame(function(){ window.TeamHub.refreshTournamentHub(); });
   }
   if(targetId === 'pageFavorites') {
-    if(typeof favsEnsureFresh   === 'function') favsEnsureFresh(true);
+    if(!skipHeavyLoad && typeof favsEnsureFresh === 'function') favsEnsureFresh(true);
     if(typeof favsRenderFolderBar === 'function') favsRenderFolderBar();
-    if(typeof favsRenderPage     === 'function') favsRenderPage();
+    if(typeof favsRenderPage === 'function') favsRenderPage();
   }
-  if(targetId === 'pageAdmin' && window.AdminPanel && typeof window.AdminPanel.load === 'function') {
+  if(targetId === 'pageCollaborate' && window.SharesManager && typeof window.SharesManager.refreshUI === 'function') {
+    window.SharesManager.refreshUI();
+  }
+  if(targetId === 'pageAdmin' && !skipHeavyLoad && window.AdminPanel && typeof window.AdminPanel.load === 'function') {
     window.AdminPanel.load();
   }
   if(window.HelpPanel && typeof window.HelpPanel.refreshCurrentPage === 'function') {
@@ -1232,7 +1237,7 @@ class TeamBuilder {
   oppRefresh(){ return oppRefresh(); }
   setupQuickAdd(inputId, dropdownId, addFn, getRoster){ return setupQuickAdd(inputId, dropdownId, addFn, getRoster); }
   initPageNav(){ return initPageNav(); }
-  showDashboardPage(targetId, activeNavId){ return showDashboardPage(targetId, activeNavId); }
+  showDashboardPage(targetId, activeNavId, opts){ return showDashboardPage(targetId, activeNavId, opts); }
   initTbSubNav(){ return initTbSubNav(); }
   pctToGrade(pct){ return pctToGrade(pct); }
   getHeadToHead(){ return getHeadToHead(); }

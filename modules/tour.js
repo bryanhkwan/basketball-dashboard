@@ -46,7 +46,8 @@
       body: 'This guest tour walks the full platform so recruiters can see the major workflows quickly. Use Right Arrow for next, Left Arrow for back, and Esc to skip anytime.',
       position: 'bottom',
       page: 'pagePlayers',
-      activeNavId: 'pagePlayers'
+      activeNavId: 'pagePlayers',
+      forcePage: true
     },
     {
       target: '.pageNav',
@@ -54,7 +55,8 @@
       body: 'The top navigation moves between scouting, portal, team, value, tournament, favorites, and collaboration workflows without leaving the same internal platform.',
       position: 'bottom',
       page: 'pagePlayers',
-      activeNavId: 'pagePlayers'
+      activeNavId: 'pagePlayers',
+      forcePage: true
     },
     {
       target: '#playersSettingsToggleBtn',
@@ -63,7 +65,8 @@
       position: 'bottom',
       page: 'pagePlayers',
       activeNavId: 'pagePlayers',
-      playersSettings: 'closed'
+      playersSettings: 'closed',
+      forcePage: true
     },
     {
       target: '#playersBody',
@@ -72,7 +75,8 @@
       position: 'top',
       page: 'pagePlayers',
       activeNavId: 'pagePlayers',
-      playersSettings: 'closed'
+      playersSettings: 'closed',
+      forcePage: true
     },
     {
       target: '#portalBoardSection',
@@ -80,7 +84,9 @@
       body: 'Portal tracks live entries, merges matched dashboard context, and helps staff move quickly from market scan to evaluation.',
       position: 'top',
       page: 'pagePortal',
-      activeNavId: 'pagePortal'
+      activeNavId: 'pagePortal',
+        skipHeavyLoad: true,
+      forcePage: true
     },
     {
       target: '#portalFitLabSection',
@@ -88,7 +94,9 @@
       body: 'Fit Lab ranks replacements for a departing slot so the portal workflow becomes more than just a list of names.',
       position: 'top',
       page: 'pagePortal',
-      activeNavId: 'pagePortal'
+      activeNavId: 'pagePortal',
+        skipHeavyLoad: true,
+      forcePage: true
     },
     {
       target: '#thOpenBuilderBtn',
@@ -96,7 +104,8 @@
       body: 'Team Hub is the real-team scouting workspace. From here staff can launch Team Builder for scenarios or Value Lab for the business side.',
       position: 'bottom',
       page: 'pageTeams',
-      activeNavId: 'pageTeams'
+      activeNavId: 'pageTeams',
+      forcePage: true
     },
     {
       target: '#tbQuickAddInput',
@@ -105,7 +114,8 @@
       position: 'bottom',
       page: 'pageTeamBuilder',
       activeNavId: 'pageTeams',
-      pageSection: 'tbSubMyTeam'
+      pageSection: 'tbSubMyTeam',
+      forcePage: true
     },
     {
       target: '#valueLabCompareSection',
@@ -113,7 +123,9 @@
       body: 'Value Lab is the roster investment workspace. Compare cases, judge budget efficiency, and turn roster ideas into business-side decisions.',
       position: 'top',
       page: 'pageValueLab',
-      activeNavId: 'pageValueLab'
+      activeNavId: 'pageValueLab',
+      skipHeavyLoad: true,
+      forcePage: true
     },
     {
       target: '#valueLabAISection',
@@ -121,7 +133,9 @@
       body: 'The Director AI Brief translates roster spend, value, and projected outcomes into a leadership-ready summary and export flow.',
       position: 'top',
       page: 'pageValueLab',
-      activeNavId: 'pageValueLab'
+      activeNavId: 'pageValueLab',
+      skipHeavyLoad: true,
+      forcePage: true
     },
     {
       target: '#labWarRoomLauncherSection',
@@ -129,7 +143,8 @@
       body: 'Tournament Lab studies field-level patterns and launches the bracket simulation flow once staff are ready to pressure-test March outcomes.',
       position: 'top',
       page: 'pageLab',
-      activeNavId: 'pageLab'
+      activeNavId: 'pageLab',
+      forcePage: true
     },
     {
       target: '#favsHeaderSection',
@@ -137,7 +152,8 @@
       body: 'Favorites keeps saved target boards, portal watch lists, and staff shortlists organized in one place.',
       position: 'bottom',
       page: 'pageFavorites',
-      activeNavId: 'pageFavorites'
+      activeNavId: 'pageFavorites',
+      forcePage: true
     },
     {
       target: '#chatGuestBanner',
@@ -145,7 +161,9 @@
       body: 'Collaborate is visible in demo mode as a preview of the internal messaging workspace. Live staff threads and sending actions stay locked to approved accounts.',
       position: 'bottom',
       page: 'pageCollaborate',
-      activeNavId: 'pageCollaborate'
+      activeNavId: 'pageCollaborate',
+      skipHeavyLoad: true,
+      forcePage: true
     },
     {
       target: '#tourBtn',
@@ -153,7 +171,8 @@
       body: 'Use the ? button anytime to reopen help for the current page, rerun that page tour, or learn more about how that specific workflow works.',
       position: 'left',
       page: 'pagePlayers',
-      activeNavId: 'pagePlayers'
+      activeNavId: 'pagePlayers',
+      forcePage: true
     }
   ];
 
@@ -224,7 +243,10 @@
 
     if (pageChanged) {
       if (window.TeamBuilder && typeof window.TeamBuilder.showDashboardPage === 'function') {
-        window.TeamBuilder.showDashboardPage(step.page, step.activeNavId);
+        window.TeamBuilder.showDashboardPage(step.page, step.activeNavId, {
+          skipHeavyLoad: !!step.skipHeavyLoad,
+          forcePage: !!step.forcePage,
+        });
       } else {
         fallbackSwitchPage(step);
       }

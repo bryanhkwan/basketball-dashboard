@@ -2467,13 +2467,20 @@ async function _wbbEnrichPlayersBackground(players, season) {
       .filter(id => id && !_wbbBioPageCache[id])
   )];
   if (unresolvedBioIds.length) {
-    const bioResults = await Promise.all(unresolvedBioIds.map(fetchBioPageHeight));
-    bioResults.forEach((bio, idx) => {
-      const espnId = unresolvedBioIds[idx];
-      if (!bio) return;
-      seasonBioMap[espnId] = mergeBio(seasonBioMap[espnId], bio);
-      _wbbBioByAthlete[espnId] = mergeBio(_wbbBioByAthlete[espnId], bio);
-    });
+      const BIO_BATCH = 12;
+      for (let i = 0; i < unresolvedBioIds.length; i += BIO_BATCH) {
+        const batchIds = unresolvedBioIds.slice(i, i + BIO_BATCH);
+        const bioResults = await Promise.all(batchIds.map(fetchBioPageHeight));
+        bioResults.forEach((bio, idx) => {
+          const espnId = batchIds[idx];
+          if (!bio) return;
+          seasonBioMap[espnId] = mergeBio(seasonBioMap[espnId], bio);
+          _wbbBioByAthlete[espnId] = mergeBio(_wbbBioByAthlete[espnId], bio);
+        });
+        if (i + BIO_BATCH < unresolvedBioIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
   }
 
   updated += applyCachedBios(players);
