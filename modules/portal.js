@@ -7,6 +7,7 @@ var portalRecRows = [];
 
 var portalSearchInputEl, portalStatusFilterEl, portalNeedFilterEl, portalRefreshBtnEl, portalUseSnapshotEl;
 var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, portalEmptyEl;
+var portalPagerEl, portalPageInfoEl, portalPrevPageBtnEl, portalNextPageBtnEl;
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
 var portalRecTeamSummaryEl, portalReplaceListEl, portalRecBodyEl, portalRecEmptyEl, portalRecContextEl;
 var portalAIAnalyzeBtn, portalAIDownloadBtn, portalAIStatusEl, portalAIOutputEl;
@@ -30,8 +31,16 @@ var portalFilterTimer = null;
 var portalPlayerIndexRef = null;
 var portalPlayerIndexExact = Object.create(null);
 var portalPlayerIndexLoose = [];
+var portalPlayerIndexVersion = 0;
 var portalJsPdfPromise = null;
 var portalRepBusy = false;
+var portalCurrentPage = 1;
+var portalPageSize = 100;
+var portalMatchedCount = 0;
+var portalLoadNonce = 0;
+var portalLastLoadKey = '';
+var portalLastLoadedAt = 0;
+var PORTAL_FEED_CACHE_MS = 120000;
 
 var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
@@ -51,6 +60,10 @@ function initPortalDOMRefs() {
   portalStatusEl = document.getElementById('portalStatus');
   portalTableBodyEl = document.getElementById('portalTableBody');
   portalEmptyEl = document.getElementById('portalEmpty');
+  portalPagerEl = document.getElementById('portalPager');
+  portalPageInfoEl = document.getElementById('portalPageInfo');
+  portalPrevPageBtnEl = document.getElementById('portalPrevPageBtn');
+  portalNextPageBtnEl = document.getElementById('portalNextPageBtn');
 
   portalRecTeamEl = document.getElementById('portalRecTeam');
   portalRecRefreshTeamBtn = document.getElementById('portalRecRefreshTeam');
@@ -229,6 +242,7 @@ function portalGetPlayerIndex() {
   }
 
   portalPlayerIndexRef = players;
+  portalPlayerIndexVersion += 1;
   portalPlayerIndexExact = Object.create(null);
   portalPlayerIndexLoose = [];
 
@@ -266,6 +280,18 @@ function portalFindPlayerMatch(name, teamName) {
     if (!looseFallback) looseFallback = index.loose[j].player;
   }
   return looseFallback;
+}
+
+function portalResolveEntryMatch(entry) {
+  if (!entry) return null;
+  portalGetPlayerIndex();
+  if (entry._matchVersion === portalPlayerIndexVersion) {
+    return entry._matchedPlayer || null;
+  }
+  var match = portalFindPlayerMatch(entry.playerName, entry.fromTeam);
+  entry._matchVersion = portalPlayerIndexVersion;
+  entry._matchedPlayer = match || null;
+  return match;
 }
 
 function portalScheduleApplyFilters(delayMs) {
@@ -647,6 +673,11 @@ function portalGetPlayerTeam(r) {
 function portalGetSeason() {
   if (typeof getDashboardSelectedSeason === 'function') return getDashboardSelectedSeason('2026');
   return '2026';
+}
+
+function portalGetLoadKey() {
+  var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
+  return [portalCurrentSport(), portalGetSeason(), st, portalUseSnapshotEnabled() ? 'snapshot' : 'live'].join('|');
 }
 
 function portalStatDir(stat) {
@@ -2167,7 +2198,7 @@ function portalComputeRecommendations() {
 
   var rows = [];
   portalFiltered.forEach(function (entry) {
-    var scored = portalScoreCandidateEntry(entry, portalFindPlayerMatch(entry.playerName, entry.fromTeam), ctx);
+    var scored = portalScoreCandidateEntry(entry, portalResolveEntryMatch(entry), ctx);
     if (scored) rows.push(scored);
   });
 
@@ -3132,12 +3163,21 @@ async function portalLoadSnapshot(year) {
   return { items: [], path: '' };
 }
 
+function portalPrepareEntry(it) {
+  if (!it) return it;
+  it._searchHay = portalNorm((it.playerName || '') + ' ' + (it.status || '') + ' ' + (it.position || '') + ' ' + (it.fromTeam || '') + ' ' + (it.toTeam || ''));
+  delete it._matchVersion;
+  delete it._matchedPlayer;
+  return it;
+}
+
 function portalMergeItems(primary, extra) {
   var list = [];
   var seen = Object.create(null);
 
   function add(it) {
     if (!it) return;
+    it = portalPrepareEntry(it);
     var k = portalNorm((it && it.playerName) || '') + '|' + portalNorm((it && it.fromTeam) || '') + '|' + portalNorm((it && it.status) || '');
     var existingIdx = seen[k];
     if (typeof existingIdx === 'number') {
@@ -3166,15 +3206,22 @@ function portalStatusMatchesFilter(statusValue, filterValue) {
   return ls === filterValue;
 }
 
-function portalApplyFilters() {
+function portalApplyFilters(opts) {
+  opts = opts && typeof opts === 'object' ? opts : {};
   var q = portalNorm(portalSearchInputEl ? portalSearchInputEl.value : '');
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
+
+  if (!opts.preservePage) portalCurrentPage = 1;
 
   portalFiltered = portalItems.filter(function (it) {
     if (!portalStatusMatchesFilter(it && it.status, st)) return false;
     if (!q) return true;
-    var hay = portalNorm((it.playerName || '') + ' ' + (it.status || '') + ' ' + (it.position || '') + ' ' + (it.fromTeam || '') + ' ' + (it.toTeam || ''));
-    return hay.includes(q);
+    return String(it._searchHay || '').includes(q);
+  });
+
+  portalMatchedCount = 0;
+  portalFiltered.forEach(function (it) {
+    if (portalResolveEntryMatch(it)) portalMatchedCount += 1;
   });
 
   portalRenderTable();
@@ -3187,20 +3234,36 @@ function portalApplyFilters() {
   }
 }
 
+function portalSetPage(nextPage) {
+  var totalPages = Math.max(1, Math.ceil(portalFiltered.length / portalPageSize));
+  var page = Math.max(1, Math.min(totalPages, nextPage));
+  if (page === portalCurrentPage) return;
+  portalCurrentPage = page;
+  portalRenderTable();
+  var shell = portalTableBodyEl ? portalTableBodyEl.closest('.portalTableShell') : null;
+  if (shell) shell.scrollTop = 0;
+}
+
 function portalRenderTable() {
   if (!portalTableBodyEl) return;
   portalTableBodyEl.innerHTML = '';
 
-  var matched = 0;
+  var totalRows = portalFiltered.length;
+  var totalPages = Math.max(1, Math.ceil(totalRows / portalPageSize));
+  if (portalCurrentPage > totalPages) portalCurrentPage = totalPages;
+  if (portalCurrentPage < 1) portalCurrentPage = 1;
+  var start = totalRows ? (portalCurrentPage - 1) * portalPageSize : 0;
+  var end = Math.min(totalRows, start + portalPageSize);
+  var visibleRows = totalRows ? portalFiltered.slice(start, end) : [];
   var targetMap = portalTargetListToMap(portalLoadTargetList());
   var frag = document.createDocumentFragment();
-  portalFiltered.forEach(function (it, idx) {
+  visibleRows.forEach(function (it, offset) {
+    var idx = start + offset;
     var tr = document.createElement('tr');
     tr.id = portalAlertDomId(portalEntryKey(it));
     tr.dataset.ri = idx;
 
-    var match = portalFindPlayerMatch(it.playerName, it.fromTeam);
-    if (match) matched++;
+    var match = portalResolveEntryMatch(it);
     var ls = (it.status || '').toLowerCase();
     var statusColor = ls === 'entered' ? 'var(--good)' : ls === 'expected' ? 'var(--warn)' : 'var(--muted)';
 
@@ -3306,7 +3369,7 @@ function portalRenderTable() {
       var idx = Number(tr.dataset.ri);
       if (!Number.isFinite(idx) || idx < 0 || idx >= portalFiltered.length) return;
       var entry = portalFiltered[idx];
-      var match = portalFindPlayerMatch(entry.playerName, entry.fromTeam);
+      var match = portalResolveEntryMatch(entry);
       if (e.target.closest('.portalBoardAddBtn')) {
         if (match && typeof tbAddPlayer === 'function') tbAddPlayer(match);
         return;
@@ -3322,22 +3385,41 @@ function portalRenderTable() {
   }
 
   if (portalCountEl) portalCountEl.textContent = String(portalFiltered.length);
-  if (portalMatchedCountEl) portalMatchedCountEl.textContent = String(matched);
+  if (portalMatchedCountEl) portalMatchedCountEl.textContent = String(portalMatchedCount);
   if (portalEmptyEl) portalEmptyEl.style.display = portalFiltered.length ? 'none' : '';
+  if (portalPagerEl) portalPagerEl.style.display = totalRows > portalPageSize ? '' : 'none';
+  if (portalPageInfoEl) {
+    portalPageInfoEl.textContent = totalRows
+      ? ('Showing ' + (start + 1) + '-' + end + ' of ' + totalRows)
+      : 'Showing 0 of 0';
+  }
+  if (portalPrevPageBtnEl) portalPrevPageBtnEl.disabled = portalCurrentPage <= 1;
+  if (portalNextPageBtnEl) portalNextPageBtnEl.disabled = portalCurrentPage >= totalPages;
 }
 
-async function loadPortalEntries() {
+async function loadPortalEntries(opts) {
+  opts = opts && typeof opts === 'object' ? opts : {};
+  var force = !!opts.force;
   if (!portalTableBodyEl) return;
   portalSyncLeagueUI();
 
   var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || 'https://hidden-salad-773b.bryanhkwan.workers.dev';
-  var q = (portalSearchInputEl && portalSearchInputEl.value) || '';
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
   var year = portalGetSeason();
   var sport = portalCurrentSport();
   var preferredSource = 'on3';
   portalTargetSeason = year;
   var apiPageLimit = 100;
+  var loadKey = portalGetLoadKey();
+  var loadNonce = ++portalLoadNonce;
+
+  if (!force && portalItems.length && portalLastLoadKey === loadKey && portalLastLoadedAt && (Date.now() - portalLastLoadedAt) < PORTAL_FEED_CACHE_MS) {
+    portalSetStatus('Cached · ' + portalItems.length + ' rows');
+    portalApplyFilters({ preservePage: true });
+    portalRefreshWatchAlerts();
+    portalRefreshScenarioRows();
+    return;
+  }
 
   function makeUrl(src, pageNum) {
     var u = new URL(base + '/api/portal/entries');
@@ -3348,84 +3430,27 @@ async function loadPortalEntries() {
     u.searchParams.set('page', String(pageNum || 1));
     u.searchParams.set('status', st);
     u.searchParams.set('onlyEntries', '1');
-    if (q.trim()) u.searchParams.set('search', q.trim());
     return u;
   }
 
-  async function fetchPortalSource(src) {
-    var firstResp = await fetch(makeUrl(src, 1).toString());
-    if (!firstResp.ok) return { resp: firstResp, data: null, items: [] };
-
-    var firstData = await firstResp.json();
-    var allItems = Array.isArray(firstData.items) ? firstData.items.slice() : [];
-    var totalAvailable = firstData && Number.isFinite(+firstData.totalAvailable) ? +firstData.totalAvailable : allItems.length;
-    var totalPages = Math.max(1, Math.ceil(totalAvailable / apiPageLimit));
-
-    if (totalPages > 1) {
-      var pagePromises = [];
-      for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
-        (function (n) {
-          pagePromises.push(
-            fetch(makeUrl(src, n).toString())
-              .then(function (pageResp) {
-                if (!pageResp.ok) throw new Error('Portal API page ' + n + ' failed with ' + pageResp.status);
-                return pageResp.json();
-              })
-          );
-        })(pageNum);
-      }
-      var pageResults = await Promise.all(pagePromises);
-      pageResults.forEach(function (pageData) {
-        if (Array.isArray(pageData.items) && pageData.items.length) {
-          allItems = allItems.concat(pageData.items);
-        }
-      });
-    }
-
+  async function fetchPortalPage(src, pageNum) {
+    var resp = await fetch(makeUrl(src, pageNum).toString());
+    if (!resp.ok) return { resp: resp, data: null, items: [] };
+    var data = await resp.json();
     return {
-      resp: firstResp,
-      data: firstData,
-      items: allItems,
+      resp: resp,
+      data: data,
+      items: Array.isArray(data && data.items) ? data.items.slice() : [],
     };
   }
 
-  portalSetStatus('Loading...');
-  if (portalRefreshBtnEl) portalRefreshBtnEl.disabled = true;
-
-  try {
-    var usedSource = preferredSource;
-    var result = await fetchPortalSource(usedSource);
-    if (!result.resp.ok) {
-      usedSource = 'on3';
-      result = await fetchPortalSource(usedSource);
-    }
-    var resp = result.resp;
-    if (!resp.ok) throw new Error('Portal API ' + resp.status);
-
-    var data = result.data || {};
-    var apiItems = Array.isArray(result.items) ? result.items : [];
-    var summary = (data && data.sourceSummary) ? data.sourceSummary : {};
-    var snapshotInfo = { items: [], path: '' };
-    var snapshotAllowed = sport !== 'wbb';
-
-    // Auto-load snapshot as fallback if live feed returned nothing
-    var autoSnapshotFallback = snapshotAllowed && apiItems.length === 0 && !portalUseSnapshotEnabled();
-    if (snapshotAllowed && (portalUseSnapshotEnabled() || autoSnapshotFallback)) {
-      snapshotInfo = await portalLoadSnapshot(year);
-      if (snapshotInfo.items.length) {
-        snapshotInfo.items = snapshotInfo.items.filter(function (it) {
-          if (!portalStatusMatchesFilter(it && it.status, st)) return false;
-          if (!q.trim()) return true;
-          var hay = portalNorm((it.playerName || '') + ' ' + (it.status || '') + ' ' + (it.position || '') + ' ' + (it.fromTeam || '') + ' ' + (it.toTeam || ''));
-          return hay.includes(portalNorm(q.trim()));
-        });
-        snapshotInfo.items.forEach(function (it) {
-          it.source = '247snapshot';
-        });
-      }
-    }
-
+  function applyPortalLoadResult(apiItems, data, resp, usedSource, snapshotInfo, isPartial) {
+    if (portalLoadNonce !== loadNonce) return;
     portalItems = portalMergeItems(apiItems, snapshotInfo.items);
+    portalLastLoadKey = loadKey;
+    portalLastLoadedAt = Date.now();
+
+    var summary = (data && data.sourceSummary) ? data.sourceSummary : {};
     var requestedSource = (data && data.sourceRequested) ? data.sourceRequested : usedSource;
     var sourceLabel = (data && data.source) ? data.source : usedSource;
     var sourcePart = sourceLabel;
@@ -3440,26 +3465,84 @@ async function loadPortalEntries() {
       });
       if (parts.length) sourcePart += ' (' + parts.join(', ') + ')';
     }
-    if (snapshotAllowed && portalUseSnapshotEnabled() && !snapshotInfo.items.length) {
+    if (sport !== 'wbb' && portalUseSnapshotEnabled() && !snapshotInfo.items.length) {
       sourcePart += ' (snapshot: not found)';
     }
-    if (snapshotAllowed && autoSnapshotFallback && snapshotInfo.items.length) {
-      sourcePart += ' (live empty — using local snapshot)';
-    }
-    var sourceErrors = Array.isArray(data.sourceErrors) ? data.sourceErrors : [];
+    var sourceErrors = Array.isArray(data && data.sourceErrors) ? data.sourceErrors : [];
     var errorSuffix = sourceErrors.length
       ? ' ⚠ ' + sourceErrors.map(function (e) { return (e.source || 'src') + ': ' + (e.error || 'failed'); }).join('; ')
       : '';
-    portalSetStatus((resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live') + ' · ' + sourcePart + ' · ' + portalItems.length + ' rows' + errorSuffix);
+    var cacheText = resp && resp.headers && resp.headers.get('X-Cache') === 'HIT' ? 'Cached' : 'Live';
+    var countText = isPartial ? (portalItems.length + ' loaded') : (portalItems.length + ' rows');
+    portalSetStatus(cacheText + ' · ' + sourcePart + ' · ' + countText + errorSuffix);
     if (portalEmptyEl) portalEmptyEl.textContent = 'No portal entries found for current filters.';
-    portalApplyFilters();
+    portalApplyFilters({ preservePage: !isPartial });
     portalRefreshWatchAlerts();
     portalNotifyNewWatchAlerts();
     portalRefreshTeamOptions();
     portalRefreshScenarioRows();
+  }
+
+  portalSetStatus('Loading...');
+  if (portalRefreshBtnEl) portalRefreshBtnEl.disabled = true;
+
+  try {
+    var usedSource = preferredSource;
+    var result = await fetchPortalPage(usedSource, 1);
+    if (!result.resp.ok) {
+      usedSource = 'on3';
+      result = await fetchPortalPage(usedSource, 1);
+    }
+    var resp = result.resp;
+    if (!resp.ok) throw new Error('Portal API ' + resp.status);
+
+    var data = result.data || {};
+    var firstPageItems = Array.isArray(result.items) ? result.items : [];
+    var totalAvailable = data && Number.isFinite(+data.totalAvailable) ? +data.totalAvailable : firstPageItems.length;
+    var totalPages = Math.max(1, Math.ceil(totalAvailable / apiPageLimit));
+    var snapshotInfo = { items: [], path: '' };
+    var snapshotAllowed = sport !== 'wbb';
+
+    // Auto-load snapshot as fallback if live feed returned nothing
+    var autoSnapshotFallback = snapshotAllowed && firstPageItems.length === 0 && !portalUseSnapshotEnabled();
+    if (snapshotAllowed && (portalUseSnapshotEnabled() || autoSnapshotFallback)) {
+      snapshotInfo = await portalLoadSnapshot(year);
+      if (snapshotInfo.items.length) {
+        snapshotInfo.items = snapshotInfo.items.filter(function (it) {
+          if (!portalStatusMatchesFilter(it && it.status, st)) return false;
+          return true;
+        });
+        snapshotInfo.items.forEach(function (it) {
+          it.source = '247snapshot';
+        });
+      }
+    }
+
+    applyPortalLoadResult(firstPageItems, data, resp, usedSource, snapshotInfo, totalPages > 1);
+
+    if (totalPages > 1) {
+      var remainingPromises = [];
+      for (var pageNum = 2; pageNum <= totalPages; pageNum++) {
+        remainingPromises.push(fetchPortalPage(usedSource, pageNum));
+      }
+      Promise.all(remainingPromises).then(function (pageResults) {
+        if (portalLoadNonce !== loadNonce) return;
+        var allApiItems = firstPageItems.slice();
+        pageResults.forEach(function (pageResult) {
+          if (pageResult && Array.isArray(pageResult.items) && pageResult.items.length) {
+            allApiItems = allApiItems.concat(pageResult.items);
+          }
+        });
+        applyPortalLoadResult(allApiItems, data, resp, usedSource, snapshotInfo, false);
+      }).catch(function () {
+        if (portalLoadNonce !== loadNonce) return;
+        portalSetStatus((portalStatusEl && portalStatusEl.textContent ? portalStatusEl.textContent : 'Live') + ' · partial feed');
+      });
+    }
   } catch (e) {
     portalItems = [];
     portalFiltered = [];
+    portalMatchedCount = 0;
     portalWatchAlerts = [];
     portalRenderTable();
     portalRenderWatchAlerts();
@@ -3489,19 +3572,30 @@ function initPortalPage() {
   }
 
   portalRefreshBtnEl.addEventListener('click', function () {
-    loadPortalEntries();
+    loadPortalEntries({ force: true });
   });
 
   if (portalSearchInputEl) portalSearchInputEl.addEventListener('input', function () {
     portalScheduleApplyFilters(120);
   });
-  if (portalStatusFilterEl) portalStatusFilterEl.addEventListener('change', function () { loadPortalEntries(); });
+  if (portalStatusFilterEl) portalStatusFilterEl.addEventListener('change', function () { loadPortalEntries({ force: true }); });
   if (portalUseSnapshotEl) portalUseSnapshotEl.addEventListener('change', function () {
     try {
       localStorage.setItem(portalUserStorageKey('snapshot_pref'), portalUseSnapshotEl.checked ? '1' : '0');
     } catch (_) {}
-    loadPortalEntries();
+    loadPortalEntries({ force: true });
   });
+
+  if (portalPrevPageBtnEl) {
+    portalPrevPageBtnEl.addEventListener('click', function () {
+      portalSetPage(portalCurrentPage - 1);
+    });
+  }
+  if (portalNextPageBtnEl) {
+    portalNextPageBtnEl.addEventListener('click', function () {
+      portalSetPage(portalCurrentPage + 1);
+    });
+  }
 
   if (portalRecRefreshTeamBtn) {
     portalRecRefreshTeamBtn.addEventListener('click', async function () {

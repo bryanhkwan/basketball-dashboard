@@ -213,6 +213,38 @@ var _loadTransitionStarted = false;
 var _loadStartTime = 0;
 var _loadVideoLastTick = 0;
 var _loadVideoStallTimer = null;
+var _loadMinTimer = null;
+var _postLoadTasksScheduled = false;
+var AUTH_MIN_LOADING_MS = 1200;
+
+function authQueuePostLoadTask(fn, delayMs) {
+  if (typeof fn !== 'function') return;
+  setTimeout(function () {
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(function () {
+        try { fn(); } catch (_) {}
+      }, { timeout: 2500 });
+      return;
+    }
+    try { fn(); } catch (_) {}
+  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0);
+}
+
+function authSchedulePostLoadTasks() {
+  if (_postLoadTasksScheduled) return;
+  _postLoadTasksScheduled = true;
+  authQueuePostLoadTask(function () {
+    if (typeof favsLoad === 'function') favsLoad();
+  }, 180);
+  authQueuePostLoadTask(function () {
+    if (typeof sharesLoad === 'function') sharesLoad();
+  }, 420);
+  authQueuePostLoadTask(function () {
+    if (window.AdminPanel && typeof window.AdminPanel.bootstrap === 'function') {
+      window.AdminPanel.bootstrap();
+    }
+  }, 900);
+}
 
 function authEnterGuest() {
   localStorage.removeItem(AUTH_ROLE_KEY);
@@ -249,8 +281,13 @@ function authStartLoading() {
   _loadDataReady = false;
   _loadVideoEnded = false;
   _loadTransitionStarted = false;
+  _postLoadTasksScheduled = false;
   _loadStartTime = Date.now();
   _loadVideoLastTick = Date.now();
+  if (_loadMinTimer) {
+    clearTimeout(_loadMinTimer);
+    _loadMinTimer = null;
+  }
   if (_loadVideoStallTimer) {
     clearTimeout(_loadVideoStallTimer);
     _loadVideoStallTimer = null;
@@ -300,48 +337,56 @@ function authStartLoading() {
 
 /* Called by data.js when data is fully loaded */
 function authFinishLoading() {
-  if (typeof favsLoad === 'function') favsLoad();
-  if (typeof sharesLoad === 'function') sharesLoad();
   if (window.EvalPresets && typeof window.EvalPresets.bootstrap === 'function') {
     window.EvalPresets.bootstrap();
   }
   if (window.DashboardPrefs && typeof window.DashboardPrefs.bootstrap === 'function') {
     window.DashboardPrefs.bootstrap();
   }
-  if (window.AdminPanel && typeof window.AdminPanel.bootstrap === 'function') {
-    window.AdminPanel.bootstrap();
-  }
   var loadingOverlay = document.getElementById('loadingOverlay');
+  _loadDataReady = true;
   if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
-    _loadDataReady = true;
     _checkLoadingComplete();
   } else {
     _authSetupHeader();
+    authSchedulePostLoadTasks();
   }
 }
 
-/* Transition out of loading when BOTH data is ready AND video has finished.
-   If data is ready before the video, we wait for the video to end for a polished entrance.
-   If video ends first (or stalls), we wait for data. Safety cap: 12s max from start. */
+/* Transition out of loading as soon as data is ready and the minimum display time has elapsed.
+   The intro video is decorative and should never hold the user on the loading screen. */
 function _checkLoadingComplete() {
   if (_loadTransitionStarted) return;
-  // Need both data and video to be done
-  if (!_loadDataReady || !_loadVideoEnded) {
-    // Safety cap: if we've been loading for 12+ seconds, force transition regardless
+  if (!_loadDataReady) {
     if (_loadStartTime && (Date.now() - _loadStartTime) >= 12000) {
       _loadDataReady = true;
-      _loadVideoEnded = true;
     } else {
       return;
     }
   }
+
+  var elapsed = _loadStartTime ? (Date.now() - _loadStartTime) : AUTH_MIN_LOADING_MS;
+  var remaining = AUTH_MIN_LOADING_MS - elapsed;
+  if (remaining > 0) {
+    if (_loadMinTimer) clearTimeout(_loadMinTimer);
+    _loadMinTimer = setTimeout(function () {
+      _loadMinTimer = null;
+      _checkLoadingComplete();
+    }, remaining);
+    return;
+  }
+
   _loadTransitionStarted = true;
-  // Pause the video element to free resources
   var _v = authGetIntroVideo();
   if (_v) { try { _v.pause(); } catch (_) {} }
+  _loadVideoEnded = true;
   if (_loadVideoStallTimer) {
     clearTimeout(_loadVideoStallTimer);
     _loadVideoStallTimer = null;
+  }
+  if (_loadMinTimer) {
+    clearTimeout(_loadMinTimer);
+    _loadMinTimer = null;
   }
 
   var welcomeOverlay = document.getElementById('welcomeOverlay');
@@ -352,16 +397,17 @@ function _checkLoadingComplete() {
 
   var overlay = document.getElementById('loadingOverlay');
   _authSetupHeader();
-  setTimeout(function () {
+  authSchedulePostLoadTasks();
+  requestAnimationFrame(function () {
     if (overlay) {
       overlay.classList.add('fade-out');
       setTimeout(function () {
         overlay.classList.add('hidden');
         overlay.classList.remove('fade-out');
-      }, 500);
+      }, 450);
     }
     authHideIntroStage();
-  }, 650);
+  });
 }
 
 function authShowDashboard() {
@@ -442,6 +488,11 @@ function authShowOverlay() {
     clearTimeout(_loadVideoStallTimer);
     _loadVideoStallTimer = null;
   }
+  if (_loadMinTimer) {
+    clearTimeout(_loadMinTimer);
+    _loadMinTimer = null;
+  }
+  _postLoadTasksScheduled = false;
   authPlayIntroVideo('auth');
   document.getElementById('authOverlay').classList.remove('hidden');
   var loadingOverlay = document.getElementById('loadingOverlay');

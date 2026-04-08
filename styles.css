@@ -376,6 +376,8 @@
     .portalSnapshotToggle{align-self:end;min-width:210px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
     .portalRefreshWrap,.portalFitActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .portalTableShell{margin-top:2px;border-radius:18px;background:rgba(5,11,20,.34);border:1px solid rgba(255,255,255,.05)}
+    .portalPager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:0 4px}
+    .portalPagerInfo{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em}
     .portalEmptyState{text-align:center;padding:20px;display:block}
     .portalSectionFootnote{margin-top:12px;font-size:12px;line-height:1.7;color:var(--muted);opacity:.92}
     .portalTeamBand{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
@@ -393,7 +395,7 @@
     .portalRecGrid > *{min-width:0}
     @media(max-width:1180px){.portalHero{grid-template-columns:1fr}.portalSummaryStrip{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:1080px){.portalRecGrid{grid-template-columns:1fr}}
-    @media(max-width:720px){.portalHero{padding:22px}.portalHeroTitle{font-size:30px}.portalSummaryStrip{grid-template-columns:1fr}.portalSectionHead{align-items:flex-start}.portalControlCluster{width:100%}.portalControlCluster > div{flex:1 1 180px}.portalRefreshWrap,.portalFitActions{justify-content:flex-start}.portalStageCard{padding:18px}}
+    @media(max-width:720px){.portalHero{padding:22px}.portalHeroTitle{font-size:30px}.portalSummaryStrip{grid-template-columns:1fr}.portalSectionHead{align-items:flex-start}.portalControlCluster{width:100%}.portalControlCluster > div{flex:1 1 180px}.portalRefreshWrap,.portalFitActions,.portalPager{justify-content:flex-start}.portalStageCard{padding:18px}.portalPager{flex-wrap:wrap}}
     .portalReplaceList{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:6px}
     .portalDepartureCard{padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(6,12,26,.35);cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
     .portalDepartureCard:hover{border-color:rgba(var(--accent-rgb),.35);background:rgba(var(--accent-rgb),.05)}

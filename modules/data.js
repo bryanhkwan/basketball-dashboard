@@ -79,6 +79,7 @@ var _ratingsCache = {};     // keyed "LEAGUE:season" -> team ratings array
 var _ratingsLoads = {};     // keyed "LEAGUE:season" -> active promise
 var _teamListRefreshTimer = null;
 var _valueLabDataTimer = null;
+var _siblingComputeTimer = null;
 
 // Live working copy (user-editable) — keyed by canonical name only
 var confMultipliers = JSON.parse(JSON.stringify(DEFAULT_CONF_VALUES));
@@ -122,12 +123,16 @@ function _scheduleTeamListRefresh(delayMs){
 
 function _scheduleValueLabDataChange(delayMs){
   if(_valueLabDataTimer) clearTimeout(_valueLabDataTimer);
+  var wait = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 140;
+  if(window._dashboardCurrentPageId !== 'pageValueLab') {
+    wait = Math.max(wait, 1200);
+  }
   _valueLabDataTimer = setTimeout(function(){
     _valueLabDataTimer = null;
     if(window.ValueLab && typeof window.ValueLab.handleDataChange === 'function') {
       window.ValueLab.handleDataChange();
     }
-  }, Number.isFinite(delayMs) ? Math.max(0, delayMs) : 140);
+  }, wait);
 }
 
 function _dataApplyActiveLeagueConfig(opts){
@@ -1328,6 +1333,35 @@ function requestComputeAll(delayMs){
   }, wait);
 }
 
+function _scheduleSiblingPoolCompute(targetLeague, activePos, siblingPos, siblingRows){
+  if(_siblingComputeTimer) {
+    clearTimeout(_siblingComputeTimer);
+    _siblingComputeTimer = null;
+  }
+  if(!siblingRows || !siblingRows.length) return;
+  var seasonKey = _dataSeasonKey(_currentDataSeason);
+  _siblingComputeTimer = setTimeout(function(){
+    _siblingComputeTimer = null;
+    if(league !== targetLeague || pos !== activePos || seasonKey !== _dataSeasonKey(_currentDataSeason)) return;
+    var savedPos = pos;
+    var savedRows = rows;
+    var savedComputed = computed;
+    try{
+      pos = siblingPos;
+      rows = siblingRows;
+      ensureWeightsCoverStats(pos, rows);
+      computeAll({ skipRender: true });
+    }catch(e){
+      console.error('Sibling computation failed:', e);
+    }finally{
+      pos = savedPos;
+      rows = savedRows;
+      computed = savedComputed;
+      ensureWeightsCoverStats(pos, rows);
+    }
+  }, 420);
+}
+
 // --- computeAll ---
 
 function computeAll(options){
@@ -1733,9 +1767,9 @@ async function ensureLeagueDataLoaded(targetLeague, year, opts) {
 
         if (result.players.length) {
           if (targetLeague === 'WBB') {
-            scheduleNonCriticalWork(function(){ _wbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 1400 : 800);
+            scheduleNonCriticalWork(function(){ _wbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 4200 : 2200);
           } else {
-            scheduleNonCriticalWork(function(){ _mbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 1400 : 800);
+            scheduleNonCriticalWork(function(){ _mbbLoadHeightsBackground(result.players, seasonKey).catch(() => {}); }, opts.background ? 4200 : 2200);
           }
         }
 
@@ -1809,16 +1843,16 @@ async function loadAllData(year) {
     _scheduleTeamListRefresh(160);
     finishIfInitial();
 
-    // Use the remaining intro-video time to prefetch non-critical data before the user interacts.
-    // Phase 1 (~0.35s): active league ratings
+    // Use a calmer stagger after initial render so background work does not fight the first scroll/interaction.
+    // Phase 1 (~2s): active league ratings
     scheduleNonCriticalWork(function(){
       loadTeamRatings(year, primaryLeague).then(() => {
         _scheduleTeamListRefresh(120);
         _scheduleValueLabDataChange(160);
       }).catch(() => {});
-    }, isInitialLoad ? 350 : 700);
+    }, isInitialLoad ? 2000 : 900);
 
-    // Phase 2 (~1.2s): secondary league player data so MBB↔WBB switches are already warm
+    // Phase 2 (~5s): secondary league player data so MBB↔WBB switches are warm without crowding startup
     scheduleNonCriticalWork(function(){
       ensureLeagueDataLoaded(secondaryLeague, year, {
         userVisible: false,
@@ -1831,14 +1865,14 @@ async function loadAllData(year) {
           }, 700);
         }
       }).catch(() => {});
-    }, isInitialLoad ? 1200 : 2200);
+    }, isInitialLoad ? 5000 : 2600);
 
     // Phase 3 (8s): Career data — 5 API fetches, heavyweight. Deferred until user is settled.
     if (!_careerDataReady && !_careerDataPromise) {
       scheduleNonCriticalWork(function(){ loadCareerSeasons().catch(() => {}); }, 8000);
     }
 
-    _scheduleValueLabDataChange(isInitialLoad ? 260 : 120);
+    _scheduleValueLabDataChange(isInitialLoad ? 1800 : 320);
 
   } catch (err) {
     showWarn('Data load error: ' + (err.message || err));
@@ -2823,7 +2857,7 @@ function switchLeague(newLeague){
       _scheduleTeamListRefresh(120);
       _scheduleValueLabDataChange(160);
     }).catch(() => {});
-  }, 300);
+  }, 900);
 
   // Defer conference multiplier table render
   requestAnimationFrame(function(){ if(!_evalPresetsLoaded()) renderConfMultTable(); });
@@ -2870,21 +2904,8 @@ function reloadActiveSheet(){
 
   const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
   const sibRows = pos === 'Guards' ? bigs : guards;
-  if(sibRows.length){
-    try{
-      const savedPos = pos, savedRows = rows, savedComputed = computed;
-      pos = sibPos;
-      rows = sibRows;
-      ensureWeightsCoverStats(pos, rows);
-      computeAll({ skipRender: true });
-      pos = savedPos; rows = savedRows; computed = savedComputed;
-      ensureWeightsCoverStats(pos, rows);
-    }catch(e){
-      console.error('Sibling computation failed:', e);
-      pos = pos === sibPos ? (sibPos === 'Guards' ? 'Bigs' : 'Guards') : pos;
-    }
-  }
   renderPlayers();
+  _scheduleSiblingPoolCompute(league, pos, sibPos, sibRows);
 }
 
 function exportCSV(){
