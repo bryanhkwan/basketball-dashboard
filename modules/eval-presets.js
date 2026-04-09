@@ -242,23 +242,23 @@ function evalPresetComparableWeights(rows) {
 function evalPresetDefaultValuationForLeague(leagueName) {
   if (leagueName === 'WBB') {
     return {
-      avgPay: 35000,
-      minPay: 5000,
-      maxPay: 100000,
-      starValue: 70000,
-      starPct: 0.95,
+      avgPay: 50000,
+      minPay: 7500,
+      maxPay: 750000,
+      starValue: 275000,
+      starPct: 0.98,
       mpMode: 'on',
-      mpPct: 0.95,
+      mpPct: 0.90,
     };
   }
   return {
-    avgPay: 70000,
-    minPay: 10000,
-    maxPay: 300000,
-    starValue: 150000,
-    starPct: 0.95,
+    avgPay: 100000,
+    minPay: 15000,
+    maxPay: 1750000,
+    starValue: 700000,
+    starPct: 0.98,
     mpMode: 'on',
-    mpPct: 0.95,
+    mpPct: 0.90,
   };
 }
 
@@ -327,9 +327,9 @@ function evalPresetApplySystemDefault(opts) {
   try {
     loadScoringWeight();
     applyLeagueDefaults(true);
-    if (starPctEl) starPctEl.value = 0.95;
+    if (starPctEl) starPctEl.value = 0.98;
     if (mpModeEl) mpModeEl.value = 'on';
-    if (mpPctEl) mpPctEl.value = 0.95;
+    if (mpPctEl) mpPctEl.value = 0.90;
     confMultipliers = evalPresetClone(DEFAULT_CONF_VALUES);
     if (confMultToggleEl) confMultToggleEl.checked = true;
     renderWeights();

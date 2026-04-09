@@ -2797,18 +2797,18 @@ function waitForXLSX(timeoutMs=5000){
 
 function applyLeagueDefaults(force){
   if(league === 'MBB'){
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000){
-      avgPayEl.value = 70000; minPayEl.value = 10000; maxPayEl.value = 300000;
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000){
+      avgPayEl.value = 100000; minPayEl.value = 15000; maxPayEl.value = 1750000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000){
-      starValueEl.value = 150000;
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000){
+      starValueEl.value = 700000;
     }
   }else{
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 70000){
-      avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 100000;
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 100000){
+      avgPayEl.value = 50000; minPayEl.value = 7500; maxPayEl.value = 750000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 150000){
-      starValueEl.value = 70000;
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 700000){
+      starValueEl.value = 275000;
     }
   }
 }
