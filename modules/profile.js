@@ -178,7 +178,7 @@ function openProfile(r){
   var marketGap = safeNum(r.MarketGap_calc);
   var laneLabel = (r.MarketLaneLabel_calc || '').toString();
   if (mScoreLabel) mScoreLabel.textContent = 'Production';
-  if (mValLabel) mValLabel.textContent = 'Recommended bid';
+  if (mValLabel) mValLabel.textContent = 'Toledo max bid';
   if (mMultLabel) mMultLabel.textContent = 'Market pressure';
   mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
   mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
@@ -273,7 +273,7 @@ function openProfile(r){
   } else {
     metaBlocks.push(`
       <div class="muted">
-        Recommended bid uses your editable curve: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
+        Toledo max bid uses your editable curve: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
         predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
         Market pressure is a separate fixed national curve for context.
       </div>

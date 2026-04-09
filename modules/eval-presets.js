@@ -252,13 +252,13 @@ function evalPresetDefaultValuationForLeague(leagueName) {
     };
   }
   return {
-    avgPay: 70000,
-    minPay: 10000,
-    maxPay: 300000,
-    starValue: 150000,
-    starPct: 0.95,
+    avgPay: 90000,
+    minPay: 15000,
+    maxPay: 500000,
+    starValue: 325000,
+    starPct: 0.97,
     mpMode: 'on',
-    mpPct: 0.95,
+    mpPct: 0.92,
   };
 }
 
@@ -325,11 +325,12 @@ function evalPresetApplySystemDefault(opts) {
   }
   evalPresetState.applying = true;
   try {
+    var valuationDefaults = evalPresetDefaultValuationForLeague(leagueName);
     loadScoringWeight();
     applyLeagueDefaults(true);
-    if (starPctEl) starPctEl.value = 0.95;
-    if (mpModeEl) mpModeEl.value = 'on';
-    if (mpPctEl) mpPctEl.value = 0.95;
+    if (starPctEl) starPctEl.value = valuationDefaults.starPct;
+    if (mpModeEl) mpModeEl.value = valuationDefaults.mpMode;
+    if (mpPctEl) mpPctEl.value = valuationDefaults.mpPct;
     confMultipliers = evalPresetClone(DEFAULT_CONF_VALUES);
     if (confMultToggleEl) confMultToggleEl.checked = true;
     renderWeights();

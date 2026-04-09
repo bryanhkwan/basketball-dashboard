@@ -641,7 +641,7 @@ function getMpMultiplier(mp, mpPctl){
 
 var VALUATION_MODEL_DEFAULTS = {
   recommended: {
-    MBB: { avgPay:70000, minPay:10000, maxPay:300000, starValue:150000, starPct:0.95, mpMode:'on', mpPct:0.95 },
+    MBB: { avgPay:90000, minPay:15000, maxPay:500000, starValue:325000, starPct:0.97, mpMode:'on', mpPct:0.92 },
     WBB: { avgPay:35000, minPay:5000, maxPay:100000, starValue:70000, starPct:0.95, mpMode:'on', mpPct:0.95 }
   },
   market: {
@@ -2867,17 +2867,17 @@ function waitForXLSX(timeoutMs=5000){
 
 function applyLeagueDefaults(force){
   if(league === 'MBB'){
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 100000){
-      avgPayEl.value = 70000; minPayEl.value = 10000; maxPayEl.value = 300000;
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 100000){
+      avgPayEl.value = 90000; minPayEl.value = 15000; maxPayEl.value = 500000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 700000){
-      starValueEl.value = 150000;
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 700000){
+      starValueEl.value = 325000;
     }
   }else{
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 100000){
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 90000 || Number(avgPayEl.value) === 100000){
       avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 100000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 700000){
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 325000 || Number(starValueEl.value) === 700000){
       starValueEl.value = 70000;
     }
   }

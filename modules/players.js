@@ -21,7 +21,7 @@ const LIST_COLS = [
   {key:'MP', label:'MP'},
   {key:'Score', label:'Perf'},
   {key:'FitScore_calc', label:'Fit'},
-  {key:'ActualValuation_calc', label:'Bid $'},
+  {key:'ActualValuation_calc', label:'Toledo Max $'},
   {key:'MarketPressure_calc', label:'Pressure $', productionOnly:true},
   {key:'_draft_prob', label:'Draft'},
 ];
@@ -41,7 +41,7 @@ function playerBoardSortKey(key){
 function playerBoardColLabel(col){
   if(col.key === 'Score') return playerValueView === 'projection' ? 'Projection' : 'Production';
   if(col.key === 'ActualValuation_calc'){
-    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()) return playerValueView === 'projection' ? 'Median band' : 'Bid band';
+    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()) return playerValueView === 'projection' ? 'Median band' : 'Toledo max band';
     return playerValueView === 'projection' ? 'Median $' : col.label;
   }
   return col.label;

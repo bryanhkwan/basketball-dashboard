@@ -260,10 +260,15 @@ window.addEventListener('DOMContentLoaded', () => {
     computeAll();
   });
   resetValBtn.addEventListener('click', ()=>{
+    const resetDefaults = (typeof getValuationModelDefaults === 'function')
+      ? getValuationModelDefaults('recommended', league)
+      : (league === 'WBB'
+          ? { starPct: 0.95, mpMode: 'on', mpPct: 0.95 }
+          : { starPct: 0.97, mpMode: 'on', mpPct: 0.92 });
     applyLeagueDefaults(true);
-    starPctEl.value = 0.95;
-    mpModeEl.value = 'on';
-    mpPctEl.value = 0.95;
+    starPctEl.value = resetDefaults.starPct;
+    mpModeEl.value = resetDefaults.mpMode;
+    mpPctEl.value = resetDefaults.mpPct;
     computeAll();
   });
   exportBtn.addEventListener('click', ()=>{
