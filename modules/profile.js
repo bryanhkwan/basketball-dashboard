@@ -174,9 +174,12 @@ function openProfile(r){
   var mValLabel = document.getElementById('mValLabel');
   var mMultLabel = document.getElementById('mMultLabel');
   var recommendedBid = safeNum(r.ActualValuation_calc);
+  var baseBid = safeNum(r.ActualValuationBase_calc);
   var marketPressure = safeNum(r.MarketPressure_calc);
   var marketGap = safeNum(r.MarketGap_calc);
   var laneLabel = (r.MarketLaneLabel_calc || '').toString();
+  var scoutAdjustLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
+  var scoutAdjustNote = (r.ScoutAdjustmentNote_calc || r.ProjectionScoutNote_calc || '').toString().trim();
   if (mScoreLabel) mScoreLabel.textContent = 'Production';
   if (mValLabel) mValLabel.textContent = 'Toledo max bid';
   if (mMultLabel) mMultLabel.textContent = 'Market pressure';
@@ -255,6 +258,11 @@ function openProfile(r){
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
   const projectionNote = (r.ProjectionReasonSummary_calc || '').toString();
   const metaBlocks = [];
+  if (scoutAdjustLabel) {
+    const scoutBits = [`${scoutAdjustLabel}`];
+    if (Number.isFinite(baseBid)) scoutBits.push(`model base <b>${profileDisplayMoney(baseBid)}</b>`);
+    metaBlocks.push(`<div class="muted">${scoutBits.join(' • ')}</div>`);
+  }
   if (Number.isFinite(marketPressure) && laneLabel) {
     const laneBits = [`Lane: <b>${laneLabel}</b>`];
     if (Number.isFinite(marketGap)) laneBits.push(`gap to pressure: <b>${profileDisplayMoney(marketGap)}</b>`);
@@ -282,13 +290,17 @@ function openProfile(r){
   if (projectionNote) {
     metaBlocks.push(`<div class="muted">Projection note: <b>${projectionNote}</b>.</div>`);
   }
+  if (scoutAdjustNote) {
+    metaBlocks.push(`<div class="muted">Scout note: <b>${scoutAdjustNote}</b>.</div>`);
+  }
   mMeta.innerHTML = metaBlocks.join('');
 
   renderProjectionDetails(r);
 
   const exclude = new Set([
-    'PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
+    'PerfScore_calc','PredictedValue_calc','ActualValuationBase_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
     'MarketPressurePredicted_calc','MarketPressureMinMultiplier_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','MarketLaneTone_calc','BidToPressureRatio_calc',
+    'ScoutAdjustmentPct_calc','ScoutAdjustmentMult_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentTone_calc','ScoutAdjustmentNote_calc',
     'ProjectionGames_calc','ProjectionMinutesSample_calc','ProjectionPriorSeasons_calc','ProjectionPerf_calc',
     'ProjectionHealthyValue_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc',
     'ProjectionConfidence_calc','ProjectionConfidenceLabel_calc','ProjectionConfidenceTone_calc',
@@ -351,6 +363,12 @@ function openProfile(r){
       openCompare(player, name2.trim());
     }
   };
+  const scoutAdjustBtn = document.getElementById('mScoutAdjustBtn');
+  if (scoutAdjustBtn) {
+    scoutAdjustBtn.onclick = () => {
+      if (typeof openProjectionScoutModal === 'function') openProjectionScoutModal(r);
+    };
+  }
 
   renderCareerHistory(r);
   renderGameLog(r);

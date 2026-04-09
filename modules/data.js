@@ -752,9 +752,12 @@ function projectionNormalizeFilmBoost(value){
   const numeric = safeNum(value);
   if(Number.isFinite(numeric)){
     const normalized = Math.abs(numeric) > 1 ? numeric / 100 : numeric;
-    return clamp(normalized, -0.2, 0.35);
+    return clamp(normalized, -0.3, 0.35);
   }
   const text = (value ?? '').toString().trim().toLowerCase();
+  if(text === 'fade' || text === 'low fade') return -0.10;
+  if(text === 'moderate fade') return -0.20;
+  if(text === 'high fade' || text === 'hard fade') return -0.30;
   if(text === 'high' || text === 'strong') return 0.18;
   if(text === 'medium' || text === 'moderate') return 0.10;
   if(text === 'low' || text === 'slight') return 0.05;
@@ -764,8 +767,8 @@ function projectionNormalizeFilmBoost(value){
 
 function projectionSnapFilmBoost(value){
   const numeric = projectionNormalizeFilmBoost(value);
-  if(!Number.isFinite(numeric) || numeric <= 0.001) return 0;
-  const options = [0.05, 0.10, 0.18];
+  if(!Number.isFinite(numeric) || Math.abs(numeric) <= 0.001) return 0;
+  const options = [-0.30, -0.20, -0.10, 0, 0.05, 0.10, 0.18];
   let best = options[0];
   let dist = Math.abs(options[0] - numeric);
   options.forEach(option => {
@@ -781,10 +784,31 @@ function projectionSnapFilmBoost(value){
 function projectionManualBoostLabel(value){
   const numeric = projectionNormalizeFilmBoost(value);
   if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return 'Off';
+  if(numeric <= -0.25) return 'Hard Fade';
   if(numeric < 0) return 'Fade';
   if(numeric >= 0.16) return 'High';
   if(numeric >= 0.09) return 'Moderate';
   return 'Low';
+}
+
+function scoutAdjustmentLabel(value){
+  const numeric = projectionNormalizeFilmBoost(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return '';
+  const pct = Math.round(Math.abs(numeric) * 100);
+  return numeric < 0 ? ('Scout fade -' + pct + '%') : ('Scout boost +' + pct + '%');
+}
+
+function scoutAdjustmentTone(value){
+  const numeric = projectionNormalizeFilmBoost(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return 'neutral';
+  return numeric < 0 ? 'warn' : 'good';
+}
+
+function applyScoutAdjustment(value, boost, minPay, maxPay){
+  const numeric = projectionNormalizeFilmBoost(boost);
+  if(!Number.isFinite(value)) return NaN;
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return clamp(value, minPay, maxPay);
+  return clamp(value * (1 + numeric), minPay, maxPay);
 }
 
 function projectionNormalizeMedicalFlag(value){
@@ -814,7 +838,7 @@ function projectionNormalizeScoutOverride(raw){
     key: String(raw.key || '').trim(),
     playerName: (raw.playerName ?? '').toString().trim(),
     teamName: (raw.teamName ?? '').toString().trim(),
-    filmBoost: filmBoostRaw > 0 ? filmBoostRaw : 0,
+    filmBoost: Number.isFinite(filmBoostRaw) && Math.abs(filmBoostRaw) > 0.001 ? filmBoostRaw : 0,
     filmLabel: projectionManualBoostLabel(filmBoostRaw),
     medicalFlag: medicalFlag,
     note: note,
@@ -864,7 +888,7 @@ function projectionApplyScoutOverride(row){
   const override = projectionGetScoutOverride(row);
   if(!override) return row;
   const next = {...row};
-  if(override.filmBoost > 0) next.ProjectionBoost = override.filmBoost;
+  if(Number.isFinite(override.filmBoost) && Math.abs(override.filmBoost) > 0.001) next.ProjectionBoost = override.filmBoost;
   if(override.medicalFlag) next.ProjectionMedicalFlag = override.medicalFlag;
   if(override.note) next.ProjectionScoutNote = override.note;
   return next;
@@ -925,7 +949,7 @@ function openProjectionScoutModal(row){
   if(projectionScoutSubEl) projectionScoutSubEl.textContent = [_projectionScoutTarget.teamName || '—', league + ' ' + String(_currentDataSeason || 2026)].join(' • ');
   if(projectionFilmBoostEl) {
     const effectiveBoost = override ? override.filmBoost : projectionSnapFilmBoost(row.ProjectionBoost || row['Projection Boost'] || row.FilmBoost || row['Film Boost'] || row.ScoutBoost || row['Scout Boost']);
-    projectionFilmBoostEl.value = effectiveBoost > 0 ? String(effectiveBoost.toFixed(2)) : '0';
+    projectionFilmBoostEl.value = (Number.isFinite(effectiveBoost) && Math.abs(effectiveBoost) > 0.001) ? String(effectiveBoost.toFixed(2)) : '0';
   }
   if(projectionMedicalFlagEl) {
     const effectiveFlag = override ? override.medicalFlag : projectionNormalizeMedicalFlag(row.ProjectionMedicalFlag || row['Projection Medical Flag']);
@@ -953,7 +977,7 @@ function saveProjectionScoutOverride(){
   const filmBoost = projectionSnapFilmBoost(projectionFilmBoostEl ? projectionFilmBoostEl.value : 0);
   const medicalFlag = projectionNormalizeMedicalFlag(projectionMedicalFlagEl ? projectionMedicalFlagEl.value : '');
   const note = projectionScoutNoteEl ? projectionScoutNoteEl.value.trim() : '';
-  if(filmBoost <= 0 && !medicalFlag && !note){
+  if(Math.abs(filmBoost) < 0.001 && !medicalFlag && !note){
     delete map[_projectionScoutTarget.key];
   } else {
     map[_projectionScoutTarget.key] = projectionNormalizeScoutOverride({
@@ -970,7 +994,7 @@ function saveProjectionScoutOverride(){
   closeProjectionScoutModal();
   projectionRefreshAfterScoutOverride(targetRow);
   if(typeof showWarn === 'function') clearWarn();
-  if(typeof valueLabSetStatus === 'function') valueLabSetStatus(label + ' projection inputs saved.', 'good');
+  if(typeof valueLabSetStatus === 'function') valueLabSetStatus(label + ' scout adjustment saved.', 'good');
   return true;
 }
 
@@ -1070,7 +1094,7 @@ function projectionGetManualScoutNote(row){
 }
 
 function projectionGetManualBoost(row){
-  const keys = ['ProjectionBoost', 'Projection Boost', 'FilmBoost', 'Film Boost', 'ScoutBoost', 'Scout Boost', 'ProjectionUpside'];
+  const keys = ['ProjectionBoost', 'Projection Boost', 'FilmBoost', 'Film Boost', 'ScoutBoost', 'Scout Boost', 'ProjectionUpside', 'ScoutAdjustment', 'Scout Adjustment', 'ScoutFade', 'Scout Fade'];
   for(const key of keys){
     const normalized = projectionNormalizeFilmBoost(row[key]);
     if(Number.isFinite(normalized)) return normalized;
@@ -1175,7 +1199,7 @@ function projectionCalcMetrics(row, ctx){
   const manualMedicalFlag = projectionGetManualMedicalFlag(row);
   const manualScoutNote = projectionGetManualScoutNote(row);
   const productionPerf = safeNum(row.PerfScore_calc);
-  const productionValue = safeNum(row.ActualValuation_calc);
+  const productionValue = safeNum(row.ActualValuationBase_calc != null ? row.ActualValuationBase_calc : row.ActualValuation_calc);
 
   let healthyPerf = productionPerf;
   if(Number.isFinite(priorPerf) && Number.isFinite(productionPerf)){
@@ -1220,6 +1244,7 @@ function projectionCalcMetrics(row, ctx){
   if(priorEntries.length) reasons.push('blended with ' + priorEntries.length + ' prior season' + (priorEntries.length === 1 ? '' : 's'));
   if(medicalRisk.label !== 'Low') reasons.push('medical risk ' + medicalRisk.label.toLowerCase());
   if(manualBoost > 0) reasons.push('scout upside boost applied');
+  if(manualBoost < 0) reasons.push('scout fade applied');
   if(manualMedicalFlag) reasons.push('manual medical flag ' + manualMedicalFlag.toLowerCase());
   if(manualScoutNote) reasons.push('scout note attached');
   if(!reasons.length) reasons.push('stable projection profile');
@@ -1509,11 +1534,16 @@ function computeAll(options){
     const rawPerf = _tempRawPerfs[i];
     const mp = _tempMps[i];
     const cm = _tempCms[i];
+    const manualBoost = projectionGetManualBoost(r);
+    const manualBoostLabel = scoutAdjustmentLabel(manualBoost);
+    const manualBoostTone = scoutAdjustmentTone(manualBoost);
+    const manualScoutNote = projectionGetManualScoutNote(r);
 
     const bidQuote = applyValuationContext(adjPerf, mp, bidCtx);
     const marketQuote = applyValuationContext(adjPerf, mp, marketCtx);
     const pred = bidQuote.pred;
-    const final = bidQuote.final;
+    const baseFinal = bidQuote.final;
+    const final = applyScoutAdjustment(baseFinal, manualBoost, bidCtx.minPay, bidCtx.maxPay);
     const mult = bidQuote.mult;
     const marketLane = getMarketLaneMeta(final, marketQuote.final);
 
@@ -1524,9 +1554,10 @@ function computeAll(options){
 
     const out = Object.assign({}, r, {
       PerfScore_calc: adjPerf, PerfScore_raw: rawPerf, ConfMult_calc: cm, MP_num: mp,
-      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuation_calc: final,
+      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuationBase_calc: baseFinal, ActualValuation_calc: final,
       MarketPressurePredicted_calc: marketQuote.pred, MarketPressureMinMultiplier_calc: marketQuote.mult, MarketPressure_calc: marketQuote.final,
       MarketGap_calc: marketLane.gap, MarketGapPct_calc: marketLane.gapPct, MarketLaneLabel_calc: marketLane.label, MarketLaneTone_calc: marketLane.tone,
+      ScoutAdjustmentPct_calc: manualBoost, ScoutAdjustmentMult_calc: (Number.isFinite(manualBoost) ? (1 + manualBoost) : 1), ScoutAdjustmentLabel_calc: manualBoostLabel, ScoutAdjustmentTone_calc: manualBoostTone, ScoutAdjustmentNote_calc: manualScoutNote,
       BidToPressureRatio_calc: (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN,
       BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
     });
@@ -2986,7 +3017,7 @@ function reloadActiveSheet(){
 }
 
 function exportCSV(){
-  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
+  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuationBase_calc','ActualValuation_calc','ScoutAdjustmentPct_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentNote_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {

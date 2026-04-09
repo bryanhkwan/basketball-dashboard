@@ -2113,6 +2113,7 @@
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Compare</button>
+        <button class="secondary" id="mScoutAdjustBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Adjust</button>
         <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Notes</button>
         <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Favorite</button>
         <button class="secondary" id="mShareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Send</button>
@@ -2274,7 +2275,7 @@
   <div class="modal" role="dialog" aria-modal="true" style="max-width:560px;width:94%">
     <div class="modalHead">
       <div>
-        <div class="modalTitle" id="projectionScoutTitle">Projection scout inputs</div>
+        <div class="modalTitle" id="projectionScoutTitle">Scout adjustment</div>
         <div class="modalSub" id="projectionScoutSub">—</div>
       </div>
       <button class="close" id="projectionScoutCloseBtn">Close</button>
@@ -2283,11 +2284,14 @@
       <div class="panel">
         <div class="panelHead">Manual adjustment</div>
         <div class="panelBody">
-          <div class="hint" style="margin-top:0">Film should move the projection band and confidence, not replace the stat base. Use these inputs when the current season sample is distorted by injury, role, or usage context.</div>
+          <div class="hint" style="margin-top:0">Use this when film says the raw model is too high or too low. Scout adjustment moves the Toledo max bid directly and also nudges the projection band without adding any extra load or fetches.</div>
           <div class="projectionScoutGrid">
             <div>
-              <label for="projectionFilmBoost">Film upside</label>
+              <label for="projectionFilmBoost">Scout adjustment</label>
               <select id="projectionFilmBoost">
+                <option value="-0.30">Hard fade (-30%)</option>
+                <option value="-0.20">Fade (-20%)</option>
+                <option value="-0.10">Light fade (-10%)</option>
                 <option value="0">Model only</option>
                 <option value="0.05">Low boost</option>
                 <option value="0.10">Moderate boost</option>
@@ -2306,11 +2310,11 @@
           </div>
           <div style="margin-top:12px">
             <label for="projectionScoutNote">Scout note</label>
-            <textarea id="projectionScoutNote" placeholder="Optional context for why the film or medical read differs from the raw sample." style="width:100%;min-height:88px;resize:vertical"></textarea>
+            <textarea id="projectionScoutNote" placeholder="Optional context for why film says the Toledo max bid should move off the raw stat model." style="width:100%;min-height:88px;resize:vertical"></textarea>
           </div>
           <div class="projectionScoutActions">
             <button id="projectionScoutClearBtn" type="button" class="secondary">Clear inputs</button>
-            <button id="projectionScoutSaveBtn" type="button" class="primary">Save inputs</button>
+            <button id="projectionScoutSaveBtn" type="button" class="primary">Save adjustment</button>
           </div>
         </div>
       </div>

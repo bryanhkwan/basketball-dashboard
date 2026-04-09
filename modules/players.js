@@ -225,9 +225,15 @@ function renderPlayersPage(){
           td.title = (r.ProjectionReasonSummary_calc || '').toString();
         } else {
           const modelValue = safeNum(r.ActualValuation_calc);
-          td.textContent = Number.isFinite(modelValue)
-            ? playersDisplayMoney(modelValue)
-            : '\u2014';
+          const baseValue = safeNum(r.ActualValuationBase_calc);
+          const scoutLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
+          const scoutTone = /^(good|warn|bad|neutral)$/.test((r.ScoutAdjustmentTone_calc || '').toString()) ? (r.ScoutAdjustmentTone_calc || 'neutral') : 'neutral';
+          if(Number.isFinite(modelValue)){
+            td.classList.add('playersProjectionValueCell');
+            td.innerHTML = `<div class="playersProjectionValueMain">${playersDisplayMoney(modelValue)}</div>${scoutLabel ? `<div class="playersProjectionBadges"><span class="playersProjectionBadge playersProjectionBadge--${scoutTone}">${scoutLabel}</span></div>` : ''}${Number.isFinite(baseValue) && scoutLabel ? `<div class="playersProjectionValueSub">Model base ${playersDisplayMoney(baseValue)}</div>` : ''}`;
+          } else {
+            td.textContent = '\u2014';
+          }
         }
       }else if(c.key === 'MarketPressure_calc'){
         const pressureValue = safeNum(r.MarketPressure_calc);
