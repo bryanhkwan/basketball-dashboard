@@ -228,11 +228,19 @@
   // ---- App bridge ----
   const app = () => window._app || {};
   function allPlayers(){ const a=app(); return a.tbGetAllPlayers ? a.tbGetAllPlayers() : (a.computed||[]); }
+  function formatChatMoney(value){
+    const num = Number(value);
+    if(!Number.isFinite(num)) return null;
+    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()){
+      return typeof demoFormatMoney === 'function' ? demoFormatMoney(num) : ('$' + Math.round(num).toLocaleString());
+    }
+    return Math.round(num);
+  }
   function statLine(r){
     return { player:r.Player, team:r.Team, pos:r.Position||r.Pos||'', conf:r.Conference||'',
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null,
-      value:r.ActualValuation_calc ? ((typeof demoIsGuestMode === 'function' && demoIsGuestMode()) ? (typeof demoFormatMoney === 'function' ? demoFormatMoney(r.ActualValuation_calc) : ('$' + Math.round(r.ActualValuation_calc).toLocaleString())) : Math.round(r.ActualValuation_calc)) : null,
+      value:formatChatMoney(r.ActualValuation_calc), marketPressure:formatChatMoney(r.MarketPressure_calc), marketLane:r.MarketLaneLabel_calc||'',
       ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
       rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
       bpg:r.BPG!=null?+Number(r.BPG).toFixed(1):null, bpm:r.BPM!=null?+Number(r.BPM).toFixed(1):null,
@@ -250,7 +258,7 @@
     const a=app(), roster=a.tbRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
       rosterSize:roster.length, roster:roster.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
-      perf:r.Score?r.Score.toFixed(1):'N/A',value:r.ActualValuation_calc?(typeof demoFormatMoney === 'function' ? demoFormatMoney(r.ActualValuation_calc) : '$'+Math.round(r.ActualValuation_calc).toLocaleString()):'N/A'})),
+      perf:r.Score?r.Score.toFixed(1):'N/A',value:formatChatMoney(r.ActualValuation_calc)||'N/A',pressure:formatChatMoney(r.MarketPressure_calc)||'N/A',lane:r.MarketLaneLabel_calc||''})),
       budget:document.getElementById('tbBudget')?.value||'500000',
       playerCap:document.getElementById('tbPlayerCap')?.value||'150000',
       maxRoster:document.getElementById('tbMaxRoster')?.value||'13',
@@ -273,10 +281,11 @@
     const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
     if (typeof demoIsGuestMode === 'function' && demoIsGuestMode()) {
       var band = typeof demoFormatMoney === 'function' ? demoFormatMoney(m.ActualValuation_calc) : null;
-      ['ActualValuation_calc','ActualValuation','PredictedValue_calc','PredictedValue','ValueDelta_calc','ValueDeltaPct_calc'].forEach(function (key) {
+      ['ActualValuation_calc','ActualValuation','PredictedValue_calc','PredictedValue','ValueDelta_calc','ValueDeltaPct_calc','MarketPressurePredicted_calc','MarketPressureMinMultiplier_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','BidToPressureRatio_calc'].forEach(function (key) {
         if (Object.prototype.hasOwnProperty.call(out, key)) delete out[key];
       });
       if (band) out.ValueBand = band;
+      if (m.MarketLaneLabel_calc) out.MarketLane = m.MarketLaneLabel_calc;
     }
     // Draft probability (MBB only)
     if(typeof draftProbability==='function'){
@@ -538,7 +547,7 @@
         maxValue:{type:'NUMBER',description:'Max valuation $'},
         minPerf:{type:'NUMBER',description:'Min PerfScore'},
         team:{type:'STRING'},conference:{type:'STRING'},
-        sortBy:{type:'STRING',description:'Score, PPG, 3PT_Rating (ALWAYS use for shooters instead of 3P%), 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, USG%, PER, WS/40, 3PA/G, ActualValuation_calc'},
+        sortBy:{type:'STRING',description:'Score, PPG, 3PT_Rating (ALWAYS use for shooters instead of 3P%), 3P%, eFG%, APG, BPG, RPG, BPM, SPG, FT%, DRtg, USG%, PER, WS/40, 3PA/G, ActualValuation_calc, MarketPressure_calc'},
         limit:{type:'NUMBER',description:'# results (default 10)'}}}},
     {name:'get_dashboard_context',description:'Get current roster, budget, settings.',
       parameters:{type:'OBJECT',properties:{}}},

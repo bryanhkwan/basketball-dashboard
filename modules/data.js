@@ -433,7 +433,8 @@ function isLikelyNumericColumn(key){
   const bad = new Set([
     'Player','Name','Team','School','Conference','Conf','Position','Pos','Class','Yr','Year','ID','URL','Link','Height','Hometown',
     'Rank','Score','PerfScore','PerfScore_calc','FitScore','FitScore_calc','PredictedValue','PredictedValue_calc',
-    'ActualValuation','ActualValuation_calc','MinMultiplier','MinMultiplier_calc','MP_num'
+    'ActualValuation','ActualValuation_calc','MinMultiplier','MinMultiplier_calc','MP_num',
+    'MarketPressurePredicted_calc','MarketPressure_calc','MarketPressureMinMultiplier_calc','MarketGap_calc','MarketGapPct_calc','BidToPressureRatio_calc'
   ]);
   if(k.startsWith('Norm_')) return false;
   if(bad.has(k)) return false;
@@ -481,7 +482,8 @@ function ensureWeightsCoverStats(forPos, rowArr){
     'FG','FGA','2P','2PA','3P','3PA','FT','FTA','ORB','DRB','TRB','AST','STL','BLK','TOV','PF','PTS',
     'Position','PerfScore_calc','PerfScore_raw','ConfMult_calc','MP_num','PredictedValue_calc',
     'ActualValuation_calc','MinMultiplier_calc','Score','FitScore_calc','CalcRank','BossRank',
-    'ActualValuation','ValueDelta_calc','ValueDeltaPct_calc','_tbPosGroup']);
+    'ActualValuation','ValueDelta_calc','ValueDeltaPct_calc','MarketPressurePredicted_calc','MarketPressure_calc',
+    'MarketPressureMinMultiplier_calc','MarketGap_calc','MarketGapPct_calc','BidToPressureRatio_calc','_tbPosGroup']);
   if(rowArr && rowArr.length){
     const sample = rowArr[0] || {};
     for(const k of Object.keys(sample)){
@@ -630,10 +632,86 @@ function scoreRow(r){
 }
 
 function getMpMultiplier(mp, mpPctl){
-  if(mpModeEl.value === 'off') return 1;
+  var mode = arguments.length > 2 ? arguments[2] : (mpModeEl ? mpModeEl.value : 'on');
+  if(mode === 'off') return 1;
   if(!Number.isFinite(mp) || mp <= 0) return 0;
   if(!Number.isFinite(mpPctl) || mpPctl <= 0) return 1;
   return Math.min(1, Math.sqrt(mp / mpPctl));
+}
+
+var VALUATION_MODEL_DEFAULTS = {
+  recommended: {
+    MBB: { avgPay:70000, minPay:10000, maxPay:300000, starValue:150000, starPct:0.95, mpMode:'on', mpPct:0.95 },
+    WBB: { avgPay:35000, minPay:5000, maxPay:100000, starValue:70000, starPct:0.95, mpMode:'on', mpPct:0.95 }
+  },
+  market: {
+    MBB: { avgPay:100000, minPay:15000, maxPay:1750000, starValue:700000, starPct:0.98, mpMode:'on', mpPct:0.90 },
+    WBB: { avgPay:50000, minPay:7500, maxPay:750000, starValue:275000, starPct:0.98, mpMode:'on', mpPct:0.90 }
+  }
+};
+
+function getValuationModelDefaults(modelKey, leagueName){
+  const lg = leagueName === 'WBB' ? 'WBB' : 'MBB';
+  const src = (((VALUATION_MODEL_DEFAULTS[modelKey] || {})[lg]) || {});
+  return Object.assign({}, src);
+}
+
+function getRecommendedBidSettings(){
+  const fallback = getValuationModelDefaults('recommended', league);
+  return {
+    avgPay: Number.isFinite(Number(avgPayEl && avgPayEl.value)) ? Number(avgPayEl.value) : fallback.avgPay,
+    minPay: Number.isFinite(Number(minPayEl && minPayEl.value)) ? Number(minPayEl.value) : fallback.minPay,
+    maxPay: Number.isFinite(Number(maxPayEl && maxPayEl.value)) ? Number(maxPayEl.value) : fallback.maxPay,
+    starValue: Number.isFinite(Number(starValueEl && starValueEl.value)) ? Number(starValueEl.value) : fallback.starValue,
+    starPct: clamp(Number(starPctEl && starPctEl.value), 0.5, 0.999),
+    mpMode: mpModeEl ? (String(mpModeEl.value || fallback.mpMode).toLowerCase() === 'off' ? 'off' : 'on') : fallback.mpMode,
+    mpPct: clamp(Number(mpPctEl && mpPctEl.value), 0.5, 0.999),
+  };
+}
+
+function buildValuationContext(perfArr, mpArr, cfg){
+  const avgPay = Number(cfg && cfg.avgPay);
+  const minPay = Number(cfg && cfg.minPay);
+  const maxPay = Number(cfg && cfg.maxPay);
+  const starValue = Number(cfg && cfg.starValue);
+  const starPct = clamp(Number(cfg && cfg.starPct), 0.5, 0.999);
+  const mpPct = clamp(Number(cfg && cfg.mpPct), 0.5, 0.999);
+  const mpMode = String((cfg && cfg.mpMode) || 'on').toLowerCase() === 'off' ? 'off' : 'on';
+  const perfAvg = perfArr.length ? perfArr.reduce((a,b)=>a+b,0) / perfArr.length : NaN;
+  const perfStar = percentileInc(perfArr, starPct);
+  const mpPctl = percentileInc(mpArr, mpPct);
+  const denom = (perfStar - perfAvg);
+  let k = 0;
+  if(Number.isFinite(starValue) && Number.isFinite(avgPay) && avgPay > 0 && Number.isFinite(denom) && Math.abs(denom) > 1e-9){
+    k = Math.log(starValue / avgPay) / denom;
+  }
+  return { avgPay, minPay, maxPay, starValue, starPct, mpMode, mpPct, perfAvg, perfStar, mpPctl, k };
+}
+
+function applyValuationContext(adjPerf, mp, ctx){
+  let pred = NaN, final = NaN, mult = 1;
+  if(Number.isFinite(adjPerf) && Number.isFinite(ctx.avgPay) && ctx.avgPay > 0){
+    pred = ctx.avgPay * Math.exp(ctx.k * (adjPerf - ctx.perfAvg));
+    pred = clamp(pred, ctx.minPay, ctx.maxPay);
+    mult = getMpMultiplier(mp, ctx.mpPctl, ctx.mpMode);
+    final = clamp(pred * mult, ctx.minPay, ctx.maxPay);
+  }
+  return { pred, final, mult };
+}
+
+function getMarketLaneMeta(bidValue, marketValue){
+  if(!Number.isFinite(bidValue) || !Number.isFinite(marketValue) || bidValue <= 0 || marketValue <= 0){
+    return { label:'—', tone:'neutral', gap:NaN, gapPct:NaN };
+  }
+  const gap = marketValue - bidValue;
+  const gapPct = bidValue !== 0 ? gap / bidValue : NaN;
+  if(gap <= 15000 || marketValue <= bidValue * 1.25){
+    return { label:'In lane', tone:'good', gap, gapPct };
+  }
+  if(gap <= 75000 || marketValue <= bidValue * 2.25){
+    return { label:'Stretch', tone:'warn', gap, gapPct };
+  }
+  return { label:'Outside our lane', tone:'bad', gap, gapPct };
 }
 
 function setPlayerValueView(mode, opts){
@@ -1385,13 +1463,8 @@ function computeAll(options){
   const perfArr = [];
   const mpArr = [];
 
-  // Pre-read valuation params once
-  const _starP = clamp(Number(starPctEl.value), 0.5, 0.999);
-  const _mpP = clamp(Number(mpPctEl.value), 0.5, 0.999);
-  const _avgPay = Number(avgPayEl.value);
-  const _minPay = Number(minPayEl.value);
-  const _maxPay = Number(maxPayEl.value);
-  const _starValue = Number(starValueEl.value);
+  const bidSettings = getRecommendedBidSettings();
+  const marketSettings = getValuationModelDefaults('market', league);
 
   // First light pass to get perfArr/mpArr for percentile anchors
   const _tempPerfs = new Float64Array(rows.length);
@@ -1412,15 +1485,10 @@ function computeAll(options){
     if(Number.isFinite(mp)) mpArr.push(mp);
   }
 
-  lastPerfAvg = perfArr.length ? perfArr.reduce((a,b)=>a+b,0) / perfArr.length : NaN;
-  lastPerfStar = percentileInc(perfArr, _starP);
-  const mpPctl = percentileInc(mpArr, _mpP);
-
-  let k = 0;
-  const denom = (lastPerfStar - lastPerfAvg);
-  if(Number.isFinite(_starValue) && Number.isFinite(_avgPay) && _avgPay > 0 && Number.isFinite(denom) && Math.abs(denom) > 1e-9){
-    k = Math.log(_starValue / _avgPay) / denom;
-  }
+  const bidCtx = buildValuationContext(perfArr, mpArr, bidSettings);
+  const marketCtx = buildValuationContext(perfArr, mpArr, marketSettings);
+  lastPerfAvg = bidCtx.perfAvg;
+  lastPerfStar = bidCtx.perfStar;
 
   const _pickValKeys = ['Valuation','Value','ActualValuation','PredictedValue','Pay','Salary'];
   function _pickActualValuation(row){
@@ -1431,7 +1499,7 @@ function computeAll(options){
     return NaN;
   }
 
-  const projectionCtx = { confMultOn, avgPay: _avgPay, minPay: _minPay, maxPay: _maxPay, k, lastPerfAvg, perfPool: perfArr };
+  const projectionCtx = { confMultOn, avgPay: bidCtx.avgPay, minPay: bidCtx.minPay, maxPay: bidCtx.maxPay, k: bidCtx.k, lastPerfAvg, perfPool: perfArr };
 
   // Main single-pass: score + valuation + projection + boss delta
   computed = new Array(rows.length);
@@ -1442,13 +1510,12 @@ function computeAll(options){
     const mp = _tempMps[i];
     const cm = _tempCms[i];
 
-    let pred = NaN, final = NaN, mult = 1;
-    if(Number.isFinite(adjPerf) && Number.isFinite(_avgPay) && _avgPay > 0){
-      pred = _avgPay * Math.exp(k * (adjPerf - lastPerfAvg));
-      pred = clamp(pred, _minPay, _maxPay);
-      mult = getMpMultiplier(mp, mpPctl);
-      final = clamp(pred * mult, _minPay, _maxPay);
-    }
+    const bidQuote = applyValuationContext(adjPerf, mp, bidCtx);
+    const marketQuote = applyValuationContext(adjPerf, mp, marketCtx);
+    const pred = bidQuote.pred;
+    const final = bidQuote.final;
+    const mult = bidQuote.mult;
+    const marketLane = getMarketLaneMeta(final, marketQuote.final);
 
     const bossRank = safeNum(r['Rank']);
     const bossVal = _pickActualValuation(r);
@@ -1458,6 +1525,9 @@ function computeAll(options){
     const out = Object.assign({}, r, {
       PerfScore_calc: adjPerf, PerfScore_raw: rawPerf, ConfMult_calc: cm, MP_num: mp,
       Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuation_calc: final,
+      MarketPressurePredicted_calc: marketQuote.pred, MarketPressureMinMultiplier_calc: marketQuote.mult, MarketPressure_calc: marketQuote.final,
+      MarketGap_calc: marketLane.gap, MarketGapPct_calc: marketLane.gapPct, MarketLaneLabel_calc: marketLane.label, MarketLaneTone_calc: marketLane.tone,
+      BidToPressureRatio_calc: (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN,
       BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
     });
     Object.assign(out, projectionCalcMetrics(out, projectionCtx));
@@ -2797,18 +2867,18 @@ function waitForXLSX(timeoutMs=5000){
 
 function applyLeagueDefaults(force){
   if(league === 'MBB'){
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000){
-      avgPayEl.value = 100000; minPayEl.value = 15000; maxPayEl.value = 1750000;
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 100000){
+      avgPayEl.value = 70000; minPayEl.value = 10000; maxPayEl.value = 300000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000){
-      starValueEl.value = 700000;
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 700000){
+      starValueEl.value = 150000;
     }
   }else{
-    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 35000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 100000){
-      avgPayEl.value = 50000; minPayEl.value = 7500; maxPayEl.value = 750000;
+    if(force || avgPayEl.value === '' || Number(avgPayEl.value) === 50000 || Number(avgPayEl.value) === 70000 || Number(avgPayEl.value) === 100000){
+      avgPayEl.value = 35000; minPayEl.value = 5000; maxPayEl.value = 100000;
     }
-    if(force || starValueEl.value === '' || Number(starValueEl.value) === 70000 || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 700000){
-      starValueEl.value = 275000;
+    if(force || starValueEl.value === '' || Number(starValueEl.value) === 150000 || Number(starValueEl.value) === 275000 || Number(starValueEl.value) === 700000){
+      starValueEl.value = 70000;
     }
   }
 }
@@ -2916,7 +2986,7 @@ function reloadActiveSheet(){
 }
 
 function exportCSV(){
-  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
+  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuation_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {

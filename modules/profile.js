@@ -172,12 +172,18 @@ function openProfile(r){
   document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
   var mScoreLabel = document.getElementById('mScoreLabel');
   var mValLabel = document.getElementById('mValLabel');
+  var mMultLabel = document.getElementById('mMultLabel');
+  var recommendedBid = safeNum(r.ActualValuation_calc);
+  var marketPressure = safeNum(r.MarketPressure_calc);
+  var marketGap = safeNum(r.MarketGap_calc);
+  var laneLabel = (r.MarketLaneLabel_calc || '').toString();
   if (mScoreLabel) mScoreLabel.textContent = 'Production';
-  if (mValLabel) mValLabel.textContent = 'Median value';
+  if (mValLabel) mValLabel.textContent = 'Recommended bid';
+  if (mMultLabel) mMultLabel.textContent = 'Market pressure';
   mScore.textContent = Number.isFinite(r.Score) ? r.Score.toFixed(2) : '—';
   mFit.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '—';
-  mVal.textContent = profileDisplayMoney(safeNum(r.ProjectionMedianValue_calc) ?? r.ActualValuation_calc);
-  mMult.textContent = Number.isFinite(r.MinMultiplier_calc) ? r.MinMultiplier_calc.toFixed(2) : '—';
+  mVal.textContent = Number.isFinite(recommendedBid) ? profileDisplayMoney(recommendedBid) : '—';
+  mMult.textContent = Number.isFinite(marketPressure) ? profileDisplayMoney(marketPressure) : '—';
 
   const mConfMultRow = document.getElementById('mConfMultRow');
   const cm = safeNum(r.ConfMult_calc);
@@ -249,19 +255,27 @@ function openProfile(r){
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
   const projectionNote = (r.ProjectionReasonSummary_calc || '').toString();
   const metaBlocks = [];
+  if (Number.isFinite(marketPressure) && laneLabel) {
+    const laneBits = [`Lane: <b>${laneLabel}</b>`];
+    if (Number.isFinite(marketGap)) laneBits.push(`gap to pressure: <b>${profileDisplayMoney(marketGap)}</b>`);
+    if (Number.isFinite(r.MinMultiplier_calc)) laneBits.push(`minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b>`);
+    metaBlocks.push(`<div class="muted">${laneBits.join(' • ')}</div>`);
+  } else if (Number.isFinite(r.MinMultiplier_calc)) {
+    metaBlocks.push(`<div class="muted">Minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b></div>`);
+  }
   if (bossLine) metaBlocks.push(`<div class="muted">${bossLine}</div>`);
   if (profileIsGuestDemo()) {
     metaBlocks.push(`
       <div class="muted">
-        Demo mode keeps the player profile and decision outputs visible, but the exact valuation curve, weighting recipe, and shot-detail internals stay limited to approved staff accounts.
+        Demo mode keeps the player profile and decision outputs visible, but the exact valuation curves, weighting recipe, and shot-detail internals stay limited to approved staff accounts.
       </div>
     `);
   } else {
     metaBlocks.push(`
       <div class="muted">
-        Star anchor: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
+        Recommended bid uses your editable curve: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
         predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
-        More starValue means a steeper curve (bigger top-end).
+        Market pressure is a separate fixed national curve for context.
       </div>
     `);
   }
@@ -274,6 +288,7 @@ function openProfile(r){
 
   const exclude = new Set([
     'PerfScore_calc','PredictedValue_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
+    'MarketPressurePredicted_calc','MarketPressureMinMultiplier_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','MarketLaneTone_calc','BidToPressureRatio_calc',
     'ProjectionGames_calc','ProjectionMinutesSample_calc','ProjectionPriorSeasons_calc','ProjectionPerf_calc',
     'ProjectionHealthyValue_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc',
     'ProjectionConfidence_calc','ProjectionConfidenceLabel_calc','ProjectionConfidenceTone_calc',

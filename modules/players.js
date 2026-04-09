@@ -21,7 +21,8 @@ const LIST_COLS = [
   {key:'MP', label:'MP'},
   {key:'Score', label:'Perf'},
   {key:'FitScore_calc', label:'Fit'},
-  {key:'ActualValuation_calc', label:'Model $'},
+  {key:'ActualValuation_calc', label:'Bid $'},
+  {key:'MarketPressure_calc', label:'Pressure $', productionOnly:true},
   {key:'_draft_prob', label:'Draft'},
 ];
 
@@ -40,7 +41,7 @@ function playerBoardSortKey(key){
 function playerBoardColLabel(col){
   if(col.key === 'Score') return playerValueView === 'projection' ? 'Projection' : 'Production';
   if(col.key === 'ActualValuation_calc'){
-    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()) return playerValueView === 'projection' ? 'Median band' : 'Value band';
+    if(typeof demoIsGuestMode === 'function' && demoIsGuestMode()) return playerValueView === 'projection' ? 'Median band' : 'Bid band';
     return playerValueView === 'projection' ? 'Median $' : col.label;
   }
   return col.label;
@@ -95,6 +96,7 @@ function renderPlayersPage(){
   const colsToShow = LIST_COLS.filter(c => {
     if(c.key === '_opp_add') return typeof oppAddPlayer !== 'undefined';
     if(c.key === '_draft_prob') return typeof league !== 'undefined' && league === 'MBB' && typeof draftBadgeHtml === 'function';
+    if(c.productionOnly) return playerValueView !== 'projection';
     if(c.wbbOnly) return typeof league !== 'undefined' && league === 'WBB';
     return true;
   });
@@ -107,7 +109,7 @@ function renderPlayersPage(){
       if(c.key === 'Score') th.classList.add('playersPerfHead');
       th.addEventListener('click', ()=>{
         if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
-        else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
+        else { sort.key = c.key; sort.dir = (c.key === 'ActualValuation_calc' || c.key === 'MarketPressure_calc' || c.key === 'Score' || c.key === 'FitScore_calc') ? 'desc' : 'asc'; }
         filteredData = sortData(filteredData);
         currentPage = 0;
         renderPlayersPage();
@@ -227,6 +229,15 @@ function renderPlayersPage(){
             ? playersDisplayMoney(modelValue)
             : '\u2014';
         }
+      }else if(c.key === 'MarketPressure_calc'){
+        const pressureValue = safeNum(r.MarketPressure_calc);
+        const laneLabel = (r.MarketLaneLabel_calc || '').toString();
+        const laneTone = /^(good|warn|bad|neutral)$/.test((r.MarketLaneTone_calc || '').toString()) ? (r.MarketLaneTone_calc || 'neutral') : 'neutral';
+        const gapValue = safeNum(r.MarketGap_calc);
+        td.classList.add('playersProjectionValueCell');
+        td.innerHTML = Number.isFinite(pressureValue)
+          ? `<div class="playersProjectionValueMain">${playersDisplayMoney(pressureValue)}</div>${laneLabel ? `<div class="playersProjectionBadges"><span class="playersProjectionBadge playersProjectionBadge--${laneTone}">${laneLabel}</span></div>` : ''}${Number.isFinite(gapValue) && gapValue > 0 ? `<div class="playersProjectionValueSub">+${playersDisplayMoney(gapValue)} vs bid</div>` : ''}`
+          : '\u2014';
       }else if(c.key === '_draft_prob'){
         if(typeof draftBadgeHtml === 'function'){
           td.innerHTML = draftBadgeHtml(r);
