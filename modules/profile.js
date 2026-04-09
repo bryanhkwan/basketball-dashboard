@@ -175,9 +175,13 @@ function openProfile(r){
   var mMultLabel = document.getElementById('mMultLabel');
   var recommendedBid = safeNum(r.ActualValuation_calc);
   var baseBid = safeNum(r.ActualValuationBase_calc);
+  var curveBid = safeNum(r.ActualValuationCurve_calc);
   var marketPressure = safeNum(r.MarketPressure_calc);
   var marketGap = safeNum(r.MarketGap_calc);
   var laneLabel = (r.MarketLaneLabel_calc || '').toString();
+  var translationLabel = (r.TranslationRiskLabel_calc || '').toString();
+  var translationLevel = (r.TranslationRiskLevel_calc || '').toString();
+  var translationReasons = (r.TranslationRiskReasons_calc || '').toString().trim();
   var scoutAdjustLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
   var scoutAdjustNote = (r.ScoutAdjustmentNote_calc || r.ProjectionScoutNote_calc || '').toString().trim();
   if (mScoreLabel) mScoreLabel.textContent = 'Production';
@@ -258,9 +262,17 @@ function openProfile(r){
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
   const projectionNote = (r.ProjectionReasonSummary_calc || '').toString();
   const metaBlocks = [];
+  if (translationLabel) {
+    const translationBits = [`Auto translation: <b>${translationLevel || translationLabel}</b>`];
+    if (Number.isFinite(curveBid) && Number.isFinite(baseBid) && Math.abs(curveBid - baseBid) > 1) {
+      translationBits.push(`curve base <b>${profileDisplayMoney(curveBid)}</b>`);
+      translationBits.push(`auto base <b>${profileDisplayMoney(baseBid)}</b>`);
+    }
+    metaBlocks.push(`<div class="muted">${translationBits.join(' • ')}</div>`);
+  }
   if (scoutAdjustLabel) {
     const scoutBits = [`${scoutAdjustLabel}`];
-    if (Number.isFinite(baseBid)) scoutBits.push(`model base <b>${profileDisplayMoney(baseBid)}</b>`);
+    if (Number.isFinite(baseBid)) scoutBits.push(`pre-scout base <b>${profileDisplayMoney(baseBid)}</b>`);
     metaBlocks.push(`<div class="muted">${scoutBits.join(' • ')}</div>`);
   }
   if (Number.isFinite(marketPressure) && laneLabel) {
@@ -290,6 +302,9 @@ function openProfile(r){
   if (projectionNote) {
     metaBlocks.push(`<div class="muted">Projection note: <b>${projectionNote}</b>.</div>`);
   }
+  if (translationReasons) {
+    metaBlocks.push(`<div class="muted">Auto read: <b>${translationReasons}</b>.</div>`);
+  }
   if (scoutAdjustNote) {
     metaBlocks.push(`<div class="muted">Scout note: <b>${scoutAdjustNote}</b>.</div>`);
   }
@@ -298,8 +313,9 @@ function openProfile(r){
   renderProjectionDetails(r);
 
   const exclude = new Set([
-    'PerfScore_calc','PredictedValue_calc','ActualValuationBase_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
+    'PerfScore_calc','PredictedValue_calc','ActualValuationCurve_calc','ActualValuationBase_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
     'MarketPressurePredicted_calc','MarketPressureMinMultiplier_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','MarketLaneTone_calc','BidToPressureRatio_calc',
+    'TranslationRiskPct_calc','TranslationRiskMult_calc','TranslationRiskLabel_calc','TranslationRiskLevel_calc','TranslationRiskTone_calc','TranslationRiskReasons_calc','TranslationRiskSource_calc',
     'ScoutAdjustmentPct_calc','ScoutAdjustmentMult_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentTone_calc','ScoutAdjustmentNote_calc',
     'ProjectionGames_calc','ProjectionMinutesSample_calc','ProjectionPriorSeasons_calc','ProjectionPerf_calc',
     'ProjectionHealthyValue_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc',

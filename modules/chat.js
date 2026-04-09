@@ -241,6 +241,7 @@
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null,
       value:formatChatMoney(r.ActualValuation_calc), marketPressure:formatChatMoney(r.MarketPressure_calc), marketLane:r.MarketLaneLabel_calc||'',
+      translationRisk:r.TranslationRiskLevel_calc||'', translationAdj:r.TranslationRiskLabel_calc||'',
       ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
       rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
       bpg:r.BPG!=null?+Number(r.BPG).toFixed(1):null, bpm:r.BPM!=null?+Number(r.BPM).toFixed(1):null,

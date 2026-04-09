@@ -226,13 +226,30 @@ function renderPlayersPage(){
         } else {
           const modelValue = safeNum(r.ActualValuation_calc);
           const baseValue = safeNum(r.ActualValuationBase_calc);
+          const curveValue = safeNum(r.ActualValuationCurve_calc);
+          const translationLabel = (r.TranslationRiskLabel_calc || '').toString();
+          const translationTone = /^(good|warn|bad|neutral)$/.test((r.TranslationRiskTone_calc || '').toString()) ? (r.TranslationRiskTone_calc || 'neutral') : 'neutral';
+          const translationReasons = (r.TranslationRiskReasons_calc || '').toString().trim();
           const scoutLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
           const scoutTone = /^(good|warn|bad|neutral)$/.test((r.ScoutAdjustmentTone_calc || '').toString()) ? (r.ScoutAdjustmentTone_calc || 'neutral') : 'neutral';
+          const scoutNote = (r.ScoutAdjustmentNote_calc || '').toString().trim();
           if(Number.isFinite(modelValue)){
             td.classList.add('playersProjectionValueCell');
-            td.innerHTML = `<div class="playersProjectionValueMain">${playersDisplayMoney(modelValue)}</div>${scoutLabel ? `<div class="playersProjectionBadges"><span class="playersProjectionBadge playersProjectionBadge--${scoutTone}">${scoutLabel}</span></div>` : ''}${Number.isFinite(baseValue) && scoutLabel ? `<div class="playersProjectionValueSub">Model base ${playersDisplayMoney(baseValue)}</div>` : ''}`;
+            const badges = [];
+            const subBits = [];
+            if(translationLabel) badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${translationTone}">${translationLabel}</span>`);
+            if(scoutLabel) badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${scoutTone}">${scoutLabel}</span>`);
+            if(translationLabel && Number.isFinite(curveValue) && (!Number.isFinite(baseValue) || Math.abs(curveValue - baseValue) > 1)){
+              subBits.push(`Curve ${playersDisplayMoney(curveValue)}`);
+            }
+            if(scoutLabel && Number.isFinite(baseValue) && Math.abs(modelValue - baseValue) > 1){
+              subBits.push(`Pre-scout ${playersDisplayMoney(baseValue)}`);
+            }
+            td.innerHTML = `<div class="playersProjectionValueMain">${playersDisplayMoney(modelValue)}</div>${badges.length ? `<div class="playersProjectionBadges">${badges.join('')}</div>` : ''}${subBits.length ? `<div class="playersProjectionValueSub">${subBits.join(' • ')}</div>` : ''}`;
+            td.title = [translationReasons, scoutNote].filter(Boolean).join(' | ');
           } else {
             td.textContent = '\u2014';
+            td.title = '';
           }
         }
       }else if(c.key === 'MarketPressure_calc'){

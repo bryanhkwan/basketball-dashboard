@@ -77,6 +77,11 @@ var _leagueRowsCache = {
 };
 var _ratingsCache = {};     // keyed "LEAGUE:season" -> team ratings array
 var _ratingsLoads = {};     // keyed "LEAGUE:season" -> active promise
+var _translationRiskRichCache = {
+  MBB: { season: '', ready: false, map: {} },
+  WBB: { season: '', ready: false, map: {} },
+};
+var _translationRiskRichLoads = {};
 var _teamListRefreshTimer = null;
 var _valueLabDataTimer = null;
 var _siblingComputeTimer = null;
@@ -193,6 +198,9 @@ function _dataResetWorkbookShell(season){
   tbAllComputed = {};
   if(typeof _cachedAllPlayers !== 'undefined') _cachedAllPlayers = null;
   _dataResetLeagueRowsCache();
+  _translationRiskRichCache.MBB = { season: seasonKey, ready: false, map: {} };
+  _translationRiskRichCache.WBB = { season: seasonKey, ready: false, map: {} };
+  _translationRiskRichLoads = {};
 }
 
 function _isLeagueDataLoaded(targetLeague, season){
@@ -650,6 +658,8 @@ var VALUATION_MODEL_DEFAULTS = {
   }
 };
 
+var TRANSLATION_RISK_LIMITS = { minAdj:-0.18, maxAdj:0.02 };
+
 function getValuationModelDefaults(modelKey, leagueName){
   const lg = leagueName === 'WBB' ? 'WBB' : 'MBB';
   const src = (((VALUATION_MODEL_DEFAULTS[modelKey] || {})[lg]) || {});
@@ -809,6 +819,388 @@ function applyScoutAdjustment(value, boost, minPay, maxPay){
   if(!Number.isFinite(value)) return NaN;
   if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.001) return clamp(value, minPay, maxPay);
   return clamp(value * (1 + numeric), minPay, maxPay);
+}
+
+function translationRiskLabel(value){
+  const numeric = safeNum(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.005) return '';
+  const pct = Math.round(Math.abs(numeric) * 100);
+  return numeric < 0 ? ('Auto fade -' + pct + '%') : ('Auto boost +' + pct + '%');
+}
+
+function translationRiskLevel(value){
+  const numeric = safeNum(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.005) return '';
+  if(numeric >= 0.02) return 'Clean translator';
+  if(numeric > 0) return 'Quietly scalable';
+  if(numeric <= -0.13) return 'High stat-padding risk';
+  if(numeric <= -0.08) return 'Moderate stat-padding risk';
+  return 'Mild translation risk';
+}
+
+function translationRiskTone(value){
+  const numeric = safeNum(value);
+  if(!Number.isFinite(numeric) || Math.abs(numeric) < 0.005) return 'neutral';
+  if(numeric >= 0.015) return 'good';
+  if(numeric > 0) return 'neutral';
+  if(numeric <= -0.13) return 'bad';
+  return 'warn';
+}
+
+function translationPct(row, stat){
+  if(!row || !stat) return NaN;
+  const cached = row['_pct_' + stat];
+  if(Number.isFinite(cached)) return cached;
+  const value = safeNum(row[stat]);
+  if(value === null) return NaN;
+  const pct = statPercentile(stat, value);
+  return Number.isFinite(pct) ? pct : NaN;
+}
+
+function translationMean(values){
+  let sum = 0;
+  let count = 0;
+  (values || []).forEach(value => {
+    if(!Number.isFinite(value)) return;
+    sum += value;
+    count += 1;
+  });
+  return count ? (sum / count) : NaN;
+}
+
+function translationPushReason(list, reason){
+  if(!list || !reason || list.indexOf(reason) >= 0) return;
+  list.push(reason);
+}
+
+function translationRiskLookupKey(rowOrName, teamName){
+  const playerName = typeof rowOrName === 'object'
+    ? (rowOrName.Player || rowOrName.Name || '')
+    : (rowOrName || '');
+  const team = typeof rowOrName === 'object'
+    ? (rowOrName.Team || rowOrName.team || teamName || '')
+    : (teamName || '');
+  return normalizeName(playerName) + '||' + normalizeName(team);
+}
+
+function translationRiskRichState(targetLeague, season){
+  const leagueKey = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  const seasonKey = _dataSeasonKey(season);
+  const state = _translationRiskRichCache[leagueKey] || (_translationRiskRichCache[leagueKey] = { season: seasonKey, ready: false, map: {} });
+  if(state.season !== seasonKey){
+    state.season = seasonKey;
+    state.ready = false;
+    state.map = {};
+  }
+  return state;
+}
+
+function translationRiskRichEntry(row, targetLeague, season){
+  const state = translationRiskRichState(targetLeague, season);
+  if(!state.ready || !state.map) return null;
+  const key = translationRiskLookupKey(row);
+  return key && state.map[key] ? state.map[key] : null;
+}
+
+function translationRiskCombineReasons(){
+  const seen = {};
+  const out = [];
+  for(let i = 0; i < arguments.length; i++){
+    const block = (arguments[i] || '').toString().trim();
+    if(!block) continue;
+    block.split('•').map(function(part){ return part.trim(); }).forEach(function(reason){
+      if(!reason) return;
+      const key = reason.toLowerCase();
+      if(seen[key]) return;
+      seen[key] = true;
+      out.push(reason);
+    });
+  }
+  return out.slice(0, 4).join(' • ');
+}
+
+function resolveTranslationRisk(row, targetLeague, season){
+  const local = translationRiskForRow(row);
+  const rich = translationRiskRichEntry(row, targetLeague, season);
+  if(!rich) return local;
+
+  const richDelta = safeNum(rich.delta);
+  const localAdjust = safeNum(local && local.adjust);
+  const combined = clamp(
+    (Number.isFinite(localAdjust) ? localAdjust : 0) + (Number.isFinite(richDelta) ? richDelta : 0),
+    TRANSLATION_RISK_LIMITS.minAdj,
+    TRANSLATION_RISK_LIMITS.maxAdj
+  );
+  const adjust = Math.abs(combined) < 0.005 ? 0 : combined;
+  return {
+    adjust: adjust,
+    mult: 1 + adjust,
+    label: translationRiskLabel(adjust),
+    level: translationRiskLevel(adjust),
+    tone: translationRiskTone(adjust),
+    reasons: translationRiskCombineReasons(local && local.reasons, rich && rich.reasons),
+    source: Number.isFinite(richDelta) ? 'rich+lite' : (local && local.source) || 'lite',
+  };
+}
+
+function buildPoolTranslationContexts(pool, targetLeague){
+  const leagueKey = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  const settings = leagueKey === league
+    ? getRecommendedBidSettings()
+    : getValuationModelDefaults('recommended', leagueKey);
+  const perfArr = [];
+  const mpArr = [];
+  (pool || []).forEach(function(row){
+    const perf = safeNum(row && row.PerfScore_calc);
+    const mp = safeNum(row && (row.MP_num != null ? row.MP_num : row.MP));
+    if(Number.isFinite(perf)) perfArr.push(perf);
+    if(Number.isFinite(mp)) mpArr.push(mp);
+  });
+  const bidCtx = buildValuationContext(perfArr, mpArr, settings);
+  return {
+    bidCtx: bidCtx,
+    projectionCtx: {
+      confMultOn: !!(confMultToggleEl && confMultToggleEl.checked && (pool || []).some(function(row){
+        return !!String((row && (row.Conference || row.Conf || '')) || '').trim();
+      })),
+      avgPay: bidCtx.avgPay,
+      minPay: bidCtx.minPay,
+      maxPay: bidCtx.maxPay,
+      k: bidCtx.k,
+      lastPerfAvg: bidCtx.perfAvg,
+      perfPool: perfArr,
+    },
+  };
+}
+
+function applyResolvedTranslationRiskToRow(row, bidCtx, projectionCtx, targetLeague, season){
+  if(!row) return row;
+  const translation = resolveTranslationRisk(row, targetLeague, season);
+  const curveBase = safeNum(row.ActualValuationCurve_calc != null ? row.ActualValuationCurve_calc : row.ActualValuationBase_calc);
+  const manualBoost = projectionNormalizeFilmBoost(row.ScoutAdjustmentPct_calc);
+  const autoBase = applyScoutAdjustment(curveBase, translation.adjust, bidCtx.minPay, bidCtx.maxPay);
+  const finalValue = applyScoutAdjustment(autoBase, manualBoost, bidCtx.minPay, bidCtx.maxPay);
+  const marketValue = safeNum(row.MarketPressure_calc);
+  const marketLane = getMarketLaneMeta(finalValue, marketValue);
+  const bossVal = safeNum(row.ActualValuation);
+  const delta = (Number.isFinite(bossVal) && Number.isFinite(finalValue)) ? (finalValue - bossVal) : NaN;
+  const deltaPct = (Number.isFinite(delta) && bossVal !== 0) ? (delta / bossVal) : NaN;
+
+  row.ActualValuationBase_calc = autoBase;
+  row.ActualValuation_calc = finalValue;
+  row.TranslationRiskPct_calc = translation.adjust;
+  row.TranslationRiskMult_calc = translation.mult;
+  row.TranslationRiskLabel_calc = translation.label;
+  row.TranslationRiskLevel_calc = translation.level;
+  row.TranslationRiskTone_calc = translation.tone;
+  row.TranslationRiskReasons_calc = translation.reasons;
+  row.TranslationRiskSource_calc = translation.source;
+  row.MarketGap_calc = marketLane.gap;
+  row.MarketGapPct_calc = marketLane.gapPct;
+  row.MarketLaneLabel_calc = marketLane.label;
+  row.MarketLaneTone_calc = marketLane.tone;
+  row.BidToPressureRatio_calc = (Number.isFinite(finalValue) && Number.isFinite(marketValue) && marketValue !== 0) ? (finalValue / marketValue) : NaN;
+  row.ValueDelta_calc = delta;
+  row.ValueDeltaPct_calc = deltaPct;
+  Object.assign(row, projectionCalcMetrics(row, projectionCtx, projectionBuildInputs(row, projectionCtx)));
+  return row;
+}
+
+function refreshLoadedTranslationRisk(targetLeague, season){
+  const leagueKey = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  if(leagueKey !== league) return false;
+  const seasonKey = _dataSeasonKey(season || _currentDataSeason);
+  let changed = false;
+
+  function refreshPool(pool){
+    if(!Array.isArray(pool) || !pool.length) return;
+    const ctx = buildPoolTranslationContexts(pool, leagueKey);
+    pool.forEach(function(row){ applyResolvedTranslationRiskToRow(row, ctx.bidCtx, ctx.projectionCtx, leagueKey, seasonKey); });
+    changed = true;
+  }
+
+  refreshPool(computed);
+  refreshPool(tbAllComputed[leagueKey + '_Guards']);
+  refreshPool(tbAllComputed[leagueKey + '_Bigs']);
+
+  if(!changed) return false;
+  if(typeof renderPlayers === 'function') renderPlayers();
+  if(window._dashboardCurrentPageId === 'pageTeamBuilder') {
+    scheduleNonCriticalWork(function(){
+      if(typeof tbRefresh === 'function') tbRefresh();
+      if(typeof oppRefresh === 'function') oppRefresh();
+    }, 140);
+  }
+  if(typeof tbGetAllPlayers === 'function' && typeof openProfile === 'function' && typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer){
+    const key = translationRiskLookupKey(_currentProfilePlayer);
+    const updated = (tbGetAllPlayers(league) || tbGetAllPlayers() || []).find(function(candidate){
+      return translationRiskLookupKey(candidate) === key;
+    });
+    if(updated) openProfile(updated);
+  }
+  _scheduleValueLabDataChange(180);
+  return true;
+}
+
+async function loadTranslationRiskRichData(year, targetLeague, opts){
+  opts = opts && typeof opts === 'object' ? opts : {};
+  const leagueKey = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  const seasonKey = _dataSeasonKey(year);
+  const state = translationRiskRichState(leagueKey, seasonKey);
+  if(state.ready && state.map && Object.keys(state.map).length) return { loaded: true, count: Object.keys(state.map).length, warning: '' };
+
+  const cacheKey = leagueKey + ':' + seasonKey;
+  if(_translationRiskRichLoads[cacheKey]) return _translationRiskRichLoads[cacheKey];
+
+  _translationRiskRichLoads[cacheKey] = (async function(){
+    try {
+      const limit = Number.isFinite(opts.limit)
+        ? (leagueKey === 'WBB'
+            ? Math.max(80, Math.min(320, Math.round(opts.limit)))
+            : Math.max(120, Math.min(1200, Math.round(opts.limit))))
+        : (leagueKey === 'WBB' ? 140 : 900);
+      const endpoint = WORKER_URL + '/api/cbdata/translationrisk?season=' + encodeURIComponent(seasonKey)
+        + '&league=' + encodeURIComponent(leagueKey)
+        + '&limit=' + encodeURIComponent(limit);
+      const res = await fetch(endpoint);
+      const data = await res.json().catch(function(){ return {}; });
+      if(!res.ok){
+        throw new Error((data && (data.error || data.message)) || ('Translation risk load failed (HTTP ' + res.status + ')'));
+      }
+      const nextMap = {};
+      const items = Array.isArray(data && data.items) ? data.items : [];
+      items.forEach(function(item){
+        const key = item && item.key ? item.key : translationRiskLookupKey(item && item.playerName, item && item.team);
+        if(!key) return;
+        nextMap[key] = {
+          delta: safeNum(item.delta),
+          reasons: (item.reasons || '').toString().trim(),
+          source: (item.source || 'rich').toString(),
+        };
+      });
+      state.season = seasonKey;
+      state.ready = true;
+      state.map = nextMap;
+
+      if(leagueKey === league) {
+        if(opts.background) scheduleNonCriticalWork(function(){ refreshLoadedTranslationRisk(leagueKey, seasonKey); }, 120);
+        else refreshLoadedTranslationRisk(leagueKey, seasonKey);
+      }
+      return { loaded: true, count: items.length, warning: '' };
+    } catch (err) {
+      console.warn('loadTranslationRiskRichData failed:', err);
+      state.season = seasonKey;
+      state.ready = false;
+      return { loaded: false, count: 0, warning: String(err && err.message ? err.message : err) };
+    } finally {
+      delete _translationRiskRichLoads[cacheKey];
+    }
+  })();
+
+  return _translationRiskRichLoads[cacheKey];
+}
+
+function translationRiskForRow(row){
+  const posGroup = bucketPosition(row.Pos || row.Position) === 'Guards' ? 'guard' : 'big';
+  const ppg = translationPct(row, 'PPG');
+  const bpm = translationPct(row, 'BPM');
+  const ws = translationPct(row, 'WS/40');
+  const efg = translationPct(row, 'eFG%');
+  const ts = translationPct(row, 'TS%');
+  const usg = translationPct(row, 'USG%');
+  const threeVol = translationPct(row, '3PA/G');
+  const ft = translationPct(row, 'FT%');
+  const ato = translationPct(row, 'A/TO');
+  const apg = translationPct(row, 'APG');
+  const drtg = translationPct(row, 'DRtg');
+  const twoPct = translationPct(row, '2P%');
+  const orb = translationPct(row, 'OR%');
+  const rpg = translationPct(row, 'RPG');
+  const bpg = translationPct(row, 'BPG');
+  const projectionMemo = row && row._projectionMemo;
+  const confidence = projectionMemo && Number.isFinite(projectionMemo.confidence)
+    ? projectionMemo.confidence
+    : safeNum(row && row.ProjectionConfidence_calc);
+
+  let penalty = 0;
+  let boost = 0;
+  const penaltyReasons = [];
+  const boostReasons = [];
+
+  const impactCore = posGroup === 'guard'
+    ? translationMean([bpm, ws, drtg, ato, apg])
+    : translationMean([bpm, ws, drtg, orb, rpg, bpg]);
+  const impactGap = Number.isFinite(ppg) && Number.isFinite(impactCore) ? (ppg - impactCore) : NaN;
+  if(Number.isFinite(impactGap) && impactGap > 0.24){
+    penalty += 0.03 + clamp((impactGap - 0.24) / 0.36, 0, 1) * 0.05;
+    translationPushReason(penaltyReasons, 'scoring outruns all-around impact');
+  }
+
+  const efficiencyCore = translationMean([efg, ts, ato]);
+  const usageGap = Number.isFinite(usg) && Number.isFinite(efficiencyCore) ? (usg - efficiencyCore) : NaN;
+  if(Number.isFinite(usageGap) && usageGap > 0.18){
+    penalty += 0.02 + clamp((usageGap - 0.18) / 0.34, 0, 1) * 0.04;
+    translationPushReason(penaltyReasons, 'usage load beats efficiency');
+  }
+
+  if(posGroup === 'guard'){
+    const guardSkillCore = translationMean([threeVol, ft, efg, ato]);
+    const guardGap = Number.isFinite(ppg) && Number.isFinite(guardSkillCore) ? (ppg - guardSkillCore) : NaN;
+    if(Number.isFinite(guardGap) && guardGap > 0.15){
+      penalty += 0.02 + clamp((guardGap - 0.15) / 0.3, 0, 1) * 0.03;
+      translationPushReason(penaltyReasons, 'guard scoring profile lacks clean spacer or foul-pressure signals');
+    }
+
+    const cleanGuard = translationMean([bpm, ws, efg, threeVol, ft, ato]);
+    const cleanGuardReady = Number.isFinite(cleanGuard)
+      && cleanGuard >= 0.78
+      && Number.isFinite(threeVol) && threeVol >= 0.82
+      && Number.isFinite(ft) && ft >= 0.72
+      && Number.isFinite(efg) && efg >= 0.74
+      && Number.isFinite(ato) && ato >= 0.72;
+    if(cleanGuardReady && (!Number.isFinite(usg) || usg <= 0.74)){
+      boost += 0.008 + clamp((cleanGuard - 0.78) / 0.16, 0, 1) * 0.012;
+      translationPushReason(boostReasons, 'spacing and decision profile should scale');
+    }
+  }else{
+    const bigTravelCore = translationMean([twoPct, efg, orb, rpg, bpg]);
+    const bigGap = Number.isFinite(ppg) && Number.isFinite(bigTravelCore) ? (ppg - bigTravelCore) : NaN;
+    if(Number.isFinite(bigGap) && bigGap > 0.18){
+      penalty += 0.02 + clamp((bigGap - 0.18) / 0.32, 0, 1) * 0.03;
+      translationPushReason(penaltyReasons, 'big scoring profile lacks finishing or anchor signals');
+    }
+
+    const cleanBig = translationMean([bpm, ws, efg, twoPct, orb, bpg]);
+    const cleanBigReady = Number.isFinite(cleanBig)
+      && cleanBig >= 0.78
+      && Number.isFinite(efg) && efg >= 0.75
+      && Number.isFinite(twoPct) && twoPct >= 0.72
+      && ((Number.isFinite(orb) && orb >= 0.62) || (Number.isFinite(bpg) && bpg >= 0.62));
+    if(cleanBigReady && (!Number.isFinite(usg) || usg <= 0.72)){
+      boost += 0.008 + clamp((cleanBig - 0.78) / 0.16, 0, 1) * 0.012;
+      translationPushReason(boostReasons, 'efficient frontcourt impact should carry up');
+    }
+  }
+
+  const damp = Number.isFinite(confidence) ? clamp(0.72 + confidence * 0.28, 0.72, 1) : 0.84;
+  penalty *= damp;
+  boost *= damp;
+
+  let adjust = clamp(boost - penalty, TRANSLATION_RISK_LIMITS.minAdj, TRANSLATION_RISK_LIMITS.maxAdj);
+  if(Math.abs(adjust) < 0.005) adjust = 0;
+
+  const reasons = adjust < 0
+    ? penaltyReasons.slice(0, 3)
+    : (adjust > 0 ? boostReasons.slice(0, 3) : []);
+  return {
+    adjust,
+    mult: 1 + adjust,
+    label: translationRiskLabel(adjust),
+    level: translationRiskLevel(adjust),
+    tone: translationRiskTone(adjust),
+    reasons: reasons.join(' • '),
+    source: 'lite',
+  };
 }
 
 function projectionNormalizeMedicalFlag(value){
@@ -1188,7 +1580,7 @@ function projectionTalentLabel(healthyPerf, perfPool){
   return 'Developmental';
 }
 
-function projectionCalcMetrics(row, ctx){
+function projectionBuildInputs(row, ctx){
   const games = projectionGetGamesPlayed(row);
   const totalMinutes = projectionGetTotalMinutes(row);
   const priorEntries = projectionGetPriorCareerEntries(row);
@@ -1198,6 +1590,20 @@ function projectionCalcMetrics(row, ctx){
   const manualBoost = projectionGetManualBoost(row);
   const manualMedicalFlag = projectionGetManualMedicalFlag(row);
   const manualScoutNote = projectionGetManualScoutNote(row);
+  return { games, totalMinutes, priorEntries, priorPerf, confidence, medicalRisk, manualBoost, manualMedicalFlag, manualScoutNote };
+}
+
+function projectionCalcMetrics(row, ctx, memo){
+  memo = memo && typeof memo === 'object' ? memo : projectionBuildInputs(row, ctx);
+  const games = memo.games;
+  const totalMinutes = memo.totalMinutes;
+  const priorEntries = memo.priorEntries || [];
+  const priorPerf = memo.priorPerf;
+  const confidence = memo.confidence;
+  const medicalRisk = memo.medicalRisk || { value: 0.14, label: 'Low', source: 'model', detail: '' };
+  const manualBoost = memo.manualBoost;
+  const manualMedicalFlag = memo.manualMedicalFlag;
+  const manualScoutNote = memo.manualScoutNote;
   const productionPerf = safeNum(row.PerfScore_calc);
   const productionValue = safeNum(row.ActualValuationBase_calc != null ? row.ActualValuationBase_calc : row.ActualValuation_calc);
 
@@ -1542,8 +1948,8 @@ function computeAll(options){
     const bidQuote = applyValuationContext(adjPerf, mp, bidCtx);
     const marketQuote = applyValuationContext(adjPerf, mp, marketCtx);
     const pred = bidQuote.pred;
-    const baseFinal = bidQuote.final;
-    const final = applyScoutAdjustment(baseFinal, manualBoost, bidCtx.minPay, bidCtx.maxPay);
+    const curveBase = bidQuote.final;
+    const final = applyScoutAdjustment(curveBase, manualBoost, bidCtx.minPay, bidCtx.maxPay);
     const mult = bidQuote.mult;
     const marketLane = getMarketLaneMeta(final, marketQuote.final);
 
@@ -1554,14 +1960,15 @@ function computeAll(options){
 
     const out = Object.assign({}, r, {
       PerfScore_calc: adjPerf, PerfScore_raw: rawPerf, ConfMult_calc: cm, MP_num: mp,
-      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuationBase_calc: baseFinal, ActualValuation_calc: final,
+      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuationCurve_calc: curveBase, ActualValuationBase_calc: curveBase, ActualValuation_calc: final,
       MarketPressurePredicted_calc: marketQuote.pred, MarketPressureMinMultiplier_calc: marketQuote.mult, MarketPressure_calc: marketQuote.final,
       MarketGap_calc: marketLane.gap, MarketGapPct_calc: marketLane.gapPct, MarketLaneLabel_calc: marketLane.label, MarketLaneTone_calc: marketLane.tone,
+      TranslationRiskPct_calc: 0, TranslationRiskMult_calc: 1, TranslationRiskLabel_calc: '', TranslationRiskLevel_calc: '', TranslationRiskTone_calc: 'neutral', TranslationRiskReasons_calc: '', TranslationRiskSource_calc: 'lite',
       ScoutAdjustmentPct_calc: manualBoost, ScoutAdjustmentMult_calc: (Number.isFinite(manualBoost) ? (1 + manualBoost) : 1), ScoutAdjustmentLabel_calc: manualBoostLabel, ScoutAdjustmentTone_calc: manualBoostTone, ScoutAdjustmentNote_calc: manualScoutNote,
       BidToPressureRatio_calc: (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN,
       BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
     });
-    Object.assign(out, projectionCalcMetrics(out, projectionCtx));
+    out._projectionMemo = projectionBuildInputs(out, projectionCtx);
     out._searchStr = ((out.Player || '') + ' ' + (out.Team || '') + ' ' + (out.Conference || out.Conf || '') + ' ' + (out.Position || out.Pos || '') + ' ' + (out.Height || '')).toLowerCase();
     computed[i] = out;
   }
@@ -1573,13 +1980,16 @@ function computeAll(options){
   var _pctStats = Object.keys(statDist);
   for(let i = 0; i < computed.length; i++){
     var _r = computed[i];
-    _r.FitScore_calc = fitScoreForRow(_r);
     // Cache percentiles as _pct_<stat> on each player row
     for(var _si = 0; _si < _pctStats.length; _si++){
       var _s = _pctStats[_si];
       var _x = safeNum(_r[_s]);
       _r['_pct_' + _s] = (_x !== null) ? statPercentile(_s, _x) : NaN;
     }
+    _r.FitScore_calc = fitScoreForRow(_r);
+
+    applyResolvedTranslationRiskToRow(_r, bidCtx, projectionCtx, league, _currentDataSeason);
+    delete _r._projectionMemo;
   }
 
   const ranked = computed.slice().sort((a,b)=>{
@@ -1953,6 +2363,11 @@ async function loadAllData(year) {
       }).catch(() => {});
     }, isInitialLoad ? 2000 : 900);
 
+    // Phase 1b (~3.4s): rich translation-risk payload from the worker for the active league.
+    scheduleNonCriticalWork(function(){
+      loadTranslationRiskRichData(year, primaryLeague, { background: true, limit: primaryLeague === 'WBB' ? 140 : 900 }).catch(() => {});
+    }, isInitialLoad ? 3400 : 1500);
+
     // Phase 2 (~5s): secondary league player data so MBB↔WBB switches are warm without crowding startup
     scheduleNonCriticalWork(function(){
       ensureLeagueDataLoaded(secondaryLeague, year, {
@@ -1964,6 +2379,9 @@ async function loadAllData(year) {
           scheduleNonCriticalWork(function(){
             loadTeamRatings(year, secondaryLeague, { applyToGlobals: false }).catch(() => {});
           }, 700);
+          scheduleNonCriticalWork(function(){
+            loadTranslationRiskRichData(year, secondaryLeague, { background: true, limit: secondaryLeague === 'WBB' ? 140 : 900 }).catch(() => {});
+          }, 1400);
         }
       }).catch(() => {});
     }, isInitialLoad ? 5000 : 2600);
@@ -2967,6 +3385,10 @@ function switchLeague(newLeague){
     }).catch(() => {});
   }, 900);
 
+  scheduleNonCriticalWork(function(){
+    loadTranslationRiskRichData(_currentDataSeason, newLeague, { background: true, limit: newLeague === 'WBB' ? 140 : 900 }).catch(() => {});
+  }, 1200);
+
   // Defer conference multiplier table render
   requestAnimationFrame(function(){ if(!_evalPresetsLoaded()) renderConfMultTable(); });
 
@@ -3017,7 +3439,7 @@ function reloadActiveSheet(){
 }
 
 function exportCSV(){
-  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuationBase_calc','ActualValuation_calc','ScoutAdjustmentPct_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentNote_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
+  const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuationCurve_calc','TranslationRiskPct_calc','TranslationRiskLabel_calc','TranslationRiskLevel_calc','TranslationRiskReasons_calc','TranslationRiskSource_calc','ActualValuationBase_calc','ActualValuation_calc','ScoutAdjustmentPct_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentNote_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {
