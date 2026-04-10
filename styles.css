@@ -4476,6 +4476,78 @@ body.helpPanelOpen {
 .valueLabInsightDot { width: 8px; height: 8px; border-radius: 999px; margin-top: 7px; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .10); }
 .valueLabEmpty, .valueLabLoading { min-height: 120px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.7; padding: 10px; border: 1px dashed rgba(255,255,255,.10); border-radius: 12px; background: rgba(255,255,255,.02); }
 .miniStats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE / TOUCH ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 1 ── Page nav: horizontal scroll instead of multi-row wrapping.
+        The base rule has flex-wrap:wrap; this overrides it at ≤640px
+        so the 8 nav buttons stay on a single scrollable row.            */
+@media(max-width:640px){
+  .pageNav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .pageNav::-webkit-scrollbar{display:none}
+  .pageNavBtn{flex-shrink:0;white-space:nowrap}
+}
+
+/* 2 ── Very small screens (≤480px)
+        Hide decorative elements that push up header height so
+        --header-h stays accurate for sticky-nav positioning.            */
+@media(max-width:480px){
+  :root{--header-h:110px;--nav-h:50px}
+  header{padding:12px 14px 10px}
+  h1{font-size:18px}
+  .sub{display:none}
+  .appFocusRow{display:none}
+  .appTag{font-size:9px;padding:4px 8px;letter-spacing:.08em}
+  /* Hide hero asides — redundant on small screens */
+  .opsHeroAside,.portalHeroAside{display:none}
+  .opsHeroTitle,.portalHeroTitle{font-size:24px}
+  /* Compact content spacing */
+  .wrap{padding:10px 12px}
+  .card{padding:12px}
+  .modalHead{padding:12px 14px}
+  .modalBody{padding:14px}
+  .modalTitle{font-size:16px}
+  .modalSub{font-size:11.5px}
+  /* KPI strip: 2-column grid on very narrow screens */
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Nav buttons slightly smaller */
+  .pageNavBtn{padding:8px 11px;font-size:11px}
+  /* Settings drawer close to viewport edges */
+  .playersSettingsDrawer{top:calc(var(--header-h) + var(--nav-h) + 4px);right:6px;bottom:6px;width:calc(100vw - 12px);padding:14px}
+  /* AI chat + Notes: full-width panels, clear of floating toggles */
+  .aiPanel{width:calc(100vw - 20px);right:10px;bottom:76px}
+  .notesPanel{width:calc(100vw - 20px);right:10px;bottom:76px}
+  .aiToggle{bottom:14px;right:14px;width:46px;height:46px}
+  .notesToggle{bottom:14px;right:72px;width:46px;height:46px}
+  /* Dashboard prefs bar */
+  .dashPrefsBar{padding:10px 12px}
+  .dashPrefsBarActions{gap:6px}
+}
+
+/* 3 ── Touch screen: prevent sticky hover states that persist after tap.
+        Restores the element's resting appearance on devices with no
+        pointer (phones, tablets). No layout changes — safe at any size.  */
+@media(hover:none){
+  button:hover{transform:none;background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.08);color:var(--text);box-shadow:none}
+  button.primary:hover{filter:none;box-shadow:0 10px 24px rgba(255,210,0,.16),0 2px 8px rgba(0,0,0,.18)}
+  button.secondary:hover{background:rgba(255,255,255,.03);border-color:var(--line);color:var(--muted);box-shadow:none}
+  .card:hover{transform:none;box-shadow:0 16px 40px rgba(0,0,0,.18),0 4px 12px rgba(0,0,0,.16);border-color:rgba(255,255,255,.07)}
+  .pageNavBtn:hover{transform:none;box-shadow:none}
+  .gapTag:hover{filter:none}
+  .tbAddBtn:hover,.tbRemoveBtn:hover{transform:none}
+}
+
+/* 4 ── Remove 300ms tap delay on all interactive elements.
+        touch-action:manipulation tells the browser to skip the
+        double-tap-zoom wait — no JS needed, zero performance cost.      */
+button,a,.tab,.pageNavBtn,.gapTag,.tbAddBtn,.tbRemoveBtn,.aiPlayerLink,.statLink,.link,.aiQuickBtn{touch-action:manipulation}
+
+/* 5 ── iOS momentum scrolling on all scroll containers.
+        -webkit-overflow-scrolling:touch enables native kinetic scroll
+        on iOS Safari. Has no effect on other platforms.                  */
+.scrollY,.tbRoster,.tbSuggest,.careerTable,.weights,.confScroll,.aiMessages,.notesList,.playersSettingsDrawerBody,.portalReplaceList{-webkit-overflow-scrolling:touch}
 .miniStat { padding:12px 14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.03); }
 .miniStat .label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
 .miniStat .value { margin-top:6px; font-size:18px; font-weight:800; color:var(--text); }
