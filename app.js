@@ -424,4 +424,5 @@ window._app = {
   draftDevelopmentRecs:typeof draftDevelopmentRecs === 'function' ? draftDevelopmentRecs : function(){ return []; },
   draftComparables:    typeof draftComparables === 'function' ? draftComparables : function(){ return []; },
   draftInsights:       typeof draftInsights === 'function' ? draftInsights : function(){ return []; },
+  PlayerDevelopment:   typeof window.PlayerDevelopment !== 'undefined' ? window.PlayerDevelopment : null,
 };

@@ -448,6 +448,9 @@ function openProfile(r){
   renderTeamContext(r);
   renderShootingZones(r);
   renderRecruitingBadge(r);
+  if (window.PlayerDevelopment && typeof window.PlayerDevelopment.renderPanel === 'function') {
+    window.PlayerDevelopment.renderPanel(r);
+  }
   renderScoutReport(r);
   if (typeof renderDraftRadar === 'function') renderDraftRadar(r);
 

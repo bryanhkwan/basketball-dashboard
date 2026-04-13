@@ -4701,3 +4701,25 @@ button,a,.tab,.pageNavBtn,.gapTag,.tbAddBtn,.tbRemoveBtn,.aiPlayerLink,.statLink
 .qs-score{font-size:12px;font-weight:700;color:var(--accent);margin-left:8px;flex:0 0 auto}
 .qs-empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
 .qs-hint{padding:8px 20px;font-size:11px;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);text-align:center;opacity:.7}
+
+/* ── Player Development Plan ─────────────────────────────────────────── */
+.devPlanToolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.devPlanGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.devPlanGrid{grid-template-columns:1fr}}
+.devPlanSubhead{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
+.devPriorityCard{display:flex;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(122,162,255,.06);border:1px solid rgba(255,255,255,.08);margin-bottom:8px}
+.devPriorityRank{flex:0 0 28px;height:28px;border-radius:50%;background:var(--accent);color:#0a0f18;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+.devPriorityTitle{font-weight:600;font-size:13px}
+.devPriorityStats{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.devCheckpoint{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.devCheckpoint:last-child{border-bottom:none}
+.devSimPanel{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.devSimRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.devSimRow label{font-size:12px;color:var(--muted)}
+.devSimRow select{min-width:180px;padding:6px 10px;border-radius:10px;background:rgba(10,18,32,.9);border:1px solid rgba(255,255,255,.12);color:var(--fg)}
+.devSimOut{font-size:12px;line-height:1.55;padding:10px;border-radius:12px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.06)}
+.devCoachNotes{margin-top:12px}
+.devCoachNotes label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.devCoachNotes textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(10,18,32,.85);color:var(--fg);font-family:inherit;font-size:12px;resize:vertical}
+.devAiOut{margin-top:12px;padding:12px;border-radius:12px;background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.2)}
+.devAiMarkdown{font-size:12px;line-height:1.55;color:var(--fg)}

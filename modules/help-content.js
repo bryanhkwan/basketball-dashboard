@@ -22,6 +22,11 @@
           '<b>Esc</b> &mdash; Close modal / overlay'
   };
 
+  var DEVELOPMENT_PLAN_CARD = {
+    title: 'Development Plan (profile)',
+    body: 'Open any player profile to see <b>Development Plan</b>: deterministic priorities from percentiles, checkpoint timeline, an <b>upside simulator</b> (perf score + draft model), optional <b>AI weekly plan</b> from structured data, and <b>Save plan</b> (local + Worker when deployed). AI explains the model output; it does not replace coaching judgment.'
+  };
+
   window.DashboardHelpContent = {
     fallback: {
       title: 'Dashboard Help',
@@ -35,7 +40,8 @@
           title: 'How This Page Works',
           body: 'The drawer summarizes the inputs, outputs, and caveats that matter for the current workflow.'
         },
-        SHORTCUTS_CARD
+        SHORTCUTS_CARD,
+        DEVELOPMENT_PLAN_CARD
       ],
       tourSteps: []
     },
@@ -59,7 +65,8 @@
         {
           title: 'Best Use',
           body: 'Treat this page as the scouting engine: tune the model here, then flow into Profiles, Team Builder, Portal, and Value Lab.'
-        }
+        },
+        DEVELOPMENT_PLAN_CARD
       ],
       tourSteps: withPage('pagePlayers', [
         {

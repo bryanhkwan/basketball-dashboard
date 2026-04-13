@@ -26,6 +26,7 @@ A comprehensive single-page scouting, valuation, and team-building tool for NCAA
 - **Shot Charts**: Three view modes — **Dots** (individual shots), **Hex Map** (hexbin efficiency), and **Zones** (5-zone summary with FG% and FGA per zone, colored by efficiency vs NCAA average).
 - **Period Filtering**: Filter shot charts by All / 1st Half / 2nd Half / OT.
 - **Draft Radar**: Logistic regression model predicting draft probability for both MBB (NBA) and WBB (WNBA), with factor analysis, development recommendations, and comparable picks.
+- **Development Plan**: Deterministic priorities and checkpoints from percentiles; upside simulator (perf score + draft model packages); optional Gemini weekly plan from structured data; save locally or via Worker (`/api/development-plans` when deployed).
 - **Performance Trend**: Historical sparklines and trend charts showing composite score and rank over time (when snapshot data available).
 
 ### Transfer Portal
@@ -112,6 +113,7 @@ modules/
   ├── lab.js                 # Tournament Lab (bracket sim, war room)
   ├── value-lab.js           # Value Lab (scenario builder, value cases, AI analysis)
   ├── draft.js               # Draft probability model (MBB + WBB), comparables, radar
+  ├── player-development.js  # Development priorities, upside simulator, AI plan, persistence
   ├── trends.js              # Historical trend data, sparklines, trend charts
   ├── chat.js                # AI chatbot (Gemini), tool orchestration
   ├── notes.js               # Note-taking (logged-in users)
