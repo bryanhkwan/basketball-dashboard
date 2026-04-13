@@ -2,7 +2,7 @@
 // Account approval + user management for the utdata admin account.
 // Dependencies: auth.js, teambuilder.js
 
-var ADMIN_BASE_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+var ADMIN_BASE_URL = URLS.WORKER;
 var ADMIN_REQUESTS_URL = ADMIN_BASE_URL + '/admin/account-requests';
 var ADMIN_USERS_URL = ADMIN_BASE_URL + '/admin/users';
 

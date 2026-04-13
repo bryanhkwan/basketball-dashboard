@@ -2,7 +2,7 @@
 // Account-level UI customization for hidden tabs and page sections.
 // Dependencies: auth.js, teambuilder.js
 
-var DASH_PREFS_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/preferences';
+var DASH_PREFS_BASE = URLS.WORKER + '/preferences';
 var DASH_PREF_PAGE_IDS = [
   'pagePlayers',
   'pagePortal',

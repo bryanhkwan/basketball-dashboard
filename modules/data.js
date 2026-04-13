@@ -2111,7 +2111,7 @@ async function loadFromGoogleSheets(url, apiKey){
 async function loadFromCBData(year) {
   year = year || 2026;
   _currentDataSeason = parseInt(year, 10) || 2026;
-  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  var WORKER = URLS.WORKER;
   var loadingOverlayEl = document.getElementById('loadingOverlay');
   var isInitialLoad = loadingOverlayEl && !loadingOverlayEl.classList.contains('hidden');
 
@@ -2186,7 +2186,7 @@ async function loadFromCBData(year) {
 }
 
 async function _loadMbbSheetData(year) {
-  const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  const WORKER = URLS.WORKER;
   let res;
   let data = {};
   try {
@@ -2405,7 +2405,7 @@ async function loadCareerSeasons() {
   if (_careerDataPromise) return _careerDataPromise;
 
   _careerDataPromise = (async function(){
-    const WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+    const WORKER = URLS.WORKER;
     const years = [2022, 2023, 2024, 2025, 2026];
 
     const results = await Promise.allSettled(
@@ -2492,7 +2492,7 @@ function _applyInferredClassAll() {
 }
 
 // ── Shared worker URL ──────────────────────────────────────────────────────
-var WORKER_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+var WORKER_URL = URLS.WORKER;
 
 // ── loadTeamRatings — adjusted efficiency + SRS for all teams ─────────────
 async function loadTeamRatings(year) {
@@ -3299,7 +3299,7 @@ function waitForXLSX(timeoutMs=5000){
     _xlsxLoadPromise = loadScriptOnce(
       'xlsx',
       [
-        'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+        URLS.XLSX_CDN,
         './xlsx.full.min.js'
       ],
       {
@@ -3355,6 +3355,8 @@ function switchLeague(newLeague){
 
   // Switch league
   league = newLeague;
+  var confDefaults = newLeague === 'WBB' ? WBB_DEFAULT_CONF_VALUES : DEFAULT_CONF_VALUES;
+  confMultipliers = JSON.parse(JSON.stringify(confDefaults));
   setActiveTab(document.getElementById(`tab${newLeague}`), '.tab[data-league]');
   applyLeagueTheme(newLeague);
   _dataApplyActiveLeagueConfig({ forceDefaults: false, alwaysReloadData: true });

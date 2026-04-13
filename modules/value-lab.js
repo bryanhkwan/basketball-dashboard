@@ -1815,7 +1815,7 @@ function valueLabEnsureJsPdf() {
   if (!valueLabJsPdfPromise) {
     valueLabJsPdfPromise = loadScriptOnce(
       'jspdf',
-      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      URLS.JSPDF_CDN,
       {
         timeoutMs: 12000,
         test: function () { return window.jspdf && window.jspdf.jsPDF; },
@@ -1858,7 +1858,7 @@ async function valueLabGetPortalPool() {
   var items = (typeof portalItems !== 'undefined' && Array.isArray(portalItems) && portalItems.length) ? portalItems.slice() : [];
   var meta = null;
   if (!items.length) {
-    var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+    var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || URLS.WORKER;
     var url = base + '/api/portal/entries?sport=mbb&source=both&status=entries&onlyEntries=1&limit=180&page=1&year=' + encodeURIComponent(valueLabCurrentSeason());
     var res = await fetch(url, { credentials: 'include' });
     var data = await res.json().catch(function () { return {}; });
@@ -2672,7 +2672,7 @@ var valueLabBudgetInputEl2;
 var valueLabAIRunBtnEl, valueLabAIPdfBtnEl, valueLabAIStatusEl, valueLabAIOutputEl, valueLabPortalWatchEl, valueLabCompareSummaryEl;
 var valueLabJsPdfPromise = null;
 
-var VALUE_LAB_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
+var VALUE_LAB_GEMINI_PROXY_URL = URLS.GEMINI_PROXY;
 var VALUE_LAB_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 function valueLabUseLocalModeV2() {
@@ -2817,7 +2817,7 @@ function valueLabFetchV2(path, opts) {
   var token = typeof authGetToken === 'function' ? authGetToken() : null;
   var headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
-  return fetch('https://hidden-salad-773b.bryanhkwan.workers.dev/value-cases' + path, Object.assign({ credentials: 'include', headers: headers }, opts)).then(async function (res) {
+  return fetch(URLS.WORKER + '/value-cases' + path, Object.assign({ credentials: 'include', headers: headers }, opts)).then(async function (res) {
     if (res.status === 401) {
       if (typeof authHandleUnauthorized === 'function') authHandleUnauthorized('Your Value Lab session expired. Please log in again.');
       var unauthorized = new Error('Unauthorized');

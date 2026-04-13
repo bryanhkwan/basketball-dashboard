@@ -31,6 +31,8 @@
   <script src="modules/help-content.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="modules/help.js" defer></script>
+  <script src="modules/trends.js" defer></script>
+  <script src="modules/shortcuts.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -2222,6 +2224,13 @@
         <div class="panelHead">Shooting Zones</div>
         <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
           <div class="muted" style="font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <div id="mTrendPanel" style="margin-top:12px;display:none" class="panel">
+        <div class="panelHead">Performance Trend</div>
+        <div class="panelBody" id="mTrendChart" style="padding-bottom:8px">
+          <div class="muted" style="font-size:12px">Loading trend data...</div>
         </div>
       </div>
 

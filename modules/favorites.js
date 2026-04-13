@@ -2,7 +2,7 @@
 // Per-user favorites with folders. Heart button in profile modal + dedicated Favorites page.
 // Dependencies: auth.js, teambuilder.js (tbPlayerKey, tbPlayerLeague)
 
-var FAVS_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/favorites';
+var FAVS_BASE = URLS.WORKER + '/favorites';
 
 // ── Dev mode localStorage fallback (mirrors notes.js pattern) ────────────────
 function _devFavsStore() { try { return JSON.parse(localStorage.getItem('_devFavs') || '[]'); } catch (_) { return []; } }

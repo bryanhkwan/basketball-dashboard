@@ -2,7 +2,7 @@
 // Per-user evaluation presets for weights, valuation settings, and conference multipliers.
 // Dependencies: auth.js, config.js, data.js
 
-var EVAL_PRESETS_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/eval-presets';
+var EVAL_PRESETS_BASE = URLS.WORKER + '/eval-presets';
 var evalPresetState = {
   loaded: false,
   loading: false,

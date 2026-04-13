@@ -23,7 +23,7 @@ function authIsAdmin() {
   return !authIsGuest() && (authGetRole() === 'admin' || username === 'utdata');
 }
 
-var LOGIN_URL = 'https://hidden-salad-773b.bryanhkwan.workers.dev/login';
+var LOGIN_URL = URLS.WORKER + '/login';
 var REGISTER_URL = LOGIN_URL.replace(/\/login$/, '/register');
 var ME_URL = LOGIN_URL.replace(/\/login$/, '/me');
 var CHANGE_PASSWORD_URL = LOGIN_URL.replace(/\/login$/, '/account/change-password');

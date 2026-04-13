@@ -42,7 +42,7 @@ var portalLastLoadKey = '';
 var portalLastLoadedAt = 0;
 var PORTAL_FEED_CACHE_MS = 120000;
 
-var PORTAL_GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
+var PORTAL_GEMINI_PROXY_URL = URLS.GEMINI_PROXY;
 var PORTAL_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 var PORTAL_STAT_DIR = {
   'drtg': 'lower',
@@ -307,7 +307,7 @@ function portalEnsureJsPdf() {
   if (!portalJsPdfPromise) {
     portalJsPdfPromise = loadScriptOnce(
       'jspdf',
-      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      URLS.JSPDF_CDN,
       {
         timeoutMs: 12000,
         test: function () { return window.jspdf && window.jspdf.jsPDF; },
@@ -3404,7 +3404,7 @@ async function loadPortalEntries(opts) {
   if (!portalTableBodyEl) return;
   portalSyncLeagueUI();
 
-  var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  var base = (typeof WORKER_URL !== 'undefined' && WORKER_URL) || URLS.WORKER;
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
   var year = portalGetSeason();
   var sport = portalCurrentSport();

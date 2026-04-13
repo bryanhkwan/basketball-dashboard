@@ -234,10 +234,143 @@ function saInitHexTooltips(containerId) {
   ct.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
 }
 
+// ── Zone chart — 5-zone summary overlay ──────────────────────────────────────
+// Zones: Restricted Area, Paint (non-RA), Mid-Range, Corner 3, Above-the-Break 3
+// Each zone shows FG%, FGA count, and a background colored by efficiency vs NCAA avg.
+
+var SA_ZONE_DEFS = {
+  ra:      { label: 'Rim',     baselineDist: 17 },
+  paint:   { label: 'Paint',   baselineDist: 75 },
+  mid:     { label: 'Mid',     baselineDist: 145 },
+  corner3: { label: 'Corner 3',baselineDist: 230 },
+  atb3:    { label: 'Above 3', baselineDist: 230 }
+};
+
+function _saClassifyZone(sx, sy) {
+  var bX = 200, bY = 415;
+  var dist = _saDist(sx, sy);
+  var pL = 148, pR = 252, pT = 265;
+  var a3L = bX - 167, a3R = bX + 167;
+
+  if (dist <= 35) return 'ra';
+
+  // 3-point territory: outside 3pt arc or in corners
+  var is3 = false;
+  if (sx <= a3L || sx >= a3R) {
+    is3 = true;
+  } else {
+    var dx = sx - bX, dy = sy - bY;
+    var arcDist = Math.sqrt((dx / 167) * (dx / 167) + (dy / 213) * (dy / 213));
+    if (arcDist >= 1) is3 = true;
+  }
+
+  if (is3) {
+    if (sy >= 340 && (sx <= a3L + 10 || sx >= a3R - 10)) return 'corner3';
+    return 'atb3';
+  }
+
+  if (sx >= pL && sx <= pR && sy >= pT) return 'paint';
+  return 'mid';
+}
+
+function saBuildZoneChart(shots, name, opts) {
+  opts = opts || {};
+  var color = opts.color || 'var(--accent)';
+  var lg = opts.league || (typeof league !== 'undefined' ? league : 'MBB');
+
+  var pts = _saNormalize(shots);
+  if (!pts.length) return '<div class="muted" style="font-size:12px">No location data for zone map.</div>';
+
+  var zones = {};
+  ['ra', 'paint', 'mid', 'corner3', 'atb3'].forEach(function(z) { zones[z] = { made: 0, att: 0 }; });
+
+  pts.forEach(function(s) {
+    var z = _saClassifyZone(s.sx, s.sy);
+    zones[z].att++;
+    if (s.made) zones[z].made++;
+  });
+
+  var W = 400, H = 455;
+  var tW = 'rgba(255,255,255,0.22)';
+  var bX = 200, bY = 415;
+  var totalFGA = pts.length;
+
+  function zoneOverlay(z, pathD, tx, ty) {
+    var d = zones[z];
+    if (!d || !d.att) {
+      return '<path d="' + pathD + '" fill="rgba(30,40,60,0.5)" stroke="' + tW + '" stroke-width="1"/>';
+    }
+    var fg = d.made / d.att;
+    var exp = _saExpected(SA_ZONE_DEFS[z].baselineDist, lg);
+    var diff = fg - exp;
+    var fill = _saColor(diff, 0.45);
+    var pctStr = Math.round(fg * 100) + '%';
+    var vol = d.att;
+    return '<path d="' + pathD + '" fill="' + fill + '" stroke="' + tW + '" stroke-width="1"/>'
+      + '<text x="' + tx + '" y="' + ty + '" text-anchor="middle" fill="#f0f4ff" font-size="18" font-weight="800" font-family="Plus Jakarta Sans,system-ui,sans-serif">' + pctStr + '</text>'
+      + '<text x="' + tx + '" y="' + (ty + 16) + '" text-anchor="middle" fill="rgba(180,200,230,0.7)" font-size="10" font-family="Plus Jakarta Sans,system-ui,sans-serif">' + vol + ' FGA</text>';
+  }
+
+  // Zone SVG paths (approximate regions on 400x455 court)
+  var raPath = 'M ' + bX + ' ' + (bY - 35) + ' A 35 35 0 1 1 ' + bX + ' ' + Math.min(bY + 35, 440) + ' A 35 35 0 1 1 ' + bX + ' ' + (bY - 35) + ' Z';
+
+  var pL = 148, pR = 252, pT = 265;
+  var paintPath = 'M ' + pL + ' ' + pT + ' L ' + pR + ' ' + pT + ' L ' + pR + ' 440 L ' + pL + ' 440 Z';
+
+  var a3L = bX - 167, a3R = bX + 167, a3T = bY - 213;
+  var midPath = 'M ' + a3L + ' 440 L ' + a3L + ' ' + bY
+    + ' A 167 213 0 0 1 ' + bX + ' ' + a3T + ' A 167 213 0 0 1 ' + a3R + ' ' + bY
+    + ' L ' + a3R + ' 440 Z';
+
+  var cornerLPath = 'M 10 440 L 10 300 L ' + a3L + ' 300 L ' + a3L + ' 440 Z';
+  var cornerRPath = 'M ' + a3R + ' 440 L ' + a3R + ' 300 L 390 300 L 390 440 Z';
+
+  var atb3Path = 'M 10 300 L 10 10 L 390 10 L 390 300'
+    + ' L ' + a3R + ' 300 L ' + a3R + ' ' + bY
+    + ' A 167 213 0 0 0 ' + bX + ' ' + a3T + ' A 167 213 0 0 0 ' + a3L + ' ' + bY
+    + ' L ' + a3L + ' 300 Z';
+
+  var ftS = shots.filter(function(s) { return s.range === 'free_throw'; });
+  var ftM = ftS.filter(function(s) { return s.made; }).length;
+  var ftA = ftS.length;
+  var totM = pts.filter(function(s) { return s.made; }).length;
+  var oPct = totalFGA ? Math.round(totM / totalFGA * 100) : 0;
+
+  return '<div class="thShotWrap saZoneWrap">'
+    + '<div class="thShotTitle" style="color:' + color + '">' + (typeof _escAttr === 'function' ? _escAttr(name) : name) + '</div>'
+    + '<div class="saHexHint">Zone efficiency vs NCAA avg &middot; FG% and FGA per zone</div>'
+    + '<svg class="sa-zone-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '"'
+    + ' style="width:100%;max-width:370px;display:block;margin:0 auto;border-radius:10px">'
+    + '<rect width="' + W + '" height="' + H + '" fill="#080f1e"/>'
+    + '<rect x="10" y="10" width="380" height="430" rx="3" fill="#0d1b32"/>'
+    + zoneOverlay('atb3', atb3Path, 200, 160)
+    + zoneOverlay('mid', midPath, 110, 340)
+    + zoneOverlay('corner3', cornerLPath, (10 + a3L) / 2, 370)
+    + zoneOverlay('corner3', cornerRPath, (a3R + 390) / 2, 370)
+    + zoneOverlay('paint', paintPath, 200, 320)
+    + zoneOverlay('ra', raPath, 200, 400)
+    + _saCourtSVG(tW)
+    + '</svg>'
+    + '<div class="saLegend">'
+    + '<span class="saLegLabel">Below avg</span>'
+    + '<span class="saLegBar"></span>'
+    + '<span class="saLegLabel">Above avg</span>'
+    + '</div>'
+    + '<div class="thShotStats">'
+    + '<span class="thShotStat" style="color:rgba(34,197,94,.9)">Rim ' + (zones.ra.att ? Math.round(zones.ra.made / zones.ra.att * 100) + '%' : '—') + '</span>'
+    + '<span class="thShotStat" style="color:rgba(99,179,237,.9)">Mid ' + (zones.mid.att ? Math.round(zones.mid.made / zones.mid.att * 100) + '%' : '—') + '</span>'
+    + '<span class="thShotStat" style="color:rgba(251,146,60,.9)">3PT ' + ((zones.corner3.att + zones.atb3.att) ? Math.round((zones.corner3.made + zones.atb3.made) / (zones.corner3.att + zones.atb3.att) * 100) + '%' : '—') + '</span>'
+    + (ftA > 0 ? '<span class="thShotStat" style="color:rgba(200,180,255,.9)">FT ' + Math.round(ftM / ftA * 100) + '%</span>' : '')
+    + '<span class="thShotStat" style="color:var(--text)">' + oPct + '% FG &middot; ' + totalFGA + ' FGA</span>'
+    + '</div>'
+    + '</div>';
+}
+
 // ── Toggle handlers (profile + matchup) ──────────────────────────────────────
 function saToggleProfileChart(btn, view) {
   var dots = document.getElementById('mShotChartDots');
   var hex = document.getElementById('mShotChartHex');
+  var zones = document.getElementById('mShotChartZones');
   if (!dots || !hex) return;
   var btns = btn.parentElement.querySelectorAll('.saShotBtn');
   for (var i = 0; i < btns.length; i++) {
@@ -245,11 +378,13 @@ function saToggleProfileChart(btn, view) {
   }
   dots.style.display = view === 'dots' ? '' : 'none';
   hex.style.display = view === 'hex' ? '' : 'none';
+  if (zones) zones.style.display = view === 'zones' ? '' : 'none';
 }
 
 function saToggleMatchupCharts(btn, view) {
   var dots = document.getElementById('thMatchupDots');
   var hex = document.getElementById('thMatchupHex');
+  var zones = document.getElementById('thMatchupZones');
   if (!dots || !hex) return;
   var btns = btn.parentElement.querySelectorAll('.saShotBtn');
   for (var i = 0; i < btns.length; i++) {
@@ -257,10 +392,12 @@ function saToggleMatchupCharts(btn, view) {
   }
   dots.style.display = view === 'dots' ? '' : 'none';
   hex.style.display = view === 'hex' ? '' : 'none';
+  if (zones) zones.style.display = view === 'zones' ? '' : 'none';
 }
 
 // ── Expose ───────────────────────────────────────────────────────────────────
 window.saBuildHexChart = saBuildHexChart;
+window.saBuildZoneChart = saBuildZoneChart;
 window.saInitHexTooltips = saInitHexTooltips;
 window.saToggleProfileChart = saToggleProfileChart;
 window.saToggleMatchupCharts = saToggleMatchupCharts;

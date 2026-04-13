@@ -1,158 +1,152 @@
 # NCAA Basketball Scouting Dashboard
-A web-based scouting, valuation, and team-building tool for NCAA Men's and Women's Basketball (MBB/WBB). Built as a single-page dashboard — MBB data is pulled live from the CBD API via a Cloudflare Worker proxy; WBB data from Google Sheets. All scoring, valuation, analysis, and AI recommendations run client-side in the browser.
+
+A comprehensive single-page scouting, valuation, and team-building tool for NCAA Men's (MBB) and Women's (WBB) Basketball. MBB data is fetched live from the College Basketball Data (CBD) API via a Cloudflare Worker proxy. WBB data comes from ESPN APIs. All scoring, valuation, analysis, and AI recommendations run client-side in the browser.
+
+## Data Architecture
+
+| Source | League | What it provides |
+|--------|--------|-----------------|
+| **CBD API** (via Worker proxy) | MBB | Player stats, team ratings, shot charts, play-by-play, draft data |
+| **ESPN APIs** (via Worker proxy) | WBB | Player stats, rosters, schedules, game logs, play-by-play |
+| **Google Sheets** (optional) | MBB/WBB | Secondary/override data source for custom datasets |
+| **Cloudflare Worker** | Both | Authentication, notes, favorites, eval presets, value cases, portal data, Gemini AI proxy, trend snapshots |
 
 ## Core Features
 
 ### Player Scoring & Valuation
-- **Weighted Composite Scoring**: Each player's raw stats are normalized between your configured Min/Max bounds, scaled by custom weights, and adjusted for direction (higher-is-better vs. lower-is-better). The result: a single "Performance Score" suitable for ranking or filtering.
-- **Dollar Valuation Model**: An exponential curve predicts what each player should be worth based on their performance score. Anchored to an "average pay" and a "star performer" target, with optional minutes-played multiplier to avoid inflating bench players.
-- **Actual $ Comparison**: Compare model predictions against real-world salary/NIL data. The "Δ$" column highlights over/undervalued players—your edge.
-- **Fit Scoring**: Presets (Balanced, Shooting, Defense, Playmaking, Rim Protection, Rebounding) weight percentiles across stat categories to find role-specific matches. Custom fit can also be built.
-- **Archetype Tags**: Players are auto-labeled (Shooter, Playmaker, Rim Protector, Disruptor, Anchor Defender, Stretch Big, etc.) based on percentile thresholds across key stats.
+- **Weighted Composite Scoring**: Stats normalized between configurable Min/Max bounds, scaled by custom weights, adjusted for direction. Outputs a single Performance Score for ranking.
+- **Dollar Valuation Model**: Exponential curve predicting player value anchored to average pay and star performer targets, with minutes-played multiplier.
+- **Fit Scoring**: Presets (Balanced, Shooting, Defense, Playmaking, Rim Protection, Rebounding) weight percentiles across categories. Custom fits supported.
+- **Archetype Tags**: Auto-labeled (Shooter, Playmaker, Rim Protector, Disruptor, Anchor Defender, Stretch Big, etc.) based on percentile thresholds.
+- **Conference Multipliers**: League-strength adjustments with separate MBB and WBB multiplier tables (e.g., SEC leads WBB, Big 12 leads MBB). Toggle on/off; fully customizable.
 
-### Player Search & Profiles
-- **Team-Based Quick Add**: Search by team name to see all players and "Add all N" from that team at once.
-- **Full Player Profile Modal**: Click any player name to see percentile bars across all stats, archetype tags with definitions, role descriptions, valuation breakdown, and full stat line.
-- **Scout Report**: Automatically generated 5-section scouting card per player — Strengths (≥82nd percentile), Weaknesses (≤22nd percentile), Tendencies (usage/shooting/playmaking roles), Development areas (25–55th percentile), and Matchup Notes with 12+ tactical statements for both offense and defense.
-- **Interactive Shot Chart**: Visual SVG shot chart inside the player profile. Click-to-filter by All / Makes / Misses to explore shooting tendencies zone by zone.
-- **Stat Glossary**: 30+ professional stat definitions built-in. Click any stat name in the Weights table to learn its composite formula and why it matters.
-- **Pagination**: Browse 200 players at a time; filter by search term (player, team, conference).
+### Player Profiles
+- **Full Profile Modal**: Percentile bars, archetype tags, valuation breakdown, scout report, game logs.
+- **Scout Report**: Auto-generated 5-section card — Strengths, Weaknesses, Tendencies, Development Areas, and Matchup Notes.
+- **Shot Charts**: Three view modes — **Dots** (individual shots), **Hex Map** (hexbin efficiency), and **Zones** (5-zone summary with FG% and FGA per zone, colored by efficiency vs NCAA average).
+- **Period Filtering**: Filter shot charts by All / 1st Half / 2nd Half / OT.
+- **Draft Radar**: Logistic regression model predicting draft probability for both MBB (NBA) and WBB (WNBA), with factor analysis, development recommendations, and comparable picks.
+- **Performance Trend**: Historical sparklines and trend charts showing composite score and rank over time (when snapshot data available).
+
+### Transfer Portal
+- **Live Portal Feed**: Entries from On3 and 247Sports, merged and deduplicated.
+- **Fit Lab**: Evaluate portal entries against your team's needs with customizable fit criteria.
+- **AI Portal Analysis**: Gemini-powered deep analysis of portal entries with transfer fit grades.
+- **Watch Alerts**: Get notified when favorited players enter the portal.
 
 ### Teams Hub
-- **Team DNA**: Adjusted offensive/defensive/net efficiency ratings, four factors, scoring profile, and insight pills summarizing team tendencies.
-- **Team Scout Report**: AI-structured 5-section scouting card for any loaded team — Offensive Weapons, Defensive Identity, Style Tendencies, Vulnerabilities, and Matchup Keys.
-- **Matchup Analysis**: Load any two teams and see dual interactive shot charts, zone-by-zone shooting comparison table, and matchup insight pills side by side.
-- **Deep Analysis**: Hit the Deep Analysis button in Matchup Insights for a structured AI breakdown rendered in-page (not in the chatbot). Sections include Overall Verdict, Offensive/Defensive Keys, Head-to-Head edges, and Adjustment Recommendations. No web search — powered purely by the loaded shot and stat data.
-- **Auto-Populate**: Team dropdowns fill automatically on page load without needing to press Refresh.
+- **Team DNA**: Adjusted efficiency ratings (adjO/adjD/adjEM), four factors, scoring profile, and efficiency trend charts.
+- **Matchup Analysis**: Dual interactive shot charts with zone comparison table, period filtering, and three chart modes (Dots/Hex/Zones).
+- **Deep Analysis**: AI-structured breakdown — Overall Verdict, Offensive/Defensive Keys, Head-to-Head edges, Adjustments.
+- **Conference Threats**: Conference standings and scouting notes for rival teams.
+- **Tournament Bracket Simulation**: Monte Carlo bracket generation with AI analysis.
+
+### Value Lab
+- **Scenario Builder**: Build "what-if" roster scenarios with budget constraints.
+- **Value Cases**: Save and compare roster configurations across seasons.
+- **AI Valuation Analysis**: Gemini-powered evaluation of roster construction and value.
+
+### Tournament Lab
+- **Bracket Simulation**: Monte Carlo simulation engine for tournament bracket predictions.
+- **War Room**: Real-time tournament tracking and adjustment dashboard.
 
 ### Team Builder
-- **My Team Roster**: Drag-and-drop interface (or use search) to build a 13-man roster. Real-time budget & per-player cap enforcement.
-- **Opponent Roster**: Build the opposing team separately for comparison & scouting.
-- **Position Targets**: Set Guard/Big allocation targets. Auto-suggestions for swaps when out of balance.
-- **Weak Player Flagging**: Highlights roster members below a percentile threshold. Shows upgrade candidates ranked by "bang-for-buck" (performance gain vs. salary delta).
-- **Gap Analysis**: Per-category strength assessment (Scoring, Shooting, Ball Security, Playmaking, Rim Protection, etc.) for both rosters with percentile breakdowns.
-- **Head-to-Head Comp**: Side-by-side category comparison + legend. Auto-analysis showing which team has edges where + vulnerabilities.
-- **Quick Scout**: Opponent roster analysis highlighting strong areas (defend these!) and weak areas (exploit these!).
+- **Roster Management**: Build 13-player rosters with budget and per-player cap enforcement.
+- **Position Targets**: Guard/Big allocation with auto-suggestions for swaps.
+- **Gap Analysis**: Per-category strength assessment with percentile breakdowns.
+- **Head-to-Head**: Side-by-side roster comparison with category-by-category analysis.
 
-### Data Management
-- **CBD API Integration (MBB)**: MBB player stats, team ratings, team game logs, and shot data are fetched via a Cloudflare Worker proxy from the CBD API.
-- **Google Sheets Integration (WBB)**: Auto-loads "Men Data" and "Women Data" sheets on app open. Manual refresh available.
-- **Conference Multipliers**: Apply league-strength adjustments (Big 12 @ 1.08x, lower conferences @ 0.90x–0.95x). Toggle on/off; customize per league.
-- **Weights Table**: Full control — set which stats matter (weight), their Min/Max normalization bounds, and direction (higher/lower is better). Save/reset to defaults instantly. Shows what's selected vs. unused.
-- **Export CSV**: Download current player rankings with all computed metrics.
+### Collaborate
+- **iMessage-style Chat**: DMs and group chats between dashboard users.
+- **Player Picks**: Share player evaluations as messages.
+- **Shared Scouting**: Collaborative note-taking and roster sharing.
 
 ### AI Assistant (Gemini-Powered)
-- **Natural Language Queries**: "Find a shooter big under $100k" → tool automatically queries the dashboard and returns top matches.
-- **Team Context Lookups**: "How good is Duke this year?" or "Compare Kentucky vs Louisville" → returns adjusted efficiency ratings (adjEM/adjO/adjD), record, conference ranking, and top contributors.
-- **Player Scouting**: Ask about a player and the AI will point you to their Scout Report and Shot Chart in the profile modal for a deeper look.
-- **Team Matchup Guidance**: Ask about a matchup and the AI will remind you about the Teams Hub Deep Analysis panel for full in-page breakdown.
-- **Role-Specific Lookups**: Find scorers, playmakers, defenders, rim protectors by natural language.
-- **Head-to-Head Summaries**: "How does my team matchup against [opponent]?" → returns category-by-category analysis.
-- **Roster Swaps**: "Swap my weakest guard for a better 3-point shooter in budget." → tool suggests & executes.
-- **Player Comparisons**: "Compare [Player A] vs [Player B]" → side-by-side stats & percentiles.
-- **Conversations persist**: Full history within session; context-aware follow-ups.
-- **Guest Mode** (10 free messages): Try the dashboard without signing in. Full feature access minus notes/saves.
+- Natural language queries for player search, team lookups, matchup analysis.
+- Tool-augmented responses using live dashboard data.
+- Guest mode with 10 free messages.
 
-### UX Polish
-- **Video Loading Screen**: Branded intro video plays during initial data load. "Welcome, [Name]" overlay after load completes.
-- **League Toggle**: Switch MBB ↔ WBB with one click. Theme updates (gold vs. pink). Rosters persist per league.
-- **Methodology Page**: Explanation of scoring, valuation, archetypes, and fit presets in plain English.
-- **Authentication**: Login with username/password (backend: Cloudflare Workers) or continue as guest.
-- **Responsive Design**: Works on desktop, tablet, and mobile browsers.
+### Favorites & Notes
+- **Favorites**: Per-user player favorites with folder organization.
+- **Scout Notes**: Per-player note drawer in the profile modal, synced to the backend.
 
-## Stats Included
+### Evaluation Presets
+- Save and load custom weight/valuation/conference multiplier configurations per league.
 
-### 30+ Metrics with Built-In Descriptions:
-**Offensive**: PPG, FG%, 3P%, 2P%, FT%, eFG%, TS%, APG, A/TO, AST%, 3PA/G, 3PT_Rating, ORtg, OWS, USG%  
-**Defensive**: DRtg, SPG, BPG, STL%, BLK%, ORB/G, DRB/G, OR%, DR%, ORB%, TRB%, WS, WS/40, TOPG, TOV%  
-**Advanced**: BPM, OBPM, DBPM, PER, MPG, DWS
+## Keyboard Shortcuts
 
-Click any stat name in the Weights sidebar to see a full explanation, the direction it's scored (higher/lower is better), and Min/Max bounds.
-
-## How to Use
-
-### 1. Load Data
-- The dashboard auto-pulls from Google Sheets on page load
-- Or click **Refresh Data** to manually reload
-- **Note**: Requires a Google Sheets API key and "Men Data" + "Women Data" sheet names
-
-### 2. Configure Scoring
-- Click the **Weights** section
-- Adjust weights for stats that matter to your scouting
-- Set Min/Max bounds (normalization range) per stat
-- Toggle "Advanced Direction" to override higher/lower logic
-- Click **Reset to Defaults** to restore baseline
-
-### 3. Browse & Search
-- Sort table by any column
-- Search by player name, team, or conference
-- Click a player to open their full profile & stat breakdown
-
-### 4. Build Rosters
-- Switch to **Team Builder** tab
-- Add players via search or "Add all [Team]" bulk add
-- Set budget & per-player cap
-- Assign position targets (Guards/Bigs); get rebalancing suggestions
-- Review gap analysis & H2H matchup
-
-### 5. Scout & Compare
-- View opponent roster gap analysis
-- Run Head-to-Head for category breakdown
-- Use AI assistant for quick queries: "Find a playmaker PG under $80k"
-
-### 6. Export & Share
-- **Export CSV** downloads all ranked players with scores & valuations
-- Share rosters via team screenshots
-
-## Performance Optimizations
-
-- **Batch Mode**: Adding entire teams via quick-add happens in a single refresh (not per-player cascades)
-- **Player Pool Caching**: `tbGetAllPlayers()` result cached per league to avoid redundant rebuilds
-- **Lazy Rendering**: Player table only re-renders when visible (not hidden behind Team Builder tab)
-- **Set-Based Lookups**: O(1) roster-key checks instead of linear scans per column
-- **RequestAnimationFrame**: Heavy computations (scoring, gap analysis) staged to keep UI responsive
+| Key | Action |
+|-----|--------|
+| `Ctrl+K` / `Cmd+K` | Quick search (players, teams, conferences) |
+| `1`–`7` | Switch page tabs |
+| `?` | Open help panel |
+| `L` | Toggle MBB / WBB |
+| `Esc` | Close topmost modal or overlay |
 
 ## Tech Stack
 
 - **Pure HTML/CSS/JS** — no frameworks, no build step, no npm
-- **CBD API** — primary MBB data source (players, ratings, team stats, shot charts)
-- **Google Sheets API** — WBB player data
-- **Cloudflare Workers** — backend for login, notes, CBD proxy, and Gemini AI proxy
-- **GitHub Pages** — free hosting
-- **Single-Page Architecture** — all logic modular, no page reloads
+- **Cloudflare Workers** — backend API (D1 database, authentication, proxy)
+- **CBD API** — primary MBB data source
+- **ESPN APIs** — primary WBB data source
+- **Gemini AI** — chatbot, deep analysis, portal analysis (via Worker proxy)
+- **GitHub Pages** — hosting
+- **Single-Page Architecture** — modular vanilla JS, no page reloads
 
 ## File Structure
 
 ```
-index.html                    # Shell (auth overlay, loading screen, DOM)
-styles.css                    # All styling + CSS variables (theming)
+index.html                    # SPA shell (auth overlay, loading screen, DOM)
+styles.css                    # All styling + CSS variables (MBB gold / WBB pink theming)
 app.js                        # Coordinator: DOMContentLoaded init, window._app bridge
 modules/
-  ├── config.js              # Constants, stat glossary, fit presets, default weights
+  ├── config.js              # Constants, URLs, stat glossary, fit presets, conference multipliers
   ├── auth.js                # Login/logout/guest mode, loading orchestration
-  ├── data.js                # Scoring engine, valuation model, CBD API + Google Sheets loader
+  ├── data.js                # Scoring engine, valuation model, CBD/ESPN/Sheets data loading
   ├── players.js             # Player table rendering, pagination, search
-  ├── profile.js             # Player modals (profile + Scout Report + Shot Chart, stat info, comparison)
+  ├── profile.js             # Player modal (profile, scout report, shot chart, draft radar, trend)
   ├── teambuilder.js         # Roster management, gap analysis, H2H, suggestions
-  ├── teams.js               # Teams Hub (DNA, scout reports, shot charts, matchup, Deep Analysis)
+  ├── teams.js               # Teams Hub (DNA, matchup, deep analysis, bracket, war room)
+  ├── shot-analytics.js      # Hexbin + zone shot chart visualization
+  ├── portal.js              # Transfer Portal (feed, fit lab, AI analysis)
+  ├── lab.js                 # Tournament Lab (bracket sim, war room)
+  ├── value-lab.js           # Value Lab (scenario builder, value cases, AI analysis)
+  ├── draft.js               # Draft probability model (MBB + WBB), comparables, radar
+  ├── trends.js              # Historical trend data, sparklines, trend charts
   ├── chat.js                # AI chatbot (Gemini), tool orchestration
-  └── notes.js               # Note-taking (logged-in users only)
+  ├── notes.js               # Note-taking (logged-in users)
+  ├── favorites.js           # Player favorites with folders
+  ├── shares.js              # Collaborate (chat, player picks)
+  ├── eval-presets.js        # Evaluation preset save/load
+  ├── dashboard-prefs.js     # UI customization preferences
+  ├── admin.js               # Admin panel (account management)
+  ├── cbdata.js              # CBD API explorer
+  ├── shortcuts.js           # Keyboard shortcut handler
+  ├── help.js                # Help panel and page tours
+  ├── help-content.js        # Help content per page
+  └── tour.js                # Interactive tour system
+tools/
+  ├── build-draft-dataset.js      # MBB draft training data collection
+  ├── build-wbb-draft-dataset.js  # WBB draft training data collection
+  ├── train-draft-model-v2.js     # MBB draft model training
+  └── train-wbb-draft-model.js    # WBB draft model training
+data/
+  ├── draft-history.json          # MBB draft training dataset
+  └── wbb-draft-history.json      # WBB draft training dataset
 ```
+
+## Performance Optimizations
+
+- **Batch Mode**: Adding entire teams via quick-add in a single refresh
+- **Player Pool Caching**: `tbGetAllPlayers()` cached per league
+- **Lazy Rendering**: Player table only re-renders when visible
+- **Promise Deduplication**: Concurrent identical API requests share a single fetch
+- **Set-Based Lookups**: O(1) roster-key checks
+- **RequestAnimationFrame**: Heavy computations staged for responsive UI
+- **In-Memory Caches**: Team ratings, shooting zones, plays, player shots all cached
 
 ## Browser Compatibility
 
 - Chrome, Firefox, Safari, Edge (all modern versions)
-- Requires JavaScript enabled
-- HTTPS required for Google Sheets API (GitHub Pages + Cloudflare Workers)
-
-## Future Ideas
-
-- **Video replay integration**: Embed clips alongside player profiles
-- **Live box scores**: Auto-update player stats in real-time during games
-- **Predictive models**: Game outcome predictions, trading recommendations
-- **Historical snapshots**: Track player value evolution across seasons
-
-## About the Demo Data
-
-The "Actual $" column shows fictional placeholder values for demonstration. They showcase what the model can do — surfacing over/undervalued players by comparing predictions against real-world data. In production, plug in actual NIL figures or salary data to find real market mispricings.
-
+- JavaScript required
+- HTTPS required (GitHub Pages + Cloudflare Workers)

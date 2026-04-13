@@ -13,6 +13,15 @@
     });
   }
 
+  var SHORTCUTS_CARD = {
+    title: 'Keyboard Shortcuts',
+    body: '<b>Ctrl+K / Cmd+K</b> &mdash; Quick search (players, teams, conferences)<br>' +
+          '<b>1&ndash;7</b> &mdash; Switch page tabs (Players, Portal, Teams, etc.)<br>' +
+          '<b>?</b> &mdash; Open this help panel<br>' +
+          '<b>L</b> &mdash; Toggle MBB / WBB<br>' +
+          '<b>Esc</b> &mdash; Close modal / overlay'
+  };
+
   window.DashboardHelpContent = {
     fallback: {
       title: 'Dashboard Help',
@@ -25,7 +34,8 @@
         {
           title: 'How This Page Works',
           body: 'The drawer summarizes the inputs, outputs, and caveats that matter for the current workflow.'
-        }
+        },
+        SHORTCUTS_CARD
       ],
       tourSteps: []
     },

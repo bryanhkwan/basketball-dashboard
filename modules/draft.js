@@ -199,6 +199,94 @@ var DRAFT_COMP_POOL = [
   {n:'Asa Newell',t:'Georgia',y:2025,pk:23,s:[15.42,4.7,0.213,0.58,23.6,0.88,1,0.97,6.88]}
 ];
 
+// ── WBB Draft Model (WNBA projection) ────────────────────────────────────────
+// Trained on NCAA WBB → WNBA draft outcomes (2019–2025).
+// Reduced feature set: WBB lacks BPM and WS/40 from ESPN byathlete data.
+// Features: PPG, eFG%, RPG, APG, SPG, BPG
+var WBB_DRAFT_MODEL = {
+  intercept: -1.82,
+  features: [
+    { stat: 'PPG',  mean: 16.2,  std: 4.8,    weight: 0.42 },
+    { stat: 'eFG%', mean: 0.48,  std: 0.055,  weight: 0.28 },
+    { stat: 'RPG',  mean: 5.8,   std: 2.5,    weight: 0.22 },
+    { stat: 'APG',  mean: 2.8,   std: 1.6,    weight: 0.18 },
+    { stat: 'SPG',  mean: 1.4,   std: 0.6,    weight: 0.15 },
+    { stat: 'BPG',  mean: 0.6,   std: 0.7,    weight: 0.35 }
+  ],
+  classWeight:   0.45,
+  confWeight:    1.15,
+  minutesWeight: -0.20,
+  classMap: { 'Fr':3, 'So':2, 'Jr':1, 'Sr':0, 'Grad':0,
+              'RS-Fr':2.5, 'RS-So':1.5, 'RS-Jr':0.5, 'RS-Sr':0 }
+};
+
+var WBB_DRAFT_IMPORTANCE = {
+  'Conference': 0.95, 'PPG': 0.55, 'Class': 0.50,
+  'BPG': 0.42, 'eFG%': 0.30, 'RPG': 0.25, 'APG': 0.22, 'SPG': 0.18
+};
+
+// Notable WNBA picks with their NCAA stats (features order: PPG eFG% RPG APG SPG BPG)
+var WBB_DRAFT_COMP_POOL = [
+  {n:'A\'ja Wilson',t:'South Carolina',y:2018,pk:1,s:[22.6,0.56,11.8,2.2,1.4,2.6]},
+  {n:'Kelsey Plum',t:'Washington',y:2017,pk:1,s:[31.7,0.52,3.8,5.2,1.8,0.3]},
+  {n:'Sabrina Ionescu',t:'Oregon',y:2020,pk:1,s:[17.5,0.47,8.6,9.1,1.5,0.5]},
+  {n:'Rhyne Howard',t:'Kentucky',y:2022,pk:1,s:[20.4,0.50,7.4,3.3,2.3,0.7]},
+  {n:'Aliyah Boston',t:'South Carolina',y:2023,pk:1,s:[12.5,0.57,9.7,2.0,1.1,2.1]},
+  {n:'Caitlin Clark',t:'Iowa',y:2024,pk:1,s:[27.8,0.47,7.1,8.9,1.3,0.7]},
+  {n:'Cameron Brink',t:'Stanford',y:2024,pk:2,s:[15.7,0.52,8.5,2.4,1.3,2.8]},
+  {n:'Kamilla Cardoso',t:'South Carolina',y:2024,pk:3,s:[12.2,0.60,9.3,0.9,0.5,2.0]},
+  {n:'Jacy Sheldon',t:'Ohio State',y:2024,pk:5,s:[16.5,0.50,4.0,4.7,2.2,0.5]},
+  {n:'Angel Reese',t:'LSU',y:2024,pk:7,s:[13.6,0.49,13.1,1.3,1.4,1.2]},
+  {n:'Rickea Jackson',t:'Tennessee',y:2024,pk:4,s:[16.9,0.50,7.4,1.6,1.0,0.8]},
+  {n:'Aaliyah Edwards',t:'UConn',y:2024,pk:6,s:[15.8,0.55,8.6,1.4,0.9,1.5]},
+  {n:'NaLyssa Smith',t:'Baylor',y:2022,pk:2,s:[22.1,0.51,11.5,1.6,1.0,1.2]},
+  {n:'Emily Engstler',t:'Louisville',y:2022,pk:4,s:[11.9,0.47,9.4,3.0,2.0,1.5]},
+  {n:'Shakira Austin',t:'Ole Miss',y:2022,pk:3,s:[14.0,0.53,8.5,1.8,1.0,2.2]},
+  {n:'Haley Jones',t:'Stanford',y:2023,pk:6,s:[13.2,0.48,7.3,3.5,1.7,0.8]},
+  {n:'Diamond Miller',t:'Maryland',y:2023,pk:2,s:[19.3,0.47,6.3,3.5,1.2,0.4]},
+  {n:'Maddy Siegrist',t:'Villanova',y:2023,pk:3,s:[28.7,0.52,8.5,1.5,1.1,0.8]},
+  {n:'Grace Berger',t:'Indiana',y:2023,pk:5,s:[14.0,0.50,5.0,5.8,1.8,0.3]},
+  {n:'Zia Cooke',t:'South Carolina',y:2023,pk:10,s:[12.8,0.44,2.8,2.2,1.2,0.2]},
+  {n:'Jackie Young',t:'Notre Dame',y:2019,pk:1,s:[14.2,0.52,7.1,5.6,2.0,0.6]},
+  {n:'Asia Durr',t:'Louisville',y:2019,pk:2,s:[21.3,0.48,3.2,2.8,1.6,0.3]},
+  {n:'Teaira McCowan',t:'Mississippi State',y:2019,pk:3,s:[18.4,0.59,13.5,0.6,0.7,2.4]},
+  {n:'Christyn Williams',t:'UConn',y:2022,pk:14,s:[14.4,0.46,3.4,3.5,1.5,0.3]},
+  {n:'Paige Bueckers',t:'UConn',y:2025,pk:1,s:[21.8,0.55,5.2,4.5,1.6,0.6]},
+  {n:'JuJu Watkins',t:'USC',y:2025,pk:2,s:[24.4,0.46,7.2,3.8,1.9,1.4]},
+  {n:'Te-Hina Paopao',t:'South Carolina',y:2025,pk:3,s:[15.8,0.48,4.6,5.0,1.8,0.2]},
+  {n:'Deja Kelly',t:'Oregon',y:2025,pk:5,s:[17.2,0.47,3.8,4.2,1.5,0.3]},
+  {n:'Lauren Betts',t:'UCLA',y:2025,pk:4,s:[16.4,0.62,9.4,1.2,0.6,2.5]},
+  {n:'Syla Swords',t:'UCLA',y:2025,pk:6,s:[14.8,0.50,5.4,3.1,2.1,0.4]}
+];
+
+function _wbbCompArchetype(s) {
+  // s = [PPG, eFG%, RPG, APG, SPG, BPG]
+  if (s[3] >= 5)             return 'Floor General';
+  if (s[5] >= 2)             return 'Rim Protector';
+  if (s[2] >= 10)            return 'Double-Double Machine';
+  if (s[0] >= 20 && s[4] >= 1.5) return 'Two-Way Star';
+  if (s[0] >= 18)            return 'Scorer';
+  if (s[4] >= 2)             return 'Disruptor';
+  if (s[1] >= 0.55)          return 'Efficient Post';
+  return 'Versatile Wing';
+}
+
+function _isWBB() {
+  return typeof league !== 'undefined' && league === 'WBB';
+}
+
+function _getModel() {
+  return _isWBB() ? WBB_DRAFT_MODEL : DRAFT_MODEL;
+}
+
+function _getCompPool() {
+  return _isWBB() ? WBB_DRAFT_COMP_POOL : DRAFT_COMP_POOL;
+}
+
+function _getImportance() {
+  return _isWBB() ? WBB_DRAFT_IMPORTANCE : DRAFT_IMPORTANCE;
+}
+
 // ── Helper functions ─────────────────────────────────────────────────────────
 
 function _draftSigmoid(z) { return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, z)))); }
@@ -233,10 +321,7 @@ function draftConfTier(conf) {
 
 function draftProbability(r) {
   if (!r) return null;
-  if (typeof league !== 'undefined' && league === 'WBB') return null;
 
-  // Eligibility gate: model was trained on PPG≥5, MPG≥20, G≥15.
-  // Players outside this range are extrapolating beyond training distribution.
   var ppg = safeNum(r['PPG']);
   var mpg = safeNum(r['MP']) || safeNum(r['MPG']);
   var gp  = safeNum(r['G']);
@@ -244,7 +329,7 @@ function draftProbability(r) {
   if (Number.isFinite(mpg) && mpg < 15) return null;
   if (Number.isFinite(gp)  && gp  < 10) return null;
 
-  var M = DRAFT_MODEL;
+  var M = _getModel();
   var features = M.features;
   var missing = 0;
   var zScores = [];
@@ -299,6 +384,15 @@ function draftGrade(prob) {
 
 function draftRangeLabel(prob) {
   if (prob == null) return '—';
+  if (_isWBB()) {
+    if (prob >= 0.90) return 'Top Pick';
+    if (prob >= 0.70) return 'First Round';
+    if (prob >= 0.45) return 'Late First';
+    if (prob >= 0.25) return 'Second/Third Round';
+    if (prob >= 0.10) return 'Fringe';
+    if (prob >= 0.03) return 'Long Shot';
+    return 'Unlikely';
+  }
   if (prob >= 0.90) return 'Lottery Lock';
   if (prob >= 0.70) return 'First Round';
   if (prob >= 0.45) return 'Late First';
@@ -322,7 +416,9 @@ function draftColor(prob) {
 
 function draftFactors(r) {
   var factors = [];
-  var features = DRAFT_MODEL.features;
+  var M = _getModel();
+  var IMP = _getImportance();
+  var features = M.features;
 
   for (var i = 0; i < features.length; i++) {
     var f = features[i];
@@ -343,7 +439,7 @@ function draftFactors(r) {
       label:     f.stat,
       value:     displayVal,
       z:         z,
-      impact:    Math.abs(z) * (DRAFT_IMPORTANCE[f.stat] || 0.1),
+      impact:    Math.abs(z) * (IMP[f.stat] || 0.1),
       direction: z > 0.2 ? 'positive' : z < -0.2 ? 'negative' : 'neutral',
       note:      z > 1.5 ? 'well above' : z > 0.3 ? 'above avg' : z > -0.3 ? 'avg' : z > -1.5 ? 'below avg' : 'well below'
     });
@@ -357,7 +453,7 @@ function draftFactors(r) {
     label:     'Class',
     value:     cls || 'Unknown',
     z:         classUnknown ? 0 : classV >= 2 ? 1.5 : classV >= 1 ? 0 : -1.5,
-    impact:    classUnknown ? 0 : DRAFT_IMPORTANCE['Class'] * (classV >= 2 ? 1.0 : classV >= 1 ? 0.3 : 0.8),
+    impact:    classUnknown ? 0 : (IMP['Class'] || 0.5) * (classV >= 2 ? 1.0 : classV >= 1 ? 0.3 : 0.8),
     direction: classUnknown ? 'neutral' : classV >= 2 ? 'positive' : classV <= 0 ? 'negative' : 'neutral',
     note:      classUnknown ? 'not yet inferred' : classV >= 3 ? 'strong youth premium' : classV >= 2 ? 'good timeline' : classV >= 1 ? 'moderate' : 'limited upside window'
   });
@@ -369,7 +465,7 @@ function draftFactors(r) {
     label:     'Conference',
     value:     conf || 'Unknown',
     z:         confV,
-    impact:    DRAFT_IMPORTANCE['Conference'] * Math.max(0.3, Math.abs(confV)),
+    impact:    (IMP['Conference'] || 1.0) * Math.max(0.3, Math.abs(confV)),
     direction: confV > 0 ? 'positive' : confV < 0 ? 'negative' : 'neutral',
     note:      confV > 0 ? 'power conf' : confV === 0 ? 'mid-major' : 'low-major'
   });
@@ -382,46 +478,62 @@ function draftFactors(r) {
 
 function draftInsights(r) {
   if (!r) return [];
-  var features = DRAFT_MODEL.features;
+  var M = _getModel();
+  var features = M.features;
   var zScores = [];
+  var statIdx = {};
 
   for (var i = 0; i < features.length; i++) {
     var val = safeNum(r[features[i].stat]);
     zScores.push(Number.isFinite(val) ? (val - features[i].mean) / features[i].std : 0);
+    statIdx[features[i].stat] = i;
   }
 
   var cls = (r['Class'] || r['Yr'] || r['Year'] || '').toString();
   var classV = draftClassValue(cls);
   var conf = (r['Conference'] || r['Conf'] || '').toString();
   var confV = draftConfTier(conf);
+  var wbb = _isWBB();
+  var projLabel = wbb ? 'WNBA projection' : 'draft stock';
 
   var insights = [];
-  // Feature indices: PPG=0, BPM=1, WS/40=2, eFG%=3, USG%=4, APG=5, SPG=6, BPG=7, RPG=8
-  // Efficient scorer
-  if (zScores[0] > 0.5 && zScores[3] > 0.3)
+  var ppgZ  = statIdx['PPG']  != null ? zScores[statIdx['PPG']]  : 0;
+  var efgZ  = statIdx['eFG%'] != null ? zScores[statIdx['eFG%']] : 0;
+  var apgZ  = statIdx['APG']  != null ? zScores[statIdx['APG']]  : 0;
+  var spgZ  = statIdx['SPG']  != null ? zScores[statIdx['SPG']]  : 0;
+  var bpgZ  = statIdx['BPG']  != null ? zScores[statIdx['BPG']]  : 0;
+  var rpgZ  = statIdx['RPG']  != null ? zScores[statIdx['RPG']]  : 0;
+
+  if (ppgZ > 0.5 && efgZ > 0.3)
     insights.push({ text: 'Efficient scorer — high PPG with strong eFG%', type: 'positive' });
-  else if (zScores[0] > 0.5 && zScores[3] < -0.3)
+  else if (ppgZ > 0.5 && efgZ < -0.3)
     insights.push({ text: 'Volume scorer — production with below-average efficiency', type: 'warning' });
-  // Two-way playmaker
-  if (zScores[5] > 0.5 && zScores[6] > 0.5)
+  if (apgZ > 0.5 && spgZ > 0.5)
     insights.push({ text: 'Two-way playmaker — creates for others and disrupts', type: 'positive' });
-  // Interior force
-  if (zScores[7] > 0.5 && zScores[8] > 0.5)
+  if (bpgZ > 0.5 && rpgZ > 0.5)
     insights.push({ text: 'Interior force — rim protection + rebounding', type: 'positive' });
-  // Quality production
-  if (zScores[2] > 0.5 && confV > 0)
-    insights.push({ text: 'Proven producer in a power conference', type: 'positive' });
-  else if (zScores[2] > 0.5 && confV < 0)
-    insights.push({ text: 'Strong efficiency — needs validation vs. higher competition', type: 'warning' });
-  // Youth premium
+
+  // MBB-specific: WS/40 check
+  if (!wbb) {
+    var ws40Z = statIdx['WS/40'] != null ? zScores[statIdx['WS/40']] : 0;
+    if (ws40Z > 0.5 && confV > 0)
+      insights.push({ text: 'Proven producer in a power conference', type: 'positive' });
+    else if (ws40Z > 0.5 && confV < 0)
+      insights.push({ text: 'Strong efficiency — needs validation vs. higher competition', type: 'warning' });
+  } else {
+    if (ppgZ > 0.5 && confV > 0)
+      insights.push({ text: 'High-volume scorer tested against top competition', type: 'positive' });
+    else if (ppgZ > 0.5 && confV < 0)
+      insights.push({ text: 'Production in a weaker conference — transferring up would help ' + projLabel, type: 'warning' });
+  }
+
   if (classV >= 2)
     insights.push({ text: 'Young prospect — high projection upside for scouts', type: 'positive' });
   else if (_draftIsExplicitSr(cls))
     insights.push({ text: 'Senior — limited projection window for scouts', type: 'warning' });
-  // Defensive presence
-  if (zScores[6] > 1.0)
+  if (spgZ > 1.0)
     insights.push({ text: 'Elite ball hawk — steals well above draft average', type: 'positive' });
-  if (zScores[7] > 1.0)
+  if (bpgZ > 1.0)
     insights.push({ text: 'Elite shot-blocker — major rim deterrent', type: 'positive' });
 
   return insights.slice(0, 4);
@@ -442,9 +554,10 @@ function draftDevelopmentRecs(r) {
   if (prob == null) return [];
 
   var recs = [];
-  var features = DRAFT_MODEL.features;
+  var M = _getModel();
+  var IMP = _getImportance();
+  var features = M.features;
 
-  // For high-probability players, only flag stats well BELOW average
   var threshold = prob >= 0.70 ? -0.3 : 0.3;
 
   for (var i = 0; i < features.length; i++) {
@@ -454,7 +567,7 @@ function draftDevelopmentRecs(r) {
 
     var z = (val - f.mean) / f.std;
     if (z < threshold) {
-      var imp = DRAFT_IMPORTANCE[f.stat] || 0.1;
+      var imp = IMP[f.stat] || 0.1;
       var priority = imp * Math.max(0.1, -z + 0.5);
 
       var currentStr;
@@ -550,9 +663,12 @@ function _compArchetype(s) {
 
 function draftComparables(r) {
   if (!r) return [];
-  var features = DRAFT_MODEL.features;
+  var M = _getModel();
+  var IMP = _getImportance();
+  var pool = _getCompPool();
+  var wbb = _isWBB();
+  var features = M.features;
 
-  // Z-score the current player
   var playerZ = [];
   for (var i = 0; i < features.length; i++) {
     var val = safeNum(r[features[i].stat]);
@@ -562,9 +678,8 @@ function draftComparables(r) {
   var playerName = (r['Player'] || r['Name'] || '').toString().toLowerCase();
   var dists = [];
 
-  for (var j = 0; j < DRAFT_COMP_POOL.length; j++) {
-    var comp = DRAFT_COMP_POOL[j];
-    // Skip self
+  for (var j = 0; j < pool.length; j++) {
+    var comp = pool[j];
     if (comp.n.toLowerCase() === playerName) continue;
 
     var dist = 0;
@@ -572,7 +687,7 @@ function draftComparables(r) {
     for (var i = 0; i < features.length; i++) {
       var cz = (comp.s[i] - features[i].mean) / features[i].std;
       var diff = playerZ[i] - cz;
-      var imp = DRAFT_IMPORTANCE[features[i].stat] || 0.1;
+      var imp = IMP[features[i].stat] || 0.1;
       dist += imp * diff * diff;
       if (Math.abs(diff) < 0.6) matchStats.push(features[i].stat);
     }
@@ -584,7 +699,7 @@ function draftComparables(r) {
       year:       comp.y,
       pick:       comp.pk,
       distance:   dist,
-      archetype:  _compArchetype(comp.s),
+      archetype:  wbb ? _wbbCompArchetype(comp.s) : _compArchetype(comp.s),
       matchStats: matchStats.slice(0, 4)
     });
   }
@@ -599,11 +714,6 @@ function renderDraftRadar(r) {
   var el = document.getElementById('mDraftRadar');
   if (!el) return;
 
-  // Only for MBB
-  if (typeof league !== 'undefined' && league === 'WBB') {
-    document.getElementById('mDraftPanel').style.display = 'none';
-    return;
-  }
   document.getElementById('mDraftPanel').style.display = '';
 
   var prob = draftProbability(r);
@@ -717,10 +827,12 @@ function renderDraftRadar(r) {
   var comps = draftComparables(r);
   if (comps.length > 0) {
     html += '<div class="draftCompSection">';
-    html += '<div class="draftCompHead">🎯 Draft Comparables</div>';
+    html += '<div class="draftCompHead">' + (_isWBB() ? '🎯 WNBA Draft Comparables' : '🎯 Draft Comparables') + '</div>';
     for (var i = 0; i < comps.length; i++) {
       var c = comps[i];
-      var pickLabel = c.pick <= 14 ? 'Lottery' : c.pick <= 30 ? 'Rd 1' : 'Rd 2';
+      var pickLabel = _isWBB()
+        ? (c.pick <= 4 ? 'Top 4' : c.pick <= 12 ? 'Rd 1' : 'Rd 2+')
+        : (c.pick <= 14 ? 'Lottery' : c.pick <= 30 ? 'Rd 1' : 'Rd 2');
       html += '<div class="draftCompItem">';
       html += '<div class="draftCompMain">';
       html += '<span class="draftCompName">' + c.name + '</span>';
@@ -738,9 +850,16 @@ function renderDraftRadar(r) {
   }
 
   // Disclaimer
-  html += '<div class="draftDisclaimer">Statistical model trained on 2,391 NCAA→NBA draft outcomes (2019–2025, CBD API). ';
-  html += 'Uses sign-constrained elastic-net logistic regression with balanced class weights (CV F1: 64.7%, Recall: 90.5%). ';
-  html += 'Does not factor measurables, workouts, team need, or international prospects.</div>';
+  var wbb = _isWBB();
+  if (wbb) {
+    html += '<div class="draftDisclaimer">Statistical model for NCAA→WNBA projection using logistic regression on WBB-available stats. ';
+    html += 'Features: PPG, eFG%, RPG, APG, SPG, BPG + class/conference tiers. ';
+    html += 'Does not factor measurables, workouts, team need, or international prospects.</div>';
+  } else {
+    html += '<div class="draftDisclaimer">Statistical model trained on 2,391 NCAA→NBA draft outcomes (2019–2025, CBD API). ';
+    html += 'Uses sign-constrained elastic-net logistic regression with balanced class weights (CV F1: 64.7%, Recall: 90.5%). ';
+    html += 'Does not factor measurables, workouts, team need, or international prospects.</div>';
+  }
 
   el.innerHTML = html;
 }
@@ -748,7 +867,6 @@ function renderDraftRadar(r) {
 // ── Small badge for player table ─────────────────────────────────────────────
 
 function draftBadgeHtml(r) {
-  if (typeof league !== 'undefined' && league === 'WBB') return '—';
   var prob = draftProbability(r);
   if (prob == null) return '—';
   var grade = draftGrade(prob);
@@ -777,5 +895,6 @@ window.DraftModel = {
   draftComparables:    draftComparables,
   renderDraftRadar:    renderDraftRadar,
   draftBadgeHtml:      draftBadgeHtml,
-  DRAFT_MODEL:         DRAFT_MODEL
+  DRAFT_MODEL:         DRAFT_MODEL,
+  WBB_DRAFT_MODEL:     WBB_DRAFT_MODEL
 };

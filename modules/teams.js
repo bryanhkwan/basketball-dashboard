@@ -1510,7 +1510,7 @@ function _thEnsureBracketJsPdf() {
   if (!_thBracketJsPdfPromise) {
     _thBracketJsPdfPromise = loadScriptOnce(
       'jspdf',
-      'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      URLS.JSPDF_CDN,
       {
         timeoutMs: 12000,
         test: function () { return window.jspdf && window.jspdf.jsPDF; },
@@ -1740,7 +1740,7 @@ async function _thRunBracketAIAnalysis() {
     '```json\n' + JSON.stringify(payload, null, 2) + '\n```';
 
   try {
-    var res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
+    var res = await fetch(URLS.GEMINI_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2076,7 +2076,25 @@ function thRenderOverview(teamData, gamesData, statsData) {
       <div class="thRatingsGrid">
         ${wbbStatsHtml}
       </div>
-    </div>`;
+    </div>
+    <div id="thEffTrend" style="margin-top:10px"></div>`;
+
+  // Inject efficiency trend if data exists
+  if (window.TrendModule && displayName) {
+    window.TrendModule.getTrendData(displayName, 'team').then(function (snaps) {
+      var el = document.getElementById('thEffTrend');
+      if (!el || !snaps || snaps.length < 2) { if (el) el.style.display = 'none'; return; }
+      el.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Efficiency Trend</div>'
+        + window.TrendModule.buildTrendChart(snaps.slice(-12), {
+          width: 320, height: 100,
+          fields: [
+            { key: 'adjO', label: 'Offense', color: '#34d399' },
+            { key: 'adjD', label: 'Defense', color: '#f87171' },
+            { key: 'adjEM', label: 'Net', color: 'var(--accent)' }
+          ]
+        });
+    });
+  }
 }
 
 // ── Render: Conference Threats ────────────────────────────────────────────────
@@ -3454,7 +3472,7 @@ async function thRunDeepAnalysis() {
 
   try {
     if (status) status.textContent = `Using ${selectedModel}\u2026`;
-    const res = await fetch('https://white-pine-7669.bryanhkwan.workers.dev', {
+    const res = await fetch(URLS.GEMINI_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4515,6 +4533,49 @@ function _thBuildDeepShotReportHTML(aName, bName) {
   return '<div class="thDeepCharts">' + parts.join('') + '</div>';
 }
 
+// ── Period filter for matchup shot charts ─────────────────────────────────────
+var _thMatchupPeriodFilter = 'all';
+
+function _thFilterShotsByPeriod(shots, filter) {
+  if (filter === 'all') return shots;
+  if (filter === 'ot') return shots.filter(function(s) { return parseInt(s.period, 10) > 2; });
+  var p = parseInt(filter, 10);
+  return shots.filter(function(s) { return parseInt(s.period, 10) === p; });
+}
+
+function thFilterMatchupPeriod(btn, period) {
+  _thMatchupPeriodFilter = period;
+  var btns = btn.parentElement.querySelectorAll('.saPeriodBtn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-period') === period);
+  }
+  if (!_thLastMatchupShots) return;
+
+  var shotsA = _thFilterShotsByPeriod(_thLastMatchupShots.shotsA, period);
+  var shotsB = _thFilterShotsByPeriod(_thLastMatchupShots.shotsB, period);
+  var tA = _thLastMatchupShots.teamA;
+  var tB = _thLastMatchupShots.teamB;
+
+  var dotsEl = document.getElementById('thMatchupDots');
+  var hexEl = document.getElementById('thMatchupHex');
+  var zonesEl = document.getElementById('thMatchupZones');
+
+  if (dotsEl && typeof _th_buildShotChartSVG === 'function') {
+    dotsEl.innerHTML = _th_buildShotChartSVG(shotsA, tA + ' offense', 'var(--accent)')
+      + _th_buildShotChartSVG(shotsB, tB + ' offense', 'var(--warn)');
+    thInitShotChart('thMatchupDots');
+  }
+  if (hexEl && typeof saBuildHexChart === 'function') {
+    hexEl.innerHTML = saBuildHexChart(shotsA, tA + ' offense', {color: 'var(--accent)'})
+      + saBuildHexChart(shotsB, tB + ' offense', {color: 'var(--warn)'});
+    if (typeof saInitHexTooltips === 'function') saInitHexTooltips('thMatchupHex');
+  }
+  if (zonesEl && typeof saBuildZoneChart === 'function') {
+    zonesEl.innerHTML = saBuildZoneChart(shotsA, tA + ' offense', {color: 'var(--accent)'})
+      + saBuildZoneChart(shotsB, tB + ' offense', {color: 'var(--warn)'});
+  }
+}
+
 // ── thRenderMatchup — shot chart + zone breakdown for head-to-head games ──────
 function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
   mode = mode || 'season';
@@ -4659,8 +4720,15 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     </div>
     ${avgPtsA ? `<div class="thMatchupScore"><span style="color:var(--accent)">${avgPtsA} ppg</span> <span class="muted" style="font-size:11px">avg score</span> <span style="color:var(--warn)">${avgPtsB} ppg</span></div>` : ''}
     <div class="saShotToggle" style="justify-content:center;margin-bottom:4px">
+      <button class="saShotBtn saPeriodBtn active" data-period="all" onclick="thFilterMatchupPeriod(this,'all')">All</button>
+      <button class="saShotBtn saPeriodBtn" data-period="1" onclick="thFilterMatchupPeriod(this,'1')">1st Half</button>
+      <button class="saShotBtn saPeriodBtn" data-period="2" onclick="thFilterMatchupPeriod(this,'2')">2nd Half</button>
+      <button class="saShotBtn saPeriodBtn" data-period="ot" onclick="thFilterMatchupPeriod(this,'ot')">OT</button>
+    </div>
+    <div class="saShotToggle" style="justify-content:center;margin-bottom:4px">
       <button class="saShotBtn active" data-view="dots" onclick="saToggleMatchupCharts(this,'dots')">Shots</button>
       <button class="saShotBtn" data-view="hex" onclick="saToggleMatchupCharts(this,'hex')">Hex Map</button>
+      <button class="saShotBtn" data-view="zones" onclick="saToggleMatchupCharts(this,'zones')">Zones</button>
     </div>
     <div class="thShotChartsRow" id="thMatchupDots">
       ${_th_buildShotChartSVG(shotsA, teamA + ' offense', 'var(--accent)')}
@@ -4669,6 +4737,10 @@ function thRenderMatchup(teamA, teamB, allShots, gamesPlayed, boxScores, mode) {
     <div class="thShotChartsRow" id="thMatchupHex" style="display:none">
       ${typeof saBuildHexChart === 'function' ? saBuildHexChart(shotsA, teamA + ' offense', {color: 'var(--accent)'}) : ''}
       ${typeof saBuildHexChart === 'function' ? saBuildHexChart(shotsB, teamB + ' offense', {color: 'var(--warn)'}) : ''}
+    </div>
+    <div class="thShotChartsRow" id="thMatchupZones" style="display:none">
+      ${typeof saBuildZoneChart === 'function' ? saBuildZoneChart(shotsA, teamA + ' offense', {color: 'var(--accent)'}) : ''}
+      ${typeof saBuildZoneChart === 'function' ? saBuildZoneChart(shotsB, teamB + ' offense', {color: 'var(--warn)'}) : ''}
     </div>
     <div class="thZoneTable">
       <div class="thZoneHead">

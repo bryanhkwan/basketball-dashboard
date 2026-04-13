@@ -3,7 +3,7 @@
 // All endpoints from api.collegebasketballdata.com
 // Dependencies: none (standalone module)
 
-var CB_PROXY_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/api/proxy';
+var CB_PROXY_BASE = URLS.WORKER + '/api/proxy';
 var CB_WORKER_BASE = CB_PROXY_BASE.replace(/\/api\/proxy$/, '');
 
 // ── Endpoint definitions ─────────────────────────────────────────────────────

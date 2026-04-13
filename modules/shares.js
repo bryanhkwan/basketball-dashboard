@@ -3,8 +3,8 @@
 // Dependencies: auth.js, teambuilder.js (tbPlayerKey, tbPlayerLeague, tbAllComputed),
 //               favorites.js (favsHeart, favsState, favsFetch)
 
-var SHARES_API   = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
-var CHAT_API     = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+var SHARES_API   = URLS.WORKER;
+var CHAT_API     = URLS.WORKER;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 var chatState = {

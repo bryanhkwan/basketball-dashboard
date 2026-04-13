@@ -5,7 +5,7 @@
 // Local escape helper
 function _esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-var NOTES_BASE = 'https://hidden-salad-773b.bryanhkwan.workers.dev/notes';
+var NOTES_BASE = URLS.WORKER + '/notes';
 
 // localStorage-backed mock used when DEV_BYPASS_AUTH = true
 function _devNotesStore()      { try { return JSON.parse(localStorage.getItem('_devNotes') || '[]'); } catch { return []; } }

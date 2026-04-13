@@ -170,6 +170,14 @@ function deepClone(obj){
   return JSON.parse(JSON.stringify(obj));
 }
 
+// --- Centralized URLs ---
+var URLS = {
+  WORKER: 'https://hidden-salad-773b.bryanhkwan.workers.dev',
+  GEMINI_PROXY: 'https://white-pine-7669.bryanhkwan.workers.dev',
+  JSPDF_CDN: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+  XLSX_CDN: 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js',
+};
+
 // --- Constants ---
 
 const DEFAULT_GS_URL = 'https://docs.google.com/spreadsheets/d/1dDphHKY2lIs1T88TKo6f3n7oUccc4dVYmMlF2Rk1mFk/edit?usp=sharing';
@@ -346,6 +354,19 @@ const DEFAULT_CONF_VALUES = {
   'Big South':0.94,'Independent':1.00,'NE10':0.90
 };
 
+// WBB conference multipliers — calibrated to WBB power rankings which differ
+// from MBB (e.g., SEC/Big Ten top-heavy in WBB, Big 12 slightly lower).
+const WBB_DEFAULT_CONF_VALUES = {
+  'SEC':1.09,'Big Ten':1.08,'Big 12':1.07,'ACC':1.06,'Big East':1.05,
+  'Pac-12':1.04,'American':1.04,'WCC':1.03,'Mountain West':1.03,'Atlantic 10':1.02,
+  'Missouri Valley':1.02,'CUSA':1.01,'Sun Belt':1.01,'MAC':1.00,
+  'CAA':1.00,'Ivy League':1.00,'Big West':0.99,'Summit League':0.99,
+  'Horizon League':0.99,'America East':0.98,'Southern':0.98,
+  'ASUN':0.97,'MAAC':0.97,'OVC':0.96,'WAC':0.96,'Patriot League':0.96,
+  'Big Sky':0.96,'Southland':0.95,'NEC':0.94,'SWAC':0.93,'MEAC':0.93,
+  'Big South':0.94,'Independent':1.00,'NE10':0.90
+};
+
 const CONF_ALIASES = {
   // Pac-12
   'Pac 12':'Pac-12','Pacific-12':'Pac-12','PAC-12':'Pac-12','Pacific 12':'Pac-12',
@@ -438,6 +459,7 @@ const GAP_EXPLANATIONS = {
 
 // --- Class wrapper (organizational) ---
 class Config {
+  get URLS(){ return URLS; }
   get SHEET_MAP(){ return SHEET_MAP; }
   get DEFAULT_GS_URL(){ return DEFAULT_GS_URL; }
   get DEFAULT_GS_API_KEY(){ return DEFAULT_GS_API_KEY; }
@@ -449,6 +471,7 @@ class Config {
   get DEFAULT_DIR(){ return DEFAULT_DIR; }
   get CONF_DISPLAY_ORDER(){ return CONF_DISPLAY_ORDER; }
   get DEFAULT_CONF_VALUES(){ return DEFAULT_CONF_VALUES; }
+  get WBB_DEFAULT_CONF_VALUES(){ return WBB_DEFAULT_CONF_VALUES; }
   get CONF_ALIASES(){ return CONF_ALIASES; }
   get GAP_CATEGORIES(){ return GAP_CATEGORIES; }
   get GAP_EXPLANATIONS(){ return GAP_EXPLANATIONS; }

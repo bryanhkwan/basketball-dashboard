@@ -11,6 +11,63 @@ var _lastCompare = null;
 var _profileSimilarCacheRef = null;
 var _profileSimilarCacheKey = '';
 var _profileSimilarCacheRows = [];
+var _profileLastShots = null;
+var _profileLastShotPlayer = '';
+var _profileShotPeriodFilter = 'all';
+
+function _profileFilterShotsByPeriod(shots, filter) {
+  if (filter === 'all') return shots;
+  if (filter === 'ot') return shots.filter(function(s) { return parseInt(s.period, 10) > 2; });
+  var p = parseInt(filter, 10);
+  return shots.filter(function(s) { return parseInt(s.period, 10) === p; });
+}
+
+function _profileRenderShotCharts(shots, playerName, yr) {
+  var mShotChart = document.getElementById('mShotChart');
+  if (!mShotChart) return;
+  var dotHtml = typeof _th_buildShotChartSVG === 'function'
+    ? _th_buildShotChartSVG(shots, playerName, 'var(--accent)') : '';
+  var hexHtml = typeof saBuildHexChart === 'function'
+    ? saBuildHexChart(shots, playerName, {}) : '';
+  var zoneHtml = typeof saBuildZoneChart === 'function'
+    ? saBuildZoneChart(shots, playerName, {}) : '';
+  var hasHex = !!hexHtml && typeof saBuildHexChart === 'function';
+  var hasZones = !!zoneHtml && typeof saBuildZoneChart === 'function';
+  var periodBar = '<div class="saShotToggle">'
+    + '<button class="saShotBtn saPeriodBtn' + (_profileShotPeriodFilter === 'all' ? ' active' : '') + '" data-period="all" onclick="profileFilterPeriod(this,\'all\')">All</button>'
+    + '<button class="saShotBtn saPeriodBtn' + (_profileShotPeriodFilter === '1' ? ' active' : '') + '" data-period="1" onclick="profileFilterPeriod(this,\'1\')">1st Half</button>'
+    + '<button class="saShotBtn saPeriodBtn' + (_profileShotPeriodFilter === '2' ? ' active' : '') + '" data-period="2" onclick="profileFilterPeriod(this,\'2\')">2nd Half</button>'
+    + '<button class="saShotBtn saPeriodBtn' + (_profileShotPeriodFilter === 'ot' ? ' active' : '') + '" data-period="ot" onclick="profileFilterPeriod(this,\'ot\')">OT</button>'
+    + '</div>';
+  var toggleBar = (hasHex || hasZones)
+    ? '<div class="saShotToggle">'
+      + '<button class="saShotBtn active" data-view="dots" onclick="saToggleProfileChart(this,\'dots\')">Shots</button>'
+      + (hasHex ? '<button class="saShotBtn" data-view="hex" onclick="saToggleProfileChart(this,\'hex\')">Hex Map</button>' : '')
+      + (hasZones ? '<button class="saShotBtn" data-view="zones" onclick="saToggleProfileChart(this,\'zones\')">Zones</button>' : '')
+      + '</div>'
+    : '';
+  mShotChart.innerHTML =
+    '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts' + (yr ? ' - ' + yr + ' season' : '') + '</div>'
+    + periodBar
+    + toggleBar
+    + '<div id="mShotChartDots">' + dotHtml + '</div>'
+    + (hasHex ? '<div id="mShotChartHex" style="display:none">' + hexHtml + '</div>' : '')
+    + (hasZones ? '<div id="mShotChartZones" style="display:none">' + zoneHtml + '</div>' : '');
+  if (typeof thInitShotChart === 'function') thInitShotChart('mShotChartDots');
+  if (hasHex && typeof saInitHexTooltips === 'function') saInitHexTooltips('mShotChartHex');
+}
+
+function profileFilterPeriod(btn, period) {
+  _profileShotPeriodFilter = period;
+  var btns = btn.parentElement.querySelectorAll('.saPeriodBtn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-period') === period);
+  }
+  if (!_profileLastShots) return;
+  var filtered = _profileFilterShotsByPeriod(_profileLastShots, period);
+  var yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
+  _profileRenderShotCharts(filtered, _profileLastShotPlayer, yr);
+}
 
 function profileIsGuestDemo() {
   return typeof demoIsGuestMode === 'function' && demoIsGuestMode();
@@ -408,24 +465,10 @@ function openProfile(r){
             mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
             return;
           }
-          var dotHtml = typeof _th_buildShotChartSVG === 'function'
-            ? _th_buildShotChartSVG(shots, player, 'var(--accent)') : '';
-          var hexHtml = typeof saBuildHexChart === 'function'
-            ? saBuildHexChart(shots, player, {}) : '';
-          var hasHex = !!hexHtml && typeof saBuildHexChart === 'function';
-          var toggleBar = hasHex
-            ? '<div class="saShotToggle">'
-              + '<button class="saShotBtn active" data-view="dots" onclick="saToggleProfileChart(this,\'dots\')">Shots</button>'
-              + '<button class="saShotBtn" data-view="hex" onclick="saToggleProfileChart(this,\'hex\')">Hex Map</button>'
-              + '</div>'
-            : '';
-          mShotChart.innerHTML =
-            '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts - ' + yr + ' season</div>'
-            + toggleBar
-            + '<div id="mShotChartDots">' + dotHtml + '</div>'
-            + (hasHex ? '<div id="mShotChartHex" style="display:none">' + hexHtml + '</div>' : '');
-          if (typeof thInitShotChart === 'function') thInitShotChart('mShotChartDots');
-          if (hasHex && typeof saInitHexTooltips === 'function') saInitHexTooltips('mShotChartHex');
+          _profileLastShots = shots;
+          _profileLastShotPlayer = player;
+          _profileShotPeriodFilter = 'all';
+          _profileRenderShotCharts(shots, player, yr);
           enrichScoutReportWithShots(shots);
           if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
         }).catch(function() {
@@ -438,6 +481,27 @@ function openProfile(r){
   if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
   var _shareBtn = document.getElementById('mShareBtn');
   if (_shareBtn) _shareBtn.onclick = function() { if (typeof sharesOpenSendModal === 'function') sharesOpenSendModal(r); };
+
+  // ── Trend chart ──────────────────────────────────────────────────────────
+  var mTrendPanel = document.getElementById('mTrendPanel');
+  var mTrendChart = document.getElementById('mTrendChart');
+  if (mTrendPanel && mTrendChart && window.TrendModule) {
+    mTrendPanel.style.display = 'none';
+    mTrendChart.innerHTML = '<div class="muted" style="font-size:12px">Loading trend data...</div>';
+    window.TrendModule.getTrendData(player, 'player').then(function (snaps) {
+      if (!snaps || snaps.length < 2) {
+        mTrendPanel.style.display = 'none';
+        return;
+      }
+      mTrendPanel.style.display = '';
+      mTrendChart.innerHTML = window.TrendModule.buildTrendChart(snaps.slice(-12), {
+        fields: [
+          { key: 'perf', label: 'Composite', color: 'var(--accent)' },
+          { key: 'rank', label: 'Rank', color: 'rgba(99,179,237,0.8)' }
+        ]
+      });
+    });
+  }
 
   // ── 📝 Notes button: toggle per-player scout note drawer ─────────────────
   var _notesBtn    = document.getElementById('mNotesBtn');

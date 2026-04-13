@@ -6,3 +6,11 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# dev/scratch artifacts
+tmp_*
+train-output.txt
+both_p*.json
+*.pyc
+__pycache__/
+*.bak

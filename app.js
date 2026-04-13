@@ -4,7 +4,7 @@
 
 // ── CBD API request counter (real users only, tracks upstream MISSes) ────────
 ;(function () {
-  var WORKER = 'https://hidden-salad-773b.bryanhkwan.workers.dev';
+  var WORKER = URLS.WORKER;
   function _monthKey() { return 'cbd_api_miss_' + new Date().toISOString().slice(0, 7); }
 
   function _isRealUser() {

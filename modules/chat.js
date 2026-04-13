@@ -3,7 +3,7 @@
 // Contains the Gemini-backed chatbot IIFE, wrapped in a class for organization.
 
 (function(){
-  const GEMINI_PROXY_URL = 'https://white-pine-7669.bryanhkwan.workers.dev';
+  const GEMINI_PROXY_URL = URLS.GEMINI_PROXY;
   const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
   const toggle = document.getElementById('aiToggle');
