@@ -1689,12 +1689,30 @@ function buildStatDistributions(){
   const fromFit = Object.keys(FIT_PRESETS.balanced);
   const stats = Array.from(new Set([...fromWeights, ...fromFit])).filter(Boolean);
 
-  stats.forEach(stat => {
-    const arr = computed.map(r => safeNum(r[stat])).filter(Number.isFinite);
-    if(arr.length < 5) return;
-    const sorted = arr.slice().sort((a,b)=>a-b);
-    statDist[stat] = {sorted, invert: getInvertForStat(stat)};
-  });
+  var buckets = {};
+  var n = computed.length;
+  for(var si = 0; si < stats.length; si++) buckets[stats[si]] = new Float64Array(n);
+  var counts = {};
+  for(si = 0; si < stats.length; si++) counts[stats[si]] = 0;
+
+  for(var i = 0; i < n; i++){
+    var r = computed[i];
+    for(si = 0; si < stats.length; si++){
+      var stat = stats[si];
+      var v = safeNum(r[stat]);
+      if(Number.isFinite(v)){
+        buckets[stat][counts[stat]++] = v;
+      }
+    }
+  }
+
+  for(si = 0; si < stats.length; si++){
+    var s = stats[si];
+    var c = counts[s];
+    if(c < 5) continue;
+    var sorted = buckets[s].subarray(0, c).slice().sort();
+    statDist[s] = {sorted: sorted, invert: getInvertForStat(s)};
+  }
 }
 
 function statPercentile(stat, x){
@@ -1958,16 +1976,15 @@ function computeAll(options){
     const delta = (Number.isFinite(bossVal) && Number.isFinite(final)) ? (final - bossVal) : NaN;
     const deltaPct = (Number.isFinite(delta) && bossVal !== 0) ? (delta / bossVal) : NaN;
 
-    const out = Object.assign({}, r, {
-      PerfScore_calc: adjPerf, PerfScore_raw: rawPerf, ConfMult_calc: cm, MP_num: mp,
-      Score: adjPerf, PredictedValue_calc: pred, MinMultiplier_calc: mult, ActualValuationCurve_calc: curveBase, ActualValuationBase_calc: curveBase, ActualValuation_calc: final,
-      MarketPressurePredicted_calc: marketQuote.pred, MarketPressureMinMultiplier_calc: marketQuote.mult, MarketPressure_calc: marketQuote.final,
-      MarketGap_calc: marketLane.gap, MarketGapPct_calc: marketLane.gapPct, MarketLaneLabel_calc: marketLane.label, MarketLaneTone_calc: marketLane.tone,
-      TranslationRiskPct_calc: 0, TranslationRiskMult_calc: 1, TranslationRiskLabel_calc: '', TranslationRiskLevel_calc: '', TranslationRiskTone_calc: 'neutral', TranslationRiskReasons_calc: '', TranslationRiskSource_calc: 'lite',
-      ScoutAdjustmentPct_calc: manualBoost, ScoutAdjustmentMult_calc: (Number.isFinite(manualBoost) ? (1 + manualBoost) : 1), ScoutAdjustmentLabel_calc: manualBoostLabel, ScoutAdjustmentTone_calc: manualBoostTone, ScoutAdjustmentNote_calc: manualScoutNote,
-      BidToPressureRatio_calc: (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN,
-      BossRank: bossRank, ActualValuation: bossVal, ValueDelta_calc: delta, ValueDeltaPct_calc: deltaPct,
-    });
+    const out = Object.assign({}, r);
+    out.PerfScore_calc = adjPerf; out.PerfScore_raw = rawPerf; out.ConfMult_calc = cm; out.MP_num = mp;
+    out.Score = adjPerf; out.PredictedValue_calc = pred; out.MinMultiplier_calc = mult; out.ActualValuationCurve_calc = curveBase; out.ActualValuationBase_calc = curveBase; out.ActualValuation_calc = final;
+    out.MarketPressurePredicted_calc = marketQuote.pred; out.MarketPressureMinMultiplier_calc = marketQuote.mult; out.MarketPressure_calc = marketQuote.final;
+    out.MarketGap_calc = marketLane.gap; out.MarketGapPct_calc = marketLane.gapPct; out.MarketLaneLabel_calc = marketLane.label; out.MarketLaneTone_calc = marketLane.tone;
+    out.TranslationRiskPct_calc = 0; out.TranslationRiskMult_calc = 1; out.TranslationRiskLabel_calc = ''; out.TranslationRiskLevel_calc = ''; out.TranslationRiskTone_calc = 'neutral'; out.TranslationRiskReasons_calc = ''; out.TranslationRiskSource_calc = 'lite';
+    out.ScoutAdjustmentPct_calc = manualBoost; out.ScoutAdjustmentMult_calc = Number.isFinite(manualBoost) ? (1 + manualBoost) : 1; out.ScoutAdjustmentLabel_calc = manualBoostLabel; out.ScoutAdjustmentTone_calc = manualBoostTone; out.ScoutAdjustmentNote_calc = manualScoutNote;
+    out.BidToPressureRatio_calc = (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN;
+    out.BossRank = bossRank; out.ActualValuation = bossVal; out.ValueDelta_calc = delta; out.ValueDeltaPct_calc = deltaPct;
     out._projectionMemo = projectionBuildInputs(out, projectionCtx);
     out._searchStr = ((out.Player || '') + ' ' + (out.Team || '') + ' ' + (out.Conference || out.Conf || '') + ' ' + (out.Position || out.Pos || '') + ' ' + (out.Height || '')).toLowerCase();
     computed[i] = out;
@@ -1978,13 +1995,20 @@ function computeAll(options){
 
   // Pre-compute percentiles for key stats used in scout report / profile
   var _pctStats = Object.keys(statDist);
+  var _pctDists = new Array(_pctStats.length);
+  for(var _pi = 0; _pi < _pctStats.length; _pi++) _pctDists[_pi] = statDist[_pctStats[_pi]];
   for(let i = 0; i < computed.length; i++){
     var _r = computed[i];
-    // Cache percentiles as _pct_<stat> on each player row
     for(var _si = 0; _si < _pctStats.length; _si++){
-      var _s = _pctStats[_si];
-      var _x = safeNum(_r[_s]);
-      _r['_pct_' + _s] = (_x !== null) ? statPercentile(_s, _x) : NaN;
+      var _x = safeNum(_r[_pctStats[_si]]);
+      if(_x !== null){
+        var _d = _pctDists[_si];
+        var _p = percentileRank(_d.sorted, _x);
+        if(_d.invert) _p = 1 - _p;
+        _r['_pct_' + _pctStats[_si]] = clamp(_p, 0, 1);
+      } else {
+        _r['_pct_' + _pctStats[_si]] = NaN;
+      }
     }
     _r.FitScore_calc = fitScoreForRow(_r);
 
@@ -1992,14 +2016,14 @@ function computeAll(options){
     delete _r._projectionMemo;
   }
 
-  const ranked = computed.slice().sort((a,b)=>{
+  computed.sort((a,b)=>{
     const pa = a.PerfScore_calc, pb = b.PerfScore_calc;
     const fa = a.FitScore_calc, fb = b.FitScore_calc;
     if(Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) return pb - pa;
     if(Number.isFinite(fa) && Number.isFinite(fb) && fa !== fb) return fb - fa;
     return String(a.Player||'').localeCompare(String(b.Player||''));
   });
-  ranked.forEach((r,i)=>{ r.CalcRank = i + 1; });
+  for(var _ri = 0; _ri < computed.length; _ri++) computed[_ri].CalcRank = _ri + 1;
 
   kpiPlayers.textContent = String(computed.length);
   kpiAvgPerf.textContent = Number.isFinite(lastPerfAvg) ? lastPerfAvg.toFixed(2) : '—';

@@ -49,16 +49,20 @@ function playerBoardColLabel(col){
 
 // --- Sort ---
 function sortData(data){
-  const k = playerBoardSortKey(sort.key);
-  const dir = sort.dir;
-  return data.slice().sort((a,b)=>{
-    const av = a[k]; const bv = b[k];
-    const an = Number(av); const bn = Number(bv);
-    let cmp;
-    if(Number.isFinite(an) && Number.isFinite(bn)) cmp = an - bn;
-    else cmp = (av ?? '').toString().localeCompare((bv ?? '').toString());
-    return dir === 'asc' ? cmp : -cmp;
-  });
+  var k = playerBoardSortKey(sort.key);
+  var dir = sort.dir;
+  var out = data.slice();
+  var n = out.length;
+  if(!n) return out;
+  var isNumeric = Number.isFinite(Number(out[0][k]));
+  if(isNumeric){
+    var m = dir === 'asc' ? 1 : -1;
+    out.sort(function(a,b){ return ((+a[k] || 0) - (+b[k] || 0)) * m; });
+  } else {
+    var m2 = dir === 'asc' ? 1 : -1;
+    out.sort(function(a,b){ return ((a[k] ?? '').toString().localeCompare((b[k] ?? '').toString())) * m2; });
+  }
+  return out;
 }
 
 // --- Render ---
@@ -76,18 +80,19 @@ function renderPlayers(){
       return hay.includes(q);
     });
   }
-  filteredData = sortData(data);
   currentPage = 0;
+  var playersPage = document.getElementById('pagePlayers');
+  if(playersPage && playersPage.style.display === 'none'){
+    filteredData = data;
+    playersBody.innerHTML = '';
+    return;
+  }
+  filteredData = sortData(data);
   // Only rebuild headers when the column set actually changes (league switch, etc.)
   var headerKey = (typeof league !== 'undefined' ? league : '') + '|' + (typeof oppAddPlayer !== 'undefined' ? '1' : '0') + '|' + (typeof draftBadgeHtml === 'function' ? '1' : '0') + '|' + playerValueView;
   if(headerKey !== _lastHeaderKey){
     playersHead.innerHTML = '';
     _lastHeaderKey = headerKey;
-  }
-  const playersPage = document.getElementById('pagePlayers');
-  if(playersPage && playersPage.style.display === 'none'){
-    playersBody.innerHTML = '';
-    return;
   }
   renderPlayersPage();
 }
@@ -154,129 +159,116 @@ function renderPlayersPage(){
     });
   }
 
-  const frag = document.createDocumentFragment();
-  pageData.forEach((r, ri) => {
-    const tr = document.createElement('tr');
-    tr.dataset.ri = ri;
-    const _rk = tbPlayerKey(r);
-    colsToShow.forEach(c => {
-      const td = document.createElement('td');
-      if(c.key === 'Score') td.classList.add('playersPerfCell');
-      let v = r[c.key];
+  var _html = [];
+  var _isProjection = playerValueView === 'projection';
+  var _hasDraft = typeof draftBadgeHtml === 'function';
+  var _esc = function(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var _toneRe = /^(good|warn|bad|neutral)$/;
+
+  for(var ri = 0; ri < pageData.length; ri++){
+    var r = pageData[ri];
+    var _rk = tbPlayerKey(r);
+    _html.push('<tr data-ri="', ri, '">');
+    for(var ci = 0; ci < colsToShow.length; ci++){
+      var c = colsToShow[ci];
+      var v = r[c.key];
       if(c.key === '_tb_add'){
-        const onRoster = _rosterKeySet.has(_rk);
-        if(onRoster){
-          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already on roster">&#10003;</span>`;
-        } else {
-          td.innerHTML = `<span class="tbAddBtn" data-action="tb" title="Add to roster">&#65291;</span>`;
-        }
+        _html.push(_rosterKeySet.has(_rk)
+          ? '<td><span class="tbAddBtn on-roster" title="Already on roster">&#10003;</span></td>'
+          : '<td><span class="tbAddBtn" data-action="tb" title="Add to roster">&#65291;</span></td>');
       }else if(c.key === '_opp_add'){
-        const onOpp = _oppKeySet.has(_rk);
-        if(onOpp){
-          td.innerHTML = `<span class="tbAddBtn on-roster" title="Already in opponent">&#10003;</span>`;
-        } else {
-          td.innerHTML = `<span class="tbAddBtn" data-action="opp" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">&#9876;</span>`;
-        }
+        _html.push(_oppKeySet.has(_rk)
+          ? '<td><span class="tbAddBtn on-roster" title="Already in opponent">&#10003;</span></td>'
+          : '<td><span class="tbAddBtn" data-action="opp" title="Add to opponent" style="border-color:rgba(251,191,36,.4);color:var(--warn)">&#9876;</span></td>');
       }else if(c.key === 'Player'){
-        const playerName = (v ?? '').toString();
-        if(playerValueView === 'projection'){
-          const badges = [];
-          const conf = safeNum(r.ProjectionConfidence_calc);
-          const riskLabel = (r.ProjectionMedicalRiskLabel_calc || '').toString();
-          if(Number.isFinite(conf)){
-            badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${projectionConfidenceTone(conf)}">Conf ${Math.round(conf*100)}%</span>`);
-          }
-          if(riskLabel){
-            badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${projectionMedicalRiskTone(riskLabel)}">Risk ${riskLabel}</span>`);
-          }
-          td.innerHTML = `<div class="playersNameCell"><span class="link">${playerName}</span>${badges.length ? `<div class="playersProjectionBadges">${badges.join('')}</div>` : ''}</div>`;
-          td.title = (r.ProjectionReasonSummary_calc || '').toString();
+        var pn = _esc((v ?? '').toString());
+        if(_isProjection){
+          var pBadges = '';
+          var pConf = safeNum(r.ProjectionConfidence_calc);
+          var pRisk = (r.ProjectionMedicalRiskLabel_calc || '').toString();
+          if(Number.isFinite(pConf)) pBadges += '<span class="playersProjectionBadge playersProjectionBadge--' + projectionConfidenceTone(pConf) + '">Conf ' + Math.round(pConf*100) + '%</span>';
+          if(pRisk) pBadges += '<span class="playersProjectionBadge playersProjectionBadge--' + projectionMedicalRiskTone(pRisk) + '">Risk ' + _esc(pRisk) + '</span>';
+          _html.push('<td title="', _esc(r.ProjectionReasonSummary_calc || ''), '"><div class="playersNameCell"><span class="link">', pn, '</span>', pBadges ? '<div class="playersProjectionBadges">' + pBadges + '</div>' : '', '</div></td>');
         } else {
-          td.innerHTML = `<span class="link">${playerName}</span>`;
+          _html.push('<td><span class="link">', pn, '</span></td>');
         }
       }else if(c.key === 'ConfMult_calc'){
-        const cm = safeNum(r.ConfMult_calc);
+        var cm = safeNum(r.ConfMult_calc);
         if(Number.isFinite(cm) && cm !== 1){
-          td.textContent = cm.toFixed(2);
-          td.style.color = cm > 1 ? 'var(--good)' : 'var(--bad)';
-          td.style.fontWeight = '700';
+          _html.push('<td style="color:', cm > 1 ? 'var(--good)' : 'var(--bad)', ';font-weight:700">', cm.toFixed(2), '</td>');
         } else {
-          td.textContent = Number.isFinite(cm) ? cm.toFixed(2) : '\u2014';
+          _html.push('<td>', Number.isFinite(cm) ? cm.toFixed(2) : '\u2014', '</td>');
         }
       }else if(c.key === 'Height'){
-        const h = Number(r.Height);
-        if(Number.isFinite(h) && h > 0) td.textContent = Math.floor(h/12) + "'" + (h%12) + '"';
-        else td.textContent = r.Height || '\u2014';
-        td.style.color = 'var(--muted)';
+        var h = Number(r.Height);
+        _html.push('<td style="color:var(--muted)">');
+        if(Number.isFinite(h) && h > 0) _html.push(Math.floor(h/12), "'", (h%12), '"');
+        else _html.push(_esc(r.Height || '\u2014'));
+        _html.push('</td>');
       }else if(c.key === 'Score'){
-        const scoreValue = playerValueView === 'projection' ? safeNum(r.ProjectionPerf_calc) : Number(r.Score);
-        td.textContent = Number.isFinite(scoreValue) ? scoreValue.toFixed(2) : '\u2014';
+        var sv = _isProjection ? safeNum(r.ProjectionPerf_calc) : Number(r.Score);
+        _html.push('<td class="playersPerfCell">', Number.isFinite(sv) ? sv.toFixed(2) : '\u2014', '</td>');
       }else if(c.key === 'FitScore_calc'){
-        td.textContent = Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '\u2014';
+        _html.push('<td>', Number.isFinite(r.FitScore_calc) ? r.FitScore_calc.toFixed(0) : '\u2014', '</td>');
       }else if(c.key === 'ActualValuation_calc'){
-        if(playerValueView === 'projection'){
-          const medianValue = safeNum(r.ProjectionMedianValue_calc);
-          const floorValue = safeNum(r.ProjectionFloorValue_calc);
-          const ceilingValue = safeNum(r.ProjectionCeilingValue_calc);
-          td.classList.add('playersProjectionValueCell');
-          td.innerHTML = Number.isFinite(medianValue)
-            ? `<div class="playersProjectionValueMain">${playersDisplayMoney(medianValue)}</div>${(Number.isFinite(floorValue) && Number.isFinite(ceilingValue)) ? `<div class="playersProjectionValueSub">${playersDisplayMoney(floorValue)} - ${playersDisplayMoney(ceilingValue)}</div>` : ''}`
-            : '\u2014';
-          td.title = (r.ProjectionReasonSummary_calc || '').toString();
+        if(_isProjection){
+          var mv = safeNum(r.ProjectionMedianValue_calc), fv = safeNum(r.ProjectionFloorValue_calc), cv2 = safeNum(r.ProjectionCeilingValue_calc);
+          _html.push('<td class="playersProjectionValueCell" title="', _esc(r.ProjectionReasonSummary_calc || ''), '">');
+          if(Number.isFinite(mv)){
+            _html.push('<div class="playersProjectionValueMain">', playersDisplayMoney(mv), '</div>');
+            if(Number.isFinite(fv) && Number.isFinite(cv2)) _html.push('<div class="playersProjectionValueSub">', playersDisplayMoney(fv), ' - ', playersDisplayMoney(cv2), '</div>');
+          } else _html.push('\u2014');
+          _html.push('</td>');
         } else {
-          const modelValue = safeNum(r.ActualValuation_calc);
-          const baseValue = safeNum(r.ActualValuationBase_calc);
-          const curveValue = safeNum(r.ActualValuationCurve_calc);
-          const translationLabel = (r.TranslationRiskLabel_calc || '').toString();
-          const translationTone = /^(good|warn|bad|neutral)$/.test((r.TranslationRiskTone_calc || '').toString()) ? (r.TranslationRiskTone_calc || 'neutral') : 'neutral';
-          const translationReasons = (r.TranslationRiskReasons_calc || '').toString().trim();
-          const scoutLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
-          const scoutTone = /^(good|warn|bad|neutral)$/.test((r.ScoutAdjustmentTone_calc || '').toString()) ? (r.ScoutAdjustmentTone_calc || 'neutral') : 'neutral';
-          const scoutNote = (r.ScoutAdjustmentNote_calc || '').toString().trim();
-          if(Number.isFinite(modelValue)){
-            td.classList.add('playersProjectionValueCell');
-            const badges = [];
-            const subBits = [];
-            if(translationLabel) badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${translationTone}">${translationLabel}</span>`);
-            if(scoutLabel) badges.push(`<span class="playersProjectionBadge playersProjectionBadge--${scoutTone}">${scoutLabel}</span>`);
-            if(translationLabel && Number.isFinite(curveValue) && (!Number.isFinite(baseValue) || Math.abs(curveValue - baseValue) > 1)){
-              subBits.push(`Curve ${playersDisplayMoney(curveValue)}`);
+          var mVal = safeNum(r.ActualValuation_calc);
+          var bVal = safeNum(r.ActualValuationBase_calc);
+          var cVal = safeNum(r.ActualValuationCurve_calc);
+          var tLabel = (r.TranslationRiskLabel_calc || '').toString();
+          var tTone = _toneRe.test((r.TranslationRiskTone_calc || '').toString()) ? (r.TranslationRiskTone_calc || 'neutral') : 'neutral';
+          var tReasons = (r.TranslationRiskReasons_calc || '').toString().trim();
+          var sLabel = (r.ScoutAdjustmentLabel_calc || '').toString();
+          var sTone = _toneRe.test((r.ScoutAdjustmentTone_calc || '').toString()) ? (r.ScoutAdjustmentTone_calc || 'neutral') : 'neutral';
+          var sNote = (r.ScoutAdjustmentNote_calc || '').toString().trim();
+          if(Number.isFinite(mVal)){
+            var vTitle = [tReasons, sNote].filter(Boolean).join(' | ');
+            _html.push('<td class="playersProjectionValueCell" title="', _esc(vTitle), '">');
+            _html.push('<div class="playersProjectionValueMain">', playersDisplayMoney(mVal), '</div>');
+            if(tLabel || sLabel){
+              _html.push('<div class="playersProjectionBadges">');
+              if(tLabel) _html.push('<span class="playersProjectionBadge playersProjectionBadge--', tTone, '">', _esc(tLabel), '</span>');
+              if(sLabel) _html.push('<span class="playersProjectionBadge playersProjectionBadge--', sTone, '">', _esc(sLabel), '</span>');
+              _html.push('</div>');
             }
-            if(scoutLabel && Number.isFinite(baseValue) && Math.abs(modelValue - baseValue) > 1){
-              subBits.push(`Pre-scout ${playersDisplayMoney(baseValue)}`);
-            }
-            td.innerHTML = `<div class="playersProjectionValueMain">${playersDisplayMoney(modelValue)}</div>${badges.length ? `<div class="playersProjectionBadges">${badges.join('')}</div>` : ''}${subBits.length ? `<div class="playersProjectionValueSub">${subBits.join(' • ')}</div>` : ''}`;
-            td.title = [translationReasons, scoutNote].filter(Boolean).join(' | ');
+            var subBits = [];
+            if(tLabel && Number.isFinite(cVal) && (!Number.isFinite(bVal) || Math.abs(cVal - bVal) > 1)) subBits.push('Curve ' + playersDisplayMoney(cVal));
+            if(sLabel && Number.isFinite(bVal) && Math.abs(mVal - bVal) > 1) subBits.push('Pre-scout ' + playersDisplayMoney(bVal));
+            if(subBits.length) _html.push('<div class="playersProjectionValueSub">', subBits.join(' \u2022 '), '</div>');
+            _html.push('</td>');
           } else {
-            td.textContent = '\u2014';
-            td.title = '';
+            _html.push('<td>\u2014</td>');
           }
         }
       }else if(c.key === 'MarketPressure_calc'){
-        const pressureValue = safeNum(r.MarketPressure_calc);
-        const laneLabel = (r.MarketLaneLabel_calc || '').toString();
-        const laneTone = /^(good|warn|bad|neutral)$/.test((r.MarketLaneTone_calc || '').toString()) ? (r.MarketLaneTone_calc || 'neutral') : 'neutral';
-        const gapValue = safeNum(r.MarketGap_calc);
-        td.classList.add('playersProjectionValueCell');
-        td.innerHTML = Number.isFinite(pressureValue)
-          ? `<div class="playersProjectionValueMain">${playersDisplayMoney(pressureValue)}</div>${laneLabel ? `<div class="playersProjectionBadges"><span class="playersProjectionBadge playersProjectionBadge--${laneTone}">${laneLabel}</span></div>` : ''}${Number.isFinite(gapValue) && gapValue > 0 ? `<div class="playersProjectionValueSub">+${playersDisplayMoney(gapValue)} vs bid</div>` : ''}`
-          : '\u2014';
+        var pVal = safeNum(r.MarketPressure_calc);
+        var lLabel = (r.MarketLaneLabel_calc || '').toString();
+        var lTone = _toneRe.test((r.MarketLaneTone_calc || '').toString()) ? (r.MarketLaneTone_calc || 'neutral') : 'neutral';
+        var gVal = safeNum(r.MarketGap_calc);
+        _html.push('<td class="playersProjectionValueCell">');
+        if(Number.isFinite(pVal)){
+          _html.push('<div class="playersProjectionValueMain">', playersDisplayMoney(pVal), '</div>');
+          if(lLabel) _html.push('<div class="playersProjectionBadges"><span class="playersProjectionBadge playersProjectionBadge--', lTone, '">', _esc(lLabel), '</span></div>');
+          if(Number.isFinite(gVal) && gVal > 0) _html.push('<div class="playersProjectionValueSub">+', playersDisplayMoney(gVal), ' vs bid</div>');
+        } else _html.push('\u2014');
+        _html.push('</td>');
       }else if(c.key === '_draft_prob'){
-        if(typeof draftBadgeHtml === 'function'){
-          td.innerHTML = draftBadgeHtml(r);
-          td.style.textAlign = 'center';
-        } else {
-          td.textContent = '—';
-        }
+        _html.push('<td style="text-align:center">', _hasDraft ? draftBadgeHtml(r) : '\u2014', '</td>');
       }else{
-        td.textContent = (v ?? '').toString();
+        _html.push('<td>', _esc((v ?? '').toString()), '</td>');
       }
-      tr.appendChild(td);
-    });
-    frag.appendChild(tr);
-  });
-  playersBody.innerHTML = '';
-  playersBody.appendChild(frag);
+    }
+    _html.push('</tr>');
+  }
+  playersBody.innerHTML = _html.join('');
 
   // Pagination controls
   let pag = document.getElementById('pagControls');

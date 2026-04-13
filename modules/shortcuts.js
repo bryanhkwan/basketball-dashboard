@@ -52,6 +52,9 @@
       if (e.target === quickSearchOverlay) closeQuickSearch();
     });
 
+    quickSearchResults.addEventListener('mousedown', qsHandleClick);
+    quickSearchResults.addEventListener('mouseover', qsHandleHover);
+
     quickSearchInput.addEventListener('input', function () {
       filterQuickSearch(quickSearchInput.value);
     });
@@ -110,12 +113,23 @@
     renderQSResults();
   }
 
-  function renderQSResults() {
+  function renderQSResults(highlightOnly) {
     if (!quickSearchResults) return;
     if (!qsFiltered.length) {
       quickSearchResults.innerHTML = '<div class="qs-empty">No results</div>';
       return;
     }
+
+    if (highlightOnly) {
+      var rows = quickSearchResults.querySelectorAll('.qs-row');
+      for (var r = 0; r < rows.length; r++) {
+        rows[r].classList.toggle('qs-active', r === qsActiveIdx);
+      }
+      var active = quickSearchResults.querySelector('.qs-active');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
     var html = '';
     for (var i = 0; i < qsFiltered.length; i++) {
       var p = qsFiltered[i];
@@ -129,19 +143,25 @@
     }
     quickSearchResults.innerHTML = html;
 
-    quickSearchResults.querySelectorAll('.qs-row').forEach(function (row) {
-      row.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        selectQSResult(parseInt(row.dataset.idx, 10));
-      });
-      row.addEventListener('mouseenter', function () {
-        qsActiveIdx = parseInt(row.dataset.idx, 10);
-        renderQSResults();
-      });
-    });
-
     var active = quickSearchResults.querySelector('.qs-active');
     if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function qsHandleClick(e) {
+    var row = e.target.closest('.qs-row');
+    if (!row) return;
+    e.preventDefault();
+    selectQSResult(parseInt(row.dataset.idx, 10));
+  }
+
+  function qsHandleHover(e) {
+    var row = e.target.closest('.qs-row');
+    if (!row) return;
+    var idx = parseInt(row.dataset.idx, 10);
+    if (idx !== qsActiveIdx) {
+      qsActiveIdx = idx;
+      renderQSResults(true);
+    }
   }
 
   function _escAttr(s) {
