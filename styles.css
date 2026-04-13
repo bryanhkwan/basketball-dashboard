@@ -236,6 +236,21 @@
     .close:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.07);color:var(--text);transform:none;box-shadow:none}
     .profileGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
     @media(max-width:980px){.profileGrid{grid-template-columns:1fr}}
+    .profileModalLayout{display:flex;gap:0;padding:0 !important}
+    .profileTabContentArea{flex:1;min-width:0;padding:22px}
+    .profileTabContent{display:none}
+    .profileTabContent.active{display:block}
+    .profileTabBar{flex:0 0 130px;display:flex;flex-direction:column;gap:4px;padding:16px 10px;border-left:1px solid rgba(255,255,255,.08);background:rgba(0,8,22,.4);position:sticky;top:0;align-self:flex-start}
+    .profileTab{display:block;width:100%;padding:10px 12px;border:1px solid transparent;border-radius:10px;background:none;color:var(--muted);font-family:inherit;font-size:11.5px;font-weight:600;text-align:left;cursor:pointer;transition:all .15s;letter-spacing:.2px}
+    .profileTab:hover{color:var(--text);background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.06)}
+    .profileTab.active{color:var(--text);background:rgba(var(--accent-rgb),.1);border-color:rgba(var(--accent-rgb),.3);box-shadow:inset 3px 0 0 rgba(var(--accent-rgb),.6)}
+    @media(max-width:700px){
+      .profileModalLayout{flex-direction:column-reverse}
+      .profileTabBar{flex:none;flex-direction:row;overflow-x:auto;border-left:none;border-top:1px solid rgba(255,255,255,.08);padding:8px 12px;gap:6px;position:static;-webkit-overflow-scrolling:touch}
+      .profileTab{white-space:nowrap;padding:8px 14px}
+      .profileTab.active{box-shadow:inset 0 -3px 0 rgba(var(--accent-rgb),.6)}
+      .profileTabContentArea{padding:16px}
+    }
     .panel{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
     .panelHead{padding:10px 16px;border-bottom:1px solid var(--line);border-left:3px solid rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.03);font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
     .panelBody{padding:14px}
@@ -4702,20 +4717,27 @@ button,a,.tab,.pageNavBtn,.gapTag,.tbAddBtn,.tbRemoveBtn,.aiPlayerLink,.statLink
 .qs-empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
 .qs-hint{padding:8px 20px;font-size:11px;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);text-align:center;opacity:.7}
 
-/* ── Player Development Plan ─────────────────────────────────────────── */
-.devPlanToolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
-.devPlanGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:720px){.devPlanGrid{grid-template-columns:1fr}}
-.devPlanSubhead{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 8px}
-.devPriorityCard{display:flex;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(122,162,255,.06);border:1px solid rgba(255,255,255,.08);margin-bottom:8px}
-.devPriorityRank{flex:0 0 28px;height:28px;border-radius:50%;background:var(--accent);color:#0a0f18;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
-.devPriorityTitle{font-weight:600;font-size:13px}
-.devPriorityStats{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
-.devCheckpoint{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-.devCheckpoint:last-child{border-bottom:none}
+/* ── Player Development ─────────────────────────────────────────────── */
+.devPlanToolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px}
+.devPlanSubhead{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 8px}
+.devPlanSubhead:first-child{margin-top:0}
+.devZoneTable{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}
+.devZoneTable th{text-align:left;padding:6px 8px;font-weight:600;color:var(--muted);border-bottom:1px solid rgba(255,255,255,.1);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.devZoneTable td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+.devZoneTable tr:last-child td{border-bottom:none}
+.devMixRow{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px}
+.devMixItem{flex:1;min-width:60px;padding:10px 8px;border-radius:10px;background:rgba(122,162,255,.06);border:1px solid rgba(255,255,255,.06);text-align:center}
+.devMixVal{font-size:16px;font-weight:800;color:var(--text)}
+.devMixLabel{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.devTendList{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
+.devTendItem{font-size:12px;line-height:1.5;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.15);border:1px solid rgba(255,255,255,.05)}
+.devSevBadge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-right:4px}
+.devRecCard{padding:10px 12px;border-radius:12px;background:rgba(122,162,255,.06);border:1px solid rgba(255,255,255,.08);margin-bottom:8px}
+.devRecTitle{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px}
+.devRecPriority{font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:rgba(var(--accent-rgb),.15);color:var(--accent)}
+.devRecDetail{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
 .devSimPanel{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
 .devSimRow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
-.devSimRow label{font-size:12px;color:var(--muted)}
 .devSimRow select{min-width:180px;padding:6px 10px;border-radius:10px;background:rgba(10,18,32,.9);border:1px solid rgba(255,255,255,.12);color:var(--fg)}
 .devSimOut{font-size:12px;line-height:1.55;padding:10px;border-radius:12px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.06)}
 .devCoachNotes{margin-top:12px}

@@ -23,8 +23,8 @@
   };
 
   var DEVELOPMENT_PLAN_CARD = {
-    title: 'Development Plan (profile)',
-    body: 'Open any player profile to see <b>Development Plan</b>: deterministic priorities from percentiles, checkpoint timeline, an <b>upside simulator</b> (perf score + draft model), optional <b>AI weekly plan</b> from structured data, and <b>Save plan</b> (local + Worker when deployed). AI explains the model output; it does not replace coaching judgment.'
+    title: 'Player Development (profile → Draft/Dev tab)',
+    body: 'Open any player profile and click the <b>Draft / Dev</b> tab to see <b>Player Development</b>: zone-by-zone shooting efficiency vs NCAA averages, shot type mix breakdown, tendency flags (shot selection issues, untapped range, conversion opportunities), practice-ready recommendations, an <b>upside simulator</b> with shot-work packages (+Range Extension, +Finishing, +Catch & Shoot, etc.), optional <b>AI plan</b> that generates drills and checkpoints from real shot data, and <b>Save plan</b> persistence.'
   };
 
   window.DashboardHelpContent = {

@@ -2137,147 +2137,175 @@
       </div>
     </div>
 
-    <div class="modalBody">
-      <div class="profileGrid">
-        <div class="panel">
-          <div class="panelHead">Overview</div>
-          <div class="panelBody">
-            <div class="scoreRow">
-              <div>
-                <div class="muted mini" id="mScoreLabel">Production</div>
-                <div class="big" id="mScore">—</div>
-              </div>
-              <div style="text-align:right">
-                <div class="muted mini">Fit score</div>
-                <div class="big" id="mFit">—</div>
-              </div>
-            </div>
+    <div class="modalBody profileModalLayout">
+      <div class="profileTabContentArea">
 
-            <div class="divider"></div>
-
-            <div class="scoreRow">
-              <div>
-                <div class="muted mini" id="mValLabel">Median value</div>
-                <div class="big" id="mVal">—</div>
-              </div>
-              <div style="text-align:right">
-                <div class="muted mini" id="mMultLabel">Minutes multiplier</div>
-                <div class="big" id="mMult">—</div>
-              </div>
-            </div>
-
-            <div id="mProjectionSummary" class="profileProjectionGrid"></div>
-
-            <div id="mConfMultRow" style="margin-top:8px;display:none">
-              <div class="scoreRow">
-                <div>
-                  <div class="muted mini">Conf multiplier</div>
-                  <div class="big" id="mConfMult" style="font-size:20px">—</div>
+        <!-- TAB: Overview -->
+        <div class="profileTabContent active" data-tab="overview">
+          <div class="profileGrid">
+            <div class="panel">
+              <div class="panelHead">Overview</div>
+              <div class="panelBody">
+                <div class="scoreRow">
+                  <div>
+                    <div class="muted mini" id="mScoreLabel">Production</div>
+                    <div class="big" id="mScore">—</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="muted mini">Fit score</div>
+                    <div class="big" id="mFit">—</div>
+                  </div>
                 </div>
-                <div style="text-align:right">
-                  <div class="muted mini">Conference</div>
-                  <div id="mConfName" style="font-size:14px;font-weight:700;margin-top:2px">—</div>
+                <div class="divider"></div>
+                <div class="scoreRow">
+                  <div>
+                    <div class="muted mini" id="mValLabel">Median value</div>
+                    <div class="big" id="mVal">—</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="muted mini" id="mMultLabel">Minutes multiplier</div>
+                    <div class="big" id="mMult">—</div>
+                  </div>
+                </div>
+                <div id="mProjectionSummary" class="profileProjectionGrid"></div>
+                <div id="mConfMultRow" style="margin-top:8px;display:none">
+                  <div class="scoreRow">
+                    <div>
+                      <div class="muted mini">Conf multiplier</div>
+                      <div class="big" id="mConfMult" style="font-size:20px">—</div>
+                    </div>
+                    <div style="text-align:right">
+                      <div class="muted mini">Conference</div>
+                      <div id="mConfName" style="font-size:14px;font-weight:700;margin-top:2px">—</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hint" id="mMeta">—</div>
+                <div class="divider"></div>
+                <div class="panel" style="background:rgba(2,18,42,.35); border-color:rgba(27,79,153,.65)">
+                  <div class="panelHead">Role tag definitions</div>
+                  <div class="panelBody" id="mRoleDefs" style="display:flex; flex-direction:column; gap:10px"></div>
                 </div>
               </div>
             </div>
-
-            <div class="hint" id="mMeta">—</div>
-            <div class="divider"></div>
-            <div class="panel" style="background:rgba(2,18,42,.35); border-color:rgba(27,79,153,.65)">
-              <div class="panelHead">Role tag definitions</div>
-              <div class="panelBody" id="mRoleDefs" style="display:flex; flex-direction:column; gap:10px"></div>
+            <div class="panel">
+              <div class="panelHead">Key percentiles</div>
+              <div class="panelBody">
+                <div class="bars" id="mBars"></div>
+              </div>
+            </div>
+          </div>
+          <div id="mProjectionPanel" style="margin-top:12px" class="panel">
+            <div class="panelHead">Projection Range</div>
+            <div class="panelBody" id="mProjectionRange">
+              <div class="muted" style="font-size:12px">Open a player to view their projection band.</div>
             </div>
           </div>
         </div>
 
-        <div class="panel">
-          <div class="panelHead">Key percentiles</div>
-          <div class="panelBody">
-            <div class="bars" id="mBars"></div>
+        <!-- TAB: Game Data -->
+        <div class="profileTabContent" data-tab="gamedata">
+          <div class="panel">
+            <div class="panelHead">Career History</div>
+            <div id="mCareer" style="padding:0;overflow-x:auto"></div>
+          </div>
+          <div id="mGameLogPanel" style="margin-top:12px" class="panel">
+            <div class="panelHead">Game Log</div>
+            <div class="panelBody" id="mGameLog" style="padding-bottom:8px;overflow-x:auto">
+              <div class="muted" style="font-size:12px">Open a player to view their game log.</div>
+            </div>
+          </div>
+          <div id="mTeamContextPanel" style="margin-top:12px" class="panel">
+            <div class="panelHead">Team Context</div>
+            <div class="panelBody" id="mTeamContext" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Loading…</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div id="mProjectionPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Projection Range</div>
-        <div class="panelBody" id="mProjectionRange">
-          <div class="muted" style="font-size:12px">Open a player to view their projection band.</div>
+        <!-- TAB: Shooting -->
+        <div class="profileTabContent" data-tab="shooting">
+          <div id="mShotChartPanel" class="panel">
+            <div class="panelHead">Shot Chart</div>
+            <div class="panelBody" id="mShotChart" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Open a player to load their shot chart.</div>
+            </div>
+          </div>
+          <div id="mShootingPanel" style="margin-top:12px" class="panel">
+            <div class="panelHead">Shooting Zones</div>
+            <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Loading…</div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div style="margin-top:12px" class="panel">
-        <div class="panelHead">Career History</div>
-        <div id="mCareer" style="padding:0;overflow-x:auto"></div>
-      </div>
-
-      <div id="mGameLogPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Game Log</div>
-        <div class="panelBody" id="mGameLog" style="padding-bottom:8px;overflow-x:auto">
-          <div class="muted" style="font-size:12px">Open a player to view their game log.</div>
+        <!-- TAB: Scouting -->
+        <div class="profileTabContent" data-tab="scouting">
+          <div id="mScoutPanel" class="panel">
+            <div class="panelHead">Scout Report</div>
+            <div class="panelBody" id="mScoutReport" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Open a player to view their scout report.</div>
+            </div>
+          </div>
+          <div id="mTrendPanel" style="margin-top:12px;display:none" class="panel">
+            <div class="panelHead">Performance Trend</div>
+            <div class="panelBody" id="mTrendChart" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Loading trend data...</div>
+            </div>
+          </div>
+          <div style="margin-top:12px" class="panel">
+            <div class="panelHead">Similar Players</div>
+            <div class="panelBody" id="mSimilar" style="font-size:12px"></div>
+          </div>
+          <div style="margin-top:12px" class="panel">
+            <div class="panelHead">All stats</div>
+            <div class="panelBody" style="padding:0">
+              <div class="panel" style="border:none;border-radius:0" id="mAllStats"></div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div id="mTeamContextPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Team Context</div>
-        <div class="panelBody" id="mTeamContext" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Loading…</div>
+        <!-- TAB: Draft / Dev -->
+        <div class="profileTabContent" data-tab="draftdev">
+          <div id="mDraftPanel" class="panel">
+            <div class="panelHead">Draft Radar</div>
+            <div class="panelBody" id="mDraftRadar" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Open a player to view draft projection.</div>
+            </div>
+          </div>
+          <div id="mDevelopmentPanel" style="margin-top:12px" class="panel">
+            <div class="panelHead">Player Development</div>
+            <div class="panelBody" id="mDevelopmentPlan" style="padding-bottom:8px">
+              <div class="muted" style="font-size:12px">Open a player to view shot work, tendency analysis, and practice recommendations.</div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div id="mShootingPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Shooting Zones</div>
-        <div class="panelBody" id="mShootingZones" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Loading…</div>
+        <!-- TAB: Notes -->
+        <div class="profileTabContent" data-tab="notes">
+          <div class="panel">
+            <div class="panelHead">Scout Notes</div>
+            <div class="panelBody">
+              <textarea id="mScoutNotesTab" placeholder="Add your scouting notes for this player…"
+                style="width:100%;height:180px;resize:vertical;background:rgba(0,10,28,.6);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.6;outline:none;box-sizing:border-box"></textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px">
+                <span id="mScoutNoteTabStatus" style="font-size:11px;color:var(--muted)"></span>
+              </div>
+            </div>
+          </div>
         </div>
+
       </div>
 
-      <div id="mTrendPanel" style="margin-top:12px;display:none" class="panel">
-        <div class="panelHead">Performance Trend</div>
-        <div class="panelBody" id="mTrendChart" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Loading trend data...</div>
-        </div>
+      <!-- Right-side tab bar -->
+      <div class="profileTabBar" id="profileTabBar">
+        <button class="profileTab active" data-tab="overview">Overview</button>
+        <button class="profileTab" data-tab="gamedata">Game Data</button>
+        <button class="profileTab" data-tab="shooting">Shooting</button>
+        <button class="profileTab" data-tab="scouting">Scouting</button>
+        <button class="profileTab" data-tab="draftdev">Draft / Dev</button>
+        <button class="profileTab" data-tab="notes">Notes</button>
       </div>
-
-      <div id="mDraftPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Draft Radar</div>
-        <div class="panelBody" id="mDraftRadar" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Open a player to view draft projection.</div>
-        </div>
-      </div>
-
-      <div id="mDevelopmentPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Development Plan</div>
-        <div class="panelBody" id="mDevelopmentPlan" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Open a player to view priorities, checkpoints, and upside simulation.</div>
-        </div>
-      </div>
-
-      <div id="mScoutPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Scout Report</div>
-        <div class="panelBody" id="mScoutReport" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Open a player to view their scout report.</div>
-        </div>
-      </div>
-
-      <div id="mShotChartPanel" style="margin-top:12px" class="panel">
-        <div class="panelHead">Shot Chart</div>
-        <div class="panelBody" id="mShotChart" style="padding-bottom:8px">
-          <div class="muted" style="font-size:12px">Open a player to load their shot chart.</div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px" class="panel">
-        <div class="panelHead">Similar Players</div>
-        <div class="panelBody" id="mSimilar" style="font-size:12px"></div>
-      </div>
-
-      <div style="margin-top:12px" class="panel">
-        <div class="panelHead">All stats</div>
-        <div class="panelBody" style="padding:0">
-          <div class="panel" style="border:none;border-radius:0" id="mAllStats"></div>
-        </div>
-      </div>
-
     </div>
   </div>
 

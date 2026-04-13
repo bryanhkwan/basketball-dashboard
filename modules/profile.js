@@ -14,6 +14,33 @@ var _profileSimilarCacheRows = [];
 var _profileLastShots = null;
 var _profileLastShotPlayer = '';
 var _profileShotPeriodFilter = 'all';
+var _profileActiveTab = 'overview';
+var _profileTabBarWired = false;
+
+function profileSwitchTab(tabId) {
+  _profileActiveTab = tabId;
+  var contents = document.querySelectorAll('.profileTabContent');
+  for (var i = 0; i < contents.length; i++) {
+    contents[i].classList.toggle('active', contents[i].getAttribute('data-tab') === tabId);
+  }
+  var buttons = document.querySelectorAll('.profileTab');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-tab') === tabId);
+  }
+}
+
+function _profileWireTabBar() {
+  if (_profileTabBarWired) return;
+  var bar = document.getElementById('profileTabBar');
+  if (!bar) return;
+  bar.addEventListener('click', function(e) {
+    var btn = e.target.closest('.profileTab');
+    if (!btn) return;
+    var tab = btn.getAttribute('data-tab');
+    if (tab) profileSwitchTab(tab);
+  });
+  _profileTabBarWired = true;
+}
 
 function _profileFilterShotsByPeriod(shots, filter) {
   if (filter === 'all') return shots;
@@ -448,37 +475,63 @@ function openProfile(r){
   renderTeamContext(r);
   renderShootingZones(r);
   renderRecruitingBadge(r);
-  if (window.PlayerDevelopment && typeof window.PlayerDevelopment.renderPanel === 'function') {
-    window.PlayerDevelopment.renderPanel(r);
-  }
   renderScoutReport(r);
   if (typeof renderDraftRadar === 'function') renderDraftRadar(r);
 
-  // Player shot chart (uses play-by-play data via worker)
-  const mShotChart = document.getElementById('mShotChart');
+  // Player shot chart + development panel (uses play-by-play data via worker)
+  var _devPanelRendered = false;
+  var mShotChart = document.getElementById('mShotChart');
   if (mShotChart) {
     if (profileIsGuestDemo()) {
       mShotChart.innerHTML = '<div class="valueLabEmpty" style="display:block"><div style="font-weight:700;color:var(--text);margin-bottom:6px">Full shot chart locked</div><div class="muted" style="font-size:12px;line-height:1.55">Demo mode shows the shot-profile preview and overall player evaluation, but the exact shot map, location counts, and zone percentages stay limited to approved staff accounts.</div></div>';
     } else {
-      const yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
+      var yr = typeof thCurrentSeason !== 'undefined' ? thCurrentSeason : '2026';
       mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Loading shot data...</div>';
-      if (typeof loadPlayerShots === 'function') {
-        loadPlayerShots(team, yr, player, r['EspnId'] || null).then(function(shots) {
-          if (!shots || !shots.length) {
-            mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
-            return;
+      var _shotPromise = typeof loadPlayerShots === 'function'
+        ? loadPlayerShots(team, yr, player, r['EspnId'] || null) : Promise.resolve([]);
+      var _shootingPromise = typeof loadShootingForTeam === 'function'
+        ? loadShootingForTeam(team, yr) : Promise.resolve([]);
+
+      Promise.all([_shotPromise, _shootingPromise]).then(function(results) {
+        var shots = results[0] || [];
+        var shootingData = results[1] || [];
+        var shootingRow = null;
+        if (shootingData.length) {
+          var pName = (player || '').toLowerCase();
+          for (var si = 0; si < shootingData.length; si++) {
+            if ((shootingData[si].name || '').toLowerCase() === pName ||
+                (shootingData[si].player || '').toLowerCase() === pName) {
+              shootingRow = shootingData[si];
+              break;
+            }
           }
+        }
+
+        if (shots.length) {
           _profileLastShots = shots;
           _profileLastShotPlayer = player;
           _profileShotPeriodFilter = 'all';
           _profileRenderShotCharts(shots, player, yr);
           enrichScoutReportWithShots(shots);
-          if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
-        }).catch(function() {
-          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
-        });
-      }
+        } else {
+          mShotChart.innerHTML = '<div class="muted" style="font-size:12px">No shot-location data available for ' + player + ' this season.</div>';
+        }
+
+        if (window.PlayerDevelopment && typeof window.PlayerDevelopment.renderPanel === 'function') {
+          window.PlayerDevelopment.renderPanel(r, shots, shootingRow);
+          _devPanelRendered = true;
+        }
+        if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
+      }).catch(function() {
+        mShotChart.innerHTML = '<div class="muted" style="font-size:12px">Shot data unavailable.</div>';
+        if (window.PlayerDevelopment && typeof window.PlayerDevelopment.renderPanel === 'function' && !_devPanelRendered) {
+          window.PlayerDevelopment.renderPanel(r, [], null);
+        }
+      });
     }
+  }
+  if (!mShotChart && window.PlayerDevelopment && typeof window.PlayerDevelopment.renderPanel === 'function') {
+    window.PlayerDevelopment.renderPanel(r, [], null);
   }
 
   if (typeof favsUpdateModalBtn === 'function') favsUpdateModalBtn(r);
@@ -571,6 +624,63 @@ function openProfile(r){
           if (typeof notesRenderList === 'function') notesRenderList();
         } catch(e2) {
           if (_scoutStatus) _scoutStatus.textContent = 'Save failed';
+        }
+      }, 1500);
+    };
+  }
+
+  _profileWireTabBar();
+  profileSwitchTab('overview');
+
+  // Sync Notes tab textarea with the notes system
+  var _notesTabTextarea = document.getElementById('mScoutNotesTab');
+  var _notesTabStatus = document.getElementById('mScoutNoteTabStatus');
+  if (_notesTabTextarea) {
+    if (typeof notesState !== 'undefined') {
+      var _ntKey = '[Scout] ' + player;
+      var _ntExisting = notesState.notes.find(function(n) { return String(n.title || '') === _ntKey; });
+      _notesTabTextarea.value = _ntExisting ? (_ntExisting.content || '') : '';
+      _notesTabTextarea._noteId = _ntExisting ? String(_ntExisting.id) : null;
+    }
+    if (_notesTabStatus) _notesTabStatus.textContent = '';
+    var _ntTimer = null;
+    _notesTabTextarea.oninput = function() {
+      if (_notesTabStatus) _notesTabStatus.textContent = 'Unsaved\u2026';
+      clearTimeout(_ntTimer);
+      var _ntPlayer = player;
+      _ntTimer = setTimeout(async function() {
+        if (typeof authIsGuest === 'function' && authIsGuest()) {
+          if (_notesTabStatus) _notesTabStatus.textContent = 'Login to save';
+          return;
+        }
+        if (typeof notesFetch !== 'function') return;
+        var content = _notesTabTextarea.value;
+        var noteTitle = '[Scout] ' + _ntPlayer;
+        try {
+          if (_notesTabTextarea._noteId) {
+            await notesFetch('/' + _notesTabTextarea._noteId, {
+              method: 'PUT',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (typeof notesState !== 'undefined') {
+              var idx = notesState.notes.findIndex(function(n) { return String(n.id) === _notesTabTextarea._noteId; });
+              if (idx !== -1) notesState.notes[idx] = Object.assign({}, notesState.notes[idx], { content: content });
+            }
+          } else {
+            var newNote = await notesFetch('', {
+              method: 'POST',
+              body: JSON.stringify({ title: noteTitle, content: content }),
+            });
+            if (newNote && newNote.id) {
+              var norm = Object.assign({}, newNote, { id: String(newNote.id) });
+              if (typeof notesState !== 'undefined') notesState.notes.unshift(norm);
+              _notesTabTextarea._noteId = norm.id;
+            }
+          }
+          if (_notesTabStatus) _notesTabStatus.textContent = 'Saved \u2713';
+          if (typeof notesRenderList === 'function') notesRenderList();
+        } catch(e2) {
+          if (_notesTabStatus) _notesTabStatus.textContent = 'Save failed';
         }
       }, 1500);
     };
