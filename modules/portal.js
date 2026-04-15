@@ -34,6 +34,8 @@ var portalPlayerIndexRef = null;
 var portalPlayerIndexExact = Object.create(null);
 var portalPlayerIndexLoose = [];
 var portalPlayerIndexVersion = 0;
+var portalArchetypeDistRef = null;
+var portalArchetypeDistCache = { guard: null, big: null };
 var portalJsPdfPromise = null;
 var portalRepBusy = false;
 var portalCurrentPage = 1;
@@ -194,15 +196,24 @@ function portalUpdateRecContext() {
   if (!portalRecContextEl) return;
   var parts = [];
   var needGroup = portalGetSelectedNeedGroup();
+  var archetype = portalArchetypeFilterEl && portalArchetypeFilterEl.value
+    ? String(portalArchetypeFilterEl.value).trim()
+    : '';
 
   if (needGroup !== 'all') {
     parts.push('Position need: ' + portalNeedGroupLabel(needGroup));
+  }
+  if (archetype) {
+    parts.push('Archetype filter: ' + archetype);
   }
   if (portalSelectedDepartureNames.length) {
     parts.push('Finding upgrades to replace ' +
       portalSelectedDepartureNames.length + ' departure' +
       (portalSelectedDepartureNames.length > 1 ? 's' : '') + ': ' +
       portalSelectedDepartureNames.join(', '));
+  }
+  if (portalTeamCtx && portalTeamCtx.roster && portalTeamCtx.roster.length) {
+    parts.push('Recommendations only use entered / expected portal statuses');
   }
 
   if (!parts.length) {
@@ -236,6 +247,42 @@ function portalGetAllPlayers() {
     return window._app.tbGetAllPlayers(lg) || [];
   }
   return [];
+}
+
+function portalNormalizeStatusValue(statusValue) {
+  var ls = portalNorm(statusValue || '');
+  if (ls === 'transfer' || ls === 'intransfer' || ls === 'in transfer' || ls === 'available' || ls === 'portal') ls = 'entered';
+  return ls;
+}
+
+function portalIsRecommendationEligibleStatus(statusValue) {
+  var ls = portalNormalizeStatusValue(statusValue);
+  return ls === 'entered' || ls === 'expected';
+}
+
+function portalFindLiveEntry(playerName, teamName) {
+  var nameNeedle = portalNorm(playerName || '');
+  var teamNeedle = portalNorm(teamName || '');
+  if (!nameNeedle) return null;
+  for (var i = 0; i < portalItems.length; i++) {
+    var entry = portalItems[i];
+    if (portalNorm(entry && entry.playerName) !== nameNeedle) continue;
+    if (!teamNeedle || !portalNorm(entry && entry.fromTeam) || portalNorm(entry && entry.fromTeam) === teamNeedle) return entry;
+  }
+  return null;
+}
+
+function portalArchetypeSummary(player) {
+  var tags = portalArchetypeTagsFor(player).slice(0, 3);
+  return tags.map(function (tag) { return tag && tag.t ? tag.t : ''; }).filter(Boolean);
+}
+
+function portalArchetypeMarkup(player) {
+  var labels = portalArchetypeSummary(player);
+  if (!labels.length) return '';
+  return '<div class="portalArchetypeRow">' + labels.map(function (label) {
+    return '<span class="portalArchetypeChip">' + portalEsc(label) + '</span>';
+  }).join('') + '</div>';
 }
 
 function portalGetPlayerIndex() {
@@ -992,6 +1039,7 @@ function portalNormalizeTargetItem(raw) {
     key: String(raw.key || '').trim(),
     playerName: String(raw.playerName || '').trim(),
     fromTeam: String(raw.fromTeam || raw.team || '').trim(),
+    status: String(raw.status || '').trim(),
     position: String(raw.position || '').trim(),
     source: String(raw.source || 'portal').trim(),
     url: String(raw.url || '').trim(),
@@ -1039,6 +1087,7 @@ function portalBuildStoredTarget(entry, player) {
     key: portalTargetKey(entry, player),
     playerName: portalGetPlayerName(player) || (entry && entry.playerName) || '',
     fromTeam: portalGetPlayerTeam(player) || (entry && (entry.fromTeam || entry.team)) || '',
+    status: (entry && entry.status) || '',
     position: (entry && entry.position) || (player && (player.Position || player.Pos)) || '',
     source: (entry && entry.source) || 'portal',
     url: (entry && entry.url) || '',
@@ -1059,6 +1108,10 @@ function portalToggleTarget(entry, player) {
     }
     next.push(item);
   });
+  if (!removed && entry.status && !portalIsRecommendationEligibleStatus(entry.status)) {
+    portalShowToast((portalGetPlayerName(player) || entry.playerName || 'Player') + ' is no longer an active portal target for fit modeling');
+    return false;
+  }
   if (!removed) next.unshift(portalBuildStoredTarget(entry, player));
   portalSaveTargetList(next);
   portalRefreshScenarioRows();
@@ -1085,7 +1138,7 @@ function portalClearTargets() {
 
 function portalGetActiveAnalysisRows(limit) {
   var rows = (portalScenarioRows || []).filter(function (row) {
-    return row && row.player && !row.sameTeam;
+    return row && row.player && !row.sameTeam && row.portalEligible !== false;
   });
   var needGroup = portalGetSelectedNeedGroup();
   if (rows.length) {
@@ -2053,19 +2106,24 @@ function portalRefreshScenarioRows() {
   var rows = [];
 
   targets.forEach(function (target) {
+    var liveEntry = portalFindLiveEntry(target.playerName, target.fromTeam);
+    var liveStatus = liveEntry && liveEntry.status ? liveEntry.status : target.status;
     var entry = {
       playerName: target.playerName,
       fromTeam: target.fromTeam,
       team: target.fromTeam,
+      status: liveStatus,
       position: target.position,
       source: target.source,
       url: target.url,
     };
     var player = portalFindPlayerMatch(target.playerName, target.fromTeam);
     var sameTeam = player && portalTeamCtx && portalNorm(portalGetPlayerTeam(player)) === portalNorm(portalTeamCtx.team);
-    var scored = (!sameTeam && player && ctx) ? portalScoreCandidateEntry(entry, player, ctx) : null;
+    var portalEligible = !liveStatus || portalIsRecommendationEligibleStatus(liveStatus);
+    var scored = (!sameTeam && portalEligible && player && ctx) ? portalScoreCandidateEntry(entry, player, ctx) : null;
     if (scored) {
       scored.savedTarget = target;
+      scored.portalEligible = true;
       rows.push(scored);
       return;
     }
@@ -2074,6 +2132,7 @@ function portalRefreshScenarioRows() {
       player: player,
       savedTarget: target,
       candidateValue: player ? portalGetPlayerValuation(player) : null,
+      portalEligible: portalEligible,
       targetMissing: !player,
       sameTeam: !!sameTeam,
     });
@@ -2124,12 +2183,13 @@ function portalRenderScenarioRows() {
     var playerName = row.entry.playerName || portalGetPlayerName(row.player) || 'Unknown';
     var teamName = row.entry.fromTeam || portalGetPlayerTeam(row.player) || '—';
     var posLabel = row.entry.position || (row.player && (row.player.Position || row.player.Pos)) || '—';
+    var archetypeHtml = row.player ? portalArchetypeMarkup(row.player) : '';
     var fitPct = Number.isFinite(row.fit) ? Math.round(row.fit * 100) : null;
     var scenarioPct = Number.isFinite(row.scenarioFit) ? Math.round(row.scenarioFit * 100) : null;
     var deltaPts = row.scenario ? row.scenario.deltaPts : null;
     var deltaClass = deltaPts === null ? 'portalScenarioDelta--flat' : (deltaPts > 0 ? 'portalScenarioDelta--pos' : (deltaPts < 0 ? 'portalScenarioDelta--neg' : 'portalScenarioDelta--flat'));
-    var verdict = row.scenario ? row.scenario.verdict : (row.targetMissing ? 'No match' : (row.sameTeam ? 'Same team' : 'Awaiting team'));
-    var tone = row.scenario ? row.scenario.tone : (row.targetMissing ? 'bad' : 'warn');
+    var verdict = row.scenario ? row.scenario.verdict : (row.portalEligible === false ? 'Committed elsewhere' : (row.targetMissing ? 'No match' : (row.sameTeam ? 'Same team' : 'Awaiting team')));
+    var tone = row.scenario ? row.scenario.tone : (row.portalEligible === false ? 'bad' : (row.targetMissing ? 'bad' : 'warn'));
     var valueText = portalFmtMoney(row.candidateValue);
     var projectionMeta = row.player
       ? ('Median ' + portalFmtMoney(row.candidateValue) + ' · Confidence ' + portalGetPlayerConfidenceLabel(row.player) + ' · Risk ' + portalGetPlayerMedicalRiskLabel(row.player))
@@ -2145,6 +2205,8 @@ function portalRenderScenarioRows() {
     var whyText = 'Select a team to score this target.';
     if (row.scenario && row.scenario.reasons && row.scenario.reasons.length) {
       whyText = row.scenario.reasons.join(' · ');
+    } else if (row.portalEligible === false) {
+      whyText = 'This player is currently listed as ' + (row.entry.status || 'committed') + ', so the fit lab excludes them from active portal recommendations.';
     } else if (row.scenario) {
       whyText = 'Balanced fit profile with no major red flags from the current scenario model.';
     } else if (row.sameTeam) {
@@ -2154,7 +2216,7 @@ function portalRenderScenarioRows() {
     }
 
     tr.innerHTML =
-      '<td><b>' + portalEsc(playerName) + '</b><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Shortlist target') + '</div></td>' +
+      '<td><b>' + portalEsc(playerName) + '</b><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Shortlist target') + '</div>' + archetypeHtml + '</td>' +
       '<td>' + portalEsc(teamName) + '</td>' +
       '<td>' + portalEsc(posLabel) + '</td>' +
       '<td>' + (fitPct === null ? '—' : ('<span class="portalFitPill">' + fitPct + '</span>')) + '</td>' +
@@ -2207,6 +2269,7 @@ function portalComputeRecommendations() {
 
   var rows = [];
   portalFiltered.forEach(function (entry) {
+    if (!portalIsRecommendationEligibleStatus(entry && entry.status)) return;
     var scored = portalScoreCandidateEntry(entry, portalResolveEntryMatch(entry), ctx);
     if (scored) rows.push(scored);
   });
@@ -2244,6 +2307,7 @@ function portalRenderRecommendations() {
     var tr = document.createElement('tr');
     var nm = row.entry.playerName || portalGetPlayerName(row.player) || 'Unknown';
     var team = row.entry.fromTeam || portalGetPlayerTeam(row.player) || '—';
+    var archetypeHtml = portalArchetypeMarkup(row.player);
     var fitPct = Math.max(0, Math.min(100, Math.round(row.fit * 100)));
     var gainTxt = row.replaceGain === null ? '—' : ((row.replaceGain >= 0 ? '+' : '') + Math.round(row.replaceGain * 100) + ' pts');
     var perf = portalGetPlayerProjectionPerf(row.player);
@@ -2254,7 +2318,7 @@ function portalRenderRecommendations() {
 
     tr.innerHTML =
       '<td>' + (idx + 1) + '</td>' +
-      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">' + portalEsc(projectionLine) + '</div><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Fit') + '</div></td>' +
+      '<td><b>' + nm + '</b><div class="muted" style="font-size:10px">' + portalEsc(projectionLine) + '</div><div class="muted" style="font-size:10px">' + portalEsc(row.replacementType || 'Fit') + ' · ' + portalEsc(row.entry.status || 'Entered') + '</div>' + archetypeHtml + '</td>' +
       '<td>' + team + '</td>' +
       '<td>' + (row.entry.position || row.player.Position || row.player.Pos || '—') + '</td>' +
       '<td><span class="portalFitPill">' + fitPct + '</span></td>' +
@@ -3303,21 +3367,100 @@ function portalMergeItems(primary, extra) {
 }
 
 function portalStatusMatchesFilter(statusValue, filterValue) {
-  var ls = portalNorm(statusValue || '');
-  if (ls === 'transfer' || ls === 'intransfer' || ls === 'in transfer' || ls === 'available' || ls === 'portal') ls = 'entered';
+  var ls = portalNormalizeStatusValue(statusValue);
   if (!filterValue || filterValue === 'all') return true;
   if (filterValue === 'entries') return ls === 'entered' || ls === 'expected' || ls === 'committed';
   return ls === filterValue;
 }
 
+function portalBuildArchetypeDist(posGroup) {
+  var players = (portalAllPlayers && portalAllPlayers.length) ? portalAllPlayers : portalCollectAllPlayers();
+  if (portalArchetypeDistRef !== players) {
+    portalArchetypeDistRef = players;
+    portalArchetypeDistCache = { guard: null, big: null };
+  }
+  if (portalArchetypeDistCache[posGroup]) return portalArchetypeDistCache[posGroup];
+
+  var stats = posGroup === 'guard'
+    ? ['3PT_Rating', 'eFG%', 'PPG', 'APG', 'A/TO', 'SPG', 'DR%', 'BPM']
+    : ['BPG', 'DRtg', 'DR%', 'DRB/G', 'OR%', 'eFG%', '3PT_Rating'];
+  var relevant = players.filter(function (p) { return portalPlayerPosGroup(p) === posGroup; });
+  var dist = {};
+
+  stats.forEach(function (stat) {
+    var arr = [];
+    relevant.forEach(function (p) {
+      var x = portalSafeNum(p && p[stat]);
+      if (x !== null) arr.push(x);
+    });
+    if (arr.length < 10) return;
+    arr.sort(function (a, b) { return a - b; });
+    dist[stat] = { sorted: arr, invert: portalStatDir(stat) === 'lower' };
+  });
+
+  portalArchetypeDistCache[posGroup] = dist;
+  return dist;
+}
+
+function portalArchetypePct(posGroup, stat, value) {
+  var dist = portalBuildArchetypeDist(posGroup);
+  if (!dist || !dist[stat] || !Number.isFinite(value)) return NaN;
+  var p = portalPctFromSorted(dist[stat].sorted, value);
+  if (!Number.isFinite(p)) return NaN;
+  if (dist[stat].invert) p = 1 - p;
+  return portalClamp01(p);
+}
+
 function portalArchetypeTagsFor(player) {
-  if (!player || typeof archetypeTags !== 'function' || typeof statPercentile !== 'function') return [];
-  var pg = portalPlayerPosGroup(player);
-  var needed = pg === 'guard' ? 'Guards' : 'Bigs';
-  var savedPos = pos;
-  pos = needed;
-  try { var tags = archetypeTags(player); } finally { pos = savedPos; }
-  return tags || [];
+  if (!player) return [];
+  var posGroup = portalPlayerPosGroup(player);
+  var pct = function (stat) {
+    var x = portalSafeNum(player[stat]);
+    if (x === null) return NaN;
+    return portalArchetypePct(posGroup, stat, x);
+  };
+
+  var tags = [];
+  if (posGroup === 'guard') {
+    var p3r = pct('3PT_Rating');
+    var pefg = pct('eFG%');
+    var pppg = pct('PPG');
+    var papg = pct('APG');
+    var pato = pct('A/TO');
+    var pspg = pct('SPG');
+    var pdr = pct('DR%');
+    var pbpm = pct('BPM');
+    var p3paG = portalSafeNum(player['3PA/G']);
+
+    if (Number.isFinite(p3r) && p3r >= 0.80 && Number.isFinite(p3paG) && p3paG >= 1.5) tags.push({ t: 'Shooter', c: 'var(--accent2)' });
+    if (Number.isFinite(pefg) && pefg >= 0.80) tags.push({ t: 'Efficient', c: 'var(--good)' });
+    if (Number.isFinite(pppg) && pppg >= 0.80) tags.push({ t: 'Scorer', c: 'var(--accent)' });
+    if (Number.isFinite(papg) && papg >= 0.80) tags.push({ t: 'Playmaker', c: 'var(--accent2)' });
+    if (Number.isFinite(pato) && pato >= 0.75) tags.push({ t: 'Low TO', c: 'var(--good)' });
+    if (Number.isFinite(pspg) && pspg >= 0.80) tags.push({ t: 'Disruptor', c: 'var(--warn)' });
+    if (Number.isFinite(pdr) && pdr >= 0.75) tags.push({ t: 'Defender', c: 'var(--warn)' });
+    if (Number.isFinite(pbpm) && pbpm >= 0.75) tags.push({ t: 'Impact', c: 'var(--accent)' });
+    if (!tags.length) tags.push({ t: 'Role Player', c: 'var(--muted)' });
+    return tags.slice(0, 6);
+  }
+
+  var pbpg = pct('BPG');
+  var pdrtg = pct('DRtg');
+  var pdrb = pct('DRB/G');
+  var pdrBig = pct('DR%');
+  var por = pct('OR%');
+  var pefgBig = pct('eFG%');
+  var p3rBig = pct('3PT_Rating');
+  var p3paGBig = portalSafeNum(player['3PA/G']);
+
+  if (Number.isFinite(pbpg) && pbpg >= 0.80) tags.push({ t: 'Rim Protector', c: 'var(--warn)' });
+  if ((Number.isFinite(pdrBig) && pdrBig >= 0.80) || (Number.isFinite(pdrb) && pdrb >= 0.80)) tags.push({ t: 'Rebounder', c: 'var(--accent2)' });
+  if (Number.isFinite(pdrtg) && pdrtg >= 0.75) tags.push({ t: 'Anchor Defender', c: 'var(--warn)' });
+  if (Number.isFinite(pefgBig) && pefgBig >= 0.80) tags.push({ t: 'Efficient Finisher', c: 'var(--good)' });
+  if (Number.isFinite(por) && por >= 0.75) tags.push({ t: 'Extra Possessions', c: 'var(--accent)' });
+  if (Number.isFinite(p3rBig) && p3rBig >= 0.75 && Number.isFinite(p3paGBig) && p3paGBig >= 1.0) tags.push({ t: 'Stretch Big', c: 'var(--accent2)' });
+  if (!tags.length) tags.push({ t: 'Frontcourt Role', c: 'var(--muted)' });
+  return tags.slice(0, 6);
 }
 
 function portalApplyFilters(opts) {
@@ -3327,6 +3470,7 @@ function portalApplyFilters(opts) {
   var archFilter = (portalArchetypeFilterEl && portalArchetypeFilterEl.value) ? portalArchetypeFilterEl.value : '';
 
   if (!opts.preservePage) portalCurrentPage = 1;
+  if (archFilter) portalCollectAllPlayers();
 
   portalFiltered = portalItems.filter(function (it) {
     if (!portalStatusMatchesFilter(it && it.status, st)) return false;
@@ -3349,6 +3493,7 @@ function portalApplyFilters(opts) {
     if (portalResolveEntryMatch(it)) portalMatchedCount += 1;
   });
 
+  portalUpdateRecContext();
   portalRenderTable();
   portalRenderWatchAlerts();
   portalSyncRepResultsFromCache();
