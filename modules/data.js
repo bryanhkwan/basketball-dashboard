@@ -1750,11 +1750,12 @@ function archetypeTags(r){
 
   const tags = [];
   if(pos === 'Guards'){
-    const p3 = p('3P%'), pefg = p('eFG%'), pft = p('FT%'), pppg = p('PPG');
+    const p3r = p('3PT_Rating'), pefg = p('eFG%'), pft = p('FT%'), pppg = p('PPG');
     const papg = p('APG'), pato = p('A/TO'), ptopg = p('TOPG');
     const pspg = p('SPG'), pdr = p('DR%'), pbpm = p('BPM');
+    const p3paG = safeNum(r['3PA/G']);
 
-    if(Number.isFinite(p3) && p3 >= 0.80) tags.push({t:'Shooter', c:'var(--accent2)'});
+    if(Number.isFinite(p3r) && p3r >= 0.80 && Number.isFinite(p3paG) && p3paG >= 1.5) tags.push({t:'Shooter', c:'var(--accent2)'});
     if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient', c:'var(--good)'});
     if(Number.isFinite(pppg) && pppg >= 0.80) tags.push({t:'Scorer', c:'var(--accent)'});
     if(Number.isFinite(papg) && papg >= 0.80) tags.push({t:'Playmaker', c:'var(--accent2)'});
@@ -1767,14 +1768,15 @@ function archetypeTags(r){
     return tags.slice(0, 6);
   }else{
     const pbpg = p('BPG'), pdrtg = p('DRtg'), pdr = p('DR%'), por = p('OR%'), pdrb = p('DRB/G');
-    const pefg = p('eFG%'), p3 = p('3P%');
+    const pefg = p('eFG%'), p3r = p('3PT_Rating');
+    const p3paG = safeNum(r['3PA/G']);
 
     if(Number.isFinite(pbpg) && pbpg >= 0.80) tags.push({t:'Rim Protector', c:'var(--warn)'});
     if((Number.isFinite(pdr) && pdr >= 0.80) || (Number.isFinite(pdrb) && pdrb >= 0.80)) tags.push({t:'Rebounder', c:'var(--accent2)'});
     if(Number.isFinite(pdrtg) && pdrtg >= 0.75) tags.push({t:'Anchor Defender', c:'var(--warn)'});
     if(Number.isFinite(pefg) && pefg >= 0.80) tags.push({t:'Efficient Finisher', c:'var(--good)'});
     if(Number.isFinite(por) && por >= 0.75) tags.push({t:'Extra Possessions', c:'var(--accent)'});
-    if(Number.isFinite(p3) && p3 >= 0.75) tags.push({t:'Stretch Big', c:'var(--accent2)'});
+    if(Number.isFinite(p3r) && p3r >= 0.75 && Number.isFinite(p3paG) && p3paG >= 1.0) tags.push({t:'Stretch Big', c:'var(--accent2)'});
 
     if(tags.length === 0) tags.push({t:'Frontcourt Role', c:'var(--muted)'});
     return tags.slice(0, 6);

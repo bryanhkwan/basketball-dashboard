@@ -6,6 +6,7 @@ var portalFiltered = [];
 var portalRecRows = [];
 
 var portalSearchInputEl, portalStatusFilterEl, portalNeedFilterEl, portalRefreshBtnEl, portalUseSnapshotEl;
+var portalArchetypeFilterEl;
 var portalCountEl, portalMatchedCountEl, portalStatusEl, portalTableBodyEl, portalEmptyEl;
 var portalPagerEl, portalPageInfoEl, portalPrevPageBtnEl, portalNextPageBtnEl;
 var portalRecTeamEl, portalRecRefreshTeamBtn, portalRecRunBtn;
@@ -22,6 +23,7 @@ var portalRecDist = null;
 var portalAllPlayers = [];
 var portalTargetSeason = '2026';
 var portalLastAIReportText = '';
+var portalLastAIProfiles = [];
 var portalDetectedDepartures = [];
 var portalSelectedDepartureNames = [];
 var portalWatchAlerts = [];
@@ -52,6 +54,7 @@ var PORTAL_STAT_DIR = {
 function initPortalDOMRefs() {
   portalSearchInputEl = document.getElementById('portalSearchInput');
   portalStatusFilterEl = document.getElementById('portalStatusFilter');
+  portalArchetypeFilterEl = document.getElementById('portalArchetypeFilter');
   portalNeedFilterEl = document.getElementById('portalNeedFilter');
   portalRefreshBtnEl = document.getElementById('portalRefreshBtn');
   portalUseSnapshotEl = document.getElementById('portalUseSnapshot');
@@ -350,6 +353,12 @@ function portalFmtNum(v, d) {
   d = d == null ? 1 : d;
   if (!Number.isFinite(+v)) return '—';
   return (+v).toFixed(d);
+}
+
+function portalFmtPct(v) {
+  if (!Number.isFinite(+v)) return '—';
+  var n = +v;
+  return (n <= 1 ? (n * 100).toFixed(1) : n.toFixed(1)) + '%';
 }
 
 function portalSafeNum(v) {
@@ -2577,6 +2586,87 @@ async function portalDownloadAIReport() {
     ? 'Replacing ' + portalSelectedDepartureNames.join(', ')
     : 'Team Fit Mode';
   var dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  var isWbb = portalCurrentLeague() === 'WBB';
+  var lgTag = isWbb ? 'WBB' : 'MBB';
+
+  // ── Build player profile appendix HTML ──
+  var profiles = portalLastAIProfiles || [];
+  var profilesHtml = '';
+  if (profiles.length) {
+    portalSetAIStatus('Fetching shot chart data for ' + profiles.length + ' player(s)...');
+    profilesHtml += '<div style="page-break-before:always"></div>';
+    profilesHtml += '<h3 style="margin-top:32px">Player Profile Appendix</h3>';
+
+    for (var pi = 0; pi < profiles.length; pi++) {
+      var prof = profiles[pi];
+      var pName = prof.name || 'Unknown';
+      var pTeam = prof.sourceTeam || '';
+      var s = prof.stats || {};
+
+      // Brief stats table
+      var statsHtml = '<table class="profBriefTable"><thead><tr>' +
+        '<th>PPG</th><th>RPG</th><th>APG</th><th>eFG%</th><th>3P%</th><th>FT%</th><th>BPM</th><th>MP</th>' +
+        '</tr></thead><tbody><tr>' +
+        '<td>' + portalFmtNum(s.ppg, 1) + '</td>' +
+        '<td>' + portalFmtNum(s.rpg, 1) + '</td>' +
+        '<td>' + portalFmtNum(s.apg, 1) + '</td>' +
+        '<td>' + portalFmtPct(s.efg) + '</td>' +
+        '<td>' + portalFmtPct(s.threePct) + '</td>' +
+        '<td>' + portalFmtPct(s.ftPct) + '</td>' +
+        '<td>' + portalFmtNum(s.bpm, 1) + '</td>' +
+        '<td>' + portalFmtNum(s.mp, 1) + '</td>' +
+        '</tr></tbody></table>';
+
+      // Fetch shot chart data
+      var shots = [];
+      try {
+        if (pTeam && typeof loadPlayerShots === 'function') {
+          shots = await loadPlayerShots(pTeam, season, pName) || [];
+        }
+      } catch (_) {}
+
+      var scatterHtml = '';
+      var hexHtml = '';
+      if (shots.length > 0) {
+        // Build scatter chart
+        if (typeof _th_buildShotChartSVG === 'function') {
+          scatterHtml = _th_buildShotChartSVG(shots, pName + ' — All Shots', '#60a5fa');
+        }
+        // Build hex chart
+        if (typeof saBuildHexChart === 'function') {
+          hexHtml = saBuildHexChart(shots, pName + ' — Hex Map', { color: '#60a5fa', league: lgTag });
+        }
+      }
+
+      // Replace CSS vars in the chart HTML with actual colors for the print window
+      var chartReplacements = [
+        ['var(--accent2)', '#60a5fa'], ['var(--accent)', '#ffd200'],
+        ['var(--good)', '#22c55e'], ['var(--warn)', '#f59e0b'],
+        ['var(--muted)', '#8a9dbf'], ['var(--bad)', '#ef4444'],
+        ['var(--text)', '#e2e8f0']
+      ];
+      chartReplacements.forEach(function (pair) {
+        scatterHtml = scatterHtml.split(pair[0]).join(pair[1]);
+        hexHtml = hexHtml.split(pair[0]).join(pair[1]);
+      });
+
+      var chartsRow = '';
+      if (scatterHtml || hexHtml) {
+        chartsRow = '<div class="chartPair">';
+        if (scatterHtml) chartsRow += '<div class="chartHalf">' + scatterHtml + '</div>';
+        if (hexHtml) chartsRow += '<div class="chartHalf">' + hexHtml + '</div>';
+        chartsRow += '</div>';
+      } else {
+        chartsRow = '<p class="muted" style="font-size:11px">No shot chart data available for this player.</p>';
+      }
+
+      profilesHtml += '<div class="playerBrief">' +
+        '<h4 style="margin-bottom:4px">' + (pi + 1) + '. ' + pName + ' <span style="font-weight:400;color:#8a9dbf;font-size:11px">' + pTeam + ' · ' + (prof.position || '—') + '</span></h4>' +
+        statsHtml + chartsRow + '</div>';
+    }
+  }
+
+  portalSetAIStatus('Opening print preview...');
   var w = window.open('', '_blank');
   if (!w) { portalSetAIStatus('Popup blocked. Allow popups to export PDF.'); return; }
   var htmlBody = portalFmtAIMarkdown(reportText);
@@ -2616,13 +2706,25 @@ async function portalDownloadAIReport() {
     '.portalAITable--cols-6 th:nth-child(4),.portalAITable--cols-6 td:nth-child(4){width:19%;}' +
     '.portalAITable--cols-6 th:nth-child(5),.portalAITable--cols-6 td:nth-child(5){width:10%;}' +
     '.portalAITable--cols-6 th:nth-child(6),.portalAITable--cols-6 td:nth-child(6){width:27%;}' +
-    '@media print{html,body{background:#fff;}body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{max-width:none;box-shadow:none;margin:0;} .hdr,.accent{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
+    '.playerBrief{margin:20px 0;page-break-inside:avoid;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;background:#fafbff;}' +
+    '.profBriefTable{table-layout:auto;margin:6px 0 10px;font-size:11px;}' +
+    '.profBriefTable th{font-size:10px;padding:4px 8px;text-transform:uppercase;letter-spacing:0.5px;}' +
+    '.profBriefTable td{padding:4px 8px;font-weight:600;text-align:center;}' +
+    '.chartPair{display:flex;gap:10px;margin:8px 0;}' +
+    '.chartHalf{flex:1;min-width:0;max-width:48%;}' +
+    '.chartHalf .thShotWrap,.chartHalf .saHexWrap{margin:0;}' +
+    '.chartHalf .thShotTitle{font-size:10px !important;margin-bottom:2px;}' +
+    '.chartHalf .thShotFilterHint,.chartHalf .saHexHint{display:none;}' +
+    '.chartHalf .thShotStats{font-size:9px;}' +
+    '.chartHalf .saLegend{font-size:8px;}' +
+    '.chartHalf svg{max-width:100% !important;}' +
+    '@media print{html,body{background:#fff;}body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{max-width:none;box-shadow:none;margin:0;} .hdr,.accent,.playerBrief,.chartPair svg,.chartHalf svg rect,.chartHalf svg path,.chartHalf svg circle,.chartHalf svg line{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
     '</style></head><body>' +
     '<div class="page"><div class="hdr"><h1>Transfer Portal Fit Report</h1>' +
     '<p class="meta">' + teamName + ' &nbsp;·&nbsp; Season ' + season + ' &nbsp;·&nbsp; ' + mode + '</p>' +
     '<p class="date">Generated ' + dateStr + '</p></div>' +
     '<div class="accent"></div>' +
-    '<div class="body">' + htmlBody + '</div></div>' +
+    '<div class="body">' + htmlBody + profilesHtml + '</div></div>' +
     '</body></html>');
   w.document.close();
   setTimeout(function () {
@@ -2630,7 +2732,7 @@ async function portalDownloadAIReport() {
       w.focus();
       w.print();
     } catch (_) {}
-  }, 150);
+  }, 400);
   portalSetAIStatus('Print dialog opened. Choose Save as PDF.');
 }
 
@@ -3008,6 +3110,7 @@ async function portalRunAIAnalysis() {
       .trim();
     if (!text) throw new Error('Empty AI response');
     portalLastAIReportText = text;
+    portalLastAIProfiles = recommendedProfiles;
     portalSetAIStatus(
       usingShortlist
         ? ('Done - graded ' + recommendedProfiles.length + ' shortlist target(s) using ' + sportLabelShort + ' team and player context')
@@ -3016,6 +3119,7 @@ async function portalRunAIAnalysis() {
     portalAIOutputEl.innerHTML = '<div class="portalAIMarkdown">' + portalFmtAIMarkdown(text) + '</div>';
   } catch (e) {
     portalLastAIReportText = '';
+    portalLastAIProfiles = [];
     portalSetAIStatus('AI analysis failed');
     portalAIOutputEl.innerHTML = '<div class="muted" style="padding:12px">Unable to run AI analysis: ' +
       (e && e.message ? e.message : String(e)) + '</div>';
@@ -3206,17 +3310,38 @@ function portalStatusMatchesFilter(statusValue, filterValue) {
   return ls === filterValue;
 }
 
+function portalArchetypeTagsFor(player) {
+  if (!player || typeof archetypeTags !== 'function' || typeof statPercentile !== 'function') return [];
+  var pg = portalPlayerPosGroup(player);
+  var needed = pg === 'guard' ? 'Guards' : 'Bigs';
+  var savedPos = pos;
+  pos = needed;
+  try { var tags = archetypeTags(player); } finally { pos = savedPos; }
+  return tags || [];
+}
+
 function portalApplyFilters(opts) {
   opts = opts && typeof opts === 'object' ? opts : {};
   var q = portalNorm(portalSearchInputEl ? portalSearchInputEl.value : '');
   var st = (portalStatusFilterEl && portalStatusFilterEl.value) ? portalStatusFilterEl.value : 'entries';
+  var archFilter = (portalArchetypeFilterEl && portalArchetypeFilterEl.value) ? portalArchetypeFilterEl.value : '';
 
   if (!opts.preservePage) portalCurrentPage = 1;
 
   portalFiltered = portalItems.filter(function (it) {
     if (!portalStatusMatchesFilter(it && it.status, st)) return false;
-    if (!q) return true;
-    return String(it._searchHay || '').includes(q);
+    if (q && !String(it._searchHay || '').includes(q)) return false;
+    if (archFilter) {
+      var match = portalResolveEntryMatch(it);
+      if (!match) return false;
+      var tags = portalArchetypeTagsFor(match);
+      var hasTag = false;
+      for (var ti = 0; ti < tags.length; ti++) {
+        if (tags[ti].t === archFilter) { hasTag = true; break; }
+      }
+      if (!hasTag) return false;
+    }
+    return true;
   });
 
   portalMatchedCount = 0;
@@ -3612,6 +3737,7 @@ function initPortalPage() {
     portalScheduleApplyFilters(120);
   });
   if (portalStatusFilterEl) portalStatusFilterEl.addEventListener('change', function () { loadPortalEntries({ force: true }); });
+  if (portalArchetypeFilterEl) portalArchetypeFilterEl.addEventListener('change', function () { portalApplyFilters(); });
   if (portalUseSnapshotEl) portalUseSnapshotEl.addEventListener('change', function () {
     try {
       localStorage.setItem(portalUserStorageKey('snapshot_pref'), portalUseSnapshotEl.checked ? '1' : '0');
