@@ -454,6 +454,23 @@
 .pdPanel{border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.025);overflow:visible}
 .pdPanelHead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:800;color:var(--text)}
 .pdPanelBody{padding:13px}
+.pdCodeLabel{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:0;text-transform:none;white-space:nowrap}
+.pdGlimpseMeta{font-size:11px;color:var(--muted);margin-bottom:9px;line-height:1.4}
+.pdGlimpseRow{display:grid;grid-template-columns:112px 58px 1fr;gap:10px;padding:4px 0;font-size:12px;align-items:baseline}
+.pdGlimpseVar{color:var(--text);font-weight:800}
+.pdGlimpseType{color:rgba(210,225,245,.38);font-size:11px}
+.pdGlimpseVal{color:var(--accent);font-weight:800}
+.pdRangeRow{margin-bottom:15px}
+.pdRangeRow:last-child{margin-bottom:8px}
+.pdRangeTop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);font-weight:800}
+.pdRangeTop b{font-size:16px;color:var(--text)}
+.pdRangeTrack{position:relative;height:9px;margin:8px 0 5px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.pdRangeBand{position:absolute;top:0;bottom:0;border-radius:999px;background:linear-gradient(90deg,rgba(var(--accent-rgb),.18),rgba(52,211,153,.34))}
+.pdRangeMid{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}
+.pdRangeScale{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10.5px;color:var(--muted)}
+.pdRangeChips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.pdRangeChips span{display:inline-flex;gap:5px;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035);font-size:10.5px;color:var(--muted)}
+.pdRangeChips b{color:var(--text)}
 .pdBar{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
 .pdBarTop{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--text)}
 .pdBarTop em{font-style:normal;color:var(--muted);font-weight:600;margin-left:4px}
@@ -468,13 +485,35 @@
 .pdTag{display:inline-flex;margin:0 6px 6px 0;padding:5px 8px;border-radius:999px;border:1px solid rgba(var(--accent-rgb),.28);color:var(--accent);font-size:11px;font-weight:800;background:rgba(var(--accent-rgb),.08)}
 .pdTrendHead{position:relative}
 .pdSelect{min-width:210px}
-.pdTrendMount{min-height:230px}
+.pdTrendMount{min-height:310px}
+.pdTrendKpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.pdTrendKpis div{border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.025);min-width:0}
+.pdTrendKpis span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+.pdTrendKpis b{display:block;margin-top:2px;color:var(--text);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdTrendFrame{position:relative}
 .pdTrendMeta{display:flex;gap:12px;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--muted)}
 .pdTrendSvg{width:100%;height:auto;display:block}
 .pdTrendSvg line{stroke:rgba(255,255,255,.075);stroke-width:1}
-.pdTrendSvg polyline{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.pdTrendSvg circle{fill:var(--accent)}
+.pdTrendSvg .pdTrendAvgLine{stroke:rgba(251,191,36,.48);stroke-width:1.5;stroke-dasharray:6 5}
+.pdTrendSvg .pdTrendLine{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pdTrendHit{fill:transparent;stroke:transparent;cursor:pointer}
+.pdTrendDot{fill:var(--accent);stroke:rgba(5,12,24,.96);stroke-width:1.5;cursor:pointer}
+.pdTrendPoint.isHigh .pdTrendDot{fill:var(--good)}
+.pdTrendPoint.isLow .pdTrendDot{fill:var(--warn)}
+.pdTrendPoint.isSelected .pdTrendDot{stroke:#fff;stroke-width:2.2}
 .pdTrendSvg text{fill:rgba(210,225,245,.52);font-size:10px;font-family:inherit}
+.pdTrendSvg .pdTrendAvgText{fill:rgba(251,191,36,.78);font-weight:800}
+.pdTrendTooltip{display:none;position:fixed;z-index:1800;pointer-events:none;width:min(260px,80vw);padding:10px 11px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(5,12,24,.98);box-shadow:0 18px 46px rgba(0,0,0,.45);font-size:12px;color:var(--text)}
+.pdTrendTipTitle{font-weight:900;margin-bottom:2px}
+.pdTrendTipMeta{font-size:10.5px;color:var(--muted);margin-bottom:7px}
+.pdTrendTipValue{font-size:12px;color:var(--text)}
+.pdTrendTipStats{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px;color:var(--muted);font-size:10.5px}
+.pdTrendTipStats b{color:var(--text)}
+.pdTrendInspect{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025)}
+.pdTrendInspect span{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.pdTrendInspect b{display:block;color:var(--text);font-size:13px;margin-top:2px}
+.pdTrendInspect em{display:block;font-style:normal;color:var(--muted);font-size:11px;margin-top:1px}
+.pdTrendInspect strong{font-size:20px;color:var(--accent)}
 .pdCompareSearch{position:relative;margin-bottom:12px}
 .pdCompareSearch input{width:min(360px,100%)}
 .pdSuggest{display:none;position:absolute;left:0;top:calc(100% + 4px);width:min(360px,90vw);max-height:240px;overflow:auto;z-index:5;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(5,12,24,.98);box-shadow:0 14px 40px rgba(0,0,0,.38)}
@@ -495,10 +534,16 @@
 .pdCompareTableHead span,.pdCompareTableRow span{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,.06);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pdCompareTableHead{background:rgba(255,255,255,.045);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
 .pdCompareTableRow .isBest{color:var(--good);font-weight:900}
-.pdGameTable{font-size:12px}
-.pdGameHead,.pdGameRow{display:grid;grid-template-columns:58px minmax(100px,1fr) repeat(4,48px);gap:7px;align-items:center}
+.pdLogHead{align-items:flex-start}
+.pdInlineControls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.pdSelectSmall{min-width:88px;font-size:11px;padding:5px 7px;border-radius:7px}
+.pdGameMeta{font-size:11px;color:var(--muted);margin-bottom:7px}
+.pdGameTable{font-size:12px;overflow:auto}
+.pdGameHead,.pdGameRow{display:grid;grid-template-columns:58px minmax(112px,1fr) 42px repeat(5,46px);gap:7px;align-items:center;min-width:560px}
 .pdGameHead{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:6px}
 .pdGameRow{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.055);color:var(--text)}
+.pdGameRow span:nth-child(n+3),.pdGameHead span:nth-child(n+3){text-align:right}
+.pdGameAvg{background:rgba(255,255,255,.035);border-top:1px solid rgba(255,255,255,.1);font-weight:900;color:var(--accent)}
 .pdSimilar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border:0;border-bottom:1px solid rgba(255,255,255,.07);background:transparent;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
 .pdSimilar:hover b{color:var(--accent)}
 .pdSimilar em{display:block;font-style:normal;color:var(--muted);font-size:11px;margin-top:2px}
@@ -523,6 +568,7 @@
 @media(max-width:980px){
   .pdMetrics{grid-template-columns:repeat(3,minmax(120px,1fr))}
   .pdGrid2{grid-template-columns:1fr}
+  .pdTrendKpis{grid-template-columns:repeat(3,minmax(0,1fr))}
   .pdCompareGrid{grid-template-columns:1fr}
   .txGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
@@ -534,12 +580,13 @@
   .pdActions{justify-content:flex-start}
   .pdHeader h2{font-size:24px}
   .pdMetrics{grid-template-columns:1fr 1fr}
+  .pdTrendKpis{grid-template-columns:1fr 1fr}
   .pdScoutGrid{grid-template-columns:1fr}
   .pdScoutCol:last-child{grid-column:auto}
   .pdCompareTable{overflow-x:auto}
   .pdCompareTableHead,.pdCompareTableRow{min-width:520px}
   .pdGameTable{overflow-x:auto}
-  .pdGameHead,.pdGameRow{min-width:440px}
+  .pdGameHead,.pdGameRow{min-width:560px}
   .txGrid{grid-template-columns:1fr}
 }
 .portalWatchAlertHeader{

@@ -10,7 +10,13 @@
     compares: [],
     logs: [],
     snapshots: [],
+    trendPoints: [],
     trendKey: 'snap_perf',
+    trendSelected: null,
+    logFilter: 'all',
+    logLimit: '8',
+    logSortKey: 'date',
+    logSortDir: 'desc',
     suggestions: [],
     wired: false,
     shell: null,
@@ -140,6 +146,48 @@
     return n.toFixed(Math.abs(n) >= 100 ? 0 : 1);
   }
 
+  function pdClamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function pdFirstNum(obj, keys) {
+    if (!obj) return null;
+    for (var i = 0; i < keys.length; i++) {
+      var n = pdNum(obj[keys[i]]);
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
+  }
+
+  function pdGameDate(game) {
+    return String((game && (game.date || game.gameDate || game.d || game.Date)) || '');
+  }
+
+  function pdGameOpp(game) {
+    return String((game && (game.opponent || game.opponentTeam || game.opp || game.Opponent)) || '');
+  }
+
+  function pdGameRank(game) {
+    return pdFirstNum(game, ['opponentRank', 'opponent_rank', 'oppRank', 'opp_rank', 'rank', 'rk', 'OpponentRank']);
+  }
+
+  function pdGameLoc(game) {
+    if (!game) return '';
+    var raw = String(game.location || game.homeAway || game.ha || game.site || '').trim();
+    if (raw) return raw;
+    var h = pdNum(game.home);
+    if (h === 1) return 'H';
+    if (h === -1) return '@';
+    return '';
+  }
+
+  function pdPctText(value) {
+    var n = pdNum(value);
+    if (!Number.isFinite(n)) return '--';
+    if (Math.abs(n) <= 1) return (n * 100).toFixed(1) + '%';
+    return n.toFixed(1) + '%';
+  }
+
   function pdPrimaryStats(row, limit) {
     var bucket = typeof bucketPosition === 'function'
       ? bucketPosition(row && (row.Pos || row.Position))
@@ -165,6 +213,78 @@
       + '<div class="pdMetricValue">' + value + '</div>'
       + '<div class="pdMetricSub">' + pdEsc(sub || '') + '</div>'
       + '</div>';
+  }
+
+  function pdBuildGlimpseHtml(row) {
+    var items = [
+      { label: 'production', type: 'dbl', value: pdNum(row.Score), fmt: function (v) { return v.toFixed(2); } },
+      { label: 'projection', type: 'dbl', value: pdNum(row.ProjectionPerf_calc), fmt: function (v) { return v.toFixed(2); } },
+      { label: 'fit', type: 'dbl', value: pdNum(row.FitScore_calc), fmt: function (v) { return v.toFixed(0); } },
+      { label: 'ppg', type: 'dbl', value: pdNum(row.PPG), fmt: function (v) { return v.toFixed(1); } },
+      { label: 'rpg', type: 'dbl', value: pdNum(row.RPG), fmt: function (v) { return v.toFixed(1); } },
+      { label: 'apg', type: 'dbl', value: pdNum(row.APG), fmt: function (v) { return v.toFixed(1); } },
+      { label: 'efg_pct', type: 'dbl', value: pdNum(row['eFG%']), fmt: pdPctText },
+      { label: 'three_pct', type: 'dbl', value: pdNum(row['3P%']), fmt: pdPctText },
+      { label: 'bpm', type: 'dbl', value: pdNum(row.BPM), fmt: function (v) { return (v >= 0 ? '+' : '') + v.toFixed(1); } },
+      { label: 'minutes', type: 'dbl', value: pdNum(row.MP || row.MPG), fmt: function (v) { return v.toFixed(1); } }
+    ];
+    var rowsHtml = items.map(function (item) {
+      var hasValue = Number.isFinite(item.value);
+      return '<div class="pdGlimpseRow">'
+        + '<span class="pdGlimpseVar">$ ' + pdEsc(item.label) + '</span>'
+        + '<span class="pdGlimpseType">&lt;' + pdEsc(item.type) + '&gt;</span>'
+        + '<span class="pdGlimpseVal">' + (hasValue ? pdEsc(item.fmt(item.value)) : '--') + '</span>'
+        + '</div>';
+    }).join('');
+    var meta = [
+      row.Team,
+      row.Conference || row.Conf,
+      row.Pos || row.Position,
+      row.Class || row.Year || row.Yr,
+      pdHeight(row)
+    ].filter(Boolean).join(' - ');
+    return '<div class="pdGlimpseMeta">' + pdEsc(meta || 'Loaded player row') + '</div>' + rowsHtml;
+  }
+
+  function pdRangeRow(label, low, mid, high, fmt, maxHint) {
+    if (!Number.isFinite(low) || !Number.isFinite(mid) || !Number.isFinite(high)) return '';
+    var max = Math.max(maxHint || 0, high, mid, low, 1);
+    var lowPct = pdClamp((low / max) * 100, 0, 100);
+    var highPct = pdClamp((high / max) * 100, 0, 100);
+    var midPct = pdClamp((mid / max) * 100, 0, 100);
+    var width = Math.max(2, highPct - lowPct);
+    return '<div class="pdRangeRow">'
+      + '<div class="pdRangeTop"><span>' + pdEsc(label) + '</span><b>' + pdEsc(fmt(mid)) + '</b></div>'
+      + '<div class="pdRangeTrack">'
+      + '<div class="pdRangeBand" style="left:' + lowPct.toFixed(2) + '%;width:' + width.toFixed(2) + '%"></div>'
+      + '<div class="pdRangeMid" style="left:' + midPct.toFixed(2) + '%"></div>'
+      + '</div>'
+      + '<div class="pdRangeScale"><span>floor ' + pdEsc(fmt(low)) + '</span><span>ceiling ' + pdEsc(fmt(high)) + '</span></div>'
+      + '</div>';
+  }
+
+  function pdBuildProjectionRangeHtml(row) {
+    var perfLow = pdNum(row.ProjectionFloorPerf_calc);
+    var perfMid = pdNum(row.ProjectionPerf_calc);
+    var perfHigh = pdNum(row.ProjectionCeilingPerf_calc);
+    var valueLow = pdNum(row.ProjectionFloorValue_calc);
+    var valueMid = pdNum(row.ProjectionMedianValue_calc);
+    var valueHigh = pdNum(row.ProjectionCeilingValue_calc);
+    var production = pdNum(row.Score);
+    var maxPerf = Math.max(100, perfHigh || 0, production || 0);
+    var rowsHtml = ''
+      + pdRangeRow('Projected Perf', perfLow, perfMid, perfHigh, function (v) { return v.toFixed(2); }, maxPerf)
+      + pdRangeRow('Projected Value', valueLow, valueMid, valueHigh, pdMoney, Math.max(valueHigh || 0, pdNum(row.ActualValuation_calc) || 0, pdNum(row.MarketPressure_calc) || 0));
+    if (!rowsHtml) return '<div class="muted">Projection range data is not available for this player.</div>';
+    var confidence = pdNum(row.ProjectionConfidence_calc);
+    var chips = [
+      { label: 'Confidence', value: Number.isFinite(confidence) ? Math.round(confidence * 100) + '%' : (row.ProjectionConfidenceLabel_calc || '--') },
+      { label: 'Medical', value: row.ProjectionMedicalRiskLabel_calc || 'Low' },
+      { label: 'Talent', value: row.ProjectionHealthyTalentLabel_calc || '--' }
+    ];
+    return rowsHtml + '<div class="pdRangeChips">' + chips.map(function (chip) {
+      return '<span><b>' + pdEsc(chip.label) + '</b>' + pdEsc(chip.value) + '</span>';
+    }).join('') + '</div>';
   }
 
   function pdBuildPercentileBars(row) {
@@ -274,7 +394,13 @@
     pdState.compares = [];
     pdState.logs = [];
     pdState.snapshots = [];
+    pdState.trendPoints = [];
     pdState.trendKey = 'snap_perf';
+    pdState.trendSelected = null;
+    pdState.logFilter = 'all';
+    pdState.logLimit = '8';
+    pdState.logSortKey = 'date';
+    pdState.logSortDir = 'desc';
     pdState.shell.style.display = 'flex';
     document.body.classList.add('pdOpen');
     if (!opts.skipHash) pdSetHash(row, 'report');
@@ -325,6 +451,10 @@
       + (reason ? '<div class="pdNote">Projection note: <b>' + pdEsc(reason) + '</b></div>' : '')
       + '</section>'
       + '<section class="pdGrid2">'
+      + '<div class="pdPanel"><div class="pdPanelHead"><span>Summary</span><span class="pdCodeLabel">glimpse(player$stats)</span></div><div class="pdPanelBody">' + pdBuildGlimpseHtml(r) + '</div></div>'
+      + '<div class="pdPanel"><div class="pdPanelHead"><span>Projection Range</span><span class="pdCodeLabel">predict(player)</span></div><div class="pdPanelBody">' + pdBuildProjectionRangeHtml(r) + '</div></div>'
+      + '</section>'
+      + '<section class="pdGrid2">'
       + '<div class="pdPanel"><div class="pdPanelHead">Key Percentiles</div><div class="pdPanelBody">' + pdBuildPercentileBars(r) + '</div></div>'
       + '<div class="pdPanel"><div class="pdPanelHead">Scout Read</div><div class="pdPanelBody">' + pdBuildScoutHtml(r) + '</div></div>'
       + '</section>'
@@ -337,13 +467,18 @@
       + '<option value="assists">Game Log: Assists</option>'
       + '<option value="minutes">Game Log: Minutes</option>'
       + '<option value="fgPct">Game Log: FG%</option>'
+      + '<option value="bpm">Game Log: BPM</option>'
       + '</select></div><div class="pdPanelBody"><div id="pdTrendMount" class="pdTrendMount"><div class="muted">Loading trend data...</div></div></div></section>'
       + '<section class="pdPanel"><div class="pdPanelHead">Inline Compare</div><div class="pdPanelBody">'
       + '<div class="pdCompareSearch"><input id="pdCompareSearch" type="text" placeholder="Add player to compare..." autocomplete="off"><div id="pdCompareSuggestions" class="pdSuggest"></div></div>'
       + '<div id="pdCompareMount">' + pdBuildCompareHtml() + '</div>'
       + '</div></section>'
       + '<section class="pdGrid2">'
-      + '<div class="pdPanel"><div class="pdPanelHead">Recent Production</div><div class="pdPanelBody"><div id="pdRecentGames" class="pdRecentGames"><div class="muted">Loading game log...</div></div></div></div>'
+      + '<div class="pdPanel"><div class="pdPanelHead pdLogHead"><span>Game Log</span><div class="pdInlineControls">'
+      + '<select id="pdLogFilter" class="pdSelectSmall"><option value="all">All Games</option><option value="10">vs Top 10</option><option value="25">vs Top 25</option><option value="50">vs Top 50</option><option value="100">vs Top 100</option></select>'
+      + '<select id="pdLogLimit" class="pdSelectSmall"><option value="8">Last 8</option><option value="15">Last 15</option><option value="all">All</option></select>'
+      + '<select id="pdLogSort" class="pdSelectSmall"><option value="date:desc">Newest</option><option value="points:desc">PTS</option><option value="rebounds:desc">REB</option><option value="assists:desc">AST</option><option value="minutes:desc">MIN</option></select>'
+      + '</div></div><div class="pdPanelBody"><div id="pdRecentGames" class="pdRecentGames"><div class="muted">Loading game log...</div></div></div></div>'
       + '<div class="pdPanel"><div class="pdPanelHead">Similar Profiles</div><div class="pdPanelBody">' + pdBuildSimilarHtml(r) + '</div></div>'
       + '</section>';
 
@@ -393,20 +528,43 @@
 
   function pdLogValue(game, key) {
     if (!game) return null;
-    if (key === 'points') return pdNum(game.points);
-    if (key === 'rebounds') return pdNum(game.rebounds);
-    if (key === 'assists') return pdNum(game.assists);
+    if (key === 'points') return pdFirstNum(game, ['points', 'pts', 'PTS']);
+    if (key === 'rebounds') return pdFirstNum(game, ['rebounds', 'reb', 'REB']);
+    if (key === 'assists') return pdFirstNum(game, ['assists', 'ast', 'AST']);
     if (key === 'minutes') {
-      var m = game.minutes;
+      var m = game.minutes || game.mp || game.MP || game.min;
       if (typeof m === 'string' && m.indexOf(':') >= 0) return pdNum(m.split(':')[0]);
       return pdNum(m);
     }
     if (key === 'fgPct') {
-      var made = pdNum(game.fgm);
-      var att = pdNum(game.fga);
+      var made = pdFirstNum(game, ['fgm', 'FGM']);
+      var att = pdFirstNum(game, ['fga', 'FGA']);
       return Number.isFinite(made) && Number.isFinite(att) && att > 0 ? made / att * 100 : null;
     }
+    if (key === 'bpm') return pdFirstNum(game, ['bpm', 'BPM']);
     return null;
+  }
+
+  function pdTrendName(key) {
+    var map = {
+      snap_perf: 'Snapshot Production',
+      snap_rank: 'Snapshot Rank',
+      points: 'Points',
+      rebounds: 'Rebounds',
+      assists: 'Assists',
+      minutes: 'Minutes',
+      fgPct: 'FG%',
+      bpm: 'BPM'
+    };
+    return map[key] || String(key || 'Trend');
+  }
+
+  function pdFmtTrendValue(value, key) {
+    if (!Number.isFinite(value)) return '--';
+    if (key === 'fgPct') return value.toFixed(1) + '%';
+    if (key === 'snap_rank') return '#' + Math.round(value);
+    if (key === 'bpm') return (value >= 0 ? '+' : '') + value.toFixed(1);
+    return value.toFixed(1);
   }
 
   function pdTrendPoints() {
@@ -414,96 +572,235 @@
     if (key === 'snap_perf' || key === 'snap_rank') {
       var field = key === 'snap_rank' ? 'rank' : 'perf';
       return (pdState.snapshots || []).map(function (snap, i) {
+        var label = String(snap.week || snap.date || (i + 1));
         return {
-          label: String(snap.week || snap.date || (i + 1)),
-          value: pdNum(snap[field])
+          label: label,
+          axisLabel: label.replace(/^20\d\d-W/, 'W'),
+          value: pdNum(snap[field]),
+          type: 'snapshot',
+          meta: String(snap.date || snap.week || ''),
+          raw: snap
         };
       }).filter(function (p) { return Number.isFinite(p.value); });
     }
     return (pdState.logs || []).slice().sort(function (a, b) {
-      return String(a.date || '').localeCompare(String(b.date || ''));
+      return pdGameDate(a).localeCompare(pdGameDate(b));
     }).map(function (game, i) {
-      var opp = game.opponent || game.opponentTeam || '';
-      return { label: opp || String(i + 1), value: pdLogValue(game, key) };
+      var opp = pdGameOpp(game);
+      var date = pdGameDate(game);
+      var rank = pdGameRank(game);
+      var meta = [date, Number.isFinite(rank) ? '#' + rank : '', pdGameLoc(game)].filter(Boolean).join(' - ');
+      return {
+        label: opp || date || String(i + 1),
+        axisLabel: date ? date.slice(5) : String(i + 1),
+        value: pdLogValue(game, key),
+        type: 'game',
+        meta: meta,
+        game: game
+      };
     }).filter(function (p) { return Number.isFinite(p.value); });
+  }
+
+  function pdAvg(values) {
+    var vals = (values || []).filter(Number.isFinite);
+    return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : null;
+  }
+
+  function pdTrendTooltipHtml(point) {
+    if (!point) return '';
+    var key = pdState.trendKey;
+    var game = point.game;
+    var statLine = '';
+    if (game) {
+      statLine = '<div class="pdTrendTipStats">'
+        + '<span>PTS <b>' + pdEsc(pdFmtStatValue(pdLogValue(game, 'points'))) + '</b></span>'
+        + '<span>REB <b>' + pdEsc(pdFmtStatValue(pdLogValue(game, 'rebounds'))) + '</b></span>'
+        + '<span>AST <b>' + pdEsc(pdFmtStatValue(pdLogValue(game, 'assists'))) + '</b></span>'
+        + '<span>MIN <b>' + pdEsc(pdFmtStatValue(pdLogValue(game, 'minutes'))) + '</b></span>'
+        + '</div>';
+    }
+    return '<div class="pdTrendTipTitle">' + pdEsc(point.label || 'Point') + '</div>'
+      + '<div class="pdTrendTipMeta">' + pdEsc(point.meta || '') + '</div>'
+      + '<div class="pdTrendTipValue">' + pdEsc(pdTrendName(key)) + ': <b>' + pdEsc(pdFmtTrendValue(point.value, key)) + '</b></div>'
+      + statLine;
   }
 
   function pdSvgLine(points) {
     if (!points || points.length < 2) return '<div class="muted">Not enough data for this trend yet.</div>';
-    var w = 720, h = 210, padL = 44, padR = 18, padT = 16, padB = 34;
+    var w = 720, h = 240, padL = 48, padR = 22, padT = 18, padB = 38;
     var vals = points.map(function (p) { return p.value; });
-    var mn = Math.min.apply(null, vals);
-    var mx = Math.max.apply(null, vals);
+    var avg = pdAvg(vals);
+    var mn = Math.min.apply(null, vals.concat(Number.isFinite(avg) ? [avg] : []));
+    var mx = Math.max.apply(null, vals.concat(Number.isFinite(avg) ? [avg] : []));
+    if (mn === mx) { mn -= 1; mx += 1; }
     var range = mx - mn || 1;
     var plotW = w - padL - padR;
     var plotH = h - padT - padB;
+    var selected = Number.isFinite(pdState.trendSelected) ? pdState.trendSelected : points.length - 1;
     var coords = points.map(function (p, i) {
       return {
         x: padL + (i / (points.length - 1)) * plotW,
         y: padT + (1 - (p.value - mn) / range) * plotH,
         value: p.value,
-        label: p.label
+        label: p.axisLabel || p.label,
+        point: p
       };
     });
     var line = coords.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
-    var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" class="pdTrendSvg" role="img">';
+    var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" class="pdTrendSvg" role="img" aria-label="' + pdEsc(pdTrendName(pdState.trendKey)) + ' trend">';
     for (var i = 0; i <= 4; i++) {
       var y = padT + (i / 4) * plotH;
       var v = mx - (i / 4) * range;
       svg += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y.toFixed(1) + '"></line>';
-      svg += '<text x="' + (padL - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + v.toFixed(1) + '</text>';
+      svg += '<text x="' + (padL - 8) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end">' + pdEsc(pdFmtTrendValue(v, pdState.trendKey).replace('#', '')) + '</text>';
     }
-    svg += '<polyline points="' + line + '"></polyline>';
+    if (Number.isFinite(avg)) {
+      var avgY = padT + (1 - (avg - mn) / range) * plotH;
+      svg += '<line class="pdTrendAvgLine" x1="' + padL + '" y1="' + avgY.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + avgY.toFixed(1) + '"></line>';
+      svg += '<text class="pdTrendAvgText" x="' + (w - padR) + '" y="' + (avgY - 5).toFixed(1) + '" text-anchor="end">avg ' + pdEsc(pdFmtTrendValue(avg, pdState.trendKey)) + '</text>';
+    }
+    svg += '<polyline class="pdTrendLine" points="' + line + '"></polyline>';
     coords.forEach(function (p, i) {
-      if (i % Math.max(1, Math.floor(coords.length / 8)) === 0 || i === coords.length - 1) {
-        svg += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3"></circle>';
-      }
+      var isSelected = i === selected;
+      var cls = p.value >= avg ? 'isHigh' : 'isLow';
+      if (isSelected) cls += ' isSelected';
+      svg += '<g class="pdTrendPoint ' + cls + '" data-pd-trend-index="' + i + '" tabindex="0" role="button">'
+        + '<title>' + pdEsc((p.point.label || 'Point') + ': ' + pdFmtTrendValue(p.value, pdState.trendKey)) + '</title>'
+        + '<circle class="pdTrendHit" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="11"></circle>'
+        + '<circle class="pdTrendDot" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + (isSelected ? '5' : '3.5') + '"></circle>'
+        + '</g>';
     });
     var step = Math.max(1, Math.floor(points.length / 6));
     for (var xi = 0; xi < points.length; xi += step) {
       var c = coords[xi];
-      svg += '<text x="' + c.x.toFixed(1) + '" y="' + (h - 8) + '" text-anchor="middle">' + pdEsc(String(c.label).slice(0, 10)) + '</text>';
+      svg += '<text x="' + c.x.toFixed(1) + '" y="' + (h - 10) + '" text-anchor="middle">' + pdEsc(String(c.label).slice(0, 10)) + '</text>';
     }
     svg += '</svg>';
     return svg;
+  }
+
+  function pdTrendDetailHtml(point) {
+    if (!point) return '';
+    var key = pdState.trendKey;
+    return '<div class="pdTrendInspect">'
+      + '<div><span>Selected</span><b>' + pdEsc(point.label || 'Point') + '</b><em>' + pdEsc(point.meta || '') + '</em></div>'
+      + '<strong>' + pdEsc(pdFmtTrendValue(point.value, key)) + '</strong>'
+      + '</div>';
   }
 
   function pdRenderTrend() {
     var mount = document.getElementById('pdTrendMount');
     if (!mount) return;
     var points = pdTrendPoints();
+    pdState.trendPoints = points;
+    if (points.length && (!Number.isFinite(pdState.trendSelected) || pdState.trendSelected >= points.length)) {
+      pdState.trendSelected = points.length - 1;
+    }
+    var vals = points.map(function (p) { return p.value; });
     var latest = points.length ? points[points.length - 1].value : null;
     var first = points.length ? points[0].value : null;
+    var avg = pdAvg(vals);
+    var lastFive = pdAvg(vals.slice(Math.max(0, vals.length - 5)));
     var delta = Number.isFinite(latest) && Number.isFinite(first) ? latest - first : null;
-    var deltaText = Number.isFinite(delta) ? ((delta >= 0 ? '+' : '') + delta.toFixed(1) + ' since first point') : '';
-    mount.innerHTML = '<div class="pdTrendMeta">'
-      + '<span>' + points.length + ' data points</span>'
-      + '<span>' + pdEsc(deltaText) + '</span>'
-      + '</div>' + pdSvgLine(points);
+    var selected = points[Number.isFinite(pdState.trendSelected) ? pdState.trendSelected : points.length - 1];
+    var kpis = [
+      ['Points', String(points.length)],
+      ['Season Avg', Number.isFinite(avg) ? pdFmtTrendValue(avg, pdState.trendKey) : '--'],
+      ['Latest', Number.isFinite(latest) ? pdFmtTrendValue(latest, pdState.trendKey) : '--'],
+      ['Last 5', Number.isFinite(lastFive) ? pdFmtTrendValue(lastFive, pdState.trendKey) : '--']
+    ];
+    if (Number.isFinite(delta)) kpis.push(['Change', (delta >= 0 ? '+' : '') + delta.toFixed(1)]);
+    mount.innerHTML = '<div class="pdTrendKpis">' + kpis.map(function (kpi) {
+      return '<div><span>' + pdEsc(kpi[0]) + '</span><b>' + pdEsc(kpi[1]) + '</b></div>';
+    }).join('') + '</div><div class="pdTrendFrame">'
+      + pdSvgLine(points)
+      + '<div id="pdTrendTooltip" class="pdTrendTooltip"></div>'
+      + '</div>' + pdTrendDetailHtml(selected);
+  }
+
+  function pdSetLogControls() {
+    var filter = document.getElementById('pdLogFilter');
+    var limit = document.getElementById('pdLogLimit');
+    var sort = document.getElementById('pdLogSort');
+    if (filter) filter.value = pdState.logFilter;
+    if (limit) limit.value = pdState.logLimit;
+    if (sort) sort.value = pdState.logSortKey + ':' + pdState.logSortDir;
+  }
+
+  function pdSortLogValue(game, key) {
+    if (key === 'date') {
+      var date = Date.parse(pdGameDate(game));
+      return Number.isFinite(date) ? date : 0;
+    }
+    if (key === 'rank') {
+      var rank = pdGameRank(game);
+      return Number.isFinite(rank) ? -rank : -9999;
+    }
+    return pdLogValue(game, key);
   }
 
   function pdRenderRecentGames() {
     var el = document.getElementById('pdRecentGames');
     if (!el) return;
-    var logs = (pdState.logs || []).slice().sort(function (a, b) {
-      return String(b.date || '').localeCompare(String(a.date || ''));
-    }).slice(0, 8);
-    if (!logs.length) {
+    pdSetLogControls();
+    var allLogs = (pdState.logs || []).slice();
+    if (!allLogs.length) {
       el.innerHTML = '<div class="muted">No game log available.</div>';
       return;
     }
-    el.innerHTML = '<div class="pdGameTable">'
-      + '<div class="pdGameHead"><span>Date</span><span>Opp</span><span>PTS</span><span>REB</span><span>AST</span><span>MIN</span></div>'
-      + logs.map(function (g) {
+    var topN = pdState.logFilter === 'all' ? 0 : parseInt(pdState.logFilter, 10);
+    var filtered = allLogs.filter(function (g) {
+      if (!topN) return true;
+      var rank = pdGameRank(g);
+      return Number.isFinite(rank) && rank <= topN;
+    });
+    if (!filtered.length) {
+      el.innerHTML = '<div class="muted">No games match this filter.</div>';
+      return;
+    }
+    filtered.sort(function (a, b) {
+      var av = pdSortLogValue(a, pdState.logSortKey);
+      var bv = pdSortLogValue(b, pdState.logSortKey);
+      if (!Number.isFinite(av)) return 1;
+      if (!Number.isFinite(bv)) return -1;
+      return pdState.logSortDir === 'asc' ? av - bv : bv - av;
+    });
+    var display = pdState.logLimit === 'all' ? filtered : filtered.slice(0, parseInt(pdState.logLimit, 10) || 8);
+    function fmtGame(g, key) {
+      var v = pdLogValue(g, key);
+      if (!Number.isFinite(v)) return '--';
+      if (key === 'fgPct') return v.toFixed(0) + '%';
+      return key === 'minutes' ? v.toFixed(1) : String(Math.round(v * 10) / 10);
+    }
+    function avgGame(key) {
+      return pdAvg(display.map(function (g) { return pdLogValue(g, key); }));
+    }
+    var avgRow = '<div class="pdGameRow pdGameAvg">'
+      + '<span>Avg</span><span>' + display.length + ' games</span><span></span>'
+      + '<span>' + pdEsc(pdFmtStatValue(avgGame('points'))) + '</span>'
+      + '<span>' + pdEsc(pdFmtStatValue(avgGame('rebounds'))) + '</span>'
+      + '<span>' + pdEsc(pdFmtStatValue(avgGame('assists'))) + '</span>'
+      + '<span>' + pdEsc(pdFmtStatValue(avgGame('minutes'))) + '</span>'
+      + '<span>' + pdEsc(pdFmtTrendValue(avgGame('fgPct'), 'fgPct')) + '</span>'
+      + '</div>';
+    el.innerHTML = '<div class="pdGameMeta">' + display.length + ' shown of ' + filtered.length + ' matching games</div>'
+      + '<div class="pdGameTable">'
+      + '<div class="pdGameHead"><span>Date</span><span>Opp</span><span>RK</span><span>PTS</span><span>REB</span><span>AST</span><span>MIN</span><span>FG</span></div>'
+      + display.map(function (g) {
+        var rank = pdGameRank(g);
+        var opp = [pdGameLoc(g), pdGameOpp(g)].filter(Boolean).join(' ');
         return '<div class="pdGameRow">'
-          + '<span>' + pdEsc(String(g.date || '').slice(5, 10) || '--') + '</span>'
-          + '<span>' + pdEsc(g.opponent || g.opponentTeam || '--') + '</span>'
-          + '<span>' + pdEsc(g.points != null ? g.points : '--') + '</span>'
-          + '<span>' + pdEsc(g.rebounds != null ? g.rebounds : '--') + '</span>'
-          + '<span>' + pdEsc(g.assists != null ? g.assists : '--') + '</span>'
-          + '<span>' + pdEsc(g.minutes != null ? g.minutes : '--') + '</span>'
+          + '<span>' + pdEsc(pdGameDate(g).slice(5, 10) || '--') + '</span>'
+          + '<span>' + pdEsc(opp || '--') + '</span>'
+          + '<span>' + (Number.isFinite(rank) ? '#' + pdEsc(rank) : '--') + '</span>'
+          + '<span>' + pdEsc(fmtGame(g, 'points')) + '</span>'
+          + '<span>' + pdEsc(fmtGame(g, 'rebounds')) + '</span>'
+          + '<span>' + pdEsc(fmtGame(g, 'assists')) + '</span>'
+          + '<span>' + pdEsc(fmtGame(g, 'minutes')) + '</span>'
+          + '<span>' + pdEsc(fmtGame(g, 'fgPct')) + '</span>'
           + '</div>';
       }).join('')
+      + avgRow
       + '</div>';
   }
 
@@ -722,6 +1019,31 @@
     }, 'image/png');
   }
 
+  function pdPositionTrendTooltip(event) {
+    var tip = document.getElementById('pdTrendTooltip');
+    if (!tip || tip.style.display !== 'block') return;
+    var x = event.clientX + 14;
+    var y = event.clientY + 14;
+    var maxX = window.innerWidth - tip.offsetWidth - 12;
+    var maxY = window.innerHeight - tip.offsetHeight - 12;
+    tip.style.left = Math.max(8, Math.min(x, maxX)).toFixed(0) + 'px';
+    tip.style.top = Math.max(8, Math.min(y, maxY)).toFixed(0) + 'px';
+  }
+
+  function pdShowTrendTooltip(index, event) {
+    var tip = document.getElementById('pdTrendTooltip');
+    var point = pdState.trendPoints[index];
+    if (!tip || !point) return;
+    tip.innerHTML = pdTrendTooltipHtml(point);
+    tip.style.display = 'block';
+    if (event && Number.isFinite(event.clientX)) pdPositionTrendTooltip(event);
+  }
+
+  function pdHideTrendTooltip() {
+    var tip = document.getElementById('pdTrendTooltip');
+    if (tip) tip.style.display = 'none';
+  }
+
   function pdWireShell() {
     if (pdState.wired || !pdState.shell) return;
     pdState.wired = true;
@@ -741,12 +1063,24 @@
         }
         if (action === 'copy-link') {
           var url = pdBuildUrl(pdState.player, 'report');
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url);
-          else window.prompt('Player report link', url);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(function () {});
+          } else {
+            window.prompt('Player report link', url);
+          }
           var status = document.getElementById('pdCardStatus');
           if (status) status.textContent = 'Report link copied.';
         }
         if (action === 'card') pdExportCard();
+        return;
+      }
+      var trendPoint = event.target.closest('[data-pd-trend-index]');
+      if (trendPoint) {
+        var ti = parseInt(trendPoint.getAttribute('data-pd-trend-index'), 10);
+        if (Number.isFinite(ti)) {
+          pdState.trendSelected = ti;
+          pdRenderTrend();
+        }
         return;
       }
       var removeBtn = event.target.closest('[data-pd-remove]');
@@ -781,7 +1115,54 @@
     pdState.shell.addEventListener('change', function (event) {
       if (event.target && event.target.id === 'pdTrendSelect') {
         pdState.trendKey = event.target.value;
+        pdState.trendSelected = null;
         pdRenderTrend();
+      }
+      if (event.target && event.target.id === 'pdLogFilter') {
+        pdState.logFilter = event.target.value || 'all';
+        pdRenderRecentGames();
+      }
+      if (event.target && event.target.id === 'pdLogLimit') {
+        pdState.logLimit = event.target.value || '8';
+        pdRenderRecentGames();
+      }
+      if (event.target && event.target.id === 'pdLogSort') {
+        var parts = String(event.target.value || 'date:desc').split(':');
+        pdState.logSortKey = parts[0] || 'date';
+        pdState.logSortDir = parts[1] || 'desc';
+        pdRenderRecentGames();
+      }
+    });
+    pdState.shell.addEventListener('pointerover', function (event) {
+      var trendPoint = event.target.closest('[data-pd-trend-index]');
+      if (!trendPoint) return;
+      var idx = parseInt(trendPoint.getAttribute('data-pd-trend-index'), 10);
+      if (Number.isFinite(idx)) pdShowTrendTooltip(idx, event);
+    });
+    pdState.shell.addEventListener('pointermove', function (event) {
+      if (event.target.closest('[data-pd-trend-index]')) pdPositionTrendTooltip(event);
+    });
+    pdState.shell.addEventListener('pointerout', function (event) {
+      if (event.target.closest('[data-pd-trend-index]')) pdHideTrendTooltip();
+    });
+    pdState.shell.addEventListener('focusin', function (event) {
+      var trendPoint = event.target.closest('[data-pd-trend-index]');
+      if (!trendPoint) return;
+      var idx = parseInt(trendPoint.getAttribute('data-pd-trend-index'), 10);
+      if (Number.isFinite(idx)) pdShowTrendTooltip(idx, { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+    });
+    pdState.shell.addEventListener('focusout', function (event) {
+      if (event.target.closest('[data-pd-trend-index]')) pdHideTrendTooltip();
+    });
+    pdState.shell.addEventListener('keydown', function (event) {
+      var trendPoint = event.target.closest('[data-pd-trend-index]');
+      if (trendPoint && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        var idx = parseInt(trendPoint.getAttribute('data-pd-trend-index'), 10);
+        if (Number.isFinite(idx)) {
+          pdState.trendSelected = idx;
+          pdRenderTrend();
+        }
       }
     });
     document.addEventListener('keydown', function (event) {
