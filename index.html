@@ -38,6 +38,9 @@
   <script src="modules/trends.js" defer></script>
   <script src="modules/shortcuts.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="modules/profile-dossier.js" defer></script>
+  <script src="modules/profile-route.js" defer></script>
+  <script src="modules/team-explainer.js" defer></script>
 </head>
 <body>
 
@@ -1029,6 +1032,15 @@
       <div class="thSectionHead">Program Overview</div>
       <div id="thOverview" class="card thOverviewCard">
         <div class="muted" style="padding:32px;text-align:center">Select a team above to load program analysis.</div>
+      </div>
+    </div>
+
+    <!-- Rating Explanation -->
+    <div class="thSection" id="teamsExplainSection">
+      <div class="thSectionHead">Why The Model Reads Them This Way</div>
+      <div class="thSectionSub">Deterministic explanation cards built from ratings, results, four factors, and recent form.</div>
+      <div id="thExplainCards" class="card thExplainCard">
+        <div class="muted" style="padding:24px;text-align:center">Load a team to see rating explanation cards.</div>
       </div>
     </div>
 
@@ -2143,6 +2155,7 @@
       </div>
       <div style="display:flex; gap:8px; align-items:start; flex-shrink:0">
         <button class="secondary" id="mCompareBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Compare</button>
+        <button class="secondary" id="mReportBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Report</button>
         <button class="secondary" id="mScoutAdjustBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Adjust</button>
         <button class="secondary" id="mNotesBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Notes</button>
         <button class="secondary" id="mFavBtn" style="padding:5px 12px;font-size:11px;box-shadow:none">Favorite</button>

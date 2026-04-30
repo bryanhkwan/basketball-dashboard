@@ -428,6 +428,120 @@
   background: linear-gradient(180deg, rgba(120,20,28,.22), rgba(46,10,16,.28));
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
+
+/* Player dossier report */
+.pdOpen{overflow:hidden}
+.pdBack{position:fixed;inset:0;z-index:1400;display:none;align-items:center;justify-content:center;background:rgba(1,5,14,.82);backdrop-filter:blur(8px);padding:18px}
+.pdModal{width:min(1180px,100%);max-height:94vh;overflow:auto;border-radius:14px;background:rgba(7,14,27,.98);border:1px solid rgba(255,255,255,.08);box-shadow:0 28px 90px rgba(0,0,0,.62)}
+.pdBody{padding:22px}
+.pdHeader{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.pdEyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:800}
+.pdHeader h2{font-size:30px;line-height:1.05;margin:4px 0;color:var(--text);letter-spacing:0}
+.pdSub{font-size:12px;color:var(--muted)}
+.pdActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.pdCardStatus{min-height:18px;margin-top:8px;font-size:12px;color:var(--good)}
+.pdSection{margin-top:16px}
+.pdGrid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:14px}
+.pdMetrics{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-top:14px}
+.pdMetric{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px;background:rgba(255,255,255,.035);min-width:0}
+.pdMetric--accent{border-color:rgba(var(--accent-rgb),.35)}
+.pdMetric--good{border-color:rgba(52,211,153,.28)}
+.pdMetric--warn{border-color:rgba(251,191,36,.28)}
+.pdMetricLabel{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+.pdMetricValue{font-size:22px;font-weight:900;margin-top:4px;color:var(--text);overflow-wrap:anywhere}
+.pdMetricSub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.35}
+.pdNote{margin-top:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.07);border-radius:8px;background:rgba(255,255,255,.025);font-size:12px;color:var(--muted);line-height:1.5}
+.pdPanel{border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.025);overflow:visible}
+.pdPanelHead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid rgba(255,255,255,.07);font-size:12px;font-weight:800;color:var(--text)}
+.pdPanelBody{padding:13px}
+.pdBar{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.pdBarTop{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--text)}
+.pdBarTop em{font-style:normal;color:var(--muted);font-weight:600;margin-left:4px}
+.pdBarTrack{height:7px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.pdBarFill{height:100%;border-radius:999px}
+.pdScoutGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pdScoutCol:last-child{grid-column:1/-1}
+.pdMiniHead{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;margin-bottom:8px}
+.pdScoutItem{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin-bottom:7px;color:var(--text);background:rgba(255,255,255,.025)}
+.pdScoutItem--good{border-color:rgba(52,211,153,.25)}
+.pdScoutItem--warn{border-color:rgba(251,191,36,.25)}
+.pdTag{display:inline-flex;margin:0 6px 6px 0;padding:5px 8px;border-radius:999px;border:1px solid rgba(var(--accent-rgb),.28);color:var(--accent);font-size:11px;font-weight:800;background:rgba(var(--accent-rgb),.08)}
+.pdTrendHead{position:relative}
+.pdSelect{min-width:210px}
+.pdTrendMount{min-height:230px}
+.pdTrendMeta{display:flex;gap:12px;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--muted)}
+.pdTrendSvg{width:100%;height:auto;display:block}
+.pdTrendSvg line{stroke:rgba(255,255,255,.075);stroke-width:1}
+.pdTrendSvg polyline{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pdTrendSvg circle{fill:var(--accent)}
+.pdTrendSvg text{fill:rgba(210,225,245,.52);font-size:10px;font-family:inherit}
+.pdCompareSearch{position:relative;margin-bottom:12px}
+.pdCompareSearch input{width:min(360px,100%)}
+.pdSuggest{display:none;position:absolute;left:0;top:calc(100% + 4px);width:min(360px,90vw);max-height:240px;overflow:auto;z-index:5;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(5,12,24,.98);box-shadow:0 14px 40px rgba(0,0,0,.38)}
+.pdSuggest button{display:flex;width:100%;justify-content:space-between;gap:10px;padding:9px 11px;border:0;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.pdSuggest button:hover{background:rgba(var(--accent-rgb),.1)}
+.pdSuggest span{color:var(--muted);font-size:11px}
+.pdCompareEmpty{border:1px dashed rgba(255,255,255,.12);border-radius:8px;padding:14px;color:var(--muted);font-size:12px}
+.pdCompareChips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.pdCompareChip{display:inline-flex;align-items:center;gap:8px;border:1px solid color-mix(in srgb,var(--pd-color) 40%,transparent);color:var(--pd-color);border-radius:999px;background:color-mix(in srgb,var(--pd-color) 12%,transparent);padding:5px 9px;font-size:11px;font-weight:800}
+.pdCompareChip button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 2px}
+.pdCompareGrid{display:grid;grid-template-columns:270px minmax(0,1fr);gap:14px;align-items:start}
+.pdRadar{width:100%;max-width:270px;display:block}
+.pdRadarRing{fill:none;stroke:rgba(255,255,255,.09);stroke-width:1}
+.pdRadarPoly{fill:color-mix(in srgb,var(--pd-color) 18%,transparent);stroke:var(--pd-color);stroke-width:2}
+.pdRadar text{fill:rgba(210,225,245,.62);font-size:9px;font-weight:800}
+.pdCompareTable{border:1px solid rgba(255,255,255,.07);border-radius:8px;overflow:hidden;font-size:12px}
+.pdCompareTableHead,.pdCompareTableRow{display:grid;grid-template-columns:minmax(105px,1.2fr) repeat(4,minmax(70px,1fr));gap:0}
+.pdCompareTableHead span,.pdCompareTableRow span{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,.06);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdCompareTableHead{background:rgba(255,255,255,.045);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+.pdCompareTableRow .isBest{color:var(--good);font-weight:900}
+.pdGameTable{font-size:12px}
+.pdGameHead,.pdGameRow{display:grid;grid-template-columns:58px minmax(100px,1fr) repeat(4,48px);gap:7px;align-items:center}
+.pdGameHead{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:6px}
+.pdGameRow{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.055);color:var(--text)}
+.pdSimilar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border:0;border-bottom:1px solid rgba(255,255,255,.07);background:transparent;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.pdSimilar:hover b{color:var(--accent)}
+.pdSimilar em{display:block;font-style:normal;color:var(--muted);font-size:11px;margin-top:2px}
+
+/* Team explanation cards */
+.thExplainCard{padding:0}
+.txGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:14px}
+.txCard{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:13px;background:rgba(255,255,255,.025);min-width:0}
+.txCard--good{border-color:rgba(52,211,153,.28)}
+.txCard--warn{border-color:rgba(251,191,36,.28)}
+.txCard--accent{border-color:rgba(var(--accent-rgb),.34)}
+.txCardTop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.txCardTop span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
+.txCardTop b{font-size:20px;color:var(--text);white-space:nowrap}
+.txMeta{font-size:11px;color:var(--muted);margin:4px 0 10px}
+.txBody{font-size:12px;line-height:1.55;color:var(--text)}
+.txBody p{margin:0 0 8px}
+.txBody p:last-child{margin-bottom:0}
+.txBody ul{margin:0;padding-left:16px}
+.txBody li{margin:0 0 6px}
+
+@media(max-width:980px){
+  .pdMetrics{grid-template-columns:repeat(3,minmax(120px,1fr))}
+  .pdGrid2{grid-template-columns:1fr}
+  .pdCompareGrid{grid-template-columns:1fr}
+  .txGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .pdBack{padding:6px}
+  .pdModal{max-height:97vh;border-radius:10px}
+  .pdBody{padding:14px}
+  .pdHeader{flex-direction:column}
+  .pdActions{justify-content:flex-start}
+  .pdHeader h2{font-size:24px}
+  .pdMetrics{grid-template-columns:1fr 1fr}
+  .pdScoutGrid{grid-template-columns:1fr}
+  .pdScoutCol:last-child{grid-column:auto}
+  .pdCompareTable{overflow-x:auto}
+  .pdCompareTableHead,.pdCompareTableRow{min-width:520px}
+  .pdGameTable{overflow-x:auto}
+  .pdGameHead,.pdGameRow{min-width:440px}
+  .txGrid{grid-template-columns:1fr}
+}
 .portalWatchAlertHeader{
   display: flex;
   align-items: center;

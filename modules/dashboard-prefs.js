@@ -41,6 +41,7 @@ var DASH_PREF_SECTION_OPTIONS = {
   ],
   pageTeams: [
     { id: 'teamsOverviewSection', label: 'Program Overview', desc: 'Show or hide the team overview section.' },
+    { id: 'teamsExplainSection', label: 'Rating Explanation', desc: 'Show or hide deterministic rating explanation cards.' },
     { id: 'teamsThreatsSection', label: 'Conference Threats', desc: 'Show or hide conference threat analysis.' },
     { id: 'teamsGameLogSection', label: 'Season Game Log', desc: 'Show or hide the team game log.' },
     { id: 'teamsH2HSection', label: 'Head-to-Head Records', desc: 'Show or hide head-to-head history.' },

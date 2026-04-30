@@ -4958,7 +4958,7 @@ async function thLoadTeam(teamName, season) {
 
   // Show overview immediately while rest loads in parallel
   thRenderOverview(teamData, null, null);
-  const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl,
+  const loadingEls = [thThreatsEl, thGameLogEl, thH2HEl, document.getElementById('thExplainCards'),
     document.getElementById('thDNA'), document.getElementById('thCompare'),
     document.getElementById('thMatchup'), document.getElementById('thScout')];
   loadingEls.forEach(el => { if (el) el.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Loading…</div>'; });
@@ -4983,6 +4983,9 @@ async function thLoadTeam(teamName, season) {
   thRenderH2H(teamData, gamesData);
   thRenderDNA(teamData, statsData, shootingData);
   thRenderTeamScout(teamName, teamData, statsData);
+  if (window.TeamExplainer && typeof window.TeamExplainer.render === 'function') {
+    window.TeamExplainer.render(teamName, teamData, gamesData, statsData);
+  }
   // Reset compare/matchup to prompt state
   const elCmp = document.getElementById('thCompare');
   const elMxp = document.getElementById('thMatchup');
