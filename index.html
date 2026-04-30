@@ -1344,7 +1344,7 @@
       <div class="methodBody">
         <p>Player valuation converts PerfScore into a market-style dollar estimate using an exponential curve anchored to your chosen <b>Average Pay</b> and <b>Star Value</b>.</p>
         <p style="margin-top:10px;font-family:monospace;font-size:12px;padding:10px 12px;background:rgba(0,15,40,.5);border:1px solid var(--line);border-radius:8px;line-height:1.7">k = ln(starValue / avgPay) / (starPerf - avgPerf)<br>Predicted = clamp(minPay, maxPay, avgPay x exp(k x (PerfScore - avgPerf)))</p>
-        <p style="margin-top:10px">A minutes adjustment keeps tiny-sample or low-minute players from inflating too easily, and the conference multiplier can optionally move valuations up or down based on league context before the market curve is applied.</p>
+        <p style="margin-top:10px">A minutes adjustment keeps tiny-sample or low-minute players from inflating too easily, and the conference multiplier can optionally move valuations up or down based on league context before the market curve is applied. Market Pressure uses a separate national curve and can apply a top-end transfer-demand premium for scarce portal profiles.</p>
         <p style="margin-top:10px">Evaluation presets simply save these choices - weights, min/max settings, valuation anchors, and conference multipliers - so different staff users can bring their own lens without changing the system default.</p>
       </div>
     </div>

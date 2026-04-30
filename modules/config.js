@@ -344,11 +344,11 @@ const CONF_DISPLAY_ORDER = [
 ];
 
 const DEFAULT_CONF_VALUES = {
-  'Big 12':1.08,'SEC':1.07,'Big Ten':1.07,'ACC':1.06,'Big East':1.06,
-  'American':1.05,'Mountain West':1.05,'Atlantic 10':1.04,'WCC':1.04,'Pac-12':1.03,
-  'Missouri Valley':1.03,'CUSA':1.03,'MAC':1.00,'Sun Belt':1.01,
-  'CAA':1.00,'Ivy League':1.00,'Big West':0.99,'Summit League':0.99,
-  'Horizon League':0.99,'America East':0.98,'Southern':0.98,
+  'Big 12':1.16,'SEC':1.15,'Big Ten':1.14,'ACC':1.13,'Big East':1.13,
+  'American':1.08,'Mountain West':1.08,'Atlantic 10':1.06,'WCC':1.06,'Pac-12':1.06,
+  'Missouri Valley':1.04,'CUSA':1.04,'MAC':1.00,'Sun Belt':1.02,
+  'CAA':1.00,'Ivy League':1.00,'Big West':0.98,'Summit League':0.97,
+  'Horizon League':0.98,'America East':0.97,'Southern':0.98,
   'ASUN':0.97,'MAAC':0.97,'OVC':0.96,'WAC':0.96,'Patriot League':0.96,
   'Big Sky':0.96,'Southland':0.95,'NEC':0.94,'SWAC':0.93,'MEAC':0.93,
   'Big South':0.94,'Independent':1.00,'NE10':0.90

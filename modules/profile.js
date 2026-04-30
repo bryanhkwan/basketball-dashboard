@@ -262,6 +262,7 @@ function openProfile(r){
   var curveBid = safeNum(r.ActualValuationCurve_calc);
   var marketPressure = safeNum(r.MarketPressure_calc);
   var marketGap = safeNum(r.MarketGap_calc);
+  var marketDemandPremium = safeNum(r.MarketDemandPremium_calc);
   var laneLabel = (r.MarketLaneLabel_calc || '').toString();
   var translationLabel = (r.TranslationRiskLabel_calc || '').toString();
   var translationLevel = (r.TranslationRiskLevel_calc || '').toString();
@@ -362,6 +363,7 @@ function openProfile(r){
   if (Number.isFinite(marketPressure) && laneLabel) {
     const laneBits = [`Lane: <b>${laneLabel}</b>`];
     if (Number.isFinite(marketGap)) laneBits.push(`gap to pressure: <b>${profileDisplayMoney(marketGap)}</b>`);
+    if (Number.isFinite(marketDemandPremium) && marketDemandPremium > 1.01) laneBits.push(`demand premium: <b>${marketDemandPremium.toFixed(2)}x</b>`);
     if (Number.isFinite(r.MinMultiplier_calc)) laneBits.push(`minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b>`);
     metaBlocks.push(`<div class="muted">${laneBits.join(' • ')}</div>`);
   } else if (Number.isFinite(r.MinMultiplier_calc)) {
@@ -379,7 +381,7 @@ function openProfile(r){
       <div class="muted">
         Toledo max bid uses your editable curve: at PerfScore <b>${starP.toFixed(2)} percentile</b> (~<b>${Number.isFinite(lastPerfStar)?lastPerfStar.toFixed(2):'N/A'}</b>),
         predicted pay is pulled toward <b>${fmtMoney(starValue)}</b>, with average anchored at <b>${fmtMoney(avgPay)}</b>.
-        Market pressure is a separate fixed national curve for context.
+        Market pressure is a separate national curve for context, with a top-end transfer-demand premium for scarce portal profiles.
       </div>
     `);
   }

@@ -653,7 +653,7 @@ var VALUATION_MODEL_DEFAULTS = {
     WBB: { avgPay:35000, minPay:5000, maxPay:100000, starValue:70000, starPct:0.95, mpMode:'on', mpPct:0.95 }
   },
   market: {
-    MBB: { avgPay:100000, minPay:15000, maxPay:1750000, starValue:700000, starPct:0.98, mpMode:'on', mpPct:0.90 },
+    MBB: { avgPay:105000, minPay:15000, maxPay:2500000, starValue:1000000, starPct:0.98, mpMode:'on', mpPct:0.90 },
     WBB: { avgPay:50000, minPay:7500, maxPay:750000, starValue:275000, starPct:0.98, mpMode:'on', mpPct:0.90 }
   }
 };
@@ -707,6 +707,50 @@ function applyValuationContext(adjPerf, mp, ctx){
     final = clamp(pred * mult, ctx.minPay, ctx.maxPay);
   }
   return { pred, final, mult };
+}
+
+function marketDemandPremiumForRow(row, adjPerf, targetLeague){
+  const lg = targetLeague === 'WBB' ? 'WBB' : 'MBB';
+  if(lg !== 'MBB') return { mult:1, reasons:'' };
+
+  const score = safeNum(adjPerf);
+  const mp = safeNum(row && (row.MP_num != null ? row.MP_num : row.MP));
+  const ppg = safeNum(row && row.PPG);
+  const apg = safeNum(row && row.APG);
+  const threePct = safeNum(row && row['3P%']);
+  const efg = safeNum(row && row['eFG%']);
+  const posText = String((row && (row.Pos || row.Position)) || '').toLowerCase();
+  const isGuard = /g/.test(posText) && !/c/.test(posText);
+
+  let mult = 1;
+  const reasons = [];
+
+  if(Number.isFinite(score) && Number.isFinite(mp) && score >= 58 && mp >= 24){
+    const add = clamp((score - 58) / 12, 0, 1) * 0.30;
+    if(add > 0){
+      mult += add;
+      reasons.push('elite production tier');
+    }
+  }
+  if(isGuard && Number.isFinite(ppg) && Number.isFinite(apg) && ppg >= 14 && apg >= 3.5){
+    mult += 0.20;
+    reasons.push('lead-guard scarcity');
+  }
+  if(isGuard && Number.isFinite(ppg) && Number.isFinite(threePct) && ppg >= 12 && threePct >= 0.36){
+    mult += 0.08;
+    reasons.push('shooting guard premium');
+  }
+  if(Number.isFinite(ppg) && Number.isFinite(efg) && ppg >= 14 && efg >= 0.54){
+    mult += 0.05;
+    reasons.push('efficient scorer premium');
+  }
+  if(Number.isFinite(mp) && mp >= 32){
+    mult += 0.04;
+    reasons.push('full-minute proof');
+  }
+
+  mult = clamp(mult, 1, 1.55);
+  return { mult, reasons: reasons.join(' | ') };
 }
 
 function getMarketLaneMeta(bidValue, marketValue){
@@ -1967,11 +2011,15 @@ function computeAll(options){
 
     const bidQuote = applyValuationContext(adjPerf, mp, bidCtx);
     const marketQuote = applyValuationContext(adjPerf, mp, marketCtx);
+    const marketDemand = marketDemandPremiumForRow(r, adjPerf, league);
+    const marketPressure = Number.isFinite(marketQuote.final)
+      ? clamp(marketQuote.final * marketDemand.mult, marketCtx.minPay, marketCtx.maxPay)
+      : marketQuote.final;
     const pred = bidQuote.pred;
     const curveBase = bidQuote.final;
     const final = applyScoutAdjustment(curveBase, manualBoost, bidCtx.minPay, bidCtx.maxPay);
     const mult = bidQuote.mult;
-    const marketLane = getMarketLaneMeta(final, marketQuote.final);
+    const marketLane = getMarketLaneMeta(final, marketPressure);
 
     const bossRank = safeNum(r['Rank']);
     const bossVal = _pickActualValuation(r);
@@ -1981,11 +2029,11 @@ function computeAll(options){
     const out = Object.assign({}, r);
     out.PerfScore_calc = adjPerf; out.PerfScore_raw = rawPerf; out.ConfMult_calc = cm; out.MP_num = mp;
     out.Score = adjPerf; out.PredictedValue_calc = pred; out.MinMultiplier_calc = mult; out.ActualValuationCurve_calc = curveBase; out.ActualValuationBase_calc = curveBase; out.ActualValuation_calc = final;
-    out.MarketPressurePredicted_calc = marketQuote.pred; out.MarketPressureMinMultiplier_calc = marketQuote.mult; out.MarketPressure_calc = marketQuote.final;
+    out.MarketPressurePredicted_calc = marketQuote.pred; out.MarketPressureMinMultiplier_calc = marketQuote.mult; out.MarketPressureBase_calc = marketQuote.final; out.MarketDemandPremium_calc = marketDemand.mult; out.MarketDemandReasons_calc = marketDemand.reasons; out.MarketPressure_calc = marketPressure;
     out.MarketGap_calc = marketLane.gap; out.MarketGapPct_calc = marketLane.gapPct; out.MarketLaneLabel_calc = marketLane.label; out.MarketLaneTone_calc = marketLane.tone;
     out.TranslationRiskPct_calc = 0; out.TranslationRiskMult_calc = 1; out.TranslationRiskLabel_calc = ''; out.TranslationRiskLevel_calc = ''; out.TranslationRiskTone_calc = 'neutral'; out.TranslationRiskReasons_calc = ''; out.TranslationRiskSource_calc = 'lite';
     out.ScoutAdjustmentPct_calc = manualBoost; out.ScoutAdjustmentMult_calc = Number.isFinite(manualBoost) ? (1 + manualBoost) : 1; out.ScoutAdjustmentLabel_calc = manualBoostLabel; out.ScoutAdjustmentTone_calc = manualBoostTone; out.ScoutAdjustmentNote_calc = manualScoutNote;
-    out.BidToPressureRatio_calc = (Number.isFinite(final) && Number.isFinite(marketQuote.final) && marketQuote.final !== 0) ? (final / marketQuote.final) : NaN;
+    out.BidToPressureRatio_calc = (Number.isFinite(final) && Number.isFinite(marketPressure) && marketPressure !== 0) ? (final / marketPressure) : NaN;
     out.BossRank = bossRank; out.ActualValuation = bossVal; out.ValueDelta_calc = delta; out.ValueDeltaPct_calc = deltaPct;
     out._projectionMemo = projectionBuildInputs(out, projectionCtx);
     out._searchStr = ((out.Player || '') + ' ' + (out.Team || '') + ' ' + (out.Conference || out.Conf || '') + ' ' + (out.Position || out.Pos || '') + ' ' + (out.Height || '')).toLowerCase();
