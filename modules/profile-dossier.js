@@ -285,6 +285,9 @@
   function pdClose() {
     if (pdState.shell) pdState.shell.style.display = 'none';
     document.body.classList.remove('pdOpen');
+    if (location.hash && /(?:^|[&#])view=report(?:&|$)/.test(location.hash)) {
+      history.replaceState(null, '', location.pathname + location.search);
+    }
   }
 
   function pdRender() {
@@ -731,7 +734,11 @@
       if (actionBtn) {
         var action = actionBtn.getAttribute('data-pd-action');
         if (action === 'close') pdClose();
-        if (action === 'open-modal' && pdState.player && typeof openProfile === 'function') openProfile(pdState.player);
+        if (action === 'open-modal' && pdState.player && typeof openProfile === 'function') {
+          var row = pdState.player;
+          pdClose();
+          openProfile(row);
+        }
         if (action === 'copy-link') {
           var url = pdBuildUrl(pdState.player, 'report');
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url);
