@@ -55,6 +55,7 @@ var teamStatsCache         = {}; // keyed "teamName:season" → full team season
 var teamShootingZonesCache = {}; // keyed "teamName:season" → team-level shooting zone object
 var playsCache             = {}; // keyed by gameId → compact shots array
 var playerShotsCache       = {}; // keyed "team:season:playerName" → shots array
+var _wbbPlayerShotLoads    = {}; // keyed "season:espnId" → active direct ESPN shot load
 var _wbbTeamIdCache        = {}; // ESPN team name → id, populated once per session
 var _wbbBiosBySeason       = {}; // season → { espnId: {height,classYr,hometown} }
 var _wbbBioByAthlete       = {}; // espnId → best-known bio fallback across seasons
@@ -2828,6 +2829,126 @@ async function loadPlaysForGame(gameId) {
   } catch (e) { return []; }
 }
 
+function _wbbShotNormName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function _wbbResolvePlayerEspnId(team, playerName, espnId) {
+  if (espnId) return String(espnId);
+  const pKey = _wbbShotNormName(playerName);
+  const tKey = _wbbShotNormName(team);
+  const pool = Array.isArray(_wbbActivePlayersRef) ? _wbbActivePlayersRef : [];
+  for (let i = 0; i < pool.length; i++) {
+    const row = pool[i] || {};
+    if (!row.EspnId) continue;
+    if (_wbbShotNormName(row.Player) !== pKey) continue;
+    if (tKey && _wbbShotNormName(row.Team) !== tKey) continue;
+    return String(row.EspnId);
+  }
+  const loose = pool.find(row => row && row.EspnId && _wbbShotNormName(row.Player) === pKey);
+  return loose ? String(loose.EspnId) : '';
+}
+
+function _wbbShotRangeFromPlay(play) {
+  const text = String((play && (play.text || play.shortDescription)) || '').toLowerCase();
+  const pts = Number(play && (play.pointsAttempted != null ? play.pointsAttempted : play.scoreValue));
+  if (pts === 1 || /free throw/.test(text)) return 'free_throw';
+  if (pts === 3 || /three|3pt|3-point/.test(text)) return 'three_pointer';
+  const c = play && play.coordinate;
+  const depth = Number(c && c.y);
+  if (/layup|dunk|tip|putback|at rim/.test(text) || (Number.isFinite(depth) && depth <= 4)) return 'rim';
+  return 'jumper';
+}
+
+function _wbbPlayHasShooter(play, espnId) {
+  const target = String(espnId || '');
+  if (!target || !play) return false;
+  const participants = play.participants || play.athletes || [];
+  for (let i = 0; i < participants.length; i++) {
+    const athlete = participants[i] && (participants[i].athlete || participants[i]);
+    if (String((athlete && athlete.id) || '') === target) return true;
+  }
+  return false;
+}
+
+function _wbbCompactShotFromPlay(play, espnId, playerName, gameId) {
+  if (!play || !play.shootingPlay || !play.coordinate || !_wbbPlayHasShooter(play, espnId)) return null;
+  const x = Number(play.coordinate.x);
+  const y = Number(play.coordinate.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const rawPeriod = Number(play.period && play.period.number);
+  const period = Number.isFinite(rawPeriod)
+    ? (rawPeriod <= 2 ? 1 : rawPeriod <= 4 ? 2 : 3)
+    : '';
+  const range = _wbbShotRangeFromPlay(play);
+  const pts = Number(play.pointsAttempted != null ? play.pointsAttempted : play.scoreValue);
+  return {
+    x: x,
+    y: y,
+    made: !!play.scoringPlay && pts > 1,
+    range: range,
+    shooter: playerName,
+    playerName: playerName,
+    espnId: String(espnId),
+    teamId: play.team && play.team.id ? String(play.team.id) : '',
+    gameId: String(gameId || ''),
+    period: period,
+    clock: play.clock && play.clock.displayValue ? play.clock.displayValue : '',
+    text: play.text || play.shortDescription || '',
+  };
+}
+
+async function _wbbFetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+async function _wbbLoadPlayerShotsDirect(team, season, playerName, espnId) {
+  const resolvedId = _wbbResolvePlayerEspnId(team, playerName, espnId);
+  if (!resolvedId) return [];
+  const seasonKey = typeof normalizeDashboardSeason === 'function'
+    ? normalizeDashboardSeason(season, String(_currentDataSeason || 2026))
+    : String(season || _currentDataSeason || 2026);
+  const loadKey = seasonKey + ':' + resolvedId;
+  if (_wbbPlayerShotLoads[loadKey]) return _wbbPlayerShotLoads[loadKey];
+
+  const promise = (async function(){
+    const glUrl = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/womens-college-basketball/athletes/'
+      + encodeURIComponent(resolvedId) + '/gamelog?season=' + encodeURIComponent(seasonKey);
+    const gamelog = await _wbbFetchJson(glUrl);
+    const events = gamelog && gamelog.events;
+    const gameIds = events
+      ? (Array.isArray(events) ? events.map(e => e && e.id) : Object.keys(events))
+          .map(String).filter(Boolean)
+      : [];
+    if (!gameIds.length) return [];
+
+    const shots = [];
+    const batchSize = 6;
+    for (let start = 0; start < gameIds.length; start += batchSize) {
+      const batch = gameIds.slice(start, start + batchSize);
+      const chunks = await Promise.all(batch.map(async function(gameId){
+        const url = 'https://site.api.espn.com/apis/site/v2/sports/basketball/womens-college-basketball/summary?event='
+          + encodeURIComponent(gameId);
+        const summary = await _wbbFetchJson(url);
+        const plays = (summary && summary.plays) || [];
+        const out = [];
+        for (let i = 0; i < plays.length; i++) {
+          const shot = _wbbCompactShotFromPlay(plays[i], resolvedId, playerName, gameId);
+          if (shot) out.push(shot);
+        }
+        return out;
+      }));
+      chunks.forEach(chunk => { shots.push.apply(shots, chunk); });
+    }
+    return shots;
+  })();
+
+  _wbbPlayerShotLoads[loadKey] = promise;
+  return promise.finally(function(){ delete _wbbPlayerShotLoads[loadKey]; });
+}
+
 // ── loadPlayerShots — all season shots for one player via the worker ──────────
 async function loadPlayerShots(team, season, playerName, espnId) {
   if (!team || !season || !playerName) return [];
@@ -2843,11 +2964,24 @@ async function loadPlayerShots(team, season, playerName, espnId) {
         '&season=' + encodeURIComponent(season) +
         '&playerName=' + encodeURIComponent(playerName);
     const r = await fetch(endpoint);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     const shots = data.shots || [];
+    if (league === 'WBB' && !shots.length) {
+      const fallbackShots = await _wbbLoadPlayerShotsDirect(team, season, playerName, espnId);
+      playerShotsCache[key] = fallbackShots;
+      return fallbackShots;
+    }
     playerShotsCache[key] = shots;
     return shots;
-  } catch (e) { return []; }
+  } catch (e) {
+    if (league === 'WBB') {
+      const fallbackShots = await _wbbLoadPlayerShotsDirect(team, season, playerName, espnId);
+      playerShotsCache[key] = fallbackShots;
+      return fallbackShots;
+    }
+    return [];
+  }
 }
 
 // ── WBB helpers — ESPN team ID lookup, derived stats, team stats mapping ──────
