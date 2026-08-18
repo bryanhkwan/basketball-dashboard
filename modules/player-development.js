@@ -79,7 +79,7 @@
       if (p.made) zones[z].made++;
     }
 
-    var total = shots.length || 1;
+    var total = pts.length || 1;
     var result = [];
     for (var k = 0; k < keys.length; k++) {
       var zk = keys[k];
@@ -283,7 +283,7 @@
       shotMix: shotMix,
       tendencies: tendencies,
       recommendations: recommendations,
-      totalShots: shots ? shots.length : 0,
+      totalShots: zoneData.reduce(function(sum, z) { return sum + z.att; }, 0),
       hasShotData: shots && shots.length > 5
     };
   }

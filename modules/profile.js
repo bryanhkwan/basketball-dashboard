@@ -52,6 +52,8 @@ function _profileFilterShotsByPeriod(shots, filter) {
 function _profileRenderShotCharts(shots, playerName, yr) {
   var mShotChart = document.getElementById('mShotChart');
   if (!mShotChart) return;
+  var fgaShots = (shots || []).filter(function(s) { return s && s.range !== 'free_throw'; });
+  var ftAtt = (shots || []).filter(function(s) { return s && s.range === 'free_throw'; }).length;
   var dotHtml = typeof _th_buildShotChartSVG === 'function'
     ? _th_buildShotChartSVG(shots, playerName, 'var(--accent)') : '';
   var hexHtml = typeof saBuildHexChart === 'function'
@@ -73,8 +75,11 @@ function _profileRenderShotCharts(shots, playerName, yr) {
       + (hasZones ? '<button class="saShotBtn" data-view="zones" onclick="saToggleProfileChart(this,\'zones\')">Zones</button>' : '')
       + '</div>'
     : '';
+  var countLabel = fgaShots.length + ' FGA charted'
+    + (ftAtt ? ' <span style="opacity:.75">(' + ftAtt + ' FT attempts excluded)</span>' : '')
+    + (yr ? ' - ' + yr + ' season' : '');
   mShotChart.innerHTML =
-    '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + shots.length + ' shot attempts' + (yr ? ' - ' + yr + ' season' : '') + '</div>'
+    '<div class="muted" style="font-size:10.5px;margin-bottom:6px">' + countLabel + '</div>'
     + periodBar
     + toggleBar
     + '<div id="mShotChartDots">' + dotHtml + '</div>'

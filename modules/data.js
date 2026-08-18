@@ -2864,11 +2864,9 @@ function _wbbPlayHasShooter(play, espnId) {
   const target = String(espnId || '');
   if (!target || !play) return false;
   const participants = play.participants || play.athletes || [];
-  for (let i = 0; i < participants.length; i++) {
-    const athlete = participants[i] && (participants[i].athlete || participants[i]);
-    if (String((athlete && athlete.id) || '') === target) return true;
-  }
-  return false;
+  // ESPN lists the shooter first; later participants are usually assisters.
+  const shooter = participants[0] && (participants[0].athlete || participants[0]);
+  return String((shooter && shooter.id) || '') === target;
 }
 
 function _wbbCompactShotFromPlay(play, espnId, playerName, gameId) {
