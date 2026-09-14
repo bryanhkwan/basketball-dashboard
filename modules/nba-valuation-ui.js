@@ -220,6 +220,17 @@ var NbaValuationUI = (function () {
       + '<p class="nbaModelNote" style="margin-top:10px">The coefficient CSV includes each available sensitivity fit, with no Holm decision assigned to those descriptive results. The checks download includes model diagnostics and exclusion records, without individual salary amounts.</p><button type="button" class="secondary nbaEvidenceChecksDownload" data-nba-checks-download>Download checks and exclusion audit</button></details>';
   }
   function evidenceHtml(evidence) {
+    if (!evidence || !evidence.groups) return '<p class="nbaModelNote">The coach summary is unavailable in this snapshot. Prediction weights remain available in the adjacent view.</p>';
+    var total = groups.reduce(function (sum, name) { return sum + (number(evidence.groups[name] && evidence.groups[name].n) || 0); }, 0);
+    var height = evidenceEstimates(evidence.groups.Bigs).find(function (item) { return item.key === 'Height'; });
+    var example = height ? '<section class="nbaCoachExample"><h4>One example: height among bigs</h4><p>An extra inch was associated with an estimated <strong>' + escape(association(height.associationPct)) + '</strong> salary difference. The 95% uncertainty range was <strong>' + escape(associationInterval(height)) + '</strong>.</p><p>The range includes zero, so the direction remains uncertain. This does not justify a height premium on a college offer.</p></section>' : '';
+    return '<section class="nbaCoachSummary" aria-label="Coach summary"><div class="nbaCoachHeading"><h3>The finding in plain language</h3><a class="nbaCoachBrief" href="output/pdf/nba-salary-coach-brief.pdf?v=coach-brief-20260914" download>Download 1-page brief (PDF)</a></div>'
+      + '<p class="nbaCoachFinding">In this NBA sample, no single stat met our evidence threshold after accounting for the other recorded inputs and checking all 36 associations. This does not mean those skills lack basketball value.</p>'
+      + '<p class="nbaCoachSample">' + escape(evidence.season || '2022–23') + ' NBA analysis · <strong>' + total + ' players</strong>: ' + groups.map(function (name) { return escape(fixed(evidence.groups[name] && evidence.groups[name].n, 0)) + ' ' + name.toLowerCase(); }).join(' · ') + '</p>'
+      + '<div class="nbaCoachGuidance"><div><h4>Use it to start a scouting discussion</h4><p>Use model estimates alongside film, role, fit, availability, and market information. College dollar estimates come from the separate prediction model and your pay settings.</p></div><div><h4>Keep confidence in perspective</h4><p>Individual salary associations remain uncertain. The NBA-to-college application has not been validated for MBB or WBB. Check the full player and your budget before setting an offer.</p></div></div>'
+      + example + '</section><details id="nbaEvidenceDetails" class="nbaModelSubdetails nbaFullStatisticalDetails"><summary>Full statistical details</summary><div class="nbaFullStatisticalBody">' + statisticalDetailsHtml(evidence) + '</div></details>';
+  }
+  function statisticalDetailsHtml(evidence) {
     if (!evidence || !evidence.groups) return '<p class="nbaModelNote">Salary evidence is unavailable in this snapshot. Prediction weights remain available in the adjacent view.</p>';
     var group = evidence.groups[selectedGroup];
     if (!group) return '<p class="nbaModelNote">Salary evidence is unavailable for this position.</p>';
@@ -290,7 +301,7 @@ var NbaValuationUI = (function () {
     var content = element('nbaModelContent');
     var status = element('nbaModelStatus');
     if (!content) return;
-    if (status) status.textContent = selectedView === 'evidence' ? 'Salary evidence · exploratory' : !model ? 'Model unavailable' : enabled() ? 'Active prediction weights' : 'Reference · custom weights active';
+    if (status) status.textContent = selectedView === 'evidence' ? 'Coach summary' : !model ? 'Model unavailable' : enabled() ? 'Active prediction weights' : 'Reference · custom weights active';
     if (!canView()) {
       if (controls) controls.hidden = true;
       content.innerHTML = lockedHtml();
@@ -298,7 +309,14 @@ var NbaValuationUI = (function () {
     }
     if (controls) controls.hidden = !model && !evidence;
     document.querySelectorAll('[data-nba-view]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.getAttribute('data-nba-view') === selectedView)); });
-    if (selectedView === 'evidence') { content.innerHTML = evidenceHtml(evidence); return; }
+    if (selectedView === 'evidence') {
+      var previousDetails = element('nbaEvidenceDetails');
+      var detailsOpen = !!(previousDetails && previousDetails.open);
+      content.innerHTML = evidenceHtml(evidence);
+      var nextDetails = element('nbaEvidenceDetails');
+      if (nextDetails) nextDetails.open = detailsOpen;
+      return;
+    }
     if (!model) {
       content.innerHTML = '<p class="nbaModelNote">The NBA salary model is not available yet. Its coefficients and validation results will appear here when loaded.</p>';
       return;
@@ -324,6 +342,11 @@ var NbaValuationUI = (function () {
     var content = element('mNbaValuationContent');
     if (!panel || !content) return;
     panel.hidden = !row || !row.NBAModel_calc || !enabled();
+    var shortcut = element('mNbaCoachShortcut');
+    if (shortcut) {
+      shortcut.hidden = panel.hidden || !canView();
+      shortcut.innerHTML = shortcut.hidden ? '' : '<p>What does the NBA model mean for scouting?</p><button type="button" data-nba-coach-summary="' + escape(row.NBAPosition_calc || row.Position || selectedGroup) + '">View coach summary</button>';
+    }
     if (panel.hidden) { content.innerHTML = ''; return; }
     var status = element('mNbaValuationStatus');
     if (status) status.textContent = (row._league || '') + ' ' + (row.NBAPosition_calc || row.Position || '') + ' peers';
@@ -335,7 +358,7 @@ var NbaValuationUI = (function () {
     var missing = Array.isArray(row.NBAMissing_calc) ? row.NBAMissing_calc : [];
     function adjustment(value, label) { return number(value) === null ? label || 'not recorded' : signed(number(value) * 100, 1) + '%'; }
     function step(label, value) { return '<div><dt>' + escape(label) + '</dt><dd>' + escape(money(value)) + '</dd></div>'; }
-    content.innerHTML = '<p class="nbaModelNote">Prediction contributions explain this player’s ridge-model signal relative to their NCAA peers. Each contribution is a prediction weight multiplied by the player’s peer-standardized input. Positive and negative values raise or lower the signal; they are not dollar amounts or tests of salary evidence.</p>'
+    content.innerHTML = '<p class="nbaModelNote">These factors raised or lowered this player’s model signal. They are not separate pay bonuses. Each contribution combines a prediction weight with the player’s stat relative to their NCAA peers.</p>'
       + (row.NBAStatus_calc && !['Calculated', 'Some inputs unavailable'].includes(row.NBAStatus_calc) ? '<div class="nbaModelNotice">' + escape(row.NBAStatus_calc) + ': no college pay quote is available from this model.</div>' : '')
       + '<dl class="nbaModelMetrics">' + metric('College peer signal', signed(row.NBAScore_calc)) + metric('Inputs available', pct(row.NBACoverage_calc))
       + metric('Before conference / bounds', money(row.NBABaseValue_calc)) + metric('Conference factor', fixed(row.NBAConferenceMultiplier_calc, 2) + '×') + '</dl>'
@@ -373,11 +396,13 @@ var NbaValuationUI = (function () {
         render();
       });
     }
-    ['nbaValuationPanel', 'mNbaValuationPanel'].forEach(function (id) {
+    ['nbaValuationPanel', 'mNbaValuationPanel', 'mNbaCoachShortcut'].forEach(function (id) {
       var panel = element(id);
       if (panel && !panel._nbaBound) {
         panel._nbaBound = true;
         panel.addEventListener('click', function (event) {
+          var coachButton = event.target.closest && event.target.closest('[data-nba-coach-summary]');
+          if (coachButton) { openCoachSummary(coachButton.getAttribute('data-nba-coach-summary')); return; }
           var viewButton = event.target.closest && event.target.closest('[data-nba-view]');
           if (viewButton && canView()) {
             var view = viewButton.getAttribute('data-nba-view');
@@ -400,6 +425,28 @@ var NbaValuationUI = (function () {
     });
   }
 
+  function openCoachSummary(group) {
+    if (typeof closeProfile === 'function') closeProfile();
+    if (typeof showDashboardPage === 'function') showDashboardPage('pagePlayers', 'pagePlayers', { forcePage: true, skipHeavyLoad: true });
+    else {
+      var navigation = document.querySelector('.pageNavBtn[data-page="pagePlayers"]');
+      if (navigation) navigation.click();
+    }
+    selectedView = 'evidence';
+    if (groups.includes(group)) selectedGroup = group;
+    lastBoardGroup = typeof pos !== 'undefined' && groups.includes(pos) ? pos : '';
+    var details = element('nbaEvidenceDetails');
+    if (details) details.open = false;
+    render();
+    var panel = element('nbaValuationPanel');
+    if (!panel) return false;
+    panel.open = true;
+    var summary = panel.querySelector('summary');
+    if (summary) summary.focus({ preventScroll: true });
+    panel.scrollIntoView({ block: 'start' });
+    return true;
+  }
+
   function render() {
     bind();
     var boardGroup = typeof pos !== 'undefined' && groups.includes(pos) ? pos : '';
@@ -418,5 +465,5 @@ var NbaValuationUI = (function () {
     if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer) renderProfile(_currentProfilePlayer);
   }
 
-  return { render: render, renderProfile: renderProfile };
+  return { render: render, renderProfile: renderProfile, openCoachSummary: openCoachSummary };
 })();

@@ -1,0 +1,22 @@
+{
+  "evidenceId": "nba-2022-23-hc3-salary-evidence-v1",
+  "evidenceGeneratedAt": "2026-09-14T19:56:27.160932+00:00",
+  "sourceSha256": "1eeff7503b87de5dbeeb42f8739f90cd8f57968fab2e036d1f76e82b2259a482",
+  "sourceHashBasis": "utf8-lf",
+  "pdfSha256": "ae2edd6bb1d4b7686b9e33368b1c76b1912c621ff8f8d061c2e4432bc96e2c9e",
+  "pages": 1,
+  "pageSize": "US Letter",
+  "facts": {
+    "n": 466,
+    "groupCounts": {
+      "Guards": 197,
+      "Wings": 91,
+      "Bigs": 178
+    },
+    "heightPct": 8.090948914572662,
+    "heightLowPct": -4.550363427050885,
+    "heightHighPct": 22.40647169277919,
+    "supportedCount": 0,
+    "testCount": 36
+  }
+}

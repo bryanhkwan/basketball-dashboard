@@ -20,12 +20,12 @@ function fixture() {
 }
 function harness(evidence = fixture()) {
   const elements = new Map(), blobs = [], timers = [], actions = { enabledChanges: 0, downloads: 0 };
-  function make(id, attrs = {}) { return { id, innerHTML: '', hidden: false, value: '', attrs, listeners: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener(type, handler) { this.listeners[type] = handler; }, querySelector() { return make('comparison'); }, focus() {}, click() { actions.downloads++; }, remove() {} }; }
-  ['nbaModelContent', 'nbaModelControls', 'nbaModelStatus', 'nbaModelGroup', 'nbaValuationPanel', 'mNbaValuationPanel', 'mNbaValuationContent', 'nbaValuationBasis', 'nbaValuationBasisHint', 'nbaMinutesHint', 'mpMode', 'mpPct', 'nbaEvidenceComparisonStat'].forEach(id => elements.set(id, make(id)));
+  function make(id, attrs = {}) { return { id, innerHTML: '', hidden: false, open: false, value: '', attrs, listeners: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener(type, handler) { this.listeners[type] = handler; }, querySelector() { return make('summary'); }, focus() { actions.focused = id; }, scrollIntoView() { actions.scrolled = id; }, click() { actions.downloads++; }, remove() {} }; }
+  ['nbaModelContent', 'nbaModelControls', 'nbaModelStatus', 'nbaModelGroup', 'nbaValuationPanel', 'nbaEvidenceDetails', 'mNbaValuationPanel', 'mNbaValuationContent', 'mNbaCoachShortcut', 'nbaValuationBasis', 'nbaValuationBasisHint', 'nbaMinutesHint', 'mpMode', 'mpPct', 'nbaEvidenceComparisonStat'].forEach(id => elements.set(id, make(id)));
   const buttons = ['evidence', 'prediction'].map(view => make(view, { 'data-nba-view': view }));
   const document = { getElementById: id => elements.get(id), querySelectorAll: selector => selector === '[data-nba-view]' ? buttons : [], createElement: tag => make(tag), body: { appendChild() {} } };
   const model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
-  const c = { document, Blob, URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} }, setTimeout(fn) { timers.push(fn); }, pos: 'Guards', NBA_SALARY_EVIDENCE: evidence, allowed: true, demoCanViewSensitiveModeling() { return c.allowed; }, NbaValuation: { getModel: () => model, isEnabled: () => true, setEnabled() { actions.enabledChanges++; } } };
+  const c = { document, Blob, URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} }, setTimeout(fn) { timers.push(fn); }, pos: 'Guards', NBA_SALARY_EVIDENCE: evidence, allowed: true, closeProfile() { actions.profileClosed = true; }, showDashboardPage(target, nav, opts) { actions.navigation = { target, nav, opts }; }, demoCanViewSensitiveModeling() { return c.allowed; }, NbaValuation: { getModel: () => model, isEnabled: () => true, setEnabled() { actions.enabledChanges++; } } };
   vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(__dirname, '../modules/nba-valuation-ui.js'), 'utf8'), c);
   c.NbaValuationUI.render();
   function click(selector, value) { const target = { closest: query => query === selector ? { getAttribute: () => value } : null }; elements.get('nbaValuationPanel').listeners.click({ target }); }
@@ -114,4 +114,29 @@ test('actual aggregate checks retain complete-case exclusions and omit individua
   const sensitivities = groups.reduce((n, group) => n + e.groups[group].sensitivities.filter(s => s.available).reduce((total, s) => total + s.estimates.length, 0), 0);
   assert.equal(csv.split('\r\n').length, 85 + sensitivities);
   assert.match(csv, /Descriptive sensitivity:/);
+});
+test('coach summary leads with the finding and PDF; all statistical detail is initially collapsed', () => {
+  const e = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
+  const h = harness(e), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
+  assert.match(top, /no single stat met our evidence threshold/);
+  assert.match(top, /466 players/); assert.match(top, /197 guards · 91 wings · 178 bigs/);
+  assert.match(top, /Download 1-page brief \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=coach-brief-20260914/);
+  assert.match(top, /\+8\.1%/); assert.match(top, /-4\.6% to \+22\.4%/);
+  assert.doesNotMatch(top, /<table|<svg|Holm|p-value|data-nba-evidence-download|data-nba-checks-download/);
+  assert.equal(h.elements.get('nbaEvidenceDetails').open, false);
+});
+test('profile shortcut opens the requested group on Players, collapses details, focuses the model panel and preserves price basis', () => {
+  const h = harness();
+  h.elements.get('nbaEvidenceDetails').open = true;
+  h.c.NbaValuationUI.openCoachSummary('Wings');
+  assert.equal(h.actions.profileClosed, true); assert.equal(h.actions.navigation.target, 'pagePlayers'); assert.equal(h.actions.navigation.opts.forcePage, true);
+  assert.equal(h.elements.get('nbaModelGroup').value, 'Wings'); assert.equal(h.elements.get('nbaValuationPanel').open, true);
+  assert.equal(h.elements.get('nbaEvidenceDetails').open, false); assert.equal(h.actions.focused, 'summary'); assert.equal(h.actions.scrolled, 'nbaValuationPanel');
+  assert.equal(h.actions.enabledChanges, 0);
+  h.c._currentProfilePlayer = { NBAModel_calc: true, NBAPosition_calc: 'Wings', _league: 'WBB', NBAContributions_calc: [] };
+  h.c.NbaValuationUI.renderProfile(h.c._currentProfilePlayer);
+  assert.equal(h.elements.get('mNbaCoachShortcut').hidden, false); assert.match(h.elements.get('mNbaCoachShortcut').innerHTML, /View coach summary/);
+  h.c.allowed = false; h.c.NbaValuationUI.render();
+  assert.equal(h.elements.get('mNbaCoachShortcut').hidden, true); assert.equal(h.elements.get('mNbaCoachShortcut').innerHTML, '');
+  assert.doesNotMatch(h.html(), /nba-salary-coach-brief/);
 });

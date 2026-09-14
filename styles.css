@@ -155,6 +155,29 @@
     .nbaEvidenceSensitivity{min-width:920px}
     .nbaEvidenceSensitivity td:last-child{white-space:normal;min-width:130px}
     .nbaEvidenceChecksDownload{min-height:44px;margin-top:10px;font-size:12px}
+    .nbaCoachSummary{padding:2px 0 4px;color:var(--text)}
+    .nbaCoachHeading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:15px}
+    .nbaCoachHeading h3{font-size:18px;line-height:1.4;margin:0}
+    .nbaCoachBrief,.nbaProfileCoachShortcut button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 16px;border:1px solid var(--accent);border-radius:9px;background:var(--accent);color:var(--bg);font-size:12px;font-weight:800;text-decoration:none;line-height:1.5;cursor:pointer;flex-shrink:0}
+    .nbaCoachBrief:hover,.nbaProfileCoachShortcut button:hover{filter:brightness(1.08)}
+    a.nbaCoachBrief{color:var(--bg)!important}
+    .nbaCoachBrief:focus-visible{outline:2px solid var(--text);outline-offset:3px}
+    .nbaCoachFinding{font-size:15px;line-height:1.75;max-width:970px;margin:0 0 12px}
+    .nbaCoachSample{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 18px}
+    .nbaCoachSample strong{color:var(--text)}
+    .nbaCoachGuidance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:0 0 18px}
+    .nbaCoachGuidance h4,.nbaCoachExample h4{font-size:13px;line-height:1.5;margin:0 0 6px}
+    .nbaCoachGuidance p,.nbaCoachExample p{font-size:13px;line-height:1.7;color:var(--muted);margin:0}
+    .nbaCoachExample{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:rgba(var(--accent-rgb),.035)}
+    .nbaCoachExample p+p{margin-top:5px}
+    .nbaCoachExample strong{color:var(--text)}
+    .nbaFullStatisticalDetails{border-top:1px solid var(--line);margin-top:18px;padding-top:5px}
+    .nbaFullStatisticalDetails>summary{font-size:13px}
+    .nbaFullStatisticalBody{padding-top:12px;min-width:0}
+    .nbaProfileCoachShortcut{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 14px;margin-bottom:14px;border:1px solid rgba(var(--accent-rgb),.3);border-radius:10px;background:rgba(var(--accent-rgb),.04)}
+    .nbaProfileCoachShortcut[hidden]{display:none!important}
+    .nbaProfileCoachShortcut p{font-size:13px;line-height:1.5;color:var(--text);margin:0}
+    @media(max-width:640px){.nbaCoachHeading{align-items:stretch;flex-direction:column;gap:12px}.nbaCoachHeading h3{font-size:17px}.nbaCoachFinding{font-size:14px}.nbaCoachBrief{width:100%}.nbaCoachGuidance{grid-template-columns:1fr;gap:15px}.nbaCoachExample{padding:12px}.nbaProfileCoachShortcut{align-items:stretch;flex-direction:column;gap:10px}.nbaProfileCoachShortcut button{width:100%}}
     .nbaEvidenceDefinitions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:8px 0 16px}
     .nbaEvidenceDefinitions h4{font-size:12px;color:var(--text);margin:0 0 6px}
     .nbaEvidenceDefinitions p,.nbaEvidenceNotes{font-size:12px;line-height:1.7;color:var(--muted)}

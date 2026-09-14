@@ -210,11 +210,13 @@ Training requires the original workbook in the repository root and the dependenc
 
 ## Position-level salary evidence
 
-**Players → NBA salary model → Salary evidence** reports a separate explanatory analysis for coaches. It shows a fixed association for each position/statistic, an explicit unit such as one inch or five percentage points, a pointwise 95% interval, the raw p-value, and the Holm-adjusted p-value. The primary adjustment covers all 36 basketball associations at a fixed 0.05 threshold. Direct tests compare position slopes on the same units. Approved staff can export the evidence for discussion; guest access follows the existing modeling gate.
+**Players → NBA salary model → Coach summary** gives coaches a short finding, a practical height example, and guidance for recruiting discussions. **Download 1-page brief (PDF)** provides a printable handout. The **View coach summary** shortcut at the top of a player's Overview opens the same summary and selects that player's position for the full statistical details.
+
+**Full statistical details** starts collapsed. It retains each position/statistic association, explicit units such as one inch or five percentage points, pointwise 95% intervals, raw and Holm-adjusted p-values, sensitivity checks, and technical CSV/JSON downloads. The primary adjustment covers all 36 basketball associations at a fixed 0.05 threshold. Direct tests compare position slopes on the same units. Guest access follows the existing modeling gate.
 
 This analysis uses OLS on recorded log salary with HC3 robust uncertainty, all twelve basketball inputs, age, and explicit three-point/free-throw percentage-availability indicators. The primary sample retains traditional nonshooting centers and excludes one one-game guard with unavailable effective field-goal percentage. Accuracy slopes describe players with usable recorded percentages. The [analysis specification](docs/nba-salary-evidence-method.md) explains sample selection, testing families, diagnostics, and limitations.
 
-The OLS coefficients and p-values belong to **Salary evidence**. **Prediction weights** retains the validated ridge model and its bootstrap stability summaries; player profiles retain individual contributions to that prediction model. The evidence view does not change the NCAA valuation engine or remove predictive inputs merely because an explanatory p-value is large. Neither analysis establishes a causal skill premium or validates NCAA compensation.
+The OLS coefficients and p-values belong to **Coach summary → Full statistical details**. **Prediction weights** retains the ridge model and its bootstrap stability summaries; player profiles retain individual contributions to that prediction model. The evidence view does not change the NCAA valuation engine or remove predictive inputs merely because an explanatory p-value is large. Neither analysis establishes a causal skill premium or validates NCAA compensation.
 
 ```powershell
 python tools/analyze-nba-evidence.py
@@ -223,3 +225,12 @@ node --test tools/nba-salary-evidence.test.cjs tools/nba-valuation.test.cjs
 ```
 
 The browser consumes `data/nba-salary-evidence.js`; `data/nba-salary-evidence.json` contains the same aggregate results. Local research exports are generated under `reports/nba-evidence/`. The original workbook remains unchanged. The explanatory analysis is exploratory because the data and prior prediction results were already inspected; its full results and fixed sensitivity checks are reported, including uncertain associations.
+
+The handout is a static PDF generated from that evidence snapshot, with its source and file hashes recorded in `output/pdf/nba-salary-coach-brief.meta.json`. Regenerate it after an evidence update, review `tmp_coach_brief/preview.png`, and publish the PDF and metadata together. The builder stops for editorial review if the findings or testing policy change. These optional offline dependencies add no frontend build step:
+
+```powershell
+python -m pip install -r tools/requirements-coach-brief.txt
+python tools/build-coach-brief.py
+python -m unittest discover -s tools -p test_coach_brief.py
+node --test tools/nba-salary-evidence-ui.test.cjs
+```
