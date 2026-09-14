@@ -1,22 +1,295 @@
 {
-  "evidenceId": "nba-2022-23-hc3-salary-evidence-v1",
-  "evidenceGeneratedAt": "2026-09-14T19:56:27.160932+00:00",
-  "sourceSha256": "1eeff7503b87de5dbeeb42f8739f90cd8f57968fab2e036d1f76e82b2259a482",
+  "evidenceId": "nba-2022-23-hc3-salary-evidence-v2-vif5",
+  "evidenceGeneratedAt": "2026-09-14T21:01:02.558330+00:00",
+  "ridgeModelId": "nba-2022-23-age-adjusted-ridge-v2-vif5",
+  "ridgeGeneratedAt": "2026-09-14T21:00:49.033589+00:00",
+  "sourceSha256": "0e079d03efb55bc9528532e8fce6147d6ac46a3d1c8761876e26060d6500ead3",
+  "ridgeSourceSha256": "9f1e32c38e02cfb7bd6b272b327bf884a236dff0be2c0d212af41db5fcd3294b",
   "sourceHashBasis": "utf8-lf",
-  "pdfSha256": "ae2edd6bb1d4b7686b9e33368b1c76b1912c621ff8f8d061c2e4432bc96e2c9e",
+  "pdfSha256": "6f69b0fcf8921faa719d8207b4760345b14a696535876ef13fc429156096f093",
   "pages": 1,
-  "pageSize": "US Letter",
+  "pageSize": "US Letter landscape",
   "facts": {
-    "n": 466,
+    "rows": [
+      {
+        "key": "Height",
+        "label": "Height",
+        "incrementLabel": "+1 inch",
+        "groups": {
+          "Guards": {
+            "weight": 0.19009894980400024,
+            "beta": 0.09022839873676297,
+            "ciLow": -0.018463849432487703,
+            "ciHigh": 0.19892064690601363,
+            "pRaw": 0.10317713918781951,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": 0.0998666508838323,
+            "beta": 0.1265345986697527,
+            "ciLow": -0.0700366324882774,
+            "ciHigh": 0.3231058298277828,
+            "pRaw": 0.20384708891678507,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": 0.18368405856228723,
+            "beta": 0.09635443586166592,
+            "ciLow": -0.02758302594967911,
+            "ciHigh": 0.22029189767301094,
+            "pRaw": 0.12669923002842973,
+            "pHolm": 1.0
+          }
+        }
+      },
+      {
+        "key": "APG",
+        "label": "Assists per game",
+        "incrementLabel": "+1 assist/game",
+        "groups": {
+          "Guards": {
+            "weight": 0.30910149717337676,
+            "beta": 0.13773865093576354,
+            "ciLow": -0.03345598692777377,
+            "ciHigh": 0.3089332887993008,
+            "pRaw": 0.11414816127486992,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": 0.36598138130404617,
+            "beta": 0.2956043644744447,
+            "ciLow": 0.09593170363565559,
+            "ciHigh": 0.4952770253132338,
+            "pRaw": 0.004219341774073333,
+            "pHolm": 0.14767696209256664
+          },
+          "Bigs": {
+            "weight": 0.10814867729469349,
+            "beta": 0.029235730527842063,
+            "ciLow": -0.378217723952558,
+            "ciHigh": 0.4366891850082421,
+            "pRaw": 0.8875165993737876,
+            "pHolm": 1.0
+          }
+        }
+      },
+      {
+        "key": "SPG",
+        "label": "Steals per game",
+        "incrementLabel": "+0.5 steals/game",
+        "groups": {
+          "Guards": {
+            "weight": -0.11874332521191203,
+            "beta": -0.2043730594878971,
+            "ciLow": -0.8467869409397296,
+            "ciHigh": 0.43804082196393546,
+            "pRaw": 0.5310169739493927,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": 0.38739518057151767,
+            "beta": 0.706568342771466,
+            "ciLow": -0.008402383896709109,
+            "ciHigh": 1.421539069439641,
+            "pRaw": 0.05268732427455761,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": 0.5334287801167792,
+            "beta": 1.0315689040659608,
+            "ciLow": 0.11202723161801931,
+            "ciHigh": 1.9511105765139023,
+            "pRaw": 0.028128854208472488,
+            "pHolm": 0.9001233346711196
+          }
+        }
+      },
+      {
+        "key": "BPG",
+        "label": "Blocks per game",
+        "incrementLabel": "+0.5 blocks/game",
+        "groups": {
+          "Guards": {
+            "weight": 0.2631292869512112,
+            "beta": 0.5618142535295719,
+            "ciLow": -0.21084557563741968,
+            "ciHigh": 1.3344740826965635,
+            "pRaw": 0.15311568294713457,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": -0.08195438717947345,
+            "beta": -0.6547578244035432,
+            "ciLow": -2.083210722154986,
+            "ciHigh": 0.7736950733478993,
+            "pRaw": 0.36435524201579356,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": 0.2717124755674563,
+            "beta": 0.3006780195180286,
+            "ciLow": 0.035540088114047685,
+            "ciHigh": 0.5658159509220095,
+            "pRaw": 0.026484092925925393,
+            "pHolm": 0.8739750665555379
+          }
+        }
+      },
+      {
+        "key": "eFG%",
+        "label": "Effective field goal percentage",
+        "incrementLabel": "+5 percentage points",
+        "groups": {
+          "Guards": {
+            "weight": 0.23740197788489859,
+            "beta": 0.10436885114886307,
+            "ciLow": -0.16265180021702735,
+            "ciHigh": 0.3713895025147535,
+            "pRaw": 0.44161689369161355,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": -0.047499658999025335,
+            "beta": 0.03368189325942881,
+            "ciLow": -0.2501542616167893,
+            "ciHigh": 0.31751804813564694,
+            "pRaw": 0.8138887134634077,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": -0.06163746229149608,
+            "beta": -0.04332691009738781,
+            "ciLow": -0.1800361026924073,
+            "ciHigh": 0.09338228249763168,
+            "pRaw": 0.5323524683942362,
+            "pHolm": 1.0
+          }
+        }
+      },
+      {
+        "key": "3P%",
+        "label": "Three-point percentage",
+        "incrementLabel": "+5 percentage points",
+        "groups": {
+          "Guards": {
+            "weight": -0.03519747581778471,
+            "beta": -0.03701709331110964,
+            "ciLow": -0.2798143192010038,
+            "ciHigh": 0.20578013257878452,
+            "pRaw": 0.7639157519549806,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": -0.0953875349743914,
+            "beta": -0.10658776446004908,
+            "ciLow": -0.5642039417959099,
+            "ciHigh": 0.35102841287581177,
+            "pRaw": 0.6441985864564214,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": 0.09735493358616953,
+            "beta": 0.038727928915933026,
+            "ciLow": -0.02369025259489978,
+            "ciHigh": 0.10114611042676583,
+            "pRaw": 0.22230750678888644,
+            "pHolm": 1.0
+          }
+        }
+      },
+      {
+        "key": "FT%",
+        "label": "Free throw percentage",
+        "incrementLabel": "+5 percentage points",
+        "groups": {
+          "Guards": {
+            "weight": -0.07455839345631303,
+            "beta": -0.03443724958041386,
+            "ciLow": -0.12513870357830933,
+            "ciHigh": 0.05626420441748164,
+            "pRaw": 0.4547764861829998,
+            "pHolm": 1.0
+          },
+          "Wings": {
+            "weight": 0.10880495536542044,
+            "beta": 0.003713787818884966,
+            "ciLow": -0.18654109959924453,
+            "ciHigh": 0.19396867523701444,
+            "pRaw": 0.9691050361209272,
+            "pHolm": 1.0
+          },
+          "Bigs": {
+            "weight": 0.005336968285463767,
+            "beta": 0.007830373146478399,
+            "ciLow": -0.11091119174046465,
+            "ciHigh": 0.12657193803342143,
+            "pRaw": 0.8965671242882234,
+            "pHolm": 1.0
+          }
+        }
+      },
+      {
+        "key": "3PA/G",
+        "label": "Three-point attempts per game",
+        "incrementLabel": "+1 three-point attempt/game",
+        "groups": {
+          "Guards": {
+            "weight": 0.5465879887106434,
+            "beta": 0.27646326901568563,
+            "ciLow": 0.14261060149263255,
+            "ciHigh": 0.4103159365387387,
+            "pRaw": 6.826885708763039e-05,
+            "pHolm": 0.002457678855154694
+          },
+          "Wings": {
+            "weight": 0.3604606181451,
+            "beta": 0.1917104876810737,
+            "ciLow": 0.035997663942228475,
+            "ciHigh": 0.34742331141991895,
+            "pRaw": 0.016471382665408783,
+            "pHolm": 0.5600270106238986
+          },
+          "Bigs": {
+            "weight": 0.13423130097316696,
+            "beta": 0.07983054346228721,
+            "ciLow": -0.08254495229230277,
+            "ciHigh": 0.2422060392168772,
+            "pRaw": 0.33312169341928755,
+            "pHolm": 1.0
+          }
+        }
+      }
+    ],
     "groupCounts": {
-      "Guards": 197,
-      "Wings": 91,
-      "Bigs": 178
+      "Guards": {
+        "ridge": 198,
+        "ols": 197
+      },
+      "Wings": {
+        "ridge": 91,
+        "ols": 91
+      },
+      "Bigs": {
+        "ridge": 178,
+        "ols": 178
+      }
     },
-    "heightPct": 8.090948914572662,
-    "heightLowPct": -4.550363427050885,
-    "heightHighPct": 22.40647169277919,
-    "supportedCount": 0,
-    "testCount": 36
+    "testedCount": 24,
+    "supportedCount": 1,
+    "familySize": 36,
+    "excludedInputs": {
+      "ridge": [
+        "MP",
+        "PPG",
+        "RPG",
+        "TOPG"
+      ],
+      "ols": [
+        "MP",
+        "PPG",
+        "RPG",
+        "TOPG"
+      ]
+    }
   }
 }

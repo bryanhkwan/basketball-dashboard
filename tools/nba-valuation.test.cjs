@@ -37,6 +37,26 @@ test('negative coefficients retain direction and groups use distinct learned coe
   close(c.NbaValuation.score(pool[1], c.NbaValuation.createContext(pool, 'MBB', 'Guards')).score, -0.2);
   close(c.NbaValuation.score(pool[1], c.NbaValuation.createContext(pool, 'MBB', 'Bigs')).score, 0.3);
 });
+
+test('excluded inputs cannot alter the learned signal or college bid', function () {
+  var model = fixture();
+  model.groups.Guards.features = model.groups.Guards.features.filter(function (feature) { return feature.key !== 'PPG' && feature.key !== 'MP'; });
+  var c = runtime.createRuntime({ model: model });
+  var pool = [player('A', 10, 70, 20), player('B', 20, 78, 30)];
+  var context = c.NbaValuation.createContext(pool, 'MBB', 'Guards');
+  var original = c.NbaValuation.score(pool[1], context);
+  var edited = Object.assign({}, pool[1], { TOPG: 99, PPG: 100, MP: 1, RPG: 50 });
+  var changed = c.NbaValuation.score(edited, context);
+  close(changed.score, original.score);
+  assert.deepEqual(Array.from(changed.contributions, function (item) { return item.key; }), ['Height']);
+  var settings = { avgPay: 100000, minPay: 10000, maxPay: 500000, starValue: 200000, k: 0.5, perfAvg: 0, perfStar: 1 };
+  close(c.NbaValuation.quote(original, pool[1], settings, 1).final, c.NbaValuation.quote(changed, edited, settings, 1).final);
+  delete edited.MP;
+  var withoutMinutes = c.NbaValuation.score(edited, context);
+  assert.equal(withoutMinutes.coverage, 1);
+  assert.ok(!withoutMinutes.missing.includes('MP'));
+  close(c.NbaValuation.quote(original, pool[1], settings, 1).final, c.NbaValuation.quote(withoutMinutes, edited, settings, 1).final);
+});
 test('missing height is neutral and documented, percentage formats and zero attempts handled', function () {
   var c = runtime.createRuntime({ model: fixture() });
   var pool = [player('A', 10, 70, 20), player('B', 20, 78, 30)];

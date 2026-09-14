@@ -1,181 +1,176 @@
 #!/usr/bin/env python3
-"""Build the one-page coach handout from the checked NBA evidence snapshot.
-
-No model is fitted or changed. Run after updating the salary evidence and review
-the rendered PNG before publishing. Frontend downloads the static PDF directly.
-"""
+"""Build one printable coefficient matrix from the published model snapshots."""
 from __future__ import annotations
 
 import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import fitz
 from pypdf import PdfReader
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_PATH = ROOT / "data/nba-salary-evidence.json"
+MODEL_PATH = ROOT / "data/nba-valuation-model.json"
 OUTPUT = ROOT / "output/pdf/nba-salary-coach-brief.pdf"
 METADATA = OUTPUT.with_suffix(".meta.json")
 PREVIEW = ROOT / "tmp_coach_brief/preview.png"
+GROUPS = ["Guards", "Wings", "Bigs"]
 NAVY = colors.HexColor("#142A43")
-INK = colors.HexColor("#223247")
 MUTED = colors.HexColor("#536174")
-GOLD = colors.HexColor("#D6A800")
-CREAM = colors.HexColor("#FBF7E8")
 LINE = colors.HexColor("#D9E0E7")
 PALE = colors.HexColor("#F3F6F9")
 
 
-def read_facts(path=EVIDENCE_PATH):
-    evidence = json.loads(path.read_text(encoding="utf-8"))
-    groups = evidence["groups"]
-    tests = [item for group in groups.values() for item in group["features"]]
-    if len(tests) != 36 or evidence["policy"] != {"alpha": .05, "adjustment": "Holm", "familySize": 36}:
-        raise ValueError("The evidence design changed; review the coach brief wording before rebuilding.")
-    if any(item["pAdjustedHolm"] <= .05 for item in tests):
-        raise ValueError("The findings changed; review the coach brief conclusion before rebuilding.")
-    height = next(item for item in groups["Bigs"]["features"] if item["key"] == "Height")
-    if height["increment"] != 1 or not height["effectCiLowPct"] < 0 < height["effectCiHighPct"]:
-        raise ValueError("The height example changed; review its interpretation before rebuilding.")
-    return evidence, {
-        "n": sum(group["n"] for group in groups.values()),
-        "groupCounts": {group: groups[group]["n"] for group in ["Guards", "Wings", "Bigs"]},
-        "heightPct": height["effectPct"], "heightLowPct": height["effectCiLowPct"],
-        "heightHighPct": height["effectCiHighPct"], "supportedCount": 0, "testCount": len(tests),
+def sha256(path):
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def read_facts(evidence_path=EVIDENCE_PATH, model_path=MODEL_PATH):
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    if evidence["season"] != model["season"]:
+        raise ValueError("Evidence and valuation snapshots must cover the same season.")
+    inputs = {}
+    for group in GROUPS:
+        for item in evidence["groups"][group]["estimates"]:
+            inputs.setdefault(item["key"], item)
+    for group in GROUPS:
+        for item in model["groups"][group]["features"]:
+            inputs.setdefault(item["key"], item)
+    if not inputs or len(inputs) > 12 or "Age" in inputs:
+        raise ValueError("Review the basketball-input table design before rebuilding.")
+    rows = []
+    for key, item in inputs.items():
+        row = {"key": key, "label": item.get("label", key), "incrementLabel": item.get("incrementLabel", "OLS not retained"), "groups": {}}
+        for group in GROUPS:
+            e = next((x for x in evidence["groups"][group]["estimates"] if x["key"] == key), None)
+            w = next((x for x in model["groups"][group]["features"] if x["key"] == key), None)
+            if e and e["incrementLabel"] != row["incrementLabel"]:
+                raise ValueError("Position rows must use the same stated increment.")
+            row["groups"][group] = {
+                "weight": w["coefficient"] if w else None,
+                "beta": e["logEffect"] if e else None,
+                "ciLow": e["logEffectCiLow"] if e else None,
+                "ciHigh": e["logEffectCiHigh"] if e else None,
+                "pRaw": e["pRaw"] if e else None,
+                "pHolm": e["pHolm"] if e else None,
+            }
+        rows.append(row)
+    estimates = [e for group in GROUPS for e in evidence["groups"][group]["estimates"]]
+    return evidence, model, {
+        "rows": rows,
+        "groupCounts": {g: {"ridge": model["groups"][g]["n"], "ols": evidence["groups"][g]["n"]} for g in GROUPS},
+        "testedCount": len(estimates),
+        "supportedCount": sum(e["pHolm"] <= evidence["policy"]["alpha"] for e in estimates),
+        "familySize": evidence["policy"]["familySize"],
+        "excludedInputs": {"ridge": model.get("selection", {}).get("excludedKeys", []), "ols": evidence.get("selection", {}).get("excludedKeys", [])},
     }
+
+
+def signed(value):
+    return "Excluded" if value is None else f"{value:+.3f}"
+
+
+def pvalue(value):
+    return "Excluded" if value is None else f"{value:.3g}" if value < .001 else f"{value:.4f}"
 
 
 def build():
-    evidence, facts = read_facts()
+    evidence, model, facts = read_facts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     PREVIEW.parent.mkdir(parents=True, exist_ok=True)
-    width, height = letter
-    content_width = width - 84
+    width, height = landscape(letter)
+    content_width = width - 60
+    large = len(facts["rows"]) <= 10
     styles = {
-        "eyebrow": ParagraphStyle("eyebrow", fontName="Helvetica-Bold", fontSize=9, leading=12, textColor=MUTED),
-        "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=24, leading=29, textColor=NAVY),
-        "subtitle": ParagraphStyle("subtitle", fontName="Helvetica", fontSize=10.4, leading=15, textColor=MUTED),
-        "heading": ParagraphStyle("heading", fontName="Helvetica-Bold", fontSize=13, leading=18, textColor=NAVY),
-        "hero": ParagraphStyle("hero", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=NAVY),
-        "body": ParagraphStyle("body", fontName="Helvetica", fontSize=11, leading=15.3, textColor=INK),
-        "small": ParagraphStyle("small", fontName="Helvetica", fontSize=9.8, leading=13.5, textColor=MUTED),
-        "foot": ParagraphStyle("foot", fontName="Helvetica", fontSize=8.1, leading=10.8, textColor=MUTED),
-        "number": ParagraphStyle("number", fontName="Helvetica-Bold", fontSize=13, leading=17, textColor=NAVY),
+        "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=21, leading=25, textColor=NAVY),
+        "small": ParagraphStyle("small", fontName="Helvetica", fontSize=9, leading=12, textColor=MUTED),
+        "cell": ParagraphStyle("cell", fontName="Helvetica", fontSize=9.5 if large else 8.5, leading=11.5 if large else 9.8, textColor=NAVY),
+        "label": ParagraphStyle("label", fontName="Helvetica-Bold", fontSize=9.5 if large else 8.5, leading=11.5 if large else 10, textColor=NAVY),
+        "header": ParagraphStyle("header", fontName="Helvetica-Bold", fontSize=10, leading=13, textColor=colors.white),
+        "foot": ParagraphStyle("foot", fontName="Helvetica", fontSize=8, leading=10.5, textColor=MUTED),
     }
 
-    def paragraph(text, style="body"):
+    def paragraph(text, style="small"):
         return Paragraph(text, styles[style])
 
-    def box(flowables, background=PALE, padding=13):
-        result = Table([[flowables]], colWidths=[content_width])
-        result.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), background),
-            ("LEFTPADDING", (0, 0), (-1, -1), padding),
-            ("RIGHTPADDING", (0, 0), (-1, -1), padding),
-            ("TOPPADDING", (0, 0), (-1, -1), padding - 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), padding),
-            ("BOX", (0, 0), (-1, -1), .5, LINE),
-        ]))
-        return result
-
-    counts = facts["groupCounts"]
-    date = datetime.fromisoformat(evidence["generatedAt"]).strftime("%d %b %Y")
-    story = [
-        paragraph("RECRUITING RESEARCH / ONE-PAGE BRIEF", "eyebrow"), Spacer(1, 5),
-        paragraph("NBA salary evidence for coaches", "title"), Spacer(1, 7),
-        paragraph(f"2022-23 NBA salary data | <b>{facts['n']} players</b> | "
-                  f"Guards {counts['Guards']} / Wings {counts['Wings']} / Bigs {counts['Bigs']}", "subtitle"),
-        Spacer(1, 16),
-        box([
-            paragraph("What this study found", "eyebrow"), Spacer(1, 5),
-            paragraph("No single statistic met our evidence threshold.", "hero"), Spacer(1, 7),
-            paragraph("We accounted for the other recorded inputs and checked 12 statistics across three position groups. "
-                      "The results do not establish that height, shooting, or other skills lack basketball value."),
-        ], CREAM),
-        Spacer(1, 16),
-        paragraph("A practical example: height for bigs", "heading"), Spacer(1, 5),
-        paragraph(f"One extra inch was associated with an estimated <b>{facts['heightPct']:.1f}% higher NBA salary</b>, "
-                  "after adjusting for the other inputs."),
-        Spacer(1, 9),
-        box([
-            paragraph(f"<b>95% uncertainty range:</b> {abs(facts['heightLowPct']):.1f}% lower to "
-                      f"{facts['heightHighPct']:.1f}% higher salary."),
-            Spacer(1, 4),
-            paragraph("The range includes no salary increase, so the direction remains uncertain. "
-                      f"This does not justify an {facts['heightPct']:.1f}% height premium on a college offer.", "small"),
-        ], PALE, 11),
-        Spacer(1, 16),
-        paragraph("How to use this in recruiting", "heading"), Spacer(1, 7),
-    ]
-    takeaways = [
-        ("Start a discussion.", "Use model estimates to identify players and questions for film review, interviews, and scouting. Keep the assumptions visible."),
-        ("Evaluate the whole role.", "Points, minutes, shooting, and size overlap. An uncertain coefficient does not tell you a skill is unimportant for winning or for your roster."),
-        ("Treat the dollars as rough estimates.", "Dashboard prices use a separate NBA prediction model plus college pay settings. Check them against role, competition, scouting, and budget."),
-    ]
-    for i, (title, description) in enumerate(takeaways, 1):
-        row = Table([[paragraph(str(i), "number"), paragraph(f"<b>{title}</b> {description}")]], colWidths=[24, content_width - 24])
-        row.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("TOPPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
-        ]))
-        story.append(row)
-    story.extend([
-        Spacer(1, 4),
-        paragraph("What the data cannot establish", "heading"), Spacer(1, 5),
-        paragraph("This study describes one NBA season. Contracts also reflect past performance, expected potential, "
-                  "experience, and bargaining rules. It does not validate NCAA salaries or transfer to women's basketball.", "small"),
-        Spacer(1, 13),
-        paragraph("METHOD AND SOURCES", "eyebrow"), Spacer(1, 4),
-        paragraph("Exploratory position-specific regression of log salary; 12 basketball inputs, age, and percentage availability. "
-                  "HC3 uncertainty; pointwise 95% intervals; Holm adjustment across 36 tests at 0.05. "
-                  "Source: supplied 2022-23 NBA salary workbook. Heights: current ESPN bios retrieved September 2026, "
-                  "not verified 2022-23 measurements.", "foot"),
-    ])
+    data = [[paragraph("Input / stated increase", "header")] + [paragraph(f"{g}<br/><font size=8>Ridge / OLS n: {facts['groupCounts'][g]['ridge']} / {facts['groupCounts'][g]['ols']}</font>", "header") for g in GROUPS]]
+    for row in facts["rows"]:
+        cells = [paragraph(escape(row["label"]) + "<br/><font name=Helvetica size=8>" + escape(row["incrementLabel"]) + "</font>", "label")]
+        for group in GROUPS:
+            c = row["groups"][group]
+            text = f"<b>Weight</b> {signed(c['weight'])} | <b>OLS beta</b> {signed(c['beta'])}"
+            if c["beta"] is not None:
+                text += f"<br/>95% beta CI: [{signed(c['ciLow'])}, {signed(c['ciHigh'])}]<br/>p {pvalue(c['pRaw'])} | Holm p {pvalue(c['pHolm'])}"
+            else:
+                text += "<br/>OLS input not retained; no interval or p-value."
+            cells.append(paragraph(text, "cell"))
+        data.append(cells)
+    table = Table(data, colWidths=[156, 192, 192, 192], repeatRows=1, hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, PALE]),
+        ("GRID", (0, 0), (-1, -1), .4, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 4 if large else 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4 if large else 3),
+    ]))
+    names = {"MP": "minutes/game", "PPG": "points/game", "RPG": "rebounds/game", "TOPG": "turnovers/game"}
+    excluded = facts["excludedInputs"]
+    subtitle = escape(evidence["season"]) + " NBA salary sample"
+    if excluded["ridge"] == excluded["ols"] and excluded["ols"]:
+        subtitle += " | Removed by VIF &lt;= 5 rule: " + escape(", ".join(names.get(k, k) for k in excluded["ols"]))
+    else:
+        subtitle += " | One table for all retained basketball inputs"
+    story = [paragraph("NBA coefficients by position", "title"), Spacer(1, 4),
+        paragraph(subtitle), Spacer(1, 7),
+        paragraph("<b>Weight:</b> ridge prediction coefficient per 1 standard deviation (SD), used in the NCAA peer signal. <b>OLS beta:</b> separate log-salary coefficient for the stated increase. <b>Intervals and p-values apply only to OLS beta.</b> Neither number is a percentage of player value.", "small"),
+        Spacer(1, 9), table, Spacer(1, 9),
+        paragraph(f"<b>{facts['supportedCount']} of {facts['testedCount']} retained OLS associations meet Holm p &lt;= 0.05</b> using the original {facts['familySize']}-candidate correction family. Excluded means not retained, never a zero effect. Age and percentage-availability controls are outside this basketball-input table.", "foot"),
+        Spacer(1, 4), paragraph("<b>Interpretation:</b> a positive salary coefficient does not show that a stat helps winning; per-game turnovers can also track workload. Redundancy screening and coefficient inference remain exploratory. These NBA results do not validate NCAA or WBB pay.", "foot"),
+        Spacer(1, 4), paragraph("<b>Sources:</b> supplied 2022-23 NBA salary workbook; ESPN heights retrieved September 2026, not verified 2022-23 measurements. Full selection policy, excluded inputs, and model checks are in the dashboard's Full statistical details.", "foot")]
 
     def footer(canvas, doc):
         canvas.saveState()
-        canvas.setStrokeColor(GOLD)
-        canvas.setLineWidth(1.4)
-        canvas.line(42, height - 28, width - 42, height - 28)
         canvas.setStrokeColor(LINE)
-        canvas.setLineWidth(.5)
-        canvas.line(42, 34, width - 42, 34)
+        canvas.line(30, 27, width - 30, 27)
+        canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(MUTED)
-        canvas.setFont("Helvetica", 8)
-        canvas.drawString(42, 21, f"Analysis: {date}  |  Full methods and coefficients: dashboard's Full statistical details")
-        canvas.drawRightString(width - 42, 21, str(doc.page))
-        canvas.linkURL("https://bryanhkwan.github.io/basketball-dashboard/", (42, 16, width - 62, 30), relative=0)
+        date = datetime.fromisoformat(evidence["generatedAt"]).strftime("%d %b %Y")
+        canvas.drawString(30, 16, f"Analysis: {date} | NCAA Scouting Dashboard | Coefficients rounded for presentation; CSV contains full precision")
+        canvas.drawRightString(width - 30, 16, str(doc.page))
+        canvas.linkURL("https://bryanhkwan.github.io/basketball-dashboard/", (30, 11, width - 60, 25), relative=0)
         canvas.restoreState()
 
-    document = SimpleDocTemplate(str(OUTPUT), pagesize=letter, leftMargin=42, rightMargin=42,
-                                 topMargin=41, bottomMargin=45, title="NBA salary evidence for coaches",
-                                 author="NCAA Scouting Dashboard", subject="One-page interpretation of NBA salary associations")
+    document = SimpleDocTemplate(str(OUTPUT), pagesize=(width, height), leftMargin=30, rightMargin=30,
+        topMargin=27, bottomMargin=35, title="NBA coefficients by position", author="NCAA Scouting Dashboard")
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     pdf = PdfReader(OUTPUT)
     if len(pdf.pages) != 1:
-        raise ValueError(f"Coach brief must be one page; rendered {len(pdf.pages)}. Adjust layout before publication.")
+        raise ValueError(f"Coefficient table must fit one page; rendered {len(pdf.pages)}. Review layout.")
     with fitz.open(OUTPUT) as rendered:
         page = rendered[0]
         page.get_pixmap(matrix=fitz.Matrix(1.8, 1.8), alpha=False).save(PREVIEW)
-        if any(rect.y1 > height - 12 or rect.x1 > width - 12 for rect in [fitz.Rect(block[:4]) for block in page.get_text("blocks")]):
-            raise ValueError("Text extends outside the print margins.")
+        if any(b[0] < 24 or b[1] < 24 or b[2] > width - 24 or b[3] > height - 8 for b in page.get_text("blocks")):
+            raise ValueError("Text extends beyond the print area.")
     metadata = {
         "evidenceId": evidence["id"], "evidenceGeneratedAt": evidence["generatedAt"],
-        "sourceSha256": hashlib.sha256(EVIDENCE_PATH.read_bytes().replace(b"\r\n", b"\n")).hexdigest(),
+        "ridgeModelId": model["id"], "ridgeGeneratedAt": model["generatedAt"],
+        "sourceSha256": sha256(EVIDENCE_PATH), "ridgeSourceSha256": sha256(MODEL_PATH),
         "sourceHashBasis": "utf8-lf", "pdfSha256": hashlib.sha256(OUTPUT.read_bytes()).hexdigest(),
-        "pages": len(pdf.pages), "pageSize": "US Letter", "facts": facts,
+        "pages": len(pdf.pages), "pageSize": "US Letter landscape", "facts": facts,
     }
     METADATA.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"pdf": str(OUTPUT), "pages": len(pdf.pages), "preview": str(PREVIEW), "facts": facts}, indent=2))
+    print(json.dumps({"pdf": str(OUTPUT), "pages": len(pdf.pages), "rows": len(facts["rows"]), "preview": str(PREVIEW)}, indent=2))
 
 
 if __name__ == "__main__":

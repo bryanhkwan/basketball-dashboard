@@ -57,7 +57,7 @@ test('published evidence JSON and browser global agree', () => {
 
 test('source fingerprints distinguish archived inputs from portable text hashes', () => {
   const evidence = JSON.parse(fs.readFileSync(path.join(root, 'data/nba-salary-evidence.json'), 'utf8'));
-  assert.equal(evidence.sources.length, 4);
+  assert.ok(evidence.sources.length >= 4);
   for (const source of evidence.sources) {
     assert.equal(source.file.includes('\\'), false, 'Source paths work across operating systems');
     assert.ok(['raw-bytes', 'utf8-lf'].includes(source.sha256Basis));
@@ -67,13 +67,14 @@ test('source fingerprints distinguish archived inputs from portable text hashes'
   }
 });
 
-test('all 36 tests use one Holm family and natural-unit effects reconcile', () => {
+test('retained estimates keep the planned Holm family and natural-unit effects reconcile', () => {
   const evidence = JSON.parse(fs.readFileSync(path.join(root, 'data/nba-salary-evidence.json'), 'utf8'));
   const rows = [];
   for (const group of ['Guards', 'Wings', 'Bigs']) {
     const population = evidence.groups[group];
-    assert.equal(population.features.length, 12);
-    assert.equal(new Set(population.features.map(row => row.key)).size, 12);
+    assert.ok(population.features.length > 0 && population.features.length <= 12);
+    assert.equal(new Set(population.features.map(row => row.key)).size, population.features.length);
+    assert.deepEqual(population.features.map(row => row.key), evidence.groups.Guards.features.map(row => row.key), 'Position evidence uses the same adjustment set');
     assert.ok(population.n > 0);
     for (const row of population.features) {
       assert.ok(Number.isFinite(row.coefficient), group + ' ' + row.key + ' coefficient');
@@ -92,7 +93,7 @@ test('all 36 tests use one Holm family and natural-unit effects reconcile', () =
   rows.sort((a, b) => a.pValue - b.pValue);
   let cumulative = 0;
   rows.forEach((row, index) => {
-    cumulative = Math.min(1, Math.max(cumulative, row.pValue * (rows.length - index)));
+    cumulative = Math.min(1, Math.max(cumulative, row.pValue * (evidence.policy.familySize - index)));
     assert.ok(Math.abs(row.pAdjustedHolm - cumulative) < 1e-12, row.key + ': global Holm adjustment');
   });
 });
@@ -103,8 +104,8 @@ test('position comparisons test raw-unit slope differences with independent-grou
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) <= 1e-8 * Math.max(1, Math.abs(expected)));
   const row = (group, key) => evidence.groups[group].features.find(item => item.key === key);
   assert.equal(comparisons.n, Object.values(evidence.groups).reduce((sum, group) => sum + group.n, 0));
-  assert.equal(comparisons.pairwise.length, 36);
-  assert.equal(comparisons.omnibus.length, 12);
+  assert.equal(comparisons.pairwise.length, evidence.groups.Guards.features.length * 3);
+  assert.equal(comparisons.omnibus.length, evidence.groups.Guards.features.length);
   for (const pair of comparisons.pairwise) {
     const a = row(pair.groupA, pair.key), b = row(pair.groupB, pair.key);
     close(pair.differenceRaw, a.coefficient - b.coefficient);
@@ -123,9 +124,10 @@ test('position comparisons test raw-unit slope differences with independent-grou
     assert.equal(overall.dfNum, 2);
   }
   for (const family of [comparisons.omnibus, comparisons.pairwise]) {
+    const plannedFamilySize = family === comparisons.omnibus ? 12 : 36;
     let cumulative = 0;
     [...family].sort((a, b) => a.pRaw - b.pRaw).forEach((item, index) => {
-      cumulative = Math.min(1, Math.max(cumulative, item.pRaw * (family.length - index)));
+      cumulative = Math.min(1, Math.max(cumulative, item.pRaw * (plannedFamilySize - index)));
       close(item.pHolm, cumulative);
     });
   }

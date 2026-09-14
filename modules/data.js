@@ -2106,8 +2106,8 @@ function computeAll(options){
 
     const bidQuote = nbaContext ? NbaValuation.quote(nbaScores[i], r, bidCtx, cm) : applyValuationContext(adjPerf, mp, bidCtx);
     const marketQuote = nbaContext ? NbaValuation.quote(nbaScores[i], r, marketCtx, cm) : applyValuationContext(adjPerf, mp, marketCtx);
-    // NBA production and minutes already enter the fitted signal. A second
-    // handcrafted production premium would obscure the learned contributions.
+    // Calibrate the retained NBA signal directly. A handcrafted production
+    // premium would reintroduce inputs excluded from the learned model.
     const marketDemand = nbaContext ? { mult: 1, reasons: '' } : marketDemandPremiumForRow(r, adjPerf, league);
     const marketPressure = Number.isFinite(marketQuote.final)
       ? clamp(marketQuote.final * marketDemand.mult, marketCtx.minPay, marketCtx.maxPay)

@@ -6,6 +6,29 @@ const vm = require('node:vm');
 const path = require('node:path');
 const groups = ['Guards', 'Wings', 'Bigs'];
 const keys = ['Height', 'MP', 'PPG', 'RPG', 'APG', 'SPG', 'BPG', 'TOPG', 'eFG%', '3P%', 'FT%', '3PA/G'];
+function csvRecords(text) {
+  text = text.replace(/^\ufeff/, '');
+  const rows = [], row = []; let cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') { if (quoted && text[i + 1] === '"') { cell += '"'; i++; } else quoted = !quoted; }
+    else if (char === ',' && !quoted) { row.push(cell); cell = ''; }
+    else if ((char === '\r' || char === '\n') && !quoted) { if (char === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row.splice(0)); cell = ''; }
+    else cell += char;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function matrixCell(html, key, group) {
+  const row = [...html.matchAll(/<tr\b[^>]*data-nba-coefficient-key="([^"]+)"[^>]*>([\s\S]*?)<\/tr>/g)].find(match => match[1] === key);
+  assert.ok(row, 'Matrix row ' + key);
+  const cell = [...row[2].matchAll(/<td\b[^>]*data-nba-coefficient-group="([^"]+)"[^>]*>([\s\S]*?)<\/td>/g)].find(match => match[1] === group);
+  assert.ok(cell, key + ' / ' + group);
+  return cell[2];
+}
+function matrixKeys(evidence, model) {
+  return [...new Set(groups.flatMap(group => [...(model.groups[group].features || []).map(item => item.key), ...(evidence.groups[group].estimates || []).map(item => item.key)]))];
+}
 function fixture() {
   const evidence = { id: 'test-evidence', season: '2022-23', generatedAt: 'test-date', protocol: { alpha: .05, primaryFamilySize: 36 }, groups: {}, comparisons: { omnibus: [], pairwise: [] } };
   groups.forEach((group, groupIndex) => {
@@ -18,19 +41,19 @@ function fixture() {
   });
   return evidence;
 }
-function harness(evidence = fixture()) {
+function harness(evidence = fixture(), modelOverride) {
   const elements = new Map(), blobs = [], timers = [], actions = { enabledChanges: 0, downloads: 0 };
   function make(id, attrs = {}) { return { id, innerHTML: '', hidden: false, open: false, value: '', attrs, listeners: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener(type, handler) { this.listeners[type] = handler; }, querySelector() { return make('summary'); }, focus() { actions.focused = id; }, scrollIntoView() { actions.scrolled = id; }, click() { actions.downloads++; }, remove() {} }; }
   ['nbaModelContent', 'nbaModelControls', 'nbaModelStatus', 'nbaModelGroup', 'nbaValuationPanel', 'nbaEvidenceDetails', 'mNbaValuationPanel', 'mNbaValuationContent', 'mNbaCoachShortcut', 'nbaValuationBasis', 'nbaValuationBasisHint', 'nbaMinutesHint', 'mpMode', 'mpPct', 'nbaEvidenceComparisonStat'].forEach(id => elements.set(id, make(id)));
   const buttons = ['evidence', 'prediction'].map(view => make(view, { 'data-nba-view': view }));
   const document = { getElementById: id => elements.get(id), querySelectorAll: selector => selector === '[data-nba-view]' ? buttons : [], createElement: tag => make(tag), body: { appendChild() {} } };
-  const model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+  const model = modelOverride || JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
   const c = { document, Blob, URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:test'; }, revokeObjectURL() {} }, setTimeout(fn) { timers.push(fn); }, pos: 'Guards', NBA_SALARY_EVIDENCE: evidence, allowed: true, closeProfile() { actions.profileClosed = true; }, showDashboardPage(target, nav, opts) { actions.navigation = { target, nav, opts }; }, demoCanViewSensitiveModeling() { return c.allowed; }, NbaValuation: { getModel: () => model, isEnabled: () => true, setEnabled() { actions.enabledChanges++; } } };
   vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(__dirname, '../modules/nba-valuation-ui.js'), 'utf8'), c);
   c.NbaValuationUI.render();
   function click(selector, value) { const target = { closest: query => query === selector ? { getAttribute: () => value } : null }; elements.get('nbaValuationPanel').listeners.click({ target }); }
   function group(name) { elements.get('nbaModelGroup').value = name; elements.get('nbaModelGroup').listeners.change(); }
-  return { c, elements, buttons, blobs, actions, click, group, html: () => elements.get('nbaModelContent').innerHTML };
+  return { c, elements, buttons, blobs, actions, click, group, model, html: () => elements.get('nbaModelContent').innerHTML };
 }
 test('default evidence includes every natural-unit estimate, robust intervals, coefficients and separate corrected decisions', () => {
   const h = harness();
@@ -73,7 +96,7 @@ test('direct comparisons use raw stat increments and separate omnibus and pairwi
   assert.match(h.html(), /not a difference in salary levels/);
   assert.equal((h.html().match(/<th scope="row">(?:Guards|Wings) versus /g) || []).length, 3);
 });
-test('CSV includes all 36 estimates, 12 overall tests and 36 pairwise tests with exact values and raw units', async () => {
+test('CSV includes every synthetic primary and comparison estimate with exact values and raw units', async () => {
   const h = harness(); h.click('[data-nba-evidence-download]');
   assert.equal(h.blobs.length, 1); assert.equal(h.actions.downloads, 1);
   const csv = await h.blobs[0].text();
@@ -87,6 +110,7 @@ test('logout clears evidence, hides controls and prevents downloads through stal
   assert.doesNotMatch(h.html(), /<table|<svg|test-evidence/);
   assert.match(h.html(), /Staff login/); assert.equal(h.elements.get('nbaModelControls').hidden, true);
   h.click('[data-nba-evidence-download]'); assert.equal(h.blobs.length, 0);
+  h.click('[data-nba-coefficient-download]'); assert.equal(h.blobs.length, 0);
 });
 test('invalid inference is distinguished from valid uncertain evidence', () => {
   const e = fixture(); Object.assign(e.groups.Guards.estimates[0], { status: 'unavailable', pRaw: null, pHolm: null, reason: 'Singular fit' });
@@ -96,8 +120,8 @@ test('actual aggregate checks retain complete-case exclusions and omit individua
   const e = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
   const h = harness(e);
   groups.forEach(group => {
-    h.group(group); assert.equal((h.html().match(/data-evidence-mark=/g) || []).length, 12);
-    assert.match(h.html(), /No individual association in this position group met the 0.05 threshold/);
+    h.group(group); assert.equal((h.html().match(/data-evidence-mark=/g) || []).length, e.groups[group].estimates.length);
+    if (e.groups[group].estimates.every(item => item.status !== 'supported')) assert.match(h.html(), /No individual association in this position group met the 0.05 threshold/);
     assert.match(h.html(), new RegExp('NBA players · ' + group));
   });
   h.click('[data-nba-checks-download]');
@@ -112,19 +136,101 @@ test('actual aggregate checks retain complete-case exclusions and omit individua
   h.click('[data-nba-evidence-download]');
   const csv = await h.blobs[1].text();
   const sensitivities = groups.reduce((n, group) => n + e.groups[group].sensitivities.filter(s => s.available).reduce((total, s) => total + s.estimates.length, 0), 0);
-  assert.equal(csv.split('\r\n').length, 85 + sensitivities);
+  const primary = groups.reduce((n, group) => n + e.groups[group].estimates.length, 0);
+  assert.equal(csv.split('\r\n').length, 1 + primary + e.comparisons.omnibus.length + e.comparisons.pairwise.length + sensitivities);
   assert.match(csv, /Descriptive sensitivity:/);
 });
-test('coach summary leads with the finding and PDF; all statistical detail is initially collapsed', () => {
+test('coach summary leads with one cross-position coefficient table and downloads; advanced details start collapsed', () => {
   const e = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
   const h = harness(e), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
-  assert.match(top, /no single stat met our evidence threshold/);
-  assert.match(top, /466 players/); assert.match(top, /197 guards · 91 wings · 178 bigs/);
-  assert.match(top, /Download 1-page brief \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=coach-brief-20260914/);
-  assert.match(top, /\+8\.1%/); assert.match(top, /-4\.6% to \+22\.4%/);
-  assert.doesNotMatch(top, /<table|<svg|Holm|p-value|data-nba-evidence-download|data-nba-checks-download/);
+  assert.match(top, /Coefficients by position/);
+  assert.match(top, /Download 1-page table \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=coefficients-table-20260914/);
+  assert.match(top, /Download table CSV/);
+  assert.match(top, /aria-label="Cross-position coefficient table"/);
+  assert.equal((top.match(/<table\b/g) || []).length, 1);
+  const retained = matrixKeys(e, h.model);
+  assert.equal((top.match(/data-nba-coefficient-key=/g) || []).length, retained.length);
+  assert.equal((top.match(/data-nba-coefficient-group=/g) || []).length, retained.length * groups.length);
+  assert.doesNotMatch(top, /<svg|data-nba-evidence-download|data-nba-checks-download/);
+  assert.match(top, /OLS/); assert.match(top, /ridge/i); assert.match(top, /p-values/);
   assert.equal(h.elements.get('nbaEvidenceDetails').open, false);
 });
+
+test('all matrix cells retain the actual ridge weight and separate OLS coefficient, interval and p-values', () => {
+  const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
+  const model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+  const h = harness(evidence), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
+  for (const group of groups) for (const key of matrixKeys(evidence, model)) {
+    const estimate = evidence.groups[group].estimates.find(item => item.key === key);
+    const ridge = model.groups[group].features.find(feature => feature.key === key);
+    const cell = matrixCell(top, key, group);
+    const expected = { ...(ridge ? {ridge:ridge.coefficient} : {}), ...(estimate ? {ols:estimate.logEffect,ciLow:estimate.logEffectCiLow,ciHigh:estimate.logEffectCiHigh,pRaw:estimate.pRaw,pHolm:estimate.pHolm} : {}) };
+    if (!ridge || !estimate) assert.match(cell, /Excluded/);
+    assert.deepEqual([...cell.matchAll(/data-nba-value="([^"]+)"/g)].map(match => match[1]).sort(), Object.keys(expected).sort(), group + ' ' + key + ' selected fields only');
+    for (const [field, value] of Object.entries(expected)) {
+      const match = [...cell.matchAll(/<([a-z]+)\b([^>]*data-nba-value="([^"]+)"[^>]*)>([\s\S]*?)<\/\1>/g)].find(item => item[3] === field);
+      assert.ok(match, group + ' ' + key + ' ' + field);
+      assert.ok((match[2] + match[4]).includes('Unrounded value: ' + value) || (field.startsWith('p') && (match[2] + match[4]).includes('Unrounded p-value: ' + value)), group + ' ' + key + ' ' + field + ' unrounded value');
+      assert.doesNotMatch(match[4], /undefined|NaN/);
+    }
+  }
+  h.group('Bigs');
+  assert.equal(h.html().split('<details id="nbaEvidenceDetails"')[0], top, 'Detailed group selector does not filter the all-position matrix');
+  assert.equal(h.actions.enabledChanges, 0);
+});
+
+test('table CSV has one wide row per input with source-exact ridge and OLS values, excluding sensitivities', async () => {
+  const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
+  const model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+  const h = harness(evidence); h.click('[data-nba-coefficient-download]');
+  assert.equal(h.blobs.length, 1); assert.equal(h.actions.downloads, 1);
+  const csv = await h.blobs[0].text(), records = csvRecords(csv);
+  const suffixes = ['ridge weight per 1 SD', 'OLS beta per stated increment', 'OLS 95% CI low', 'OLS 95% CI high', 'OLS raw p', 'OLS Holm p'];
+  assert.deepEqual(records[0], ['Input', 'OLS increment', ...groups.flatMap(group => suffixes.map(suffix => group + ' ' + suffix))]);
+  const retained = matrixKeys(evidence, model), orderedKeys = [...h.html().matchAll(/data-nba-coefficient-key="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual([...orderedKeys].sort(), [...retained].sort());
+  assert.equal(records.length, retained.length + 1); assert.ok(records.every(row => row.length === 2 + groups.length * 6));
+  orderedKeys.forEach((key, index) => {
+    const source = groups.flatMap(group => evidence.groups[group].estimates).find(item => item.key === key) || groups.flatMap(group => model.groups[group].features).find(item => item.key === key);
+    const row = records[index + 1]; assert.equal(row[0], source.label || source.key); assert.equal(row[1], /^[=+\-@]/.test(source.incrementLabel) ? "'" + source.incrementLabel : source.incrementLabel || '');
+    groups.forEach((group, groupIndex) => {
+      const estimate = evidence.groups[group].estimates.find(item => item.key === source.key), ridge = model.groups[group].features.find(item => item.key === source.key);
+      const expected = [ridge && ridge.coefficient, estimate && estimate.logEffect, estimate && estimate.logEffectCiLow, estimate && estimate.logEffectCiHigh, estimate && estimate.pRaw, estimate && estimate.pHolm].map(value => value === undefined || value === null ? '' : String(value));
+      assert.deepEqual(row.slice(2 + groupIndex * 6, 8 + groupIndex * 6), expected);
+    });
+  });
+  assert.doesNotMatch(csv, /Descriptive sensitivity|Pairwise|Player|salary records/);
+  assert.equal(h.actions.enabledChanges, 0);
+});
+
+test('ridge and OLS exclusions are independent, remain explicit and are never shown as zero coefficients', async () => {
+  const evidence = fixture(), model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+  groups.forEach(group => { model.groups[group].features = keys.map(key => ({key,label:key,coefficient:.25})); });
+  evidence.groups.Guards.estimates = evidence.groups.Guards.estimates.filter(item => item.key !== 'Height');
+  model.groups.Guards.features = model.groups.Guards.features.filter(item => item.key !== 'Height');
+  model.groups.Wings.features = model.groups.Wings.features.filter(item => item.key !== 'Height');
+  evidence.groups.Bigs.estimates = evidence.groups.Bigs.estimates.filter(item => item.key !== 'Height');
+  const h = harness(evidence, model), excluded = matrixCell(h.html(), 'Height', 'Guards');
+  assert.match(excluded, /Excluded/); assert.doesNotMatch(excluded, /data-nba-value=/);
+  const wings = matrixCell(h.html(), 'Height', 'Wings'), bigs = matrixCell(h.html(), 'Height', 'Bigs');
+  assert.match(wings, /Excluded/); assert.match(wings, /data-nba-value="ols"/); assert.doesNotMatch(wings, /data-nba-value="ridge"/);
+  assert.match(bigs, /Excluded/); assert.match(bigs, /data-nba-value="ridge"/); assert.doesNotMatch(bigs, /data-nba-value="(?:ols|ciLow|ciHigh|pRaw|pHolm)"/);
+  h.click('[data-nba-coefficient-download]');
+  const records = csvRecords(await h.blobs[0].text()), row = records.find(item => item[0] === 'Height');
+  assert.deepEqual(row.slice(2, 8), ['', '', '', '', '', '']); assert.equal(row[8], ''); assert.equal(Number(row[9]), .01);
+  assert.equal(Number(row[14]), .25); assert.deepEqual(row.slice(15, 20), ['', '', '', '', '']);
+});
+test('reduced-model explanations do not describe excluded minutes as an active prediction input', () => {
+  const h = harness(); h.click('[data-nba-view]', 'prediction');
+  groups.forEach(group => {
+    h.group(group);
+    if (h.model.groups[group].features.some(feature => feature.key === 'MP')) return;
+    assert.doesNotMatch(h.html(), /Minutes are (?:already )?an input|minutes are not applied a second time/);
+    h.c.NbaValuationUI.renderProfile({NBAModel_calc:true,NBAPosition_calc:group,_league:'MBB',NBAContributions_calc:[]});
+    assert.doesNotMatch(h.elements.get('mNbaValuationContent').innerHTML, /Minutes are (?:already )?an input|minutes are not applied a second time/);
+  });
+});
+
 test('profile shortcut opens the requested group on Players, collapses details, focuses the model panel and preserves price basis', () => {
   const h = harness();
   h.elements.get('nbaEvidenceDetails').open = true;

@@ -134,6 +134,14 @@ class RobustEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(height["seRaw"], np.sqrt(a.cov_params()[i, i] + b.cov_params()[i, i]), places=10)
         self.assertEqual(result["dfResidual"], 270 - 42)
 
+    def test_excluded_holm_slots_are_internal_only(self):
+        rows = [{"pRaw": p} for p in [.001, .01, .03]]
+        evidence.adjust_rows(rows, family_size=36, pad_excluded=True)
+        self.assertEqual(len(rows), 3)
+        self.assertAlmostEqual(rows[0]["pHolm"], .036)
+        self.assertAlmostEqual(rows[1]["pHolm"], .35)
+        self.assertEqual(rows[2]["pHolm"], 1.)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

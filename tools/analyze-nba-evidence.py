@@ -47,14 +47,15 @@ ALPHA = .05
 PROTOCOL = {
     "alpha": ALPHA, "primaryFamilySize": 36, "primaryCorrection": "Holm",
     "primarySample": "Complete core nine basketball features, age and eFG%; observed-accuracy controls for undefined 3P% and FT%.",
-    "missingPercentageHandling": "Undefined 3P%/FT% uses a zero design placeholder plus a separate unavailable-percentage indicator. It is not an observed 0% or an estimated missing accuracy. Accuracy slopes describe players with observed accuracy.",
+    "missingPercentageHandling": "Observed 3P%/FT% are centered around their observed group mean; unavailable rows use a zero centered-design placeholder plus a separate unavailable-percentage indicator. It is not an observed 0% or an estimated missing accuracy. Centering changes only nuisance offsets, not accuracy slopes, and avoids artificial coding-induced VIF.",
     "excludedRowReason": "Alondes Williams has the sole unavailable eFG% (one game, no field-goal attempts). A separate singleton eFG% indicator would give leverage 1 and undefined HC3 variance. Require observed eFG% instead; do not drop nonshooting centers for missing 3P%.",
     "pointwiseInterval": "95% pointwise HC3 robust intervals using approximate Student t with residual df=n-design rank; intervals are not multiplicity-adjusted.",
-    "exploratoryDisclosure": "The dataset, prediction fits and bootstrap results were inspected before this inferential analysis. Design choices were then frozen for statistical/role-coverage reasons before fitting these OLS tests. This is exploratory, not preregistered or confirmatory.",
+    "exploratoryDisclosure": "Earlier full-model outcomes and p-values were inspected before the user requested redundant-input removal. The shared VIF<=5 policy was then fixed using predictors only, before revised fits; no salary, sign or p-value selects inputs. This remains exploratory and is not preregistered or independently confirmed.",
     "positionComparison": "Fully interacted pooled OLS with separate group intercepts, all slopes and applicable availability indicators; HC3 covariance. Raw-unit linear contrasts use approximate robust t/F with pooled residual df. Omnibus 12-feature and pairwise 36-contrast Holm corrections are separate families.",
     "statusDefinitions": {"supported": "Holm-adjusted p <= 0.05", "suggestive": "0.05 < Holm-adjusted p <= 0.10; not statistically significant", "uncertain": "Holm-adjusted p > 0.10"},
     "fixedSensitivities": ["At least 20 games", "Age at least 23 (not a rookie identifier)", "Recorded salary at least $1 million", "Exclude primary Cook's distance >4/n", "Core nine plus age, all eligible players", "Core nine plus age on full complete cases", "Full 12 plus age, complete cases"],
-    "noSelection": "All 36 portable associations are shown. No stepwise selection, best-p subset, threshold switching, or sensitivity winner selection. Sensitivity p-values are descriptive and do not replace primary decisions.",
+    "noSelection": "A shared X-only VIF<=5 policy removes redundant inputs, protects height/age and retains percentage-availability controls with their parent statistic. No salary, sign, p-value, threshold switching or sensitivity winner determines selection. Excluded tests are unavailable; the original planned 36 Holm slots are retained by internally padding untested slots, not by reporting fabricated p-values.",
+    "redundancyPolicy": "Shared retained basketball set across all positions, repeatedly excluding the unprotected stat with the worst per-position VIF until every retained predictor/control meets VIF<=5. Natural candidate order breaks ties. This heuristic reduces redundant linear information; it does not imply zero correlation or that excluded stats have no basketball value.",
 }
 
 
@@ -74,25 +75,33 @@ def source_fingerprint(path):
             "sha256Basis": "utf8-lf" if text_source else "raw-bytes"}
 
 
-def design_data(data, specification="observed"):
+def design_data(data, specification="observed", selected_keys=None):
     """Return eligible rows, raw design, and exclusions without changing source values."""
     required = (CORE_KEYS + ["Age", "eFG%"]) if specification == "observed" else (CORE_KEYS + ["Age"] if specification == "core" else KEYS + ["Age"])
     complete = data[required].notna().all(axis=1)
     sample = data.loc[complete].copy()
     columns = (CORE_KEYS if specification == "core" else KEYS) + ["Age"]
+    if selected_keys is not None:
+        columns = [key for key in columns if key == "Age" or key in selected_keys]
     x = sample[columns].copy()
+    centers = {}
     if specification == "observed":
         for key in ["3P%", "FT%"]:
+            if key not in x:
+                continue
             missing = x[key].isna()
+            centers[key] = float(x[key].mean())
             if missing.any():
                 x["Unavailable " + key] = missing.astype(float)
-                x[key] = x[key].fillna(0.0)
+            x[key] = (x[key] - centers[key]).fillna(0.0)
     x.insert(0, "Intercept", 1.0)
     excluded = []
     for _, row in data.loc[~complete].iterrows():
         excluded.append({"player": row["Player Name"], "group": row.PositionGroup,
                          "missing": [key for key in required if pd.isna(row[key])]})
-    return sample, x.astype(float), excluded
+    x = x.astype(float)
+    x.attrs["percentageCenters"] = centers
+    return sample, x, excluded
 
 
 def checked_fit(x, y):
@@ -117,10 +126,12 @@ def status(p):
     return "supported" if p <= .05 else "suggestive" if p <= .10 else "uncertain"
 
 
-def adjust_rows(rows, field="pRaw", family_size=None):
-    if family_size is not None and len(rows) != family_size:
+def adjust_rows(rows, field="pRaw", family_size=None, pad_excluded=False):
+    if family_size is not None and (len(rows) > family_size or len(rows) != family_size and not pad_excluded):
         raise AssertionError(f"Correction family expected {family_size}, got {len(rows)}")
     p_values = np.array([row[field] for row in rows], dtype=float)
+    if pad_excluded and family_size is not None:
+        p_values = np.concatenate([p_values, np.ones(family_size - len(rows))])
     holm = multipletests(p_values, alpha=ALPHA, method="holm")[1]
     bh = multipletests(p_values, alpha=ALPHA, method="fdr_bh")[1]
     for row, hp, qp in zip(rows, holm, bh):
@@ -150,8 +161,11 @@ def coefficient_record(key, index, sample, x, robust):
     return record
 
 
-def fit_group(data, specification="observed"):
-    sample, x, excluded = design_data(data, specification)
+def fit_group(data, specification="observed", selected_keys=None, enforce_vif=False):
+    sample, x, excluded = design_data(data, specification, selected_keys)
+    vifs = loader.redundancy.vif_values(x)
+    if enforce_vif and max(vifs.values()) > loader.redundancy.THRESHOLD + 1e-9:
+        raise UnavailableFit("Fixed retained subset exceeds VIF 5 in this restricted sample")
     ordinary, robust = checked_fit(x, sample.LogSalary)
     influence = ordinary.get_influence()
     h = influence.hat_matrix_diag
@@ -174,6 +188,7 @@ def fit_group(data, specification="observed"):
                                 "highCooksDistance": bool(cooks[i] > 4 / len(sample))})
     output = {"nInput": len(data), "n": len(sample), "nExcluded": len(excluded), "dfResidual": float(robust.df_resid),
               "rank": parameter_count, "designColumns": list(x.columns), "intercept": float(robust.params[0]),
+              "percentageCenters": x.attrs.get("percentageCenters", {}),
               "estimates": effects, "features": effects, "ageControl": next(record for record in records if record["key"] == "Age"),
               "availabilityControls": [record for record in records if record["key"].startswith("Unavailable ")],
               "attrition": {"excluded": excluded, "missingByFeatureInInput": {key: int(data[key].isna().sum()) for key in KEYS},
@@ -202,7 +217,10 @@ def position_comparisons(fits):
     def column(group, key):
         return offsets[group] + list(fits[group]["x"].columns).index(key)
     omnibus, pairwise = [], []
-    for key in KEYS:
+    selected_keys = [key for key in KEYS if all(key in fits[group]["x"] for group in GROUPS)]
+    if any({key for key in KEYS if key in fits[group]["x"]} != set(selected_keys) for group in GROUPS):
+        raise ValueError("Position comparisons require the same retained basketball adjustment set")
+    for key in selected_keys:
         r = np.zeros((2, x.shape[1]))
         for i, group in enumerate(GROUPS[1:]):
             r[i, column(GROUPS[0], key)] = 1
@@ -225,33 +243,35 @@ def position_comparisons(fits):
                              "associationPctCiLow": float(100 * np.expm1(low * inc)), "associationPctCiHigh": float(100 * np.expm1(high * inc)),
                              "pRaw": float(result.pvalue), "pValue": float(result.pvalue), "dfResidual": float(robust.df_resid),
                              "interpretation": "Difference in slopes: group A minus group B. Exponentiation compares multiplicative salary associations, not salary levels."})
-    adjust_rows(omnibus, family_size=12)
-    adjust_rows(pairwise, family_size=36)
+    adjust_rows(omnibus, family_size=12, pad_excluded=True)
+    adjust_rows(pairwise, family_size=36, pad_excluded=True)
     return {"method": PROTOCOL["positionComparison"], "n": len(y), "rank": int(np.linalg.matrix_rank(x)),
             "dfResidual": float(robust.df_resid), "omnibusFamilySize": 12, "pairwiseFamilySize": 36,
+            "omnibusTestedCount": len(omnibus), "pairwiseTestedCount": len(pairwise),
+            "excludedKeys": [key for key in KEYS if key not in selected_keys],
             "omnibus": omnibus, "pairwise": pairwise}
 
 
-def sensitivities(data, primary):
+def sensitivities(data, primary, selected_keys):
     complete, _, _ = design_data(data, "complete")
     influential = {row["player"] for row in primary["influence"] if row["highCooksDistance"]}
     definitions = [("games20", "At least 20 games", data[data.GP.ge(20)], "observed"),
                    ("age23", "Age at least 23", data[data.Age.ge(23)], "observed"),
                    ("salary1m", "Recorded salary at least $1 million", data[data.Salary.ge(1_000_000)], "observed"),
                    ("influence", "Exclude primary Cook's distance above 4/n", data[~data["Player Name"].isin(influential)], "observed"),
-                   ("coreAll", "Core nine plus age, all eligible players", data, "core"),
-                   ("coreComplete", "Core nine plus age on full complete cases", complete, "core"),
-                   ("fullComplete", "Full 12 plus age, complete cases", data, "complete")]
+                   ("coreAll", "Retained core inputs plus age, all eligible players", data, "core"),
+                   ("coreComplete", "Retained core inputs plus age on original full complete cases", complete, "core"),
+                   ("fullComplete", "Retained inputs plus age on original full complete cases", data, "complete")]
     result = []
     for identifier, label, sample, spec in definitions:
-        eligible, x, excluded = design_data(sample, spec)
+        eligible, x, excluded = design_data(sample, spec, selected_keys)
         item = {"id": identifier, "label": label, "nInput": len(sample), "n": len(eligible), "specification": spec,
                 "rank": int(np.linalg.matrix_rank(x)), "designColumnCount": x.shape[1], "descriptiveOnly": True,
                 "excludedMissingCount": len(excluded), "restrictedOutCount": len(data) - len(sample),
                 "missingCountsBeforeEligibility": {key: int(sample[key].isna().sum()) for key in KEYS},
                 "excluded": excluded}
         try:
-            fitted, _ = fit_group(sample, spec)
+            fitted, _ = fit_group(sample, spec, selected_keys, enforce_vif=True)
             primary_coefficients = dict(zip(primary["x"].columns, primary["robust"].params))
             for record in fitted["estimates"]:
                 record["signChangedFromPrimary"] = bool(record["coefficientRaw"] * primary_coefficients[record["key"]] < 0)
@@ -266,15 +286,15 @@ def coach_summary(groups, comparisons):
     all_effects = [(group, row) for group in GROUPS for row in groups[group]["estimates"]]
     supported = [(group, row) for group, row in all_effects if row["status"] == "supported"]
     suggestive = [(group, row) for group, row in all_effects if row["status"] == "suggestive"]
-    statements = [f"{len(supported)} of 36 portable salary associations meet the fixed 5% Holm-adjusted threshold."]
+    statements = [f"{len(supported)} of {len(all_effects)} retained salary associations meet the fixed 5% Holm-adjusted threshold using the original 36 planned slots."]
     if not supported:
         statements.append("This sample does not isolate a portable stat with sufficient adjusted evidence to present as an established pay driver. It does not establish that every association is zero.")
     for group, row in supported:
         statements.append(f"{group}: {row['label']} has a {'positive' if row['coefficientRaw'] > 0 else 'negative'} conditional association (Holm p={row['pHolm']:.4g}); this is not a causal training or pay recommendation.")
     supported_differences = [row for row in comparisons["omnibus"] if row["status"] == "supported"]
-    statements.append(f"{len(supported_differences)} of 12 direct position-difference tests meet their separate Holm-adjusted 5% threshold. A significant result in one position and a nonsignificant result in another is not itself evidence of a difference.")
-    statements.append("Percentages, minutes, scoring and role overlap. Use the full intervals, attrition and sensitivity results; do not convert association estimates into guaranteed NCAA pay changes.")
-    return {"supportedCount": len(supported), "suggestiveCount": len(suggestive), "statements": statements,
+    statements.append(f"{len(supported_differences)} of {len(comparisons['omnibus'])} retained direct position-difference tests meet their separate Holm-adjusted 5% threshold using 12 planned slots. A significant result in one position and a nonsignificant result in another is not itself evidence of a difference.")
+    statements.append("Minutes, points, rebounds and turnovers were removed for overlapping information, not because they lack basketball value. Remaining associations no longer control those inputs and can absorb their role or scoring information. Do not convert an association into a guaranteed pay change.")
+    return {"supportedCount": len(supported), "suggestiveCount": len(suggestive), "testedCount": len(all_effects), "familySize": 36, "statements": statements,
             "supported": [{"group": group, "key": row["key"], "pHolm": row["pHolm"]} for group, row in supported]}
 
 
@@ -295,7 +315,7 @@ def write_forest(evidence, output):
         ax.grid(axis="x", alpha=.15)
     axes[0].invert_yaxis()
     fig.suptitle("NBA 2022–23 salary evidence by position", fontsize=17, y=.98)
-    fig.text(.5, .055, "95% pointwise HC3 intervals. Filled teal points meet Holm-adjusted p ≤ .05 across 36 associations.", ha="center")
+    fig.text(.5, .055, f"95% pointwise HC3 intervals. Filled teal points meet Holm p ≤ .05; {evidence['policy']['testedCount']} tested associations, 36 planned slots.", ha="center")
     fig.text(.5, .028, "Exploratory conditional associations; age and percentage availability controlled. Not causal effects or NCAA pay estimates.", ha="center", fontsize=10)
     fig.tight_layout(rect=(0, .085, 1, .94))
     for extension in ["png", "pdf"]:
@@ -307,13 +327,24 @@ def write_report(evidence, output):
     lines = ["# NBA salary evidence for coaches", "", *evidence["coachSummary"]["statements"], "", "## Scope and frozen analysis protocol", ""]
     lines.extend(PROTOCOL[key] for key in ["primarySample", "missingPercentageHandling", "excludedRowReason", "pointwiseInterval", "exploratoryDisclosure", "positionComparison", "noSelection"])
     lines.extend(["", "The primary model is ordinary least squares for natural log recorded 2022–23 NBA salary, separately by position. "
-                  "The 12 portable features and age are fixed. OLS supplies associations and uncertainty; the separate ridge prediction "
-                  "model and existing NCAA valuation engine are unchanged. No regression p-values were attached to ridge weights.", "",
-                  "An unavailable percentage has its own intercept offset plus a zero design placeholder. The estimated accuracy slope "
+                  "A frozen predictor-only overlap rule screens the original 12 portable candidates with age and applicable availability "
+                  "controls. Each position then uses the same retained inputs. OLS supplies associations and uncertainty; ridge separately "
+                  "supplies prediction weights and has its own training-fold selection. OLS p-values do not test ridge weights.", "",
+                  "The shared rule removes the eligible basketball input with the largest VIF in any group, recomputing until all "
+                  "VIFs are at most 5. Height and age are protected and availability controls follow their parent percentage. Exact ties "
+                  "follow the original candidate order; salary, coefficient signs and p-values never enter selection. The removal order "
+                  "is " + " → ".join(step["excludedKey"] for step in evidence["selection"]["trace"]) + "; retained inputs are "
+                  + ", ".join(evidence["selection"]["retainedKeys"]) + ". VIF 5 is a heuristic, not proof of zero correlation or a repair "
+                  "for omitted-variable bias. The earlier outcomes were already inspected, so this revised evidence remains exploratory.", "",
+                  "Observed 3P% and FT% are centered around their position's observed mean before unavailable rows receive a zero design "
+                  "placeholder and their own intercept offset. This removes placeholder-induced correlation with the availability flag "
+                  "without changing a same-mask continuous slope or fitted value. The estimated accuracy slope "
                   "therefore concerns observed percentages. The placeholder is not an imputed player ability or an observed 0%. This "
                   "parameterization retains nonshooting centers but does not generally solve missing-data bias. Very rare availability "
                   "categories can create high leverage. Current listed heights and all other input processing match the prediction dataset.", "",
-                  "There are 36 primary portable associations (12 features × 3 groups). Holm-adjusted p ≤ .05 is the fixed evidence "
+                  f"There are {evidence['policy']['testedCount']} tested portable associations ({len(evidence['selection']['retainedKeys'])} retained features × three groups), within the original 36 planned "
+                  "slots (12 candidates × three groups). Unfitted slots are padded with p=1 internally for correction only; excluded inputs "
+                  "have no exported coefficient, interval or p-value and must not be displayed as zero effects. Holm-adjusted p ≤ .05 is the fixed evidence "
                   "criterion. Values above .05 through .10 are only suggestive, not significant. Raw p-values and optional BH q-values "
                   "are also exported, but do not determine the primary decision. Age and availability controls are nuisance parameters "
                   "and are reported separately. A 95% pointwise interval may exclude zero while Holm p exceeds .05; that is expected "
@@ -339,24 +370,32 @@ def write_report(evidence, output):
             lines.append(f"- Sensitivity {sensitivity['label']}: n={sensitivity['n']}, {note}.")
         lines.append("")
     lines.extend(["## How to interpret the associations", "",
-                  "The natural increments are: height one inch, minutes five per game, points five per game, rebounds/assists/turnovers "
-                  "one per game, steals/blocks half per game, shooting percentages five percentage points, and three-point attempts one "
+                  "The retained natural increments are: height one inch, assists one per game, steals/blocks half per game, "
+                  "shooting percentages five percentage points, and three-point attempts one "
                   "per game. The percentage salary association is 100 × [exp(raw slope × increment) − 1], with the same transformation "
                   "applied to interval endpoints. It concerns a conditional multiplicative salary association, not a guaranteed raise. "
                   "This is a ratio of fitted conditional geometric salary levels, not an arithmetic-mean premium or a guaranteed median. "
                   "Raw slopes use original units; standardized slopes use the SD of observed values in that primary position sample.", "",
                   "Direct position comparisons use a fully interacted pooled design: every group's intercept, stat slopes, age slope "
                   "and applicable missing-percentage indicators are separate. Raw-unit slope contrasts avoid comparing coefficients "
-                  "whose group SDs differ. The 12 two-degree-of-freedom omnibus F tests and 36 pairwise t tests each have their own "
-                  "Holm correction. Their approximate HC3 inference uses pooled residual df=N−rank. A pairwise exponentiated contrast "
+                  "whose group SDs differ. All groups condition on the same retained basketball inputs. There are "
+                  f"{len(evidence['comparisons']['omnibus'])} tested two-degree-of-freedom omnibus F tests and {len(evidence['comparisons']['pairwise'])} pairwise t tests, preserving their original planned families of 12 "
+                  "and 36 respectively with internal p=1 padding. Their approximate HC3 inference uses pooled residual df=N−rank. A pairwise exponentiated contrast "
                   "is a ratio of salary associations for a common increment, not a difference in salary levels.", "",
-                  "High correlations and VIFs explain why coefficients can have wide intervals or counterintuitive signs. The fixed "
+                  "The remaining associations do not hold minutes, scoring, rebounds or turnovers fixed. For example, a three-point "
+                  "attempt coefficient may now absorb some of the scoring volume and role previously carried by those predictors. "
+                  "A positive turnover coefficient in the earlier model did not establish that turnovers help winning; usage and "
+                  "context matter. Removal means overlap, not no value. The fixed "
                   "sensitivities are descriptive: games ≥20, age ≥23, salary ≥$1 million, removal of primary Cook's-distance flags, a "
-                  "core-nine model without percentages on all 467 and on the full complete cases, and a full-12 complete-case model. "
-                  "The latter excludes many nonshooting centers. Comparing the two core models separates part of the sample-selection "
+                  "model using only the retained core inputs without percentages on all 467 and on the original full complete cases, "
+                  "and a model using the retained inputs on the original full-12 complete-case cohort. Primary eligibility remains "
+                  "unchanged from the original design so the primary refinement does not also change its sample. The complete-case "
+                  "cohort excludes many nonshooting centers. Comparing the two retained-core models separates part of the sample-selection "
                   "change from the specification change. No sensitivity replaces the primary result. Cook's-distance removal is "
                   "data-dependent and is not evidence that those valid observations should be deleted. Rank-deficient or leverage-one "
-                  "sensitivity fits are marked unavailable rather than silently repaired.", "",
+                  "sensitivity fits are marked unavailable rather than silently repaired. Sensitivities keep the primary retained mask "
+                  "(intersected with core inputs where applicable), never reselect by significance, and are also unavailable if the "
+                  "restricted design exceeds VIF 5.", "",
                   "## Limits for coaching and college pay", "", *evidence["limitations"], "",
                   "The college feed is a loaded set of records, not a verified all-NCAA or Division I population. Names/teams can repeat "
                   "with different source fragments. College records were not automatically summed or deduplicated; before/after audit "
@@ -365,9 +404,10 @@ def write_report(evidence, output):
                   "## Reproduction and sources", "",
                   "Run `python tools/analyze-nba-evidence.py` and `python tools/test_nba_evidence.py`. Dependencies are pinned in "
                   "`tools/requirements-nba-valuation.txt`. Exact workbook, height, input-loader and analysis-script hashes and package "
-                  "versions are stored in the evidence JSON. The source workbook and prediction-model assets are unchanged.", "",
+                  "versions are stored in the evidence JSON. Python source hashes normalize UTF-8 text to LF; data hashes use raw bytes. "
+                  "The source workbook is unchanged. The separate trainer regenerates ridge assets; this OLS script never modifies them.", "",
                   "The corresponding project specification is `docs/nba-salary-evidence-method.md`. Published evidence assets contain "
-                  "aggregate coefficients, diagnostics and test results. Player-level influence, design and salary source rows stay in "
+                  "aggregate coefficients, diagnostics, test results and sample-coverage metadata. Player-level influence, design and salary source rows stay in "
                   "the local report outputs.", "",
                   "Source URLs and references:", "",
                   "- HC3 and t-based robust inference: https://www.statsmodels.org/stable/generated/statsmodels.regression.linear_model.RegressionResults.get_robustcov_results.html",
@@ -390,7 +430,7 @@ def main():
     parser.add_argument("--skip-plots", action="store_true", help="Keep already reviewed plots when only report/metadata formatting changes.")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    protocol_path = args.output / "protocol.json"
+    protocol_path = args.output / "protocol-v2-vif5.json"
     if not protocol_path.exists():
         protocol_path.write_text(json.dumps({"recordedBeforeOlsFitAt": datetime.now(timezone.utc).isoformat(), **PROTOCOL}, indent=2), encoding="utf-8")
     else:
@@ -398,11 +438,15 @@ def main():
         if any(recorded.get(key) != value for key, value in PROTOCOL.items()):
             raise ValueError("Recorded protocol differs from this analysis; do not silently relabel a changed specification.")
     data, input_audit = loader.read_data(args.workbook, args.heights)
-    evidence = {"schemaVersion": 1, "id": "nba-2022-23-hc3-salary-evidence-v1", "season": "2022-23",
+    selection_designs = {group: design_data(data[data.PositionGroup.eq(group)])[1] for group in GROUPS}
+    selection = loader.redundancy.select_shared(selection_designs, KEYS)
+    selected_keys = selection["retainedKeys"]
+    evidence = {"schemaVersion": 2, "id": "nba-2022-23-hc3-salary-evidence-v2-vif5", "season": "2022-23", "selection": selection,
                 "generatedAt": datetime.now(timezone.utc).isoformat(), "protocol": PROTOCOL,
-                "policy": {"alpha": .05, "adjustment": "Holm", "familySize": 36}, "exploratory": True,
+                "sensitivityFeaturePolicy": "Keep the primary retained mask, intersected with core candidates for core sensitivities. Full/core labels in the archived fixed protocol specify the original candidate-pool eligibility; no excluded basketball input is restored. Restricted fits above VIF 5, rank deficient or with leverage one are unavailable.",
+                "policy": {"alpha": .05, "adjustment": "Holm", "familySize": 36, "testedCount": 3 * len(selected_keys), "excludedSlotHandling": "Internal padding only; excluded tests have no displayed p-value"}, "exploratory": True,
                 "sources": [source_fingerprint(path)
-                            for path in [args.workbook, args.heights, ROOT / "tools/train-nba-valuation.py", Path(__file__).resolve()]],
+                            for path in [args.workbook, args.heights, ROOT / "tools/train-nba-valuation.py", ROOT / "tools/nba_redundancy.py", Path(__file__).resolve()]],
                 "runtime": {"python": platform.python_version(), "numpy": np.__version__, "pandas": pd.__version__,
                             "scipy": scipy.__version__, "statsmodels": statsmodels.__version__},
                 "inputAudit": {key: input_audit[key] for key in ["inputRows", "modeledRows", "heightMatched", "missingByFeature", "groupCounts", "salarySummary", "salaryBelowMillion", "gamesBelowTwenty", "ageBelowTwentyThree"]}, "groups": {},
@@ -411,19 +455,23 @@ def main():
                                 "Recorded salaries include possible partial-season contracts; no annualization, contract-duration or guarantee data were supplied.",
                                 "Current ESPN listed heights were retrieved in September 2026; they are not verified 2022–23 measurements or a strict historical backtest.",
                                 "The source is one selected NBA season. Multiple testing correction does not fix omitted variables, selection, correlated features, rare missingness categories or model misspecification.",
+                                "Minutes, points, rebounds and turnovers were excluded for overlapping predictor information. Remaining conditional associations do not adjust for them and may absorb their role or scoring information; exclusion does not imply no basketball value.",
                                 "Percentages with observed accuracy and unavailable-accuracy indicators retain more roles but do not provide a general missing-data bias correction.",
                                 "NBA results do not validate NCAA compensation or the NBA-to-WBB transfer. College dollar anchors, conference factors and scouting adjustments remain assumptions.",
                                 "Prediction weights, salary evidence, and existing college scouting scores answer different questions. This evidence analysis does not replace prediction weights or attach significance to ridge coefficients."]}
     fits = {}
     for group in GROUPS:
-        item, fit = fit_group(data[data.PositionGroup.eq(group)])
+        item, fit = fit_group(data[data.PositionGroup.eq(group)], selected_keys=selected_keys, enforce_vif=True)
+        item["selection"] = {"threshold": selection["threshold"], "retainedKeys": selected_keys, "excludedKeys": selection["excludedKeys"],
+                             "beforeVifs": selection["perGroupBeforeVifs"][group], "afterVifs": selection["perGroupAfterVifs"][group], "modelN": item["n"]}
+        item["excludedFeatures"] = [{"key": key, "label": LABELS[key][0], "status": "excluded", "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"} for key in selection["excludedKeys"]]
         evidence["groups"][group] = item
         fits[group] = fit
     effects = [row for group in GROUPS for row in evidence["groups"][group]["estimates"]]
-    adjust_rows(effects, family_size=36)
+    adjust_rows(effects, family_size=36, pad_excluded=True)
     evidence["comparisons"] = position_comparisons(fits)
     for group in GROUPS:
-        evidence["groups"][group]["sensitivities"] = sensitivities(data[data.PositionGroup.eq(group)], fits[group])
+        evidence["groups"][group]["sensitivities"] = sensitivities(data[data.PositionGroup.eq(group)], fits[group], selected_keys)
     evidence["coachSummary"] = coach_summary(evidence["groups"], evidence["comparisons"])
     association_rows, sensitivity_rows, attrition_rows, influence_rows, correlation_rows, design_rows = [], [], [], [], [], []
     for group in GROUPS:

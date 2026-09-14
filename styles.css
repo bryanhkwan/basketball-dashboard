@@ -162,6 +162,23 @@
     .nbaCoachBrief:hover,.nbaProfileCoachShortcut button:hover{filter:brightness(1.08)}
     a.nbaCoachBrief{color:var(--bg)!important}
     .nbaCoachBrief:focus-visible{outline:2px solid var(--text);outline-offset:3px}
+    .nbaCoachDownloads{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .nbaCoachDownloads button{min-height:44px;font-size:12px;padding:10px 14px}
+    .nbaMatrixLegend{margin:0 0 14px;max-width:1100px}
+    .nbaModelTable.nbaCoefficientMatrix{min-width:860px;table-layout:fixed}
+    .nbaCoefficientMatrix th:first-child{width:23%}
+    .nbaCoefficientMatrix td{vertical-align:top;white-space:normal;padding:13px 14px;text-align:left;font-variant-numeric:tabular-nums}
+    .nbaCoefficientMatrix tbody th{font-size:13px;white-space:normal;vertical-align:middle}
+    .nbaCoefficientMatrix thead th{text-align:left}
+    .nbaMatrixPair{display:flex;justify-content:space-between;gap:14px;margin-bottom:6px}
+    .nbaMatrixPair>div{min-width:0}
+    .nbaMatrixLabel{display:block;color:var(--muted);font-size:12px;font-weight:500;line-height:1.5;margin-bottom:2px}
+    .nbaMatrixPair strong{font-size:15px;color:var(--text)}
+    .nbaMatrixExcluded{font-size:12px;color:var(--muted);font-style:italic}
+    .nbaMatrixCI,.nbaMatrixP{font-size:12px;line-height:1.7;color:var(--muted);white-space:nowrap}
+    .nbaMatrixDecision{margin:12px 0 0}
+    .nbaTurnoverNote{margin:10px 0 0}
+    @media(max-width:640px){.nbaCoachDownloads{width:100%;flex-direction:column;align-items:stretch}.nbaCoachDownloads button{width:100%}.nbaCoefficientMatrix td{padding:11px 12px}}
     .nbaCoachFinding{font-size:15px;line-height:1.75;max-width:970px;margin:0 0 12px}
     .nbaCoachSample{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 18px}
     .nbaCoachSample strong{color:var(--text)}

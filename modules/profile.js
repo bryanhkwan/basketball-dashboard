@@ -403,7 +403,7 @@ function openProfile(r){
       <div class="muted">
         Toledo max bid uses NBA salary coefficients applied to this player's college league and position peers,
         calibrated so the cohort mean signal is priced at <b>${fmtMoney(avgPay)}</b>, with star pay anchored at <b>${fmtMoney(starValue)}</b>.
-        Minutes are already an input; no second minutes adjustment is applied. Conference context adjusts dollars after calibration.
+        NBA mode applies no separate minutes multiplier. Conference context adjusts dollars after calibration.
         Existing translation-risk and manual scouting adjustments then affect the final bid as separate college assumptions.
         Production and fit scores remain separate scouting views. This NBA-to-college transfer has not been validated, including for WBB.
       </div>
@@ -737,7 +737,11 @@ function openProfile(r){
   modalBack.style.display = 'flex';
 }
 
-function closeProfile(){ modalBack.style.display = 'none'; }
+function closeProfile(){
+  modalBack.style.display = 'none';
+  // Cancel queued data refreshes that should only reopen an active profile.
+  _currentProfilePlayer = null;
+}
 
 // ── Scout Report ─────────────────────────────────────────────────────────────
 function renderScoutReport(r) {
@@ -1085,6 +1089,7 @@ function _fmtC(col, val) {
 }
 
 function renderCareerHistory(r) {
+  if (!r) return;
   const el = document.getElementById('mCareer');
   if (!el) return;
 

@@ -108,9 +108,9 @@ var NbaValuation = (function () {
       .every(function (key) { return Number.isFinite(context[key]); }) && context.avgPay > 0 && context.starValue > 0 &&
       context.minPay >= 0 && context.maxPay >= context.minPay && context.k >= 0 && context.starValue >= context.avgPay &&
       (context.starValue === context.avgPay || context.perfStar >= context.perfAvg);
-    var sufficient = !!(validCalibration && result && Number.isFinite(result.score) && result.coverage >= 0.5 && featureValue(row, 'MP') !== null);
+    var sufficient = !!(validCalibration && result && Number.isFinite(result.score) && result.coverage >= 0.5);
     var value = sufficient ? context.avgPay * Math.exp(bound(context.k * (result.score - context.perfAvg), -50, 50)) : NaN;
-    // Minutes are already a learned feature. Do not apply the legacy MP haircut.
+    // The ridge signal is calibrated directly. Do not add the legacy MP haircut.
     // Conference strength is a separate college assumption, applied to dollars.
     var final = sufficient ? bound(value * cm, context.minPay, context.maxPay) : NaN;
     return { pred: final, final: final, mult: 1, sufficient: sufficient, validCalibration: !!validCalibration,

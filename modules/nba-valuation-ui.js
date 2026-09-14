@@ -62,7 +62,7 @@ var NbaValuationUI = (function () {
         return '<tr' + (feature.key === 'Height' ? ' class="nbaHeightRow"' : '') + '><td><strong>' + escape(feature.label || feature.key) + '</strong>'
           + (note ? '<span class="nbaModelFeatureNote">' + escape(note) + '</span>' : '') + '</td><td>' + effect(feature.coefficient, maximum) + '</td><td>'
           + escape(interval(feature)) + '</td><td>' + escape(pct(feature.positiveShare)) + '</td></tr>';
-      }).join('') + '</tbody></table></div><p class="nbaModelNote" style="margin-top:9px">Player bootstrap intervals keep the final ridge penalty fixed. They describe coefficient stability in this NBA sample. Positive-run frequency is not a probability that an effect is causal or that a college valuation is correct. Age is a separate NBA control and is held neutral for college players.</p>';
+      }).join('') + '</tbody></table></div><p class="nbaModelNote" style="margin-top:9px">Player bootstrap intervals keep the final ridge penalty and retained inputs fixed. They describe conditional coefficient stability in this NBA sample. Positive-run frequency is not a probability that an effect is causal or that a college valuation is correct. Age is a separate NBA control and is held neutral for college players.</p>';
   }
 
   function heightHtml(model, group) {
@@ -94,7 +94,7 @@ var NbaValuationUI = (function () {
 
   function validationHtml(model, group) {
     var metrics = group.metrics || {};
-    var definitions = [['deployedRidge', 'Transferred ridge', 'Age held neutral, matching the college application'], ['portableTree', 'Regression tree', 'Portable basketball inputs'], ['baseline', 'Baseline', 'Salary reference without player inputs']];
+    var definitions = [['deployedRidge', 'Transferred ridge', 'Selected inputs; age held neutral, matching the college application'], ['fullReferenceRidge', 'All-input reference', 'Comparison on the same held-out folds before redundancy removal'], ['portableTree', 'Regression tree', 'Selected portable basketball inputs'], ['baseline', 'Baseline', 'Salary reference without player inputs']];
     var rows = definitions.filter(function (definition) { return metrics[definition[0]] && number(metrics[definition[0]].logR2) !== null; });
     var table = rows.length ? '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Held-out NBA salary validation"><table class="nbaModelTable"><caption>Held-out NBA salary predictions. Higher R² is better; lower errors are better. Dollar errors apply to the NBA sample only. A negative R² is worse than a mean reference.</caption>'
       + '<thead><tr><th scope="col">Method</th><th scope="col">Log-salary R²</th><th scope="col">Log RMSE</th><th scope="col">NBA salary MAE</th></tr></thead><tbody>'
@@ -148,7 +148,7 @@ var NbaValuationUI = (function () {
     var unclear = estimates.filter(function (estimate) { return estimate.status !== 'supported'; });
     function labels(items) { return items.map(function (item) { return escape(item.label || item.key); }).join(', ') || 'None'; }
     return '<section class="nbaEvidenceSummary" aria-label="Coach summary"><h3>What the salary sample supports for ' + escape(selectedGroup.toLowerCase()) + '</h3>'
-      + (!positive.length && !negative.length ? '<p class="nbaEvidenceLead">No individual association in this position group met the 0.05 threshold after correcting the 36 tests. Estimates remain uncertain; this does not establish no association.</p>' : '')
+      + (!positive.length && !negative.length ? '<p class="nbaEvidenceLead">No individual association in this position group met the 0.05 threshold after correcting the planned 36-test family. Estimates remain uncertain; this does not establish no association.</p>' : '')
       + '<div class="nbaEvidenceSummaryGrid"><div><h4>Higher salary association</h4><p>' + labels(positive) + '</p></div><div><h4>Lower salary association</h4><p>' + labels(negative) + '</p></div><div><h4>Not supported at adjusted p ≤ 0.05</h4><p>' + unclear.length + ' of ' + estimates.length + ' inputs. Lack of support does not establish no association.</p></div></div>'
       + (suggestive.length ? '<p class="nbaModelNote"><strong>Suggestive only:</strong> ' + labels(suggestive) + '. Adjusted p is above 0.05 and at most 0.10; these results do not meet the main decision rule.</p>' : '')
       + '<p class="nbaModelNote">These are conditional associations with 2022–23 NBA salary, holding the other included statistics, age, and shooting-availability controls fixed. They do not identify what causes pay or prove NCAA value.</p></section>';
@@ -175,13 +175,13 @@ var NbaValuationUI = (function () {
         + '<text class="nbaEvidenceEstimate" x="795" y="' + (y + 4) + '">' + escape(association(estimate.associationPct)) + '</text></g>';
     }).join('');
     return '<h3 class="nbaModelSectionTitle">Estimated salary association per stated increment</h3><p class="nbaModelNote">Dots are estimates; whiskers are pointwise 95% intervals. Filled dots meet the fixed Holm-adjusted 0.05 rule. Open dots do not, even when an interval excludes zero. Each stat uses its stated increment, so this is not an importance ranking.</p>'
-      + '<div class="nbaModelTableWrap nbaEvidenceForestWrap" tabindex="0" role="region" aria-label="Salary association interval chart"><svg class="nbaEvidenceForest" viewBox="0 0 905 ' + (bottom + 54) + '" role="img" aria-labelledby="nbaEvidenceForestTitle nbaEvidenceForestDescription"><title id="nbaEvidenceForestTitle">' + escape(selectedGroup) + ' salary associations and pointwise 95% intervals</title><desc id="nbaEvidenceForestDescription">All twelve statistics in natural increments. The complete estimates, intervals, sample sizes and adjusted decisions are in the table below. The vertical zero line means no salary association.</desc>'
+      + '<div class="nbaModelTableWrap nbaEvidenceForestWrap" tabindex="0" role="region" aria-label="Salary association interval chart"><svg class="nbaEvidenceForest" viewBox="0 0 905 ' + (bottom + 54) + '" role="img" aria-labelledby="nbaEvidenceForestTitle nbaEvidenceForestDescription"><title id="nbaEvidenceForestTitle">' + escape(selectedGroup) + ' salary associations and pointwise 95% intervals</title><desc id="nbaEvidenceForestDescription">All retained statistics in natural increments. The complete estimates, intervals, sample sizes and adjusted decisions are in the table below. The vertical zero line means no salary association.</desc>'
       + axis + '<line class="nbaEvidenceZero" x1="' + x(0).toFixed(1) + '" x2="' + x(0).toFixed(1) + '" y1="25" y2="' + bottom + '"/>' + marks
       + '<text class="nbaEvidenceTick" x="525" y="' + (bottom + 47) + '" text-anchor="middle">Salary association · multiplicative scale</text></svg></div>'
       + '<p class="nbaModelNote">Positions share the same horizontal scale. Equal spacing represents equal changes in log salary; tick labels show percentage changes in the salary multiplier. Exact pointwise intervals follow.</p>';
   }
   function evidenceTable(estimates) {
-    return '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Salary evidence estimates"><table class="nbaModelTable nbaEvidenceTable"><caption>Primary explanatory OLS regression with HC3 robust standard errors. β is the log-salary coefficient rescaled to the stated increment; salary association = 100 × (exp(β) − 1). The 36 stat-by-position tests share one Holm correction. Intervals are pointwise 95%, not adjusted simultaneous intervals. N is observed input values / players in that position model.</caption><thead><tr><th scope="col">Stat / increment</th><th scope="col">Salary association / coefficient</th><th scope="col">Pointwise 95% interval</th><th scope="col">Raw p</th><th scope="col">Holm p · 36 tests</th><th scope="col">Observed / model N</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
+    return '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Salary evidence estimates"><table class="nbaModelTable nbaEvidenceTable"><caption>Primary explanatory OLS regression with HC3 robust standard errors. β is the log-salary coefficient rescaled to the stated increment; salary association = 100 × (exp(β) − 1). The original 36 candidate stat-by-position tests remain the Holm correction family after input selection. Intervals are pointwise 95%, not adjusted simultaneous intervals. N is observed input values / players in that position model.</caption><thead><tr><th scope="col">Stat / increment</th><th scope="col">Salary association / coefficient</th><th scope="col">Pointwise 95% interval</th><th scope="col">Raw p</th><th scope="col">Holm p · 36 tests</th><th scope="col">Observed / model N</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
       + estimates.map(function (estimate) { return '<tr' + (estimate.key === 'Height' ? ' class="nbaHeightRow"' : '') + '><th scope="row">' + escape(estimate.label || estimate.key) + '<span class="nbaModelFeatureNote">' + escape(estimate.incrementLabel) + '</span></th><td><strong>' + escape(association(estimate.associationPct)) + '</strong><span class="nbaModelFeatureNote">β = ' + escape(signed(estimate.logEffect, 4)) + ' log salary</span></td><td>' + escape(associationInterval(estimate)) + '</td><td>' + pHtml(estimate.pRaw) + '</td><td>' + pHtml(estimate.pHolm) + '</td><td>' + escape(fixed(estimate.nObserved, 0)) + ' / ' + escape(fixed(estimate.n, 0)) + '</td><td>' + decisionBadge(estimate, false) + '</td></tr>'; }).join('')
       + '</tbody></table></div>';
   }
@@ -193,10 +193,10 @@ var NbaValuationUI = (function () {
     if (!keys.some(function (item) { return item.key === comparisonStat; })) comparisonStat = keys[0].key;
     var selectedPairs = pairs.filter(function (item) { return item.key === comparisonStat; });
     return '<details class="nbaModelSubdetails nbaEvidenceComparisons"><summary>Do salary associations differ by position?</summary><p class="nbaModelNote">A supported result in one position and an uncertain result in another does not establish a difference. These tests directly compare slopes in the same raw stat units.</p>'
-      + '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Direct overall position comparisons"><table class="nbaModelTable"><caption>Overall tests ask whether the stat\u2019s salary association differs anywhere across the three positions. Holm correction covers these 12 overall tests as a separate family.</caption><thead><tr><th scope="col">Stat</th><th scope="col">Raw p</th><th scope="col">Holm p · 12 tests</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
+      + '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Direct overall position comparisons"><table class="nbaModelTable"><caption>Overall tests ask whether the stat\u2019s salary association differs anywhere across the three positions. Holm correction retains the original 12 candidate overall tests as a separate family.</caption><thead><tr><th scope="col">Stat</th><th scope="col">Raw p</th><th scope="col">Holm p · 12 tests</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
       + omnibus.map(function (item) { return '<tr><th scope="row">' + escape(item.label || item.key) + '</th><td>' + pHtml(item.pRaw) + '</td><td>' + pHtml(item.pHolm) + '</td><td>' + decisionBadge(item, true) + '</td></tr>'; }).join('') + '</tbody></table></div>'
       + '<div class="nbaEvidenceComparisonControl"><label for="nbaEvidenceComparisonStat">Compare a stat directly</label><select id="nbaEvidenceComparisonStat">' + keys.map(function (item) { return '<option value="' + escape(item.key) + '"' + (item.key === comparisonStat ? ' selected' : '') + '>' + escape(item.label || item.key) + '</option>'; }).join('') + '</select></div>'
-      + '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Direct pairwise position comparisons"><table class="nbaModelTable nbaEvidenceTable"><caption>For the stated increment, this compares the salary multiplier in the first position with the second: exp((slope A − slope B) × increment) − 1. It is not a difference in salary levels. All 36 pairwise tests share a separate Holm correction; intervals remain pointwise 95%.</caption><thead><tr><th scope="col">Position comparison / increment</th><th scope="col">Relative association</th><th scope="col">Pointwise 95% interval</th><th scope="col">Raw p</th><th scope="col">Holm p · 36 pairs</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
+      + '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Direct pairwise position comparisons"><table class="nbaModelTable nbaEvidenceTable"><caption>For the stated increment, this compares the salary multiplier in the first position with the second: exp((slope A − slope B) × increment) − 1. It is not a difference in salary levels. The original 36 candidate pairwise tests remain a separate Holm family; intervals remain pointwise 95%.</caption><thead><tr><th scope="col">Position comparison / increment</th><th scope="col">Relative association</th><th scope="col">Pointwise 95% interval</th><th scope="col">Raw p</th><th scope="col">Holm p · 36 pairs</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
       + selectedPairs.map(function (item) { return '<tr><th scope="row">' + escape(item.groupA) + ' versus ' + escape(item.groupB) + '<span class="nbaModelFeatureNote">' + escape(item.incrementLabel) + '</span></th><td>' + escape(association(item.associationPct)) + '<span class="nbaModelFeatureNote">Δβ = ' + escape(signed(item.logEffect, 4)) + '</span></td><td>' + escape(associationInterval(item)) + '</td><td>' + pHtml(item.pRaw) + '</td><td>' + pHtml(item.pHolm) + '</td><td>' + decisionBadge(item, true) + '</td></tr>'; }).join('') + '</tbody></table></div></details>';
   }
   function sensitivityChanges(primary, sensitivity) {
@@ -212,23 +212,96 @@ var NbaValuationUI = (function () {
   function robustnessHtml(group) {
     var diagnostics = group.diagnostics || {}, sensitivities = group.sensitivities || [];
     var primary = evidenceEstimates(group);
-    return '<details class="nbaModelSubdetails nbaEvidenceRobustness"><summary>Robustness checks and sample exclusions · ' + escape(selectedGroup) + '</summary><p class="nbaModelNote">These checks show how the fit changes under other samples or specifications. They are descriptive sensitivity analyses, not extra opportunities to declare a supported result. The main 36-test decision stays fixed.</p>'
+    return '<details class="nbaModelSubdetails nbaEvidenceRobustness"><summary>Robustness checks and sample exclusions · ' + escape(selectedGroup) + '</summary><p class="nbaModelNote">These checks show how the fit changes under other samples or specifications. They are descriptive sensitivity analyses, not extra opportunities to declare a supported result. The original 36-candidate correction family stays fixed.</p>'
       + '<dl class="nbaModelMetrics">' + metric('Largest VIF', fixed(diagnostics.maxVif, 1)) + metric('High leverage · primary', fixed(diagnostics.highLeverageCount, 0)) + metric('High Cook\u2019s distance · primary', fixed(diagnostics.highCooksCount, 0)) + metric('Excluded from primary', fixed(group.nExcluded, 0)) + '</dl>'
       + '<p class="nbaModelNote">VIF describes overlap among model inputs; larger values make individual associations harder to separate. Leverage and Cook\u2019s distance flag unusual inputs or influential records, not mistakes. Current cutoffs: leverage ' + escape(fixed(diagnostics.highLeverageThreshold, 4)) + '; Cook\u2019s distance ' + escape(fixed(diagnostics.cooksThreshold, 4)) + '. Maximum leverage: ' + escape(fixed(diagnostics.maxLeverage, 4)) + '. Standardized design condition number: ' + escape(fixed(diagnostics.standardizedConditionNumber, 1)) + '.</p>'
       + (sensitivities.length ? '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Salary evidence sensitivity checks"><table class="nbaModelTable nbaEvidenceSensitivity"><caption>Direction changes count signs of shared raw-unit coefficients versus the primary fit. They do not measure statistical support. Sample exclusions can change which basketball roles are represented, especially centers without observed three-point accuracy.</caption><thead><tr><th scope="col">Descriptive check</th><th scope="col">Model N / input N</th><th scope="col">Directions changed / compared</th><th scope="col">High leverage / high Cook\u2019s distance</th><th scope="col">Availability</th></tr></thead><tbody>'
         + sensitivities.map(function (item) { var changes = sensitivityChanges(primary, item), d = item.diagnostics || {}; return '<tr><th scope="row">' + escape(item.label || item.id) + '<span class="nbaModelFeatureNote">' + escape(typeof item.specification === 'string' ? item.specification : '') + '</span></th><td>' + escape(fixed(item.n, 0)) + ' / ' + escape(fixed(item.nInput, 0)) + '</td><td>' + (item.available === false ? '\u2014' : changes.changed + ' / ' + changes.compared) + '</td><td>' + escape(fixed(d.highLeverageCount, 0)) + ' / ' + escape(fixed(d.highCooksCount, 0)) + '</td><td>' + (item.available === false ? '<strong>Not estimable</strong><span class="nbaModelFeatureNote">' + escape(item.reason || 'Valid inference is unavailable.') + '</span>' : 'Descriptive only') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="nbaModelNote">Sensitivity fits are unavailable in this snapshot.</p>')
       + '<p class="nbaModelNote" style="margin-top:10px">The coefficient CSV includes each available sensitivity fit, with no Holm decision assigned to those descriptive results. The checks download includes model diagnostics and exclusion records, without individual salary amounts.</p><button type="button" class="secondary nbaEvidenceChecksDownload" data-nba-checks-download>Download checks and exclusion audit</button></details>';
   }
+  function coefficientRows(evidence, model) {
+    var inputs = [];
+    groups.forEach(function (name) { evidenceEstimates(evidence && evidence.groups && evidence.groups[name]).forEach(function (input) {
+      if (!inputs.some(function (item) { return item.key === input.key; })) inputs.push(input);
+    }); });
+    groups.forEach(function (name) { var fit = model && model.groups && model.groups[name]; (fit && fit.features || []).forEach(function (input) {
+      if (!inputs.some(function (item) { return item.key === input.key; })) inputs.push(input);
+    }); });
+    return inputs.map(function (input) {
+      return { key: input.key, label: input.label || input.key, incrementLabel: input.incrementLabel, positions: groups.map(function (name) {
+        var fit = model && model.groups && model.groups[name];
+        var weight = (fit && fit.features || []).find(function (item) { return item.key === input.key; });
+        var estimate = evidenceEstimates(evidence.groups[name]).find(function (item) { return item.key === input.key; });
+        return { group: name, weight: weight ? weight.coefficient : null, hasWeight: !!weight, hasEvidence: !!estimate, estimate: estimate || {} };
+      }) };
+    });
+  }
+  function matrixNumber(key, value) {
+    return '<span data-nba-value="' + key + '" title="Unrounded value: ' + escape(number(value) === null ? 'unavailable' : String(value)) + '">' + escape(key === 'pRaw' || key === 'pHolm' ? pValue(value) : signed(value)) + '</span>';
+  }
+  function excludedInputNames(keys) {
+    var labels = { MP: 'minutes/game', PPG: 'points/game', RPG: 'rebounds/game', TOPG: 'turnovers/game', APG: 'assists/game', SPG: 'steals/game', BPG: 'blocks/game', 'eFG%': 'effective FG%', '3P%': 'three-point %', 'FT%': 'free-throw %', '3PA/G': 'three-point attempts/game', Height: 'height' };
+    return (keys || []).map(function (key) { return labels[key] || key; }).join(', ') || 'None';
+  }
+  function selectionNote(evidence, model) {
+    var e = evidence.selection, m = model && model.selection;
+    if (!e && !m) return '';
+    var excluded = e && m && JSON.stringify(e.excludedKeys) === JSON.stringify(m.excludedKeys)
+      ? 'Removed from both models: ' + excludedInputNames(e.excludedKeys) + '.'
+      : 'Removed from ridge: ' + excludedInputNames(m && m.excludedKeys) + '. Removed from OLS: ' + excludedInputNames(e && e.excludedKeys) + '.';
+    return '<p class="nbaModelNote nbaSelectionNote"><strong>Redundancy filter: VIF ≤ ' + escape(fixed((e || m).threshold, 0)) + '.</strong> ' + escape(excluded) + ' Their original scouting stats remain available; exclusion does not mean they lack basketball value.</p>';
+  }
+  function selectionAudit(evidence) {
+    var e = evidence.selection, runtime = api(), model = runtime && runtime.getModel ? runtime.getModel() : null;
+    var m = model && model.selection;
+    if (!e) return '';
+    function maxVif(selection, field) { var values = selection && selection[field] && selection[field][selectedGroup]; return values ? Math.max.apply(null, Object.keys(values).map(function (key) { return values[key]; }).filter(function (value) { return number(value) !== null; })) : null; }
+    return '<details class="nbaModelSubdetails nbaSelectionAudit"><summary>Redundancy selection · ' + escape(selectedGroup) + '</summary>'
+      + selectionNote(evidence, model)
+      + '<dl class="nbaModelMetrics">' + metric('Ridge VIF before → after', fixed(maxVif(m, 'perGroupBeforeVifs'), 2) + ' → ' + fixed(maxVif(m, 'perGroupAfterVifs'), 2)) + metric('OLS VIF before → after', fixed(maxVif(e, 'perGroupBeforeVifs'), 2) + ' → ' + fixed(maxVif(e, 'perGroupAfterVifs'), 2)) + '</dl>'
+      + '<p class="nbaModelNote">The same retained inputs are used across positions within each model type. The highest unprotected VIF across the three groups determines each removal; the design is checked again after every removal. Height, age, and applicable percentage-availability controls are protected. No salary outcome, coefficient sign, or p-value determines selection. Ridge validation repeats selection inside training folds.</p>'
+      + '<ol class="nbaEvidenceNotes">' + (e.trace || []).map(function (step) { return '<li>OLS removed ' + escape(excludedInputNames([step.excludedKey])) + ' · worst position VIF ' + escape(fixed(step.worstGroupVif, 2)) + '.</li>'; }).join('') + '</ol>'
+      + '<p class="nbaModelNote">VIF ≤ 5 limits severe linear overlap; it does not mean zero correlation. The reported OLS intervals and p-values are conditional on the selected design, with no separate selection-uncertainty correction. Earlier inspection, omitted variables, and contract timing still limit the evidence.</p></details>';
+  }
+  function coefficientMatrix(evidence, model) {
+    return '<div class="nbaModelTableWrap nbaCoefficientMatrixWrap" tabindex="0" role="region" aria-label="Cross-position coefficient table"><table class="nbaModelTable nbaCoefficientMatrix"><caption>Retained basketball inputs, side by side. Sample counts are ridge / OLS. Excluded means the input is not used in that model. Scroll the table sideways on a small screen.</caption><thead><tr><th scope="col">Input<span class="nbaModelFeatureNote">Stated increase for OLS β</span></th>'
+      + groups.map(function (name) { return '<th scope="col">' + name + '<span class="nbaModelFeatureNote">n = ' + escape(fixed(model && model.groups && model.groups[name] && model.groups[name].n, 0)) + ' / ' + escape(fixed(evidence.groups[name] && evidence.groups[name].n, 0)) + '</span></th>'; }).join('') + '</tr></thead><tbody>'
+      + coefficientRows(evidence, model).map(function (row) {
+        return '<tr data-nba-coefficient-key="' + escape(row.key) + '"><th scope="row">' + escape(row.label) + '<span class="nbaModelFeatureNote">' + escape(row.incrementLabel) + '</span></th>'
+          + row.positions.map(function (cell) { var e = cell.estimate; return '<td data-nba-coefficient-group="' + cell.group + '"><div class="nbaMatrixPair"><div><span class="nbaMatrixLabel">Valuation weight</span>' + (cell.hasWeight ? '<strong>' + matrixNumber('ridge', cell.weight) + '</strong>' : '<span class="nbaMatrixExcluded">Excluded</span>') + '</div><div><span class="nbaMatrixLabel">OLS β</span>' + (cell.hasEvidence ? '<strong>' + matrixNumber('ols', e.logEffect) + '</strong>' : '<span class="nbaMatrixExcluded">Excluded</span>') + '</div></div>' + (cell.hasEvidence ? '<div class="nbaMatrixCI">95% β CI: ' + matrixNumber('ciLow', e.logEffectCiLow) + ' to ' + matrixNumber('ciHigh', e.logEffectCiHigh) + '</div><div class="nbaMatrixP">p: ' + matrixNumber('pRaw', e.pRaw) + ' · Holm p: ' + matrixNumber('pHolm', e.pHolm) + '</div>' : '') + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
   function evidenceHtml(evidence) {
     if (!evidence || !evidence.groups) return '<p class="nbaModelNote">The coach summary is unavailable in this snapshot. Prediction weights remain available in the adjacent view.</p>';
-    var total = groups.reduce(function (sum, name) { return sum + (number(evidence.groups[name] && evidence.groups[name].n) || 0); }, 0);
-    var height = evidenceEstimates(evidence.groups.Bigs).find(function (item) { return item.key === 'Height'; });
-    var example = height ? '<section class="nbaCoachExample"><h4>One example: height among bigs</h4><p>An extra inch was associated with an estimated <strong>' + escape(association(height.associationPct)) + '</strong> salary difference. The 95% uncertainty range was <strong>' + escape(associationInterval(height)) + '</strong>.</p><p>The range includes zero, so the direction remains uncertain. This does not justify a height premium on a college offer.</p></section>' : '';
-    return '<section class="nbaCoachSummary" aria-label="Coach summary"><div class="nbaCoachHeading"><h3>The finding in plain language</h3><a class="nbaCoachBrief" href="output/pdf/nba-salary-coach-brief.pdf?v=coach-brief-20260914" download>Download 1-page brief (PDF)</a></div>'
-      + '<p class="nbaCoachFinding">In this NBA sample, no single stat met our evidence threshold after accounting for the other recorded inputs and checking all 36 associations. This does not mean those skills lack basketball value.</p>'
-      + '<p class="nbaCoachSample">' + escape(evidence.season || '2022–23') + ' NBA analysis · <strong>' + total + ' players</strong>: ' + groups.map(function (name) { return escape(fixed(evidence.groups[name] && evidence.groups[name].n, 0)) + ' ' + name.toLowerCase(); }).join(' · ') + '</p>'
-      + '<div class="nbaCoachGuidance"><div><h4>Use it to start a scouting discussion</h4><p>Use model estimates alongside film, role, fit, availability, and market information. College dollar estimates come from the separate prediction model and your pay settings.</p></div><div><h4>Keep confidence in perspective</h4><p>Individual salary associations remain uncertain. The NBA-to-college application has not been validated for MBB or WBB. Check the full player and your budget before setting an offer.</p></div></div>'
-      + example + '</section><details id="nbaEvidenceDetails" class="nbaModelSubdetails nbaFullStatisticalDetails"><summary>Full statistical details</summary><div class="nbaFullStatisticalBody">' + statisticalDetailsHtml(evidence) + '</div></details>';
+    var runtime = api(), model = runtime && runtime.getModel ? runtime.getModel() : null;
+    var tests = groups.reduce(function (items, name) { return items.concat(evidenceEstimates(evidence.groups[name])); }, []);
+    var supported = tests.filter(function (item) { return number(item.pHolm) !== null && item.pHolm <= 0.05; }).length;
+    return '<section class="nbaCoachSummary" aria-label="Coach summary"><div class="nbaCoachHeading"><h3>Coefficients by position</h3><div class="nbaCoachDownloads"><a class="nbaCoachBrief" href="output/pdf/nba-salary-coach-brief.pdf?v=coefficients-table-20260914" download>Download 1-page table (PDF)</a><button type="button" class="secondary" data-nba-coefficient-download>Download table CSV</button></div></div>'
+      + '<p class="nbaModelNote nbaMatrixLegend"><strong>Valuation weight:</strong> the ridge coefficient used in a player’s valuation signal, per one standard deviation (SD) above their peers. <strong>OLS β:</strong> a separate coefficient for the stated stat increase, measured in log NBA salary. The 95% interval and both p-values apply only to OLS β. Neither coefficient is a percent of a player’s value.</p>'
+      + coefficientMatrix(evidence, model)
+      + selectionNote(evidence, model)
+      + '<p class="nbaModelNote nbaMatrixDecision"><strong>' + supported + ' of ' + tests.length + ' retained OLS associations pass Holm p ≤ 0.05.</strong> Adjustment retains the original ' + escape(evidence.policy && evidence.policy.familySize || tests.length) + '-candidate family. This is exploratory NBA salary evidence; it does not validate NCAA pay for MBB or WBB. Age and percentage-availability controls are outside this basketball-input summary.</p>'
+      + '<p class="nbaModelNote nbaTurnoverNote"><strong>Why can turnovers have a positive weight?</strong> Turnovers per game overlap with minutes and shot creation. A positive salary weight may reflect that workload; it does not mean giving away possessions helps a team. Judge ball security in the context of opportunities and role.</p>'
+      + '</section><details id="nbaEvidenceDetails" class="nbaModelSubdetails nbaFullStatisticalDetails"><summary>Full statistical details</summary><div class="nbaFullStatisticalBody">' + statisticalDetailsHtml(evidence) + '</div></details>';
+  }
+  function downloadCoefficientTable() {
+    var evidence = evidenceApi(), runtime = api(), model = runtime && runtime.getModel ? runtime.getModel() : null;
+    if (!canView() || !evidence || !evidence.groups) return;
+    var header = ['Input', 'OLS increment'];
+    groups.forEach(function (name) { ['ridge weight per 1 SD', 'OLS beta per stated increment', 'OLS 95% CI low', 'OLS 95% CI high', 'OLS raw p', 'OLS Holm p'].forEach(function (label) { header.push(name + ' ' + label); }); });
+    var csvRows = [header].concat(coefficientRows(evidence, model).map(function (row) {
+      var values = [row.label, row.incrementLabel];
+      row.positions.forEach(function (cell) { var e = cell.estimate; values.push(cell.weight, e.logEffect, e.logEffectCiLow, e.logEffectCiHigh, e.pRaw, e.pHolm); });
+      return values;
+    }));
+    var csv = csvRows.map(function (row) { return row.map(function (value) {
+      var text = value === null || value === undefined ? '' : String(value);
+      if (typeof value === 'string' && /^[=+\-@]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    }).join(','); }).join('\r\n');
+    var url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    var link = document.createElement('a'); link.href = url; link.download = 'nba-coefficients-by-position-' + (evidence.season || '2022-23') + '.csv';
+    document.body.appendChild(link); link.click(); link.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
   function statisticalDetailsHtml(evidence) {
     if (!evidence || !evidence.groups) return '<p class="nbaModelNote">Salary evidence is unavailable in this snapshot. Prediction weights remain available in the adjacent view.</p>';
@@ -240,12 +313,12 @@ var NbaValuationUI = (function () {
     return '<div class="nbaEvidenceHeading"><div><h3>Which statistics are associated with NBA salary?</h3><p class="nbaModelNote">Explanatory salary evidence · ' + escape(evidence.season || '2022–23') + '. This separate analysis does not change player dollar quotes.</p></div><button type="button" class="secondary" data-nba-evidence-download>Download evidence CSV</button></div>'
       + '<dl class="nbaModelMetrics">' + metric('NBA players · ' + selectedGroup, fixed(group.n, 0)) + metric('NBA analysis sample', String(total)) + metric('Main decision', 'Holm p ≤ 0.05') + '</dl>'
       + evidenceSummary(group)
-      + '<div class="nbaModelNotice">Exploratory evidence: this workbook was inspected before this analysis was specified. Adjustment for 36 tests does not erase that prior exploration, omitted variables, or contract timing. Salary associations are not causal effects or proof of NCAA pay, including WBB.</div>'
+      + '<div class="nbaModelNotice">Exploratory evidence: this workbook was inspected before this analysis was specified. Input selection and adjustment for the planned 36-test family do not erase that prior exploration, omitted variables, or contract timing. Salary associations are not causal effects or proof of NCAA pay, including WBB.</div>'
       + evidenceForest(evidence, estimates) + evidenceTable(estimates)
       + '<p class="nbaModelNote" style="margin-top:10px">Shooting percentages with unavailable accuracy are handled by separate availability controls. Their slopes describe observed accuracy. A positive estimate means a higher salary association for the stated increase; a negative estimate means a lower association, conditional on the other inputs.</p>'
-      + comparisonsHtml(evidence) + robustnessHtml(group)
-      + '<details class="nbaModelSubdetails"><summary>How to read the evidence and prediction weights</summary><div class="nbaEvidenceDefinitions"><div><h4>Estimate versus contribution</h4><p>An evidence estimate describes the fitted salary association for a stated stat increment in an NBA position group. A player contribution uses a separate ridge prediction weight multiplied by that player\u2019s standardized NCAA stat. Neither number is an importance percentage.</p></div><div><h4>Interval versus decision</h4><p>A pointwise 95% interval shows uncertainty for one fitted association under this model. It is not a 95% probability that the true association lies inside. The supported label uses the Holm-adjusted p-value across the full 36-test primary family, so an interval may exclude zero while the adjusted result stays unsupported.</p></div><div><h4>What a p-value says</h4><p>A p-value measures how incompatible the observed estimate is with a zero-association model, under its assumptions. It does not measure the chance that a finding is true, the size of an effect, or its value to a college program. The 0.05 rule stays fixed; a Holm-adjusted p above 0.05 and at most 0.10 is suggestive only.</p></div><div><h4>Why the models differ</h4><p>Evidence uses an explanatory OLS model with HC3 robust standard errors. Prediction weights use ridge regression and held-out validation. Ridge shrinks correlated inputs to aid prediction; its bootstrap intervals and positive-run percentages are not these OLS p-values. College prices still use the prediction model and existing pay assumptions.</p></div></div>'
-      + '<p class="nbaModelNote"><strong>Basketball interpretation:</strong> the three-point accuracy coefficient asks whether accuracy adds a salary association among players with otherwise comparable measured minutes, points, and other production. It does not capture all basketball value of shooting, which can work through points or minutes. Controlling those same inputs also holds part of height\u2019s role impact fixed. No supported individual coefficient does not mean those skills lack basketball value.</p>'
+      + comparisonsHtml(evidence) + selectionAudit(evidence) + robustnessHtml(group)
+      + '<details class="nbaModelSubdetails"><summary>How to read the evidence and prediction weights</summary><div class="nbaEvidenceDefinitions"><div><h4>Estimate versus contribution</h4><p>An evidence estimate describes the fitted salary association for a stated stat increment in an NBA position group. A player contribution uses a separate ridge prediction weight multiplied by that player\u2019s standardized NCAA stat. Neither number is an importance percentage.</p></div><div><h4>Interval versus decision</h4><p>A pointwise 95% interval shows uncertainty for one fitted association under this model. It is not a 95% probability that the true association lies inside. The supported label uses the Holm-adjusted p-value across the original 36-candidate primary family, so an interval may exclude zero while the adjusted result stays unsupported.</p></div><div><h4>What a p-value says</h4><p>A p-value measures how incompatible the observed estimate is with a zero-association model, under its assumptions. It does not measure the chance that a finding is true, the size of an effect, or its value to a college program. The 0.05 rule stays fixed; a Holm-adjusted p above 0.05 and at most 0.10 is suggestive only.</p></div><div><h4>Why the models differ</h4><p>Evidence uses an explanatory OLS model with HC3 robust standard errors. Prediction weights use ridge regression and held-out validation. Ridge shrinks correlated inputs to aid prediction; its bootstrap intervals and positive-run percentages are not these OLS p-values. College prices still use the prediction model and existing pay assumptions.</p></div></div>'
+      + '<p class="nbaModelNote"><strong>Basketball interpretation:</strong> each association is conditional on the retained inputs. Removed statistics may share information with the retained coefficients, so these estimates do not isolate a skill\u2019s total value. Lower predictor overlap does not remove omitted-variable bias, establish causation, or validate college pay. An excluded input has no fitted coefficient in this model; that does not mean it lacks basketball value.</p>'
       + (notes.length ? '<ul class="nbaEvidenceNotes">' + notes.map(function (note) { return '<li>' + escape(note) + '</li>'; }).join('') + '</ul>' : '')
       + (Array.isArray(evidence.limitations) && evidence.limitations.length ? '<h4 class="nbaModelSectionTitle">Scope and limitations</h4><ul class="nbaEvidenceNotes">' + evidence.limitations.filter(function (item) { return typeof item === 'string'; }).map(function (item) { return '<li>' + escape(item) + '</li>'; }).join('') + '</ul>' : '') + '</details>'
       + '<p class="nbaModelNote" style="margin-top:14px">Aggregate analysis: ' + escape(evidence.id) + ' · generated ' + escape(evidence.generatedAt) + '. Download contains aggregate estimates and direct comparisons, not individual salary records. <a href="docs/nba-salary-evidence-method.md" download>Download full methodology</a>.</p>';
@@ -283,7 +356,7 @@ var NbaValuationUI = (function () {
       return result;
     }
     function exclusionsOnly(items) { return (Array.isArray(items) ? items : []).map(function (item) { return { player: item.player, group: item.group, missing: item.missing || [], reason: item.reason }; }); }
-    var report = { id: evidence.id, season: evidence.season, generatedAt: evidence.generatedAt, protocol: evidence.protocol, limitations: evidence.limitations, groups: {} };
+    var report = { id: evidence.id, season: evidence.season, generatedAt: evidence.generatedAt, protocol: evidence.protocol, selection: evidence.selection, limitations: evidence.limitations, groups: {} };
     groups.forEach(function (name) {
       var group = evidence.groups[name] || {}, attrition = group.attrition || {};
       report.groups[name] = { nInput: group.nInput, n: group.n, nExcluded: group.nExcluded, diagnostics: diagnosticsOnly(group.diagnostics), excluded: exclusionsOnly(attrition.excluded), missingByFeatureInInput: attrition.missingByFeatureInInput, unavailablePercentageCountsInPrimary: attrition.unavailablePercentageCountsInPrimary, sensitivities: (group.sensitivities || []).map(function (item) { return { id: item.id, label: item.label, nInput: item.nInput, n: item.n, specification: item.specification, descriptiveOnly: true, available: item.available, reason: item.reason, directionChanges: sensitivityChanges(evidenceEstimates(group), item), diagnostics: diagnosticsOnly(item.diagnostics), excluded: exclusionsOnly(item.excluded) }; }) };
@@ -324,14 +397,14 @@ var NbaValuationUI = (function () {
     var group = model.groups && model.groups[selectedGroup];
     if (!group) { content.innerHTML = '<p class="nbaModelNote">This model snapshot has no ' + escape(selectedGroup.toLowerCase()) + ' fit.</p>'; return; }
     var total = groups.reduce(function (sum, name) { return sum + (number(model.groups && model.groups[name] && model.groups[name].n) || 0); }, 0);
-    content.innerHTML = '<p class="nbaModelNote"><strong>Prediction weights · ridge regression.</strong> These weights drive the existing college valuation signal. Their bootstrap intervals describe prediction-weight stability; the Salary evidence view uses a separate explanatory regression and adjusted statistical tests.</p>'
+    content.innerHTML = '<p class="nbaModelNote"><strong>Prediction weights · ridge regression.</strong> These weights drive the existing college valuation signal. Their bootstrap intervals describe prediction-weight stability; the Coach summary shows these alongside a separate explanatory regression and adjusted statistical tests.</p>'
       + '<p class="nbaModelNote"><strong>' + escape(model.season || '2022–23') + ' NBA salary reference.</strong> Separate age-adjusted fits for Guards, Wings, and Bigs. Age is held neutral when applying these coefficients to college players.</p>'
       + '<dl class="nbaModelMetrics">' + metric('NBA players · ' + selectedGroup, fixed(group.n, 0)) + metric('NBA reference sample', total ? String(total) : '\u2014')
       + metric('Model inputs', String((group.features || []).filter(function (feature) { return feature.key !== 'Age'; }).length)) + '</dl>'
       + '<div class="nbaModelNotice">College pay uses the learned associations and your editable NCAA pay anchors. The model does not assign NBA salaries to NCAA players; this transfer remains unvalidated.</div>'
       + heightHtml(model, group) + '<h3 class="nbaModelSectionTitle">Learned coefficients</h3>' + coefficientHtml(group)
       + validationHtml(model, group) + treeHtml(group)
-      + '<h3 class="nbaModelSectionTitle">How college players are evaluated</h3><p class="nbaModelNote">Each input is standardized against the same NCAA league and position group, then capped at ±3 standard deviations. Missing inputs contribute zero. The weighted signal is calibrated to pay at the cohort mean signal and the star-pay anchor; conference context adjusts dollars separately. Pay at the mean signal is not the arithmetic average of all player quotes. Minutes are an input, so no additional minutes multiplier is applied. Existing translation-risk and manual scouting adjustments then affect the final bid as separate college assumptions.</p>'
+      + '<h3 class="nbaModelSectionTitle">How college players are evaluated</h3><p class="nbaModelNote">Each retained input is standardized against the same NCAA league and position group, then capped at ±3 standard deviations. Missing inputs contribute zero. The weighted signal is calibrated to pay at the cohort mean signal and the star-pay anchor; conference context adjusts dollars separately. Pay at the mean signal is not the arithmetic average of all player quotes. NBA mode applies no separate minutes multiplier. Existing translation-risk and manual scouting adjustments then affect the final bid as separate college assumptions.</p>'
       + '<code class="nbaModelEquation">College signal = Σ(NBA coefficient × college peer z-score)</code>'
       + '<p class="nbaModelNote">Source: ' + escape((model.sources || []).filter(function (source) { return source.type === 'userWorkbook'; }).map(function (source) { return source.file; }).join(', ') || 'Supplied NBA salary workbook')
       + '. Model: ' + escape(model.id || 'unversioned') + '.</p>';
@@ -365,6 +438,7 @@ var NbaValuationUI = (function () {
       + (contributions.length ? '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Player NBA model contributions"><table class="nbaModelTable"><caption>One row per input. Peer z-score is capped at ±3. Missing values contribute zero rather than an invented measurement.</caption><thead><tr><th scope="col">Input</th><th scope="col">Player value</th><th scope="col">Peer z-score</th><th scope="col">Contribution</th></tr></thead><tbody>'
         + contributions.map(function (item) {
           var note = item.missing ? 'Unavailable · neutral contribution' : item.clipped ? 'Peer deviation capped at ±3 SD' : '';
+          if (item.key === 'TOPG' && !item.missing) note += (note ? ' · ' : '') + 'Salary pattern; a positive contribution does not mean turnovers help a team';
           return '<tr' + (item.key === 'Height' ? ' class="nbaHeightRow"' : '') + '><td><strong>' + escape(item.label || item.key) + '</strong>'
             + (note ? '<span class="nbaModelFeatureNote">' + escape(note) + '</span>' : '') + '</td><td>' + escape(item.missing ? '\u2014' : stat(item.value, item.key))
             + '</td><td>' + escape(item.missing ? 'Neutral (0)' : signed(item.z, 2)) + '</td><td>' + effect(item.contribution, maximum) + '</td></tr>';
@@ -377,7 +451,7 @@ var NbaValuationUI = (function () {
       + step('Final bid · after manual scouting (' + adjustment(row.ScoutAdjustmentPct_calc, row.ScoutAdjustmentLabel_calc) + ')', row.ActualValuation_calc) + '</dl>'
       + '<p class="nbaModelNote">Translation risk and manual scouting are separate college assumptions; they are not NBA salary coefficients. Pay bounds can limit each adjustment.</p>'
       + '<p class="nbaModelNote" style="margin-top:10px">The cohort mean signal is priced at ' + escape(money(calibration.avgPay)) + ', with star pay anchored at ' + escape(money(calibration.starValue))
-      + '. This mean-signal anchor is not the arithmetic average of all quotes. Age stays neutral, and minutes are not applied a second time. Production and fit scores remain separate. The NBA-to-NCAA transfer has not been validated, including for WBB.</p>';
+      + '. This mean-signal anchor is not the arithmetic average of all quotes. Age stays neutral, and NBA mode applies no separate minutes multiplier. Production and fit scores remain separate. The NBA-to-NCAA transfer has not been validated, including for WBB.</p>';
   }
 
   function bind() {
@@ -409,6 +483,7 @@ var NbaValuationUI = (function () {
             if (view === 'evidence' || view === 'prediction') { selectedView = view; renderModel(); }
           }
           if (event.target.closest && event.target.closest('[data-nba-evidence-download]') && canView()) downloadEvidence();
+          if (event.target.closest && event.target.closest('[data-nba-coefficient-download]') && canView()) downloadCoefficientTable();
           if (event.target.closest && event.target.closest('[data-nba-checks-download]') && canView()) downloadChecks();
           if (event.target.closest && event.target.closest('[data-nba-staff-login]') && typeof authPromptUpgrade === 'function') authPromptUpgrade('Log in with an approved staff account to inspect the NBA salary model and player contributions.');
         });
@@ -462,7 +537,7 @@ var NbaValuationUI = (function () {
     var minutesHint = element('nbaMinutesHint');
     if (minutesHint) minutesHint.hidden = !active;
     renderModel();
-    if (typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer) renderProfile(_currentProfilePlayer);
+    renderProfile(typeof _currentProfilePlayer !== 'undefined' ? _currentProfilePlayer : null);
   }
 
   return { render: render, renderProfile: renderProfile, openCoachSummary: openCoachSummary };
