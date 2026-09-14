@@ -132,7 +132,7 @@ function profileGetSimilarVectorRows(allPlayers, posGroup, keyStats) {
 
   var rows = [];
   (allPlayers || []).forEach(function(player) {
-    if (bucketPosition(player.Pos || player.Position) !== posGroup) return;
+    if (bucketPosition(player) !== posGroup) return;
     rows.push({
       player: player,
       key: typeof tbPlayerKey === 'function' ? tbPlayerKey(player) : ((player.Player || '') + '||' + (player.Team || '')),
@@ -248,10 +248,19 @@ function profileBuildGuestShotProfileHtml(p) {
 
 // --- Profile modal functions ---
 
+function profilePositionLabel(r){
+  var group = bucketPosition(r);
+  var listed = String(r.ListedPosition || r.Pos || '').trim();
+  var label = group + (r.PositionSource === 'Inferred' ? ' (inferred)' : '');
+  return listed && listed.toLowerCase() !== group.toLowerCase() ? 'Listed ' + listed + ' · ' + label : label;
+}
+
 function profileRefreshMeasurements(r){
   if(!r || !mSub) return;
-  mSub.textContent = [r.Team, r.Conference || r.Conf, r.Pos || r.Position,
+  mSub.textContent = [r.Team, r.Conference || r.Conf, profilePositionLabel(r),
     formatPlayerHeight(r.Height), formatPlayerWeight(r.Weight)].filter(Boolean).join(' \u2022 ');
+  var positionReason = mMeta && mMeta.querySelector('[data-position-explanation]');
+  if(positionReason) positionReason.textContent = 'Position: ' + playerPositionExplanation(r);
   if(mAllStats) mAllStats.querySelectorAll('[data-bio-field]').forEach(function(el){
     var key = el.getAttribute('data-bio-field');
     el.textContent = (key === 'Height' ? formatPlayerHeight(r.Height) : key === 'Weight' ? formatPlayerWeight(r.Weight) : r[key]) || '\u2014';
@@ -262,7 +271,7 @@ function openProfile(r){
   const player = (r['Player'] ?? 'Player').toString();
   const team = (r['Team'] ?? '').toString();
   const conf = (r['Conference'] ?? r['Conf'] ?? '').toString();
-  const position = (r['Pos'] ?? r['Position'] ?? pos).toString();
+  const position = (r['Position'] || r['Pos'] || bucketPosition(r)).toString();
 
   mTitle.textContent = player;
   profileRefreshMeasurements(r);
@@ -331,7 +340,7 @@ function openProfile(r){
     mTags.appendChild(div);
   });
 
-  const usedStats = (currentWeights[pos] || []).filter(x => (Number(x.w)||0) !== 0).map(x=>x.stat);
+  const usedStats = (currentWeights[bucketPosition(r)] || []).filter(x => (Number(x.w)||0) !== 0).map(x=>x.stat);
   const fallback = ['PPG','eFG%','3P%','FT%','APG','A/TO','TOPG','SPG','BPG','DRtg','DR%','WS/40','BPM','PER'];
   const stats = Array.from(new Set([...usedStats, ...fallback])).filter(s => r[s] !== undefined).slice(0, 10);
 
@@ -359,7 +368,7 @@ function openProfile(r){
   const starValue = Number(starValueEl.value);
   const starP = clamp(Number(starPctEl.value), 0.5, 0.999);
   const projectionNote = (r.ProjectionReasonSummary_calc || '').toString();
-  const metaBlocks = [];
+  const metaBlocks = ['<div class="muted" data-position-explanation></div>'];
   if (translationLabel) {
     const translationBits = [`Auto translation: <b>${translationLevel || translationLabel}</b>`];
     if (Number.isFinite(curveBid) && Number.isFinite(baseBid) && Math.abs(curveBid - baseBid) > 1) {
@@ -408,6 +417,7 @@ function openProfile(r){
     metaBlocks.push(`<div class="muted">Scout note: <b>${scoutAdjustNote}</b>.</div>`);
   }
   mMeta.innerHTML = metaBlocks.join('');
+  mMeta.querySelector('[data-position-explanation]').textContent = 'Position: ' + playerPositionExplanation(r);
 
   renderProjectionDetails(r);
 
@@ -448,11 +458,13 @@ function openProfile(r){
 
   const mSimilar = document.getElementById('mSimilar');
   if(mSimilar){
-    const allPlayers = tbGetAllPlayers();
-    const curPos = bucketPosition(r.Pos || r.Position);
+    const allPlayers = tbGetAllPlayers(r._league);
+    const curPos = bucketPosition(r);
     const keyStats = curPos === 'Guards'
       ? ['PPG','eFG%','3P%','APG','A/TO','SPG','BPM','DRtg']
-      : ['PPG','eFG%','BPG','RPG','DRtg','BPM','FT%','A/TO'];
+      : curPos === 'Wings'
+        ? ['PPG','eFG%','3P%','APG','RPG','SPG','BPM','DRtg']
+        : ['PPG','eFG%','BPG','RPG','DRtg','BPM','FT%','A/TO'];
     const curVec = keyStats.map(function(stat) { return profilePctOrMid(r, stat); });
     const currentKey = tbPlayerKey(r);
     const samePos = profileGetSimilarVectorRows(allPlayers, curPos, keyStats).filter(function(entry) {
@@ -720,7 +732,7 @@ function renderScoutReport(r) {
   const el = document.getElementById('mScoutReport');
   if (!el) return;
 
-  const posGroup = bucketPosition(r.Pos || r.Position || '');
+  const posGroup = bucketPosition(r);
   function pct(stat) {
     // Use pre-computed percentile if available (cached in computeAll)
     var cached = r['_pct_' + stat];
@@ -763,7 +775,9 @@ function renderScoutReport(r) {
   if (apgP  >= 0.82) strengths.push(`High-level playmaker — ${fN(apg)} APG, reads defenses and creates consistently for teammates`);
   if (atoP  >= 0.82) strengths.push(`Excellent decision-maker — ${fN(ato,2)} A/TO, protects possessions and limits live-ball turnovers`);
   if (spgP  >= 0.82) strengths.push(`Elite ball-hawk — ${fN(spg)} SPG, disrupts passing lanes and generates transition chances`);
-  if (bpgP  >= 0.82) strengths.push(`Rim protector — ${fN(bpg)} BPG, deters drives and shifts opponent shot selection away from the paint`);
+  if (bpgP  >= 0.82) strengths.push(posGroup === 'Bigs'
+    ? `Rim protector — ${fN(bpg)} BPG, deters drives and shifts opponent shot selection away from the paint`
+    : `Help-side shot blocker — ${fN(bpg)} BPG; adds shot contests from the perimeter rotation`);
   if (rpgP  >= 0.82) strengths.push(`High-volume rebounder — ${fN(rpg)} RPG, controls both glass ends and limits second-chance points`);
   if (bpmP  >= 0.82) strengths.push(`Strong two-way impact — BPM places them among the most impactful players at this position`);
   if (drtgP >= 0.82) strengths.push(`Excellent individual defender — ${fN(drtg,0)} DRtg; opponents score inefficiently in these matchups`);
@@ -783,6 +797,7 @@ function renderScoutReport(r) {
   if (drtgP != null && drtgP <= 0.22) weaknesses.push(`Below-average defender — ${fN(drtg,0)} DRtg; opponents score efficiently when they are the primary assignment`);
   if (rpgP  != null && rpgP  <= 0.22) weaknesses.push(`Soft on the glass — ${fN(rpg)} RPG; gives up extra possessions and second-chance opportunities`);
   if (apgP  != null && apgP  <= 0.22 && posGroup === 'Guards') weaknesses.push(`Limited playmaking — ${fN(apg)} APG; off-ball only, not a primary creator or initiator`);
+  if (apgP  != null && apgP  <= 0.22 && posGroup === 'Wings') weaknesses.push(`Limited secondary creation — ${fN(apg)} APG; check drive-and-kick and closeout passing reads on film`);
 
   // ── TENDENCIES ─────────────────────────────────────────────────────────────
   if      (Number.isFinite(usg) && usg >= 26) tendencies.push(`Primary option (${fN(usg,0)}% USG) — initiates possessions, demands double-team attention in half-court sets`);
@@ -792,6 +807,7 @@ function renderScoutReport(r) {
   if      (Number.isFinite(p3paG) && p3paG >= 5)   tendencies.push(`Volume 3PT gunner — ${fN(p3paG)}/g; attacks pull-ups and spot-ups relentlessly, spaces the floor wide`);
   else if (Number.isFinite(p3paG) && p3paG >= 2.5)  tendencies.push(`Perimeter-oriented — ${fN(p3paG)} 3PA/g; comfortable catch-and-shoot and off-dribble from beyond the arc`);
   else if (Number.isFinite(p3paG) && p3paG < 1 && posGroup === 'Guards') tendencies.push(`Drive-first guard — rarely attempts 3s (${fN(p3paG)}/g); attacks closeouts going to the basket and FT line`);
+  else if (Number.isFinite(p3paG) && p3paG < 1 && posGroup === 'Wings') tendencies.push(`Low-volume perimeter shooter — ${fN(p3paG)} 3PA/g; evaluate cutting and closeout finishing as the wing's off-ball role`);
 
   if      (Number.isFinite(apg) && apg >= 5)   tendencies.push(`Floor general — runs every action; master of pick-and-roll, drive-and-kick, and secondary reads`);
   else if (Number.isFinite(apg) && apg >= 3)   tendencies.push(`Secondary ball-handler — comfortable in PnR as pull-up or pass-first on second-side actions`);
@@ -812,7 +828,9 @@ function renderScoutReport(r) {
   devCheck('APG',  '', `Playmaking volume — adding consistent passing reads would shift them from scorer to dual-threat initiator`);
   devCheck('A/TO', '', `Decision-making — cleaning up live-ball turnovers is the clearest efficiency floor-raiser`);
   devCheck('DRtg', '', `Defensive engagement — improved positioning and floor awareness would raise overall two-way value`);
-  devCheck('BPG',  '', `Rim-deterrence — better shot-contest timing and verticality could develop them into a paint anchor`);
+  devCheck('BPG',  '', posGroup === 'Bigs'
+    ? `Rim-deterrence — better shot-contest timing and verticality could develop them into a paint anchor`
+    : `Help-side contests — improve rotation timing and verticality without leaving perimeter shooters open`);
   devCheck('RPG',  '', `Rebounding discipline — box-out fundamentals improvement has a direct impact on team rebound rate`);
   devCheck('eFG%', '', `Shot quality — higher shot selectivity or finishing improvement pushes eFG% to league-average range`);
   devCandidates.sort((a, b) => b.p - a.p);

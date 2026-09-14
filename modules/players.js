@@ -16,6 +16,7 @@ const LIST_COLS = [
   {key:'Player', label:'Player'},
   {key:'Team', label:'Team'},
   {key:'Conference', label:'Conf'},
+  {key:'Position', label:'Position'},
   {key:'Height', label:'Ht'},
   {key:'Weight', label:'Wt (lb)'},
   {key:'ConfMult_calc', label:'CM'},
@@ -215,6 +216,9 @@ function renderPlayersPage(){
         } else {
           _html.push('<td>', Number.isFinite(cm) ? cm.toFixed(2) : '\u2014', '</td>');
         }
+      }else if(c.key === 'Position'){
+        var listedPos = r.ListedPosition || r.Pos || '\u2014';
+        _html.push('<td title="', _esc(playerPositionExplanation(r)), '"><div>', _esc(listedPos), '</div><div class="playersProjectionValueSub">', _esc(r.Position || pos), r.PositionSource === 'Inferred' ? ' (inferred)' : '', '</div></td>');
       }else if(c.key === 'Height' || c.key === 'Weight'){
         var measurement = c.key === 'Height' ? formatPlayerHeight(r.Height) : formatPlayerWeight(r.Weight).replace(' lb', '');
         var source = r[c.key + 'Source'] || '';

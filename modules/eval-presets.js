@@ -185,9 +185,11 @@ function evalPresetCurrentLeague() {
 
 function evalPresetDefaultsForLeague(leagueName) {
   var guardDefaults = (leagueName === 'WBB' && typeof WBB_GUARD_DEFAULTS !== 'undefined') ? WBB_GUARD_DEFAULTS : GUARD_DEFAULTS;
+  var wingDefaults = (leagueName === 'WBB' && typeof WBB_WING_DEFAULTS !== 'undefined') ? WBB_WING_DEFAULTS : WING_DEFAULTS;
   var bigDefaults = (leagueName === 'WBB' && typeof WBB_BIG_DEFAULTS !== 'undefined') ? WBB_BIG_DEFAULTS : BIG_DEFAULTS;
   return {
     Guards: evalPresetClone(guardDefaults),
+    Wings: evalPresetClone(wingDefaults),
     Bigs: evalPresetClone(bigDefaults),
   };
 }
@@ -213,6 +215,7 @@ function evalPresetSerializeCurrent() {
     version: 1,
     positionWeights: {
       Guards: evalPresetSanitizeWeights(currentWeights.Guards || []),
+      Wings: evalPresetSanitizeWeights(currentWeights.Wings || []),
       Bigs: evalPresetSanitizeWeights(currentWeights.Bigs || []),
     },
     valuation: {
@@ -237,6 +240,12 @@ function evalPresetComparableWeights(rows) {
   }).sort(function (a, b) {
     return String(a.stat || '').localeCompare(String(b.stat || ''));
   });
+}
+
+function evalPresetWingWeights(payload, defaults) {
+  var weights = evalPresetSanitizeWeights(payload && payload.positionWeights && payload.positionWeights.Wings);
+  // Older presets and older Worker sanitizers omit Wings or return an empty array.
+  return weights.length ? weights : evalPresetSanitizeWeights(defaults.Wings);
 }
 
 function evalPresetDefaultValuationForLeague(leagueName) {
@@ -281,6 +290,7 @@ function evalPresetNormalizeComparablePayload(payload, leagueName) {
     version: 1,
     positionWeights: {
       Guards: evalPresetComparableWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Guards) || defaults.Guards),
+      Wings: evalPresetComparableWeights(evalPresetWingWeights(cleanPayload, defaults)),
       Bigs: evalPresetComparableWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Bigs) || defaults.Bigs),
     },
     valuation: {
@@ -361,6 +371,7 @@ function evalPresetApplyPayload(payload, opts) {
     loadScoringWeight();
     currentWeights = {
       Guards: evalPresetSanitizeWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Guards) || defaults.Guards),
+      Wings: evalPresetWingWeights(cleanPayload, defaults),
       Bigs: evalPresetSanitizeWeights((cleanPayload.positionWeights && cleanPayload.positionWeights.Bigs) || defaults.Bigs),
     };
 

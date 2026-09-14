@@ -73,7 +73,7 @@
   }
 
   function pdPlayerLabel(row) {
-    return [row && row.Team, row && (row.Conference || row.Conf), row && (row.Pos || row.Position), pdHeight(row), formatPlayerWeight(row && row.Weight)]
+    return [row && row.Team, row && (row.Conference || row.Conf), row && profilePositionLabel(row), pdHeight(row), formatPlayerWeight(row && row.Weight)]
       .filter(Boolean).join(' - ');
   }
 
@@ -187,9 +187,7 @@
   }
 
   function pdPrimaryStats(row, limit) {
-    var bucket = typeof bucketPosition === 'function'
-      ? bucketPosition(row && (row.Pos || row.Position))
-      : (String(row && (row.Pos || row.Position) || '').toLowerCase().indexOf('c') >= 0 ? 'Bigs' : 'Guards');
+    var bucket = bucketPosition(row, (row && row._league) || pdLeague());
     var fromWeights = [];
     if (typeof currentWeights !== 'undefined' && currentWeights && currentWeights[bucket]) {
       fromWeights = currentWeights[bucket]
@@ -237,7 +235,7 @@
     var meta = [
       row.Team,
       row.Conference || row.Conf,
-      row.Pos || row.Position,
+      profilePositionLabel(row),
       row.Class || row.Year || row.Yr,
       pdHeight(row),
       formatPlayerWeight(row.Weight)
@@ -337,15 +335,18 @@
   }
 
   function pdSimilarPlayers(row) {
-    var all = pdAllPlayers();
-    var curBucket = typeof bucketPosition === 'function' ? bucketPosition(row.Pos || row.Position) : '';
+    var playerLeague = row._league || pdLeague();
+    var all = pdAllPlayers(playerLeague);
+    var curBucket = bucketPosition(row, playerLeague);
     var stats = curBucket === 'Bigs'
       ? ['PPG', 'eFG%', 'RPG', 'BPG', 'DRtg', 'BPM', 'FT%', 'A/TO']
-      : ['PPG', 'eFG%', '3P%', 'APG', 'A/TO', 'SPG', 'BPM', 'DRtg'];
+      : curBucket === 'Wings'
+        ? ['PPG', 'eFG%', '3P%', 'APG', 'RPG', 'SPG', 'BPM', 'DRtg']
+        : ['PPG', 'eFG%', '3P%', 'APG', 'A/TO', 'SPG', 'BPM', 'DRtg'];
     var curVec = stats.map(function (s) { var p = pdPct(row, s); return Number.isFinite(p) ? p : 0.5; });
     return all.filter(function (p) {
       if (pdKey(p) === pdKey(row)) return false;
-      if (curBucket && typeof bucketPosition === 'function' && bucketPosition(p.Pos || p.Position) !== curBucket) return false;
+      if (bucketPosition(p, playerLeague) !== curBucket) return false;
       return true;
     }).map(function (p) {
       var dist = 0;
@@ -437,6 +438,7 @@
       + '<div class="pdEyebrow">Player dossier</div>'
       + '<h2>' + pdEsc(r.Player || 'Player') + '</h2>'
       + '<div class="pdSub">' + pdEsc(pdPlayerLabel(r)) + '</div>'
+      + '<div class="pdNote" data-position-explanation>Position: ' + pdEsc(playerPositionExplanation(r)) + '</div>'
       + '</div>'
       + '<div class="pdActions">'
       + '<button class="secondary" type="button" data-pd-action="copy-link">Copy Link</button>'
@@ -1194,6 +1196,8 @@
       if(subtitle) subtitle.textContent = pdPlayerLabel(pdState.player);
       var summary = pdState.body.querySelector('.pdGlimpseMeta');
       if(summary) summary.textContent = [pdPlayerLabel(pdState.player), pdState.player.Class].filter(Boolean).join(' - ');
+      var positionReason = pdState.body.querySelector('[data-position-explanation]');
+      if(positionReason) positionReason.textContent = 'Position: ' + playerPositionExplanation(pdState.player);
     },
     open: pdOpen,
     close: pdClose,

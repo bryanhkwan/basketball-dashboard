@@ -9,8 +9,8 @@
 var wb = null;
 var league = 'MBB';
 var pos = 'Guards';
-var excelWeights = {Guards:[], Bigs:[]};
-var currentWeights = {Guards:[], Bigs:[]};
+var excelWeights = {Guards:[], Wings:[], Bigs:[]};
+var currentWeights = {Guards:[], Wings:[], Bigs:[]};
 var rows = [];
 var computed = [];
 var tbAllComputed = {}; // cache: {'MBB_Guards': [...], 'MBB_Bigs': [...], ...}
@@ -63,8 +63,8 @@ var _playerBioStatus = {};
 var recruitingCache   = []; // flat array of recruit objects across multiple class years
 var _recruitingReady  = false;
 var _leagueRowsCache = {
-  MBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] },
-  WBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] },
+  MBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] },
+  WBB: { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] },
 };
 var _ratingsCache = {};     // keyed "LEAGUE:season" -> team ratings array
 var _ratingsLoads = {};     // keyed "LEAGUE:season" -> active promise
@@ -166,11 +166,11 @@ function _dataPlaceholderSheet(){
 
 function _dataResetLeagueRowsCache(targetLeague){
   if(targetLeague){
-    _leagueRowsCache[targetLeague] = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
+    _leagueRowsCache[targetLeague] = { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] };
     return;
   }
-  _leagueRowsCache.MBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
-  _leagueRowsCache.WBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] };
+  _leagueRowsCache.MBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] };
+  _leagueRowsCache.WBB = { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] };
 }
 
 function _dataEnsureWorkbookShell(){
@@ -227,7 +227,7 @@ function _dataGetLeagueRows(targetLeague){
   const ws = wb && wb.Sheets ? wb.Sheets[sheetName] : null;
   if(!ws) return null;
 
-  const cache = _leagueRowsCache[leagueKey] || (_leagueRowsCache[leagueKey] = { season: '', wsRef: null, overrideVersion: -1, guards: [], bigs: [] });
+  const cache = _leagueRowsCache[leagueKey] || (_leagueRowsCache[leagueKey] = { season: '', wsRef: null, overrideVersion: -1, guards: [], wings: [], bigs: [] });
   const seasonKey = _dataSeasonKey(_currentDataSeason);
   if(cache.season === seasonKey && cache.wsRef === ws && cache.overrideVersion === _projectionScoutOverrideVersion){
     return cache;
@@ -235,12 +235,14 @@ function _dataGetLeagueRows(targetLeague){
 
   const allRows = parseSheetToRows(ws);
   const guards = [];
+  const wings = [];
   const bigs = [];
 
   for(let i = 0; i < allRows.length; i++){
     const r = allRows[i];
     const out = {...r};
-    out.Position = bucketPosition(r.Pos);
+    out._league = leagueKey;
+    applyPlayerPosition(out, leagueKey);
     if(out['TOV/G'] != null && out['TOPG'] == null) out['TOPG'] = out['TOV/G'];
     if(out['ORB%'] != null && out['OR%'] == null) out['OR%'] = out['ORB%'];
     if(out['DRB%'] != null && out['DR%'] == null) out['DR%'] = out['DRB%'];
@@ -258,6 +260,7 @@ function _dataGetLeagueRows(targetLeague){
     }
     const normalizedRow = projectionApplyScoutOverride(out);
     if(normalizedRow.Position === 'Bigs') bigs.push(normalizedRow);
+    else if(normalizedRow.Position === 'Wings') wings.push(normalizedRow);
     else guards.push(normalizedRow);
   }
 
@@ -265,6 +268,7 @@ function _dataGetLeagueRows(targetLeague){
   cache.wsRef = ws;
   cache.overrideVersion = _projectionScoutOverrideVersion;
   cache.guards = guards;
+  cache.wings = wings;
   cache.bigs = bigs;
   return cache;
 }
@@ -377,10 +381,10 @@ function findSheetLike(target){
   return null;
 }
 
-function bucketPosition(posStr){
-  const p = (posStr||'').toString().trim().toUpperCase();
-  if(!p || p === 'G' || p === 'G-F' || p === 'F-G') return 'Guards';
-  return 'Bigs';
+function bucketPosition(player, forLeague){
+  if(player && typeof player === 'object' && POSITION_GROUPS.includes(player.Position)
+    && (player.Position === 'Wings' || player.PositionSource || (!player.Pos && !player.ListedPosition))) return player.Position;
+  return classifyPlayerPosition(player, forLeague || (player && player._league) || league).group;
 }
 
 function prettyDir(isLower){
@@ -515,10 +519,11 @@ function ensureWeightsCoverStats(forPos, rowArr){
 
 function loadScoringWeight(){
   var gDef = (league === 'WBB' && typeof WBB_GUARD_DEFAULTS !== 'undefined') ? WBB_GUARD_DEFAULTS : GUARD_DEFAULTS;
+  var wDef = league === 'WBB' ? WBB_WING_DEFAULTS : WING_DEFAULTS;
   var bDef = (league === 'WBB' && typeof WBB_BIG_DEFAULTS   !== 'undefined') ? WBB_BIG_DEFAULTS   : BIG_DEFAULTS;
-  excelWeights   = {Guards: JSON.parse(JSON.stringify(gDef)), Bigs: JSON.parse(JSON.stringify(bDef))};
-  currentWeights = {Guards: JSON.parse(JSON.stringify(gDef)), Bigs: JSON.parse(JSON.stringify(bDef))};
-  baseStatsAll = [...new Set([...gDef.map(x=>x.stat), ...bDef.map(x=>x.stat)])];
+  excelWeights = deepClone({Guards:gDef, Wings:wDef, Bigs:bDef});
+  currentWeights = deepClone(excelWeights);
+  baseStatsAll = [...new Set([...gDef.map(x=>x.stat), ...wDef.map(x=>x.stat), ...bDef.map(x=>x.stat)])];
   return true;
 }
 
@@ -1065,6 +1070,7 @@ function refreshLoadedTranslationRisk(targetLeague, season){
 
   refreshPool(computed);
   refreshPool(tbAllComputed[leagueKey + '_Guards']);
+  refreshPool(tbAllComputed[leagueKey + '_Wings']);
   refreshPool(tbAllComputed[leagueKey + '_Bigs']);
 
   if(!changed) return false;
@@ -1145,7 +1151,8 @@ async function loadTranslationRiskRichData(year, targetLeague, opts){
 }
 
 function translationRiskForRow(row){
-  const posGroup = bucketPosition(row.Pos || row.Position) === 'Guards' ? 'guard' : 'big';
+  const position = bucketPosition(row, row._league);
+  const posGroup = position === 'Guards' ? 'guard' : position === 'Wings' ? 'wing' : 'big';
   const ppg = translationPct(row, 'PPG');
   const bpm = translationPct(row, 'BPM');
   const ws = translationPct(row, 'WS/40');
@@ -1173,7 +1180,7 @@ function translationRiskForRow(row){
 
   const impactCore = posGroup === 'guard'
     ? translationMean([bpm, ws, drtg, ato, apg])
-    : translationMean([bpm, ws, drtg, orb, rpg, bpg]);
+    : posGroup === 'wing' ? translationMean([bpm, ws, drtg, ato, rpg]) : translationMean([bpm, ws, drtg, orb, rpg, bpg]);
   const impactGap = Number.isFinite(ppg) && Number.isFinite(impactCore) ? (ppg - impactCore) : NaN;
   if(Number.isFinite(impactGap) && impactGap > 0.24){
     penalty += 0.03 + clamp((impactGap - 0.24) / 0.36, 0, 1) * 0.05;
@@ -1187,12 +1194,12 @@ function translationRiskForRow(row){
     translationPushReason(penaltyReasons, 'usage load beats efficiency');
   }
 
-  if(posGroup === 'guard'){
+  if(posGroup !== 'big'){
     const guardSkillCore = translationMean([threeVol, ft, efg, ato]);
     const guardGap = Number.isFinite(ppg) && Number.isFinite(guardSkillCore) ? (ppg - guardSkillCore) : NaN;
     if(Number.isFinite(guardGap) && guardGap > 0.15){
       penalty += 0.02 + clamp((guardGap - 0.15) / 0.3, 0, 1) * 0.03;
-      translationPushReason(penaltyReasons, 'guard scoring profile lacks clean spacer or foul-pressure signals');
+      translationPushReason(penaltyReasons, posGroup + ' scoring profile lacks clean spacer or foul-pressure signals');
     }
 
     const cleanGuard = translationMean([bpm, ws, efg, threeVol, ft, ato]);
@@ -1787,13 +1794,16 @@ function fitScoreForRow(r){
 
 function archetypeTags(r){
   const p = (stat) => {
+    if(Object.prototype.hasOwnProperty.call(r, '_pct_' + stat)) return r['_pct_' + stat];
+    if(bucketPosition(r, r._league) !== pos || (r._league && r._league !== league)) return NaN;
     const x = safeNum(r[stat]);
     if(x === null) return NaN;
     return statPercentile(stat, x);
   };
 
   const tags = [];
-  if(pos === 'Guards'){
+  if(bucketPosition(r, r._league) !== 'Bigs'){
+    var isWing = bucketPosition(r, r._league) === 'Wings';
     const p3r = p('3PT_Rating'), pefg = p('eFG%'), pft = p('FT%'), pppg = p('PPG');
     const papg = p('APG'), pato = p('A/TO'), ptopg = p('TOPG');
     const pspg = p('SPG'), pdr = p('DR%'), pbpm = p('BPM');
@@ -1807,8 +1817,9 @@ function archetypeTags(r){
     if(Number.isFinite(pspg) && pspg >= 0.80) tags.push({t:'Disruptor', c:'var(--warn)'});
     if(Number.isFinite(pdr) && pdr >= 0.75) tags.push({t:'Defender', c:'var(--warn)'});
     if(Number.isFinite(pbpm) && pbpm >= 0.75) tags.push({t:'Impact', c:'var(--accent)'});
+    if(isWing && Number.isFinite(p('RPG')) && p('RPG') >= 0.80) tags.push({t:'Rebounder', c:'var(--accent2)'});
 
-    if(tags.length === 0) tags.push({t:'Role Player', c:'var(--muted)'});
+    if(tags.length === 0) tags.push({t:isWing ? 'Wing Role' : 'Role Player', c:'var(--muted)'});
     return tags.slice(0, 6);
   }else{
     const pbpg = p('BPG'), pdrtg = p('DRtg'), pdr = p('DR%'), por = p('OR%'), pdrb = p('DRB/G');
@@ -1906,41 +1917,98 @@ function requestComputeAll(delayMs){
   }, wait);
 }
 
-function _scheduleSiblingPoolCompute(targetLeague, activePos, siblingPos, siblingRows){
+function _scheduleSiblingPoolCompute(targetLeague, activePos, leagueRows){
   if(_siblingComputeTimer) {
     clearTimeout(_siblingComputeTimer);
     _siblingComputeTimer = null;
   }
-  if(!siblingRows || !siblingRows.length) return;
+  if(!leagueRows) return;
   var seasonKey = _dataSeasonKey(_currentDataSeason);
-  _siblingComputeTimer = setTimeout(function(){
+  var pendingGroups = POSITION_GROUPS.filter(function(group){ return group !== activePos; });
+  function runNext(){
     _siblingComputeTimer = null;
     if(league !== targetLeague || pos !== activePos || seasonKey !== _dataSeasonKey(_currentDataSeason)) return;
+    var siblingPos = pendingGroups.shift();
+    if(!siblingPos) return;
+    var siblingRows = leagueRows[siblingPos.toLowerCase()] || [];
     var savedPos = pos;
     var savedRows = rows;
     var savedComputed = computed;
+    var savedDist = statDist;
+    var savedAvg = lastPerfAvg;
+    var savedStar = lastPerfStar;
     try{
       pos = siblingPos;
       rows = siblingRows;
       ensureWeightsCoverStats(pos, rows);
-      computeAll({ skipRender: true });
+      computeAll({ skipRender: true, background: true });
     }catch(e){
       console.error('Sibling computation failed:', e);
     }finally{
       pos = savedPos;
       rows = savedRows;
       computed = savedComputed;
-      ensureWeightsCoverStats(pos, rows);
+      statDist = savedDist;
+      lastPerfAvg = savedAvg;
+      lastPerfStar = savedStar;
     }
-  }, 420);
+    if(pendingGroups.length) _siblingComputeTimer = setTimeout(runNext, 100);
+    else {
+      _scheduleTeamListRefresh(80);
+      _scheduleValueLabDataChange(160);
+      var teamBuilderPage = document.getElementById('pageTeamBuilder');
+      if(teamBuilderPage && teamBuilderPage.style.display !== 'none'){
+        if(typeof tbRefresh === 'function') tbRefresh();
+        if(typeof oppRefresh === 'function') oppRefresh();
+      }
+    }
+  }
+  _siblingComputeTimer = setTimeout(runNext, 420);
 }
 
 // --- computeAll ---
 
+function _dataRefreshScoredReferences(targetLeague, group){
+  var byKey = new Map();
+  function key(row){ return String(row.Player || '') + '||' + String(row.Team || ''); }
+  (tbAllComputed[targetLeague + '_' + group] || []).forEach(function(row){
+    var id = key(row);
+    byKey.set(id, byKey.has(id) ? null : row);
+  });
+  var seen = new Set();
+  function refresh(row){
+    if(!row || seen.has(row) || (row._league && row._league !== targetLeague)) return;
+    seen.add(row);
+    var fresh = byKey.get(key(row));
+    if(!fresh || fresh === row) return;
+    if(row.CbdId && fresh.CbdId && String(row.CbdId) !== String(fresh.CbdId)) return;
+    if(row.EspnId && fresh.EspnId && String(row.EspnId) !== String(fresh.EspnId)) return;
+    Object.keys(row).forEach(function(field){ if(field.startsWith('_pct_')) delete row[field]; });
+    Object.assign(row, fresh);
+  }
+  var saved = leagueRosters[targetLeague];
+  if(saved){ saved.tb.forEach(refresh); saved.opp.forEach(refresh); }
+  if(league === targetLeague){
+    if(typeof tbRoster !== 'undefined') tbRoster.forEach(refresh);
+    if(typeof oppRoster !== 'undefined') oppRoster.forEach(refresh);
+    if(typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer){
+      var profile = _currentProfilePlayer;
+      var freshProfile = byKey.get(key(profile));
+      refresh(profile);
+      if(freshProfile && bucketPosition(profile, targetLeague) === group){
+        var season = _currentDataSeason;
+        requestAnimationFrame(function(){
+          if(league === targetLeague && season === _currentDataSeason && _currentProfilePlayer === profile && typeof openProfile === 'function') openProfile(freshProfile);
+        });
+      }
+    }
+  }
+}
+
 function computeAll(options){
   options = options && typeof options === 'object' ? options : {};
   const skipRender = !!options.skipRender;
-  if(_computeAllTimer){
+  if(_computeAllTimer && !options.background){
     clearTimeout(_computeAllTimer);
     _computeAllTimer = null;
   }
@@ -1948,6 +2016,16 @@ function computeAll(options){
 
   if(!rows.length) {
     computed = [];
+    statDist = {};
+    lastPerfAvg = NaN;
+    lastPerfStar = NaN;
+    tbAllComputed[league + '_' + pos] = [];
+    _cachedAllPlayers = null;
+    if(!options.background){
+      kpiPlayers.textContent = '0';
+      kpiAvgPerf.textContent = '—';
+      kpiStarPerf.textContent = '—';
+    }
     if(!skipRender) renderPlayers();
     return;
   }
@@ -2075,9 +2153,11 @@ function computeAll(options){
   });
   for(var _ri = 0; _ri < computed.length; _ri++) computed[_ri].CalcRank = _ri + 1;
 
-  kpiPlayers.textContent = String(computed.length);
-  kpiAvgPerf.textContent = Number.isFinite(lastPerfAvg) ? lastPerfAvg.toFixed(2) : '—';
-  kpiStarPerf.textContent = Number.isFinite(lastPerfStar) ? lastPerfStar.toFixed(2) : '—';
+  if(!options.background){
+    kpiPlayers.textContent = String(computed.length);
+    kpiAvgPerf.textContent = Number.isFinite(lastPerfAvg) ? lastPerfAvg.toFixed(2) : '—';
+    kpiStarPerf.textContent = Number.isFinite(lastPerfStar) ? lastPerfStar.toFixed(2) : '—';
+  }
 
   tbAllComputed[league + '_' + pos] = computed.slice();
   _cachedAllPlayers = null; // invalidate player pool cache
@@ -2085,6 +2165,7 @@ function computeAll(options){
   // Apply inferred class from career data (if available)
   _applyInferredClassToPool(computed);
   _applyInferredClassToPool(rows);
+  _dataRefreshScoredReferences(league, pos);
 
   if(!skipRender) renderPlayers();
 }
@@ -2264,6 +2345,7 @@ async function loadFromCBData(year) {
 
 async function _loadMbbSheetData(year) {
   const WORKER = URLS.WORKER;
+  var bioSnapshot = PlayerBios.load('MBB', year, { snapshotOnly: true }).catch(function(){ return null; });
   let res;
   let data = {};
   try {
@@ -2278,14 +2360,17 @@ async function _loadMbbSheetData(year) {
   if (!data.players || !data.players.length) {
     return { players: [], warning: 'No MBB players returned from API (season ' + year + ').' };
   }
-  return { players: data.players, warning: '' };
+  var snapshot = await bioSnapshot;
+  var bios = snapshot ? PlayerBios.apply(data.players, snapshot, 'MBB', year) : null;
+  return { players: data.players, warning: '', bios: bios };
 }
 
 async function _loadWbbSheetData(year) {
   const warnings = [];
-  const [wbbPlayersSettled, wbbTeamsSettled] = await Promise.allSettled([
+  const [wbbPlayersSettled, wbbTeamsSettled, bioSettled] = await Promise.allSettled([
     _wbbLoadAllPlayerPages(year),
     fetch(WORKER_URL + '/api/wbb/teams?season=' + encodeURIComponent(year)).then(function(r){ return r.json(); }),
+    PlayerBios.load('WBB', year, { snapshotOnly: true }),
   ]);
 
   if (!(wbbPlayersSettled.status === 'fulfilled' && wbbPlayersSettled.value && wbbPlayersSettled.value.length)) {
@@ -2317,7 +2402,8 @@ async function _loadWbbSheetData(year) {
   }
 
   players.forEach(_calcWbbDerivedStats);
-  return { players: players, warning: warnings.join(' | ') };
+  var bios = bioSettled.status === 'fulfilled' && bioSettled.value ? PlayerBios.apply(players, bioSettled.value, 'WBB', year) : null;
+  return { players: players, warning: warnings.join(' | '), bios: bios };
 }
 
 async function ensureLeagueDataLoaded(targetLeague, year, opts) {
@@ -2343,6 +2429,7 @@ async function ensureLeagueDataLoaded(targetLeague, year, opts) {
       if (_leagueDataStatus[targetLeague] !== status || status.season !== seasonKey) return { loaded: false, warning: '' };
 
       if (result.players && result.players.length) {
+        if(result.bios) _playerBioStatus[targetLeague + ':' + seasonKey] = result.bios;
         if (targetLeague === 'MBB') _mbbActivePlayersRef = result.players;
         else _wbbActivePlayersRef = result.players;
         _dataCommitLeaguePlayers(targetLeague, result.players);
@@ -3052,6 +3139,8 @@ async function _wbbLoadAllPlayerPages(year) {
         EspnId:  ath.id          || null,
         Conference: '',
         Pos:     (ath.position && ath.position.abbreviation) || '',
+        ListedPosition: (ath.position && (ath.position.abbreviation || ath.position.name)) || 'NA',
+        ListedPositionSource: 'ESPN season statistics',
         Height:  PlayerBios.normalizeHeight(ath.height || ath.displayHeight),
         Weight:  PlayerBios.normalizeWeight(ath.weight || ath.displayWeight),
         HeightSource: ath.height || ath.displayHeight ? 'ESPN' : '',
@@ -3071,6 +3160,7 @@ async function _wbbLoadAllPlayerPages(year) {
         SPG:     +(stats.avgSteals    || 0).toFixed(2),
         BPG:     +(stats.avgBlocks    || 0).toFixed(2),
         '3PA/G': +(stats.avgThreePointFieldGoalsAttempted || 0).toFixed(1),
+        'FGA/G': stats.gamesPlayed > 0 ? +(stats.fieldGoalsAttempted / stats.gamesPlayed).toFixed(2) : null,
         _FGM:    stats.fieldGoalsMade               || 0,
         _FGA:    stats.fieldGoalsAttempted           || 0,
         _3PM:    stats.threePointFieldGoalsMade      || 0,
@@ -3086,7 +3176,7 @@ async function _wbbLoadAllPlayerPages(year) {
   return players;
 }
 
-// Measurement updates patch existing row objects: no score/valuation recomputation.
+// Bio updates patch row objects. Recompute only when class or inferred group changes.
 function _dataRenderBioStatus(){
   var el = document.getElementById('playerBioStatus');
   if(!el) return;
@@ -3108,6 +3198,7 @@ function _dataSyncPlayerBios(players, targetLeague, season){
   players.forEach(function(p){ var k = key(p); byKey.set(k, byKey.has(k) ? null : p); });
   var seen = new Set();
   var classChanged = false;
+  var positionChanged = false;
   function patch(p){
     if(!p || seen.has(p)) return;
     if(p._league && p._league !== targetLeague) return;
@@ -3125,26 +3216,32 @@ function _dataSyncPlayerBios(players, targetLeague, season){
       // Do not erase inferred class labels or saved metadata with empty API fields.
       if(source[field] !== undefined && source[field] !== null && source[field] !== '') p[field] = source[field];
     });
+    if(p.Position || p.Pos || p.ListedPosition){
+      var oldPosition = p.Position;
+      applyPlayerPosition(p, targetLeague);
+      if(oldPosition && oldPosition !== p.Position) positionChanged = true;
+    }
     p._searchStr = playerSearchText(p);
   }
   _dataCommitLeaguePlayers(targetLeague, players);
   var cache = _leagueRowsCache[targetLeague];
   if(cache && cache.season === String(season)){
     cache.guards.forEach(patch);
+    (cache.wings || []).forEach(patch);
     cache.bigs.forEach(patch);
     cache.wsRef = wb.Sheets[SHEET_MAP[targetLeague]];
   }
-  ['Guards', 'Bigs'].forEach(function(bucket){
+  POSITION_GROUPS.forEach(function(bucket){
     (tbAllComputed[targetLeague + '_' + bucket] || []).forEach(patch);
   });
   var saved = leagueRosters[targetLeague];
   if(saved){ saved.tb.forEach(patch); saved.opp.forEach(patch); }
-  // Class contributes to projection confidence. Only class changes need scoring;
-  // height/weight updates can leave the scoring pipeline and its caches intact.
+  // Class affects projection confidence; measurements can resolve an inferred position.
   function refreshClassScores(){
-    if(!classChanged) return;
+    if(!classChanged && !positionChanged) return;
     _dataResetLeagueRowsCache(targetLeague);
     delete tbAllComputed[targetLeague + '_Guards'];
+    delete tbAllComputed[targetLeague + '_Wings'];
     delete tbAllComputed[targetLeague + '_Bigs'];
     if(typeof _cachedAllPlayers !== 'undefined') _cachedAllPlayers = null;
     if(league === targetLeague) reloadActiveSheet();
@@ -3157,7 +3254,7 @@ function _dataSyncPlayerBios(players, targetLeague, season){
     refreshClassScores();
     if(typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer){
       patch(_currentProfilePlayer);
-      var freshProfile = classChanged && computed.find(function(p){ return key(p) === key(_currentProfilePlayer); });
+      var freshProfile = (classChanged || positionChanged) && computed.find(function(p){ return key(p) === key(_currentProfilePlayer); });
       if(freshProfile && typeof openProfile === 'function') openProfile(freshProfile);
       else if(typeof profileRefreshMeasurements === 'function') profileRefreshMeasurements(_currentProfilePlayer);
     }
@@ -3485,23 +3582,18 @@ function reloadActiveSheet(){
   if(!cachedRows){
     rows = []; computed = []; renderPlayers(); return;
   }
-  const guards = cachedRows.guards || [];
-  const bigs = cachedRows.bigs || [];
-
-  rows = pos === 'Guards' ? guards : bigs;
+  rows = cachedRows[pos.toLowerCase()] || [];
   ensureWeightsCoverStats(pos, rows);
   renderWeights();
   computeAll({ skipRender: true });
 
-  const sibPos = pos === 'Guards' ? 'Bigs' : 'Guards';
-  const sibRows = pos === 'Guards' ? bigs : guards;
   renderPlayers();
-  _scheduleSiblingPoolCompute(league, pos, sibPos, sibRows);
+  _scheduleSiblingPoolCompute(league, pos, cachedRows);
 }
 
 function exportCSV(){
   const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuationCurve_calc','TranslationRiskPct_calc','TranslationRiskLabel_calc','TranslationRiskLevel_calc','TranslationRiskReasons_calc','TranslationRiskSource_calc','ActualValuationBase_calc','ActualValuation_calc','ScoutAdjustmentPct_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentNote_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
-  cols.splice(6, 0, 'Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt');
+  cols.splice(6, 0, 'Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt', 'Pos', 'ListedPosition', 'ListedPositionSource', 'PositionSource', 'PositionReason', 'PositionConfidence');
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {

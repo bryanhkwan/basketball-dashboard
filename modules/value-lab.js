@@ -508,14 +508,17 @@ function valueLabRenderSourceControls() {
 function valueLabPosLabel(row) {
   var raw = String(row && (row.Position || row.Pos || '')).trim();
   if (raw) return raw;
-  if (typeof tbPosGroup === 'function') return tbPosGroup(row) === 'guard' ? 'Guard' : 'Big';
+  if (typeof bucketPosition === 'function') return { Guards: 'Guard', Wings: 'Wing', Bigs: 'Big' }[bucketPosition(row, valueLabCurrentLeague())];
   return '—';
 }
 
 function valueLabPosGroup(row) {
   if (typeof tbPosGroup === 'function') return tbPosGroup(row);
-  var posText = String(row && (row.Position || row.Pos || '')).toLowerCase();
-  return posText.indexOf('g') >= 0 ? 'guard' : 'big';
+  return { Guards: 'guard', Wings: 'wing', Bigs: 'big' }[bucketPosition(row, valueLabCurrentLeague())];
+}
+
+function valueLabPosGroupLabel(row) {
+  return { guard: 'Guards', wing: 'Wings', big: 'Bigs' }[valueLabPosGroup(row)];
 }
 
 function valueLabClassBucket(row) {
@@ -830,7 +833,8 @@ function valueLabBuildAnalysis(bundle) {
   var peerPools = {
     all: currentPool.slice(),
     guard: currentPool.filter(function (row) { return valueLabPosGroup(row) === 'guard'; }),
-    big: currentPool.filter(function (row) { return valueLabPosGroup(row) !== 'guard'; }),
+    wing: currentPool.filter(function (row) { return valueLabPosGroup(row) === 'wing'; }),
+    big: currentPool.filter(function (row) { return valueLabPosGroup(row) === 'big'; }),
   };
 
   var poolValSorted = currentPool.map(function (row) { return valueLabDecisionMedianValue(row); }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
@@ -984,7 +988,7 @@ function valueLabBuildAnalysis(bundle) {
     highMedicalCount: highMedicalCount,
     dominantTeam: teamContext,
     breakdowns: {
-      position: valueLabAggregateBy(detailed.map(function (row) { return Object.assign({}, row, { ActualValuation_calc: row.spendBasis }); }), function (row) { return valueLabPosGroup(row) === 'guard' ? 'Guards' : 'Bigs'; }),
+      position: valueLabAggregateBy(detailed.map(function (row) { return Object.assign({}, row, { ActualValuation_calc: row.spendBasis }); }), valueLabPosGroupLabel),
       classYear: valueLabAggregateBy(detailed.map(function (row) { return Object.assign({}, row, { ActualValuation_calc: row.spendBasis }); }), function (row) { return row.classBucket; }),
       team: valueLabAggregateBy(detailed.map(function (row) { return Object.assign({}, row, { ActualValuation_calc: row.spendBasis }); }), function (row) { return row.Team || 'Unknown'; }).slice(0, 6),
     },
@@ -1879,12 +1883,13 @@ function valueLabBuildPortalTargets(analysis, portalPack) {
   var peerPools = {
     all: pool.slice(),
     guard: pool.filter(function (row) { return valueLabPosGroup(row) === 'guard'; }),
-    big: pool.filter(function (row) { return valueLabPosGroup(row) !== 'guard'; }),
+    wing: pool.filter(function (row) { return valueLabPosGroup(row) === 'wing'; }),
+    big: pool.filter(function (row) { return valueLabPosGroup(row) === 'big'; }),
   };
   var groupRows = valueLabAggregateBy(analysis.players.map(function (row) {
     return Object.assign({}, row, { ActualValuation_calc: row.spendBasis });
   }), function (row) {
-    return valueLabPosGroup(row) === 'guard' ? 'Guards' : 'Bigs';
+    return valueLabPosGroupLabel(row);
   });
   var weakestGroup = groupRows.slice().sort(function (a, b) { return (a.avgPerf || 0) - (b.avgPerf || 0); })[0];
   var weakestLabel = weakestGroup ? weakestGroup.label : '';
@@ -1905,7 +1910,7 @@ function valueLabBuildPortalTargets(analysis, portalPack) {
     seen[key] = true;
     var expectedPerf = valueLabExpectedPerfAtSpend(player, peerPools);
     var surplus = (Number.isFinite(perf) && Number.isFinite(expectedPerf)) ? (perf - expectedPerf) : NaN;
-    var posLabel = valueLabPosGroup(player) === 'guard' ? 'Guards' : 'Bigs';
+    var posLabel = valueLabPosGroupLabel(player);
     var fitsNeed = weakestLabel && posLabel === weakestLabel;
     var withinBudget = !Number.isFinite(budgetLeft) || budgetLeft <= 0 ? true : valuation <= budgetLeft;
     var valueScore = (perf / Math.max(1, valuation)) * 100000;

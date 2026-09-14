@@ -1,14 +1,25 @@
-// Player measurements. No build step: shared by the browser and snapshot refresh CLI.
+// Player measurements and listed positions. Shared by browser and refresh CLI.
 // Records are scoped to one league + season. Missing measurements remain null.
 var PlayerBios = (function () {
   'use strict';
   var VERSION = 1;
   var TTL = 7 * 24 * 60 * 60 * 1000;
   var RETRY_TTL = 10 * 60 * 1000;
-  var PREFIX = 'ncaa-player-bios-v1:';
+  var PREFIX = 'ncaa-player-bios-v2:';
   var memory = {};
   var pending = {};
-  var columns = ['espnId', 'cbdId', 'teamId', 'team', 'name', 'height', 'weight', 'heightSource', 'weightSource', 'classYear', 'hometown'];
+  var columns = ['espnId', 'cbdId', 'teamId', 'team', 'name', 'height', 'weight', 'heightSource', 'weightSource', 'classYear', 'hometown', 'listedPosition', 'positionSource'];
+
+  function listedPosition(value) {
+    if (value && typeof value === 'object') value = value.abbreviation || value.name || value.displayName;
+    var label = String(value || '').trim();
+    return label || null;
+  }
+
+  function knownPosition(value) {
+    var label = listedPosition(value);
+    return label && !/^(?:ATH|Athlete|NA|N\/A|Not Available|Unknown|-)$/i.test(label);
+  }
 
   function normalizeName(value) {
     var name = String(value || '').toLowerCase();
@@ -52,10 +63,10 @@ var PlayerBios = (function () {
 
   function decode(snapshot) {
     return snapshot.records.map(function (row) {
-      if (!Array.isArray(row)) return row;
+      if (!Array.isArray(row)) return Object.assign({}, row);
       var record = {};
-      columns.forEach(function (key, index) { record[key] = row[index] === undefined ? null : row[index]; });
-      ['heightSource', 'weightSource'].forEach(function (key) {
+      (snapshot.columns || columns).forEach(function (key, index) { record[key] = row[index] === undefined ? null : row[index]; });
+      ['heightSource', 'weightSource', 'positionSource'].forEach(function (key) {
         if (typeof record[key] === 'number') record[key] = (snapshot.sourceLabels || [])[record[key] - 1] || null;
       });
       return record;
@@ -127,7 +138,7 @@ var PlayerBios = (function () {
     var ctx = context(league, season);
     if (!validSnapshot(snapshot, ctx)) throw new Error('Player bio snapshot league/season mismatch');
     var index = indexRecords(snapshot);
-    var stats = { total: players.length, matched: 0, height: 0, weight: 0, updated: 0, records: snapshot.records.length, source: snapshot.source || 'snapshot', errors: snapshot.errors || [] };
+    var stats = { total: players.length, matched: 0, height: 0, weight: 0, listedPosition: 0, updated: 0, records: snapshot.records.length, source: snapshot.source || 'snapshot', errors: snapshot.errors || [] };
     players.forEach(function (player) {
       if (!player) return;
       var rowLeague = player._league || player.League;
@@ -160,9 +171,16 @@ var PlayerBios = (function () {
         if (!player.CbdId && !player.CBDId && record.cbdId) { player.CbdId = String(record.cbdId); stats.updated++; }
         if (!player.Class && record.classYear) { player.Class = record.classYear; stats.updated++; }
         if (!player.Hometown && record.hometown) { player.Hometown = record.hometown; stats.updated++; }
+        var position = listedPosition(record.listedPosition);
+        if (position && (player.ListedPosition !== position || player.ListedPositionSource !== record.positionSource)) {
+          player.ListedPosition = position;
+          player.ListedPositionSource = record.positionSource || snapshot.source;
+          stats.updated++;
+        }
       }
       if (normalizeHeight(player.Height) !== null) stats.height++;
       if (normalizeWeight(player.Weight) !== null) stats.weight++;
+      if (knownPosition(player.ListedPosition)) stats.listedPosition++;
     });
     return stats;
   }
@@ -202,8 +220,9 @@ var PlayerBios = (function () {
     var compactRecords = records.map(function (record) {
       var row = columns.map(function (key) {
         var value = record[key] === undefined || record[key] === '' ? null : record[key];
-        if (key === 'heightSource' || key === 'weightSource') {
-          if (record[key === 'heightSource' ? 'height' : 'weight'] === null) return null;
+        if (key === 'heightSource' || key === 'weightSource' || key === 'positionSource') {
+          var field = key === 'heightSource' ? 'height' : key === 'weightSource' ? 'weight' : 'listedPosition';
+          if (record[field] === null || record[field] === undefined) return null;
           if (value) {
             if (sourceLabels.indexOf(value) < 0) sourceLabels.push(value);
             value = sourceLabels.indexOf(value) + 1;
@@ -219,7 +238,7 @@ var PlayerBios = (function () {
       source: source, sources: (ctx.league === 'MBB' ? ['https://api.collegebasketballdata.com/teams/roster?season=' + ctx.season, 'https://api.collegebasketballdata.com/stats/player/season?season=' + ctx.season, siteBase(ctx.league) + '/teams'] : ['https://site.web.api.espn.com/apis/common/v3/sports/basketball/' + sport(ctx.league) + '/statistics/byathlete?season=' + ctx.season]).concat(['https://sports.core.api.espn.com/v3/sports/basketball/' + sport(ctx.league) + '/seasons/' + ctx.season + '/athletes', 'https://sports.core.api.espn.com/v2/sports/basketball/leagues/' + sport(ctx.league) + '/seasons/' + ctx.season + '/athletes/{id}']),
       measurementNote: 'Season identifies the roster/statistics population. ESPN historical endpoints may return an athlete\'s updated bio; dimensions are listed values retrieved on generatedAt, not measurements verified for that season.',
       units: { height: 'in', weight: 'lb' }, columns: columns, sourceLabels: sourceLabels,
-      coverage: { records: records.length, height: records.filter(function (r) { return r.height !== null; }).length, weight: records.filter(function (r) { return r.weight !== null; }).length },
+      coverage: { records: records.length, height: records.filter(function (r) { return r.height !== null; }).length, weight: records.filter(function (r) { return r.weight !== null; }).length, listedPosition: records.filter(function (r) { return knownPosition(r.listedPosition); }).length },
       complete: errors.length === 0, errors: errors, teams: teams,
       records: compactRecords
     };
@@ -241,7 +260,8 @@ var PlayerBios = (function () {
         if (!athlete.id || byId[String(athlete.id)]) return;
         var record = { espnId: String(athlete.id), cbdId: '', teamId: String(athlete.teamId || ''), team: athlete.teamName || '', name: athlete.displayName,
           height: normalizeHeight(athlete.height) || normalizeHeight(athlete.displayHeight), weight: normalizeWeight(athlete.weight) || normalizeWeight(athlete.displayWeight),
-          heightSource: 'ESPN athlete bio', weightSource: 'ESPN athlete bio' };
+          heightSource: 'ESPN athlete bio', weightSource: 'ESPN athlete bio',
+          listedPosition: listedPosition(athlete.position) || 'NA', positionSource: 'ESPN season statistics (' + ctx.season + ')' };
         byId[record.espnId] = [record];
         records.push(record);
       });
@@ -336,7 +356,8 @@ var PlayerBios = (function () {
           (roster.players || []).forEach(function (athlete) {
             var record = { espnId: String(athlete.sourceId || ''), cbdId: String(athlete.id || ''), teamId: teamId, team: roster.team,
               name: athlete.name, height: normalizeHeight(athlete.height), weight: normalizeWeight(athlete.weight),
-              heightSource: 'CBD roster (' + ctx.season + ')', weightSource: 'CBD roster (' + ctx.season + ')' };
+              heightSource: 'CBD roster (' + ctx.season + ')', weightSource: 'CBD roster (' + ctx.season + ')',
+              listedPosition: listedPosition(athlete.position), positionSource: 'CBD roster (' + ctx.season + ')' };
             rosterPlayers[roster.teamId + ':' + athlete.id] = record;
             records.push(record);
           });
@@ -354,10 +375,14 @@ var PlayerBios = (function () {
             seen[key] = true;
             var roster = rosterPlayers[athlete.teamId + ':' + athlete.athleteId];
             var sameIdentity = roster && (!athlete.athleteSourceId || !roster.espnId || String(athlete.athleteSourceId) === roster.espnId);
+            var statsPosition = listedPosition(athlete.position);
+            var rosterPosition = sameIdentity ? listedPosition(roster.listedPosition) : null;
             population.push({ espnId: String(athlete.athleteSourceId || (sameIdentity && roster.espnId) || ''), cbdId: String(athlete.athleteId || ''),
               teamId: rosterTeamIds[String(athlete.teamId)] || '', team: athlete.team, name: athlete.name,
               height: sameIdentity ? roster.height : null, weight: sameIdentity ? roster.weight : null,
-              heightSource: sameIdentity ? roster.heightSource : null, weightSource: sameIdentity ? roster.weightSource : null });
+              heightSource: sameIdentity ? roster.heightSource : null, weightSource: sameIdentity ? roster.weightSource : null,
+              listedPosition: statsPosition || rosterPosition || 'NA',
+              positionSource: !statsPosition && rosterPosition ? roster.positionSource : 'CBD season statistics (' + ctx.season + ')' });
           });
           if (!population.length) throw new Error('CBD statistics season mismatch');
           records = population;
@@ -407,6 +432,10 @@ var PlayerBios = (function () {
             }
             if (record.height === null && height !== null) { record.height = height; record.heightSource = source; }
             if (record.weight === null && weight !== null) { record.weight = weight; record.weightSource = source; }
+            if (!listedPosition(record.listedPosition) && listedPosition(athlete.position)) {
+              record.listedPosition = listedPosition(athlete.position);
+              record.positionSource = source;
+            }
             // ESPN also updates experience on historical roster URLs. Keep the
             // dashboard's existing class rather than labeling it with today's class.
             var birthplace = athlete.birthPlace || {};
@@ -424,6 +453,68 @@ var PlayerBios = (function () {
   function storage(options) {
     if (options.storage !== undefined) return options.storage;
     try { return typeof localStorage === 'undefined' ? null : localStorage; } catch (_) { return null; }
+  }
+
+  // Refresh only season-listed positions in an existing snapshot. Measurements
+  // and their original retrieval timestamp/provenance stay exactly as supplied.
+  async function refreshPositions(snapshot, options) {
+    options = options || {};
+    var ctx = context(snapshot.league, snapshot.season);
+    if (!validSnapshot(snapshot, ctx)) throw new Error('Invalid player bio snapshot');
+    var records = decode(snapshot);
+    var sourceRecords = [];
+    var sourceUrl;
+    var source = (ctx.league === 'MBB' ? 'CBD' : 'ESPN') + ' season statistics (' + ctx.season + ')';
+    if (ctx.league === 'MBB') {
+      sourceUrl = workerBase(options) + '/api/proxy/stats/player/season?season=' + ctx.season;
+      var data = await request(sourceUrl, options);
+      if (!Array.isArray(data) || !data.length) throw new Error('Invalid CBD position population');
+      sourceRecords = data.filter(function (athlete) { return Number(athlete.season) === ctx.season; }).map(function (athlete) {
+        return { espnId: String(athlete.athleteSourceId || ''), cbdId: String(athlete.athleteId || ''), team: athlete.team,
+          name: athlete.name, listedPosition: listedPosition(athlete.position) || 'NA' };
+      });
+    } else {
+      sourceUrl = 'https://site.web.api.espn.com/apis/common/v3/sports/basketball/' + sport(ctx.league) + '/statistics/byathlete?season=' + ctx.season + '&limit=1000';
+      var first = await request(sourceUrl + '&page=1', options);
+      function addPage(page) {
+        if (!page || !Array.isArray(page.athletes)) throw new Error('Invalid ESPN position page');
+        page.athletes.forEach(function (entry) {
+          var athlete = entry.athlete || {};
+          if (athlete.id) sourceRecords.push({ espnId: String(athlete.id), teamId: String(athlete.teamId || ''), team: athlete.teamName,
+            name: athlete.displayName, listedPosition: listedPosition(athlete.position) || 'NA' });
+        });
+      }
+      addPage(first);
+      var pages = Number(first.pagination && first.pagination.pages) || 1;
+      await pool(Array.from({ length: Math.max(0, pages - 1) }, function (_, index) { return index + 2; }), options.concurrency || 8, async function (page) {
+        addPage(await request(sourceUrl + '&page=' + page, options));
+      });
+    }
+    if (!sourceRecords.length) throw new Error('No positions found for snapshot season');
+    var index = indexRecords({ records: sourceRecords, teams: snapshot.teams || [] });
+    records.forEach(function (record) {
+      var match = resolveRecord({ EspnId: record.espnId, CbdId: record.cbdId, TeamId: record.teamId, Team: record.team, Player: record.name }, index);
+      if (match && match.listedPosition) {
+        record.listedPosition = match.listedPosition;
+        record.positionSource = source;
+      }
+    });
+    var labels = (snapshot.sourceLabels || []).slice();
+    var packed = records.map(function (record) {
+      var row = columns.map(function (key) {
+        var value = record[key] === undefined || record[key] === '' ? null : record[key];
+        if ((key === 'heightSource' || key === 'weightSource' || key === 'positionSource') && value) {
+          if (labels.indexOf(value) < 0) labels.push(value);
+          value = labels.indexOf(value) + 1;
+        }
+        return value;
+      });
+      while (row.length && row[row.length - 1] === null) row.pop();
+      return row;
+    });
+    return Object.assign({}, snapshot, { columns: columns.slice(), sourceLabels: labels, records: packed,
+      positionGeneratedAt: new Date().toISOString(), positionSources: [sourceUrl],
+      coverage: Object.assign({}, snapshot.coverage, { listedPosition: records.filter(function (record) { return knownPosition(record.listedPosition); }).length }) });
   }
 
   function readCache(ctx, options) {
@@ -448,33 +539,36 @@ var PlayerBios = (function () {
     options = options || {};
     var ctx = context(league, season);
     if (!options.force && memory[ctx.key] && memory[ctx.key].expires > Date.now()) return memory[ctx.key].snapshot;
-    if (pending[ctx.key]) return pending[ctx.key];
+    var pendingKey = ctx.key + (options.snapshotOnly ? ':snapshot' : '');
+    if (pending[pendingKey]) return pending[pendingKey];
     var cached = !options.force && readCache(ctx, options);
     if (cached) { memory[ctx.key] = { snapshot: cached, expires: Date.now() + (cached.complete ? TTL : RETRY_TTL) }; return cached; }
-    pending[ctx.key] = (async function () {
+    pending[pendingKey] = (async function () {
       var snapshot;
       if (!options.force && options.snapshot !== false) {
         try {
-          snapshot = await request((options.snapshotBase || 'data/') + 'player-bios-' + league.toLowerCase() + '-' + ctx.season + '.json', options);
+          snapshot = await request((options.snapshotBase || 'data/') + 'player-bios-' + league.toLowerCase() + '-' + ctx.season + '.json?v=positions-2', options);
           if (!validSnapshot(snapshot, ctx) || !snapshot.records.length) snapshot = null;
         } catch (_) { snapshot = null; }
       }
       // A committed snapshot deliberately caches unavailable fields as null, too.
       // Refreshing belongs to the CLI; opening a dashboard must not refetch every roster.
+      if (!snapshot && options.snapshotOnly) return null;
       if (!snapshot) snapshot = await refresh(league, season, options);
       remember(ctx, snapshot, options);
       return snapshot;
     })();
-    try { return await pending[ctx.key]; } finally { delete pending[ctx.key]; }
+    try { return await pending[pendingKey]; } finally { delete pending[pendingKey]; }
   }
 
   async function enrich(players, league, season, options) {
     var snapshot = await load(league, season, options);
+    if (!snapshot) return { total: players.length, matched: 0, height: 0, weight: 0, listedPosition: 0, updated: 0, records: 0, source: 'unavailable', unavailable: true, errors: [] };
     return apply(players, snapshot, league, season);
   }
 
   return { version: VERSION, columns: columns, normalizeName: normalizeName, normalizeHeight: normalizeHeight, normalizeWeight: normalizeWeight,
-    apply: apply, enrich: enrich, load: load, refresh: refresh, decode: decode,
+    apply: apply, enrich: enrich, load: load, refresh: refresh, refreshPositions: refreshPositions, decode: decode,
     clearMemory: function () { memory = {}; pending = {}; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = PlayerBios;

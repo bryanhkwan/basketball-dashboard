@@ -13,6 +13,23 @@ A comprehensive single-page scouting, valuation, and team-building tool for NCAA
 
 ## Core Features
 
+### Guards, Wings and Bigs
+
+Both leagues have three independent player pools, scoring weights and percentile distributions. G/PG/SG are Guards; SF and G-F/F-G are Wings; PF/C and F-C/C-F are Bigs. Native positions come from CBD season statistics for MBB and ESPN byathlete season statistics for WBB, and remain visible as `ListedPosition` with `ListedPositionSource`.
+
+Generic forwards and unknown labels (`ATH`, `NA`) use the shared `classifyPlayerPosition` helper in `modules/config.js`. It uses league-specific height ranges, three-point attempt share, passing and interior activity. Low-sample or missing evidence produces a provisional group. These rules are heuristics; they do not establish the exact position played on court. The player board and profiles identify inferred groups and explain the rule. Detailed thresholds are in the dashboard's Methodology panel. No named-player overrides are used.
+
+Wings have editable defaults totaling 100 in each league. WBB weights use available box-score statistics. Legacy evaluation presets preserve Guard/Big settings and receive the league's default Wing weights. Roster targets, comparisons, portal filters, Value Lab, development tools, profiles and AI tools all use the same groups. Background scoring restores the active group's percentile context; late biography updates reclassify and refresh affected scores and roster references.
+
+```sh
+node tools/refresh-player-bios.js --league ALL --seasons 2022,2023,2024,2025,2026 --positions-only
+node --test tools/player-positions.test.cjs tools/position-rosters.test.cjs tools/position-consumers.test.cjs tools/player-bios.test.js tools/test-data-bios.cjs
+node tools/audit-player-positions.cjs --season 2026
+node tools/audit-player-positions.cjs --season 2026 --published
+```
+
+The Worker player response must retain native athlete IDs, `ListedPosition`, `ListedPositionSource` and `FGA/G`; its evaluation-preset sanitizer must retain `positionWeights.Wings`. The player cache uses `cbdata:players:v4`. The public snapshots include source positions for all five supported seasons and load alongside statistics before grouping.
+
 ### Player Height and Weight
 
 MBB and WBB now load listed measurements from season-specific snapshots in `data/player-bios-*.json`. Height is stored/exported in **inches** and weight in **pounds**. The player board, profile, dossier, CSV export, and AI summaries include these fields. The board reports measurement coverage; missing values stay blank and display as a dash.
@@ -32,7 +49,7 @@ node --test tools/test-data-bios.cjs tools/player-bios.test.js
 node tools/audit-player-bios.cjs --seasons 2026 --sample 0
 ```
 
-Measurement refreshes update existing player objects without rerunning valuation. A changed class/eligibility label still triggers projection recalculation. Biography fields and IDs are excluded from scoring. WBB statistics now use 1,000-row pages with bounded concurrency, and a failed page causes a visible load failure instead of silently dropping players. Team Builder retains only the top displayed suggestions instead of sorting its full candidate pools.
+Measurement refreshes update existing player objects. A changed class/eligibility label or inferred position group triggers recalculation; other biography changes preserve scores. Biography fields and IDs are excluded from scoring weights. WBB statistics use 1,000-row pages with bounded concurrency, and a failed page causes a visible load failure instead of silently dropping players. Team Builder retains only the top displayed suggestions instead of sorting its full candidate pools.
 
 ### Player Scoring & Valuation
 - **Weighted Composite Scoring**: Stats normalized between configurable Min/Max bounds, scaled by custom weights, adjusted for direction. Outputs a single Performance Score for ranking.

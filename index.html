@@ -9,37 +9,37 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://hidden-salad-773b.bryanhkwan.workers.dev" crossorigin>
   <link rel="preconnect" href="https://white-pine-7669.bryanhkwan.workers.dev" crossorigin>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=positions-20260914">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" media="print" onload="this.media='all'">
   <!-- Modules — load in dependency order (no deps first, coordinator last) -->
-  <script src="modules/config.js?v=player-bios-20260914" defer></script>
-  <script src="modules/player-bios.js?v=player-bios-20260914" defer></script>
+  <script src="modules/config.js?v=positions-20260914" defer></script>
+  <script src="modules/player-bios.js?v=positions-20260914" defer></script>
   <script src="modules/auth.js" defer></script>
   <script src="modules/notes.js" defer></script>
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
-  <script src="modules/data.js?v=player-bios-20260914" defer></script>
-  <script src="modules/eval-presets.js" defer></script>
+  <script src="modules/data.js?v=positions-20260914" defer></script>
+  <script src="modules/eval-presets.js?v=positions-20260914" defer></script>
   <script src="modules/draft.js" defer></script>
-  <script src="modules/player-development.js" defer></script>
-  <script src="modules/players.js?v=player-bios-20260914" defer></script>
-  <script src="modules/profile.js?v=player-bios-20260914" defer></script>
-  <script src="modules/teambuilder.js?v=player-bios-20260914" defer></script>
+  <script src="modules/player-development.js?v=positions-20260914" defer></script>
+  <script src="modules/players.js?v=positions-20260914" defer></script>
+  <script src="modules/profile.js?v=positions-20260914" defer></script>
+  <script src="modules/teambuilder.js?v=positions-20260914" defer></script>
   <script src="modules/dashboard-prefs.js" defer></script>
   <script src="modules/admin.js" defer></script>
-  <script src="modules/portal.js" defer></script>
-  <script src="modules/teams.js" defer></script>
+  <script src="modules/portal.js?v=positions-20260914" defer></script>
+  <script src="modules/teams.js?v=positions-20260914" defer></script>
   <script src="modules/shot-analytics.js" defer></script>
   <script src="modules/lab.js" defer></script>
-  <script src="modules/value-lab.js" defer></script>
-  <script src="modules/chat.js?v=player-bios-20260914" defer></script>
-  <script src="modules/help-content.js" defer></script>
+  <script src="modules/value-lab.js?v=positions-20260914" defer></script>
+  <script src="modules/chat.js?v=positions-20260914" defer></script>
+  <script src="modules/help-content.js?v=positions-20260914" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="modules/help.js" defer></script>
   <script src="modules/trends.js" defer></script>
   <script src="modules/shortcuts.js" defer></script>
-  <script src="app.js" defer></script>
-  <script src="modules/profile-dossier.js?v=player-bios-20260914" defer></script>
+  <script src="app.js?v=positions-20260914" defer></script>
+  <script src="modules/profile-dossier.js?v=positions-20260914" defer></script>
   <script src="modules/profile-route.js" defer></script>
   <script src="modules/team-explainer.js" defer></script>
 </head>
@@ -147,7 +147,7 @@
       <h1>Basketball Operations Dashboard</h1>
       <p class="sub">
         Scouting, portal monitoring, team intelligence, and roster investment analysis for UToledo Athletics.
-        Uses CBD, ESPN, worker-backed portal feeds, and position bucketing (G/G-F -> Guards, F/C/F-C/C-F -> Bigs).
+        Uses CBD, ESPN, and worker-backed portal feeds. Players are grouped as Guards, Wings, or Bigs using listed positions, with height and playing-role fallbacks marked as inferred.
       </p>
     </div>
     <div class="appControlRail">
@@ -276,8 +276,9 @@
 
       <div class="playersControlCell">
         <label>Position rules</label><br/>
-        <div class="tabs">
+        <div class="tabs positionTabs" aria-label="Position group">
           <button class="tab active" data-pos="Guards" id="tabGuards">Guards</button>
+          <button class="tab" data-pos="Wings" id="tabWings">Wings</button>
           <button class="tab" data-pos="Bigs" id="tabBigs">Bigs</button>
         </div>
       </div>
@@ -290,7 +291,7 @@
           <option value="playmaking">Playmaking</option>
           <option value="defense">Defense</option>
           <option value="rim">Rim Protection (Bigs)</option>
-          <option value="rebounding">Rebounding (Bigs)</option>
+          <option value="rebounding">Rebounding</option>
         </select>
       </div>
       <div class="playersControlCell playersSearchBlock">
@@ -401,7 +402,7 @@
         <div class="row" style="justify-content:space-between">
           <div>
             <div class="playersPanelTitle">Weights / Min / Max</div>
-            <div class="playersPanelSub">Switches with Guards/Bigs automatically.</div>
+            <div class="playersPanelSub">Separate weights for Guards, Wings, and Bigs.</div>
           </div>
           <div class="row" style="gap:8px">
   <label class="pill" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
@@ -595,7 +596,7 @@
             <label>Archetype</label><br/>
             <select id="portalArchetypeFilter" style="width:160px">
               <option value="" selected>All archetypes</option>
-              <optgroup label="Guards">
+              <optgroup label="Guards and Wings">
                 <option value="Shooter">Shooter</option>
                 <option value="Efficient">Efficient</option>
                 <option value="Scorer">Scorer</option>
@@ -604,6 +605,7 @@
                 <option value="Disruptor">Disruptor</option>
                 <option value="Defender">Defender</option>
                 <option value="Impact">Impact</option>
+                <option value="Wing Role">Wing Role</option>
               </optgroup>
               <optgroup label="Bigs">
                 <option value="Rim Protector">Rim Protector</option>
@@ -676,6 +678,7 @@
             <select id="portalNeedFilter" style="width:150px">
               <option value="all" selected>All positions</option>
               <option value="guard">Guards</option>
+              <option value="wing">Wings</option>
               <option value="big">Bigs</option>
             </select>
           </div>
@@ -784,7 +787,7 @@
         <h2 class="opsHeroTitle">Team Builder</h2>
         <span class="opsHeroBadge">What-if workspace</span>
       </div>
-      <p class="opsHeroText">Build hypothetical rosters, balance your guard-big mix, pressure-test budget decisions, and see how a scenario changes your team profile before anything becomes real.</p>
+      <p class="opsHeroText">Build hypothetical rosters, balance Guards, Wings, and Bigs, pressure-test budget decisions, and see how a scenario changes your team profile before anything becomes real.</p>
       <div class="opsHeroTags">
         <span class="opsHeroTag">Roster fit</span>
         <span class="opsHeroTag">Budget controls</span>
@@ -820,8 +823,9 @@
         <div><label>Budget</label><br/><input id="tbBudget" type="number" step="10000" value="500000" style="width:100px"></div>
         <div><label>Player cap</label><br/><input id="tbPlayerCap" type="number" step="5000" value="150000" style="width:90px"></div>
         <div><label>Max roster</label><br/><input id="tbMaxRoster" type="number" step="1" min="1" max="25" value="13" style="width:60px"></div>
-        <div><label>Guards</label><br/><input id="tbTargetGuards" type="number" step="1" min="0" max="15" value="8" style="width:48px;text-align:center"></div>
-        <div><label>Bigs</label><br/><input id="tbTargetBigs" type="number" step="1" min="0" max="15" value="5" style="width:48px;text-align:center"></div>
+        <div><label for="tbTargetGuards">Guards</label><br/><input id="tbTargetGuards" type="number" step="1" min="0" max="15" value="5" style="width:48px;text-align:center"></div>
+        <div><label for="tbTargetWings">Wings</label><br/><input id="tbTargetWings" type="number" step="1" min="0" max="15" value="5" style="width:48px;text-align:center"></div>
+        <div><label for="tbTargetBigs">Bigs</label><br/><input id="tbTargetBigs" type="number" step="1" min="0" max="15" value="3" style="width:48px;text-align:center"></div>
         <div><label>Weak below</label><br/>
           <div style="display:flex;align-items:center;gap:6px">
             <input id="tbWeakThresh" type="range" min="10" max="60" value="40" style="width:80px;accent-color:var(--accent)">
@@ -841,8 +845,9 @@
 
     <div class="tbKpis" id="tbKpis">
       <span class="pill">Roster: <b id="tbCount">0</b> / <b id="tbMaxLabel">13</b></span>
-      <span class="pill">Guards: <b id="tbGuardCount">0</b> / <b id="tbGuardTarget">8</b></span>
-      <span class="pill">Bigs: <b id="tbBigCount">0</b> / <b id="tbBigTarget">5</b></span>
+      <span class="pill">Guards: <b id="tbGuardCount">0</b> / <b id="tbGuardTarget">5</b></span>
+      <span class="pill">Wings: <b id="tbWingCount">0</b> / <b id="tbWingTarget">5</b></span>
+      <span class="pill">Bigs: <b id="tbBigCount">0</b> / <b id="tbBigTarget">3</b></span>
       <span class="pill">Total cost: <b id="tbCost">$0</b></span>
       <span class="pill">Remaining: <b id="tbRemaining">$500,000</b></span>
       <span class="pill" id="tbPosNote" style="display:none;border-color:rgba(251,191,36,.3);color:var(--warn)"></span>
@@ -936,6 +941,7 @@
     <div class="tbKpis" id="oppKpis" style="margin-top:10px">
       <span class="pill">Roster: <b id="oppCount">0</b></span>
       <span class="pill">Guards: <b id="oppGuardCount">0</b></span>
+      <span class="pill">Wings: <b id="oppWingCount">0</b></span>
       <span class="pill">Bigs: <b id="oppBigCount">0</b></span>
     </div>
 
@@ -1337,7 +1343,7 @@
         <p>PerfScore is the main player evaluation score. Each active stat is normalized between your configured Min and Max, weighted by your selected stat weight, then rolled into one composite score.</p>
         <p style="margin-top:10px"><b>Formula:</b> PerfScore = sum(weight x normalized stat) / sum(active weights)</p>
         <p style="margin-top:10px">Higher-is-better stats, like points or assists, reward strong raw values. Lower-is-better stats, like turnovers, are inverted automatically so a better underlying performance still scores higher.</p>
-        <p style="margin-top:10px">PerfScore is always calculated inside the current league and position bucket, so guards are only compared with guards and bigs are only compared with bigs.</p>
+        <p style="margin-top:10px">PerfScore and percentiles are calculated separately for Guards, Wings, and Bigs within each league.</p>
       </div>
     </div>
 
@@ -1354,12 +1360,15 @@
     <div class="methodSection" id="methodPositionGroupsSection">
       <div class="methodHead">Position Groups</div>
       <div class="methodBody">
-        <p>For percentile calculations, the dashboard buckets players into two broad role groups:</p>
+        <p>MBB and WBB each have three separate scoring and percentile groups. Original source positions remain visible beside the dashboard group:</p>
         <ul style="margin-top:10px;padding-left:18px;display:flex;flex-direction:column;gap:6px">
-          <li><b>Guards</b> - G, G-F</li>
-          <li><b>Bigs</b> - F, C, F-C, C-F</li>
+          <li><b>Guards</b> - G, PG, SG and combination guards</li>
+          <li><b>Wings</b> - SF, G-F and F-G; perimeter forwards identified by the fallback rules</li>
+          <li><b>Bigs</b> - PF, C, F-C and C-F; interior forwards identified by the fallback rules</li>
         </ul>
-        <p style="margin-top:10px">This keeps comparison logic more honest. A guard is not graded against a rim-protecting center, and a big is not graded against a primary ball handler.</p>
+        <p style="margin-top:10px">A generic F does not distinguish a small forward from a power forward. The starting split is 6′7″ for MBB and 6′1″ for WBB: shorter forwards go to Wings, taller forwards to Bigs. Hybrid-height forwards can move to Wings with perimeter shooting or passing evidence. MBB forwards at 6′10″ or taller and WBB forwards at 6′3″ or taller go to Bigs.</p>
+        <p style="margin-top:10px">Role evidence requires at least five games and ten minutes per game. Perimeter shooting means at least 1.5 three-point attempts per game and a 30% share of field-goal attempts when available. A passing wing has at least 2.5 assists, fewer than eight rebounds in MBB (seven in WBB), and fewer than 0.75 blocks per game. Unknown positions use size and role; records without enough evidence receive a provisional group.</p>
+        <p style="margin-top:10px">Fallback groups are marked <b>inferred</b>; profiles explain the rule used. These are scouting categories, not claims about a player's position on every possession. Wings have editable weights emphasizing perimeter production, rebounding and two-way contribution. Existing two-group evaluation presets keep their settings and receive the league's default Wings weights.</p>
       </div>
     </div>
 
@@ -1427,7 +1436,7 @@
       <div class="methodHead">WBB Defaults</div>
       <div class="methodBody">
         <p>WBB uses its own default weights and min/max ranges because the stat environment is different from MBB. The scoring model is not a direct copy-paste from the men's side.</p>
-        <p style="margin-top:10px"><b>Guards</b> lean more heavily on playmaking efficiency, defensive activity, and balanced shooting context. <b>Bigs</b> lean more heavily on rebounding, rim impact, and efficient frontcourt finishing.</p>
+        <p style="margin-top:10px"><b>Guards</b> emphasize playmaking efficiency, defensive activity, and shooting. <b>Wings</b> balance perimeter production, rebounding, and two-way impact. <b>Bigs</b> emphasize rebounding, rim impact, and efficient frontcourt finishing.</p>
         <p style="margin-top:10px">Draft Radar remains MBB-only. WBB player evaluation still uses the same dashboard structure, but not every MBB-specific downstream model is carried over.</p>
       </div>
     </div>

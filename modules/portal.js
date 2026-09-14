@@ -35,7 +35,7 @@ var portalPlayerIndexExact = Object.create(null);
 var portalPlayerIndexLoose = [];
 var portalPlayerIndexVersion = 0;
 var portalArchetypeDistRef = null;
-var portalArchetypeDistCache = { guard: null, big: null };
+var portalArchetypeDistCache = { guard: null, wing: null, big: null };
 var portalJsPdfPromise = null;
 var portalRepBusy = false;
 var portalCurrentPage = 1;
@@ -167,12 +167,13 @@ function portalGetSelectedNeedGroup() {
   var value = portalNeedFilterEl && portalNeedFilterEl.value
     ? String(portalNeedFilterEl.value).toLowerCase()
     : 'all';
-  if (value === 'guard' || value === 'big') return value;
+  if (value === 'guard' || value === 'wing' || value === 'big') return value;
   return 'all';
 }
 
 function portalNeedGroupLabel(group) {
   if (group === 'guard') return 'Guards';
+  if (group === 'wing') return 'Wings';
   if (group === 'big') return 'Bigs';
   return 'All positions';
 }
@@ -183,7 +184,7 @@ function portalLoadNeedFilterPref() {
   try {
     saved = localStorage.getItem(portalNeedFilterStorageKey()) || 'all';
   } catch (_) {}
-  portalNeedFilterEl.value = (saved === 'guard' || saved === 'big') ? saved : 'all';
+  portalNeedFilterEl.value = (saved === 'guard' || saved === 'wing' || saved === 'big') ? saved : 'all';
 }
 
 function portalSaveNeedFilterPref() {
@@ -518,19 +519,18 @@ function portalClamp01(v) {
 }
 
 function portalPlayerPosGroup(player) {
-  if (!player) return 'guard';
   if (typeof tbPosGroup === 'function') return tbPosGroup(player);
-  var pos = String(player.Position || player.Pos || '').toLowerCase();
-  return (pos.indexOf('g') >= 0 || pos.indexOf('guard') >= 0) ? 'guard' : 'big';
+  return { Guards: 'guard', Wings: 'wing', Bigs: 'big' }[bucketPosition(player, portalCurrentSport().toUpperCase())];
 }
 
 function portalEntryPosGroup(entry, player) {
   if (player) return portalPlayerPosGroup(player);
-  var raw = portalNorm(entry && entry.position);
-  if (!raw) return '';
-  if (raw.indexOf('guard') >= 0 || /\b(pg|sg|g)\b/.test(raw)) return 'guard';
-  if (raw.indexOf('center') >= 0 || raw.indexOf('forward') >= 0 || raw.indexOf('post') >= 0 || /\b(c|f)\b/.test(raw)) return 'big';
-  return '';
+  if (!entry || !entry.position) return '';
+  return portalPlayerPosGroup(Object.assign({}, entry, {
+    Position: entry.position,
+    Height: entry.Height || entry.height,
+    _league: portalCurrentSport().toUpperCase()
+  }));
 }
 
 function portalClassBucket(player) {
@@ -764,8 +764,9 @@ function portalCollectAllPlayers() {
 function portalBuildDistributions(players) {
   var allStats = {};
   var guardCats = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Guards) ? GAP_CATEGORIES.Guards : [];
+  var wingCats = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Wings) ? GAP_CATEGORIES.Wings : [];
   var bigCats = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Bigs) ? GAP_CATEGORIES.Bigs : [];
-  guardCats.concat(bigCats).forEach(function (cat) {
+  guardCats.concat(wingCats, bigCats).forEach(function (cat) {
     (cat.stats || []).forEach(function (s) { allStats[s] = true; });
   });
   allStats['PerfScore_calc'] = true;
@@ -796,28 +797,13 @@ function portalStatPercentile(stat, val, dist) {
 }
 
 function portalCategoryDefsForRoster(roster, forcedGroup) {
-  if (forcedGroup === 'guard') {
-    var guardDefs = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Guards) ? GAP_CATEGORIES.Guards : [];
-    return guardDefs.filter(function (d, idx, arr) {
-      return arr.findIndex(function (item) { return item.label === d.label; }) === idx;
-    });
-  }
-  if (forcedGroup === 'big') {
-    var bigDefs = (typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES && GAP_CATEGORIES.Bigs) ? GAP_CATEGORIES.Bigs : [];
-    return bigDefs.filter(function (d, idx, arr) {
-      return arr.findIndex(function (item) { return item.label === d.label; }) === idx;
-    });
-  }
-  var guards = (roster || []).some(function (r) {
-    return typeof tbPosGroup === 'function' ? tbPosGroup(r) === 'guard' : true;
-  });
-  var bigs = (roster || []).some(function (r) {
-    return typeof tbPosGroup === 'function' ? tbPosGroup(r) !== 'guard' : true;
+  var buckets = { guard: 'Guards', wing: 'Wings', big: 'Bigs' };
+  var categories = typeof GAP_CATEGORIES !== 'undefined' && GAP_CATEGORIES ? GAP_CATEGORIES : {};
+  var groups = buckets[forcedGroup] ? [forcedGroup] : Object.keys(buckets).filter(function (group) {
+    return !(roster || []).length || roster.some(function (r) { return portalPlayerPosGroup(r) === group; });
   });
   var defs = [];
-  if (guards && bigs) defs = (GAP_CATEGORIES.Guards || []).concat(GAP_CATEGORIES.Bigs || []);
-  else if (bigs) defs = GAP_CATEGORIES.Bigs || [];
-  else defs = GAP_CATEGORIES.Guards || [];
+  groups.forEach(function (group) { defs = defs.concat(categories[buckets[group]] || []); });
 
   var seen = {};
   return defs.filter(function (d) {
@@ -962,7 +948,7 @@ function portalRenderDepartureCards(departures) {
   departures.forEach(function (dep) {
     var r = dep.player;
     var nm = portalGetPlayerName(r);
-    var pos = r.Position || r.Pos || (typeof tbPosGroup === 'function' ? (tbPosGroup(r) === 'guard' ? 'G' : 'F/C') : '?');
+    var pos = r.Position || r.Pos || { guard: 'G', wing: 'Wing', big: 'PF/C' }[portalPlayerPosGroup(r)] || '?';
     var score = portalSafeNum(r.Score) || portalSafeNum(r.PerfScore_calc);
     var card = document.createElement('div');
     card.className = 'portalDepartureCard' + (portalSelectedDepartureNames.indexOf(nm) >= 0 ? ' selected' : '');
@@ -3113,7 +3099,7 @@ async function portalRunAIAnalysis() {
       '## Instructions\n' +
       '- Use language and examples that fit ' + sportLabelShort + ' roster building, rotation balance, and portal decision-making.\n' +
       '- For EACH departing player, analyze what the team loses statistically (points, shooting, rebounds, defense, playmaking) using their per-game stats AND shot zone data when available.\n' +
-      '- Treat position realism as a real constraint. If the team loses a guard, make sure the core replacement plan stays guard-focused unless there is a clear roster-level reason to pivot big/wing, and vice versa for frontcourt losses.\n' +
+      '- Treat Guards, Wings, and Bigs as distinct position groups. Keep the core replacement plan in the departing player\'s group unless there is a clear roster-level reason to change the positional balance.\n' +
       '- For EACH recommended replacement, explain specifically WHY they are a good fit by comparing their stats, shooting profile, recent-game summary, valuation tier, and role against what was lost.\n' +
       '- Consider team-level four factors (eFG%, TOV%, ORB%, FTR) and identify which departures hurt which factors.\n' +
       '- Recommend which replacement best fills EACH departing player\'s role. If one replacement can cover gaps from multiple departures, say so.\n' +
@@ -3377,13 +3363,15 @@ function portalBuildArchetypeDist(posGroup) {
   var players = (portalAllPlayers && portalAllPlayers.length) ? portalAllPlayers : portalCollectAllPlayers();
   if (portalArchetypeDistRef !== players) {
     portalArchetypeDistRef = players;
-    portalArchetypeDistCache = { guard: null, big: null };
+    portalArchetypeDistCache = { guard: null, wing: null, big: null };
   }
   if (portalArchetypeDistCache[posGroup]) return portalArchetypeDistCache[posGroup];
 
   var stats = posGroup === 'guard'
     ? ['3PT_Rating', 'eFG%', 'PPG', 'APG', 'A/TO', 'SPG', 'DR%', 'BPM']
-    : ['BPG', 'DRtg', 'DR%', 'DRB/G', 'OR%', 'eFG%', '3PT_Rating'];
+    : posGroup === 'wing'
+      ? ['3PT_Rating', 'eFG%', 'PPG', 'APG', 'A/TO', 'SPG', 'DR%', 'RPG', 'BPM']
+      : ['BPG', 'DRtg', 'DR%', 'DRB/G', 'OR%', 'eFG%', '3PT_Rating'];
   var relevant = players.filter(function (p) { return portalPlayerPosGroup(p) === posGroup; });
   var dist = {};
 
@@ -3421,7 +3409,7 @@ function portalArchetypeTagsFor(player) {
   };
 
   var tags = [];
-  if (posGroup === 'guard') {
+  if (posGroup === 'guard' || posGroup === 'wing') {
     var p3r = pct('3PT_Rating');
     var pefg = pct('eFG%');
     var pppg = pct('PPG');
@@ -3430,6 +3418,7 @@ function portalArchetypeTagsFor(player) {
     var pspg = pct('SPG');
     var pdr = pct('DR%');
     var pbpm = pct('BPM');
+    var prpgWing = posGroup === 'wing' ? pct('RPG') : NaN;
     var p3paG = portalSafeNum(player['3PA/G']);
 
     if (Number.isFinite(p3r) && p3r >= 0.80 && Number.isFinite(p3paG) && p3paG >= 1.5) tags.push({ t: 'Shooter', c: 'var(--accent2)' });
@@ -3440,7 +3429,8 @@ function portalArchetypeTagsFor(player) {
     if (Number.isFinite(pspg) && pspg >= 0.80) tags.push({ t: 'Disruptor', c: 'var(--warn)' });
     if (Number.isFinite(pdr) && pdr >= 0.75) tags.push({ t: 'Defender', c: 'var(--warn)' });
     if (Number.isFinite(pbpm) && pbpm >= 0.75) tags.push({ t: 'Impact', c: 'var(--accent)' });
-    if (!tags.length) tags.push({ t: 'Role Player', c: 'var(--muted)' });
+    if (Number.isFinite(prpgWing) && prpgWing >= 0.80) tags.push({ t: 'Rebounder', c: 'var(--accent2)' });
+    if (!tags.length) tags.push({ t: posGroup === 'wing' ? 'Wing Role' : 'Role Player', c: 'var(--muted)' });
     return tags.slice(0, 6);
   }
 

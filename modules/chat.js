@@ -227,7 +227,7 @@
 
   // ---- App bridge ----
   const app = () => window._app || {};
-  function allPlayers(){ const a=app(); return a.tbGetAllPlayers ? a.tbGetAllPlayers() : (a.computed||[]); }
+  function allPlayers(){ const a=app(); return a.tbGetAllPlayers ? a.tbGetAllPlayers() : (typeof tbGetAllPlayers === 'function' ? tbGetAllPlayers() : []); }
   function formatChatMoney(value){
     const num = Number(value);
     if(!Number.isFinite(num)) return null;
@@ -237,7 +237,7 @@
     return Math.round(num);
   }
   function statLine(r){
-    return { player:r.Player, team:r.Team, pos:r.Position||r.Pos||'', conf:r.Conference||'',
+    return { player:r.Player, team:r.Team, pos:bucketPosition(r, r._league || app().league), conf:r.Conference||'',
       heightInches:PlayerBios.normalizeHeight(r.Height), weightPounds:PlayerBios.normalizeWeight(r.Weight),
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null,
@@ -259,19 +259,20 @@
   function getDashboardContext(){
     const a=app(), roster=a.tbRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
-      rosterSize:roster.length, roster:roster.map(r=>({player:r.Player,team:r.Team,pos:r.Position||'',
+      rosterSize:roster.length, rosterPositions:roster.reduce(function(counts, r){ counts[bucketPosition(r, r._league || a.league)]++; return counts; }, {Guards:0, Wings:0, Bigs:0}), roster:roster.map(r=>({player:r.Player,team:r.Team,pos:bucketPosition(r, r._league || a.league),
       perf:r.Score?r.Score.toFixed(1):'N/A',value:formatChatMoney(r.ActualValuation_calc)||'N/A',pressure:formatChatMoney(r.MarketPressure_calc)||'N/A',lane:r.MarketLaneLabel_calc||''})),
       budget:document.getElementById('tbBudget')?.value||'500000',
       playerCap:document.getElementById('tbPlayerCap')?.value||'150000',
       maxRoster:document.getElementById('tbMaxRoster')?.value||'13',
-      targetGuards:document.getElementById('tbTargetGuards')?.value||'8',
-      targetBigs:document.getElementById('tbTargetBigs')?.value||'5' };
+      targetGuards:document.getElementById('tbTargetGuards')?.value||'5',
+      targetWings:document.getElementById('tbTargetWings')?.value||'5',
+      targetBigs:document.getElementById('tbTargetBigs')?.value||'3' };
   }
 
   function searchPlayers(q){
     const pool=allPlayers(); if(!pool.length)return [];
     const lq=q.toLowerCase();
-    return pool.filter(r=>['Player','Team','Conference','Position'].some(k=>(r[k]||'').toString().toLowerCase().includes(lq))).slice(0,20).map(statLine);
+    return pool.filter(r=>['Player','Team','Conference','Position','Pos','ListedPosition'].some(k=>(r[k]||'').toString().toLowerCase().includes(lq)) || bucketPosition(r, r._league || app().league).toLowerCase().includes(lq)).slice(0,20).map(statLine);
   }
 
   function getPlayerProfile(name, team){
@@ -310,14 +311,21 @@
   function getTopPlayers(f){
     let pool=allPlayers().slice();
     const totalBefore = pool.length;
-    if(f.position){ const fp=f.position.toLowerCase();
-      pool=pool.filter(r=>{
-        const pos=(r.Position||'').toString().toLowerCase();
-        const rawPos=(r.Pos||'').toString().toLowerCase();
-        if(fp==='guard'||fp==='guards') return pos==='guards'||pos.includes('guard')||rawPos==='g'||rawPos==='g-f'||rawPos==='f-g'||rawPos==='pg'||rawPos==='sg';
-        if(fp==='big'||fp==='bigs'||fp==='forward'||fp==='center') return pos==='bigs'||pos.includes('forward')||pos.includes('center')||rawPos==='f'||rawPos==='c'||rawPos==='f-c'||rawPos==='c-f'||rawPos==='pf'||rawPos==='sf';
-        return pos.includes(fp)||rawPos.includes(fp);
-      }); }
+    if(f.position){
+      const fp = f.position.toLowerCase().trim().replace(/[–—/]/g, '-');
+      const groupAliases = {
+        guard:'Guards', guards:'Guards', g:'Guards', pg:'Guards', sg:'Guards', 'point guard':'Guards', 'shooting guard':'Guards',
+        wing:'Wings', wings:'Wings', w:'Wings', sf:'Wings', 'small forward':'Wings', 'g-f':'Wings', 'f-g':'Wings',
+        big:'Bigs', bigs:'Bigs', b:'Bigs', pf:'Bigs', c:'Bigs', center:'Bigs', centre:'Bigs', 'power forward':'Bigs', 'f-c':'Bigs', 'c-f':'Bigs'
+      };
+      const requestedGroup = groupAliases[fp];
+      pool = pool.filter(function(r){
+        const group = bucketPosition(r, r._league || app().league);
+        if(requestedGroup) return group === requestedGroup;
+        if(fp === 'forward' || fp === 'forwards' || fp === 'f') return group === 'Wings' || group === 'Bigs';
+        return [group, r.Pos || '', r.ListedPosition || ''].some(function(value){ return value.toLowerCase().includes(fp); });
+      });
+    }
     const afterPosFilter = pool.length;
     if(f.maxValue) pool=pool.filter(r=>(r.ActualValuation_calc||Infinity)<=+f.maxValue);
     if(f.minPerf) pool=pool.filter(r=>(r.Score||0)>=+f.minPerf);
@@ -330,7 +338,7 @@
       totalPool: totalBefore,
       afterPositionFilter: afterPosFilter,
       finalCount: pool.length,
-      note: afterPosFilter === 0 && f.position ? `No ${f.position} players found in ${app().league || 'current league'} (pool had ${totalBefore} total). Both Guards and Bigs data should be auto-loaded.` : null
+      note: afterPosFilter === 0 && f.position ? `No ${f.position} players found in ${app().league || 'current league'} (pool had ${totalBefore} total). Guards, Wings, and Bigs data should be auto-loaded.` : null
     };
   }
 
@@ -525,7 +533,7 @@
     const a = app();
     if(!a.openCompare) return {error:'Comparison not available.'};
     const result = a.openCompare(n1, n2);
-    if(!result) return {error: 'One or both players not found. Make sure both tabs (Guards & Bigs) have been loaded.'};
+    if(!result) return {error: 'One or both players not found. Make sure all three position groups (Guards, Wings, and Bigs) have been loaded.'};
     const p1 = getPlayerProfile(n1), p2 = getPlayerProfile(n2);
     return {opened: true, player1: p1 ? statLine(p1) : null, player2: p2 ? statLine(p2) : null};
   }
@@ -545,7 +553,7 @@
       parameters:{type:'OBJECT',properties:{playerName:{type:'STRING'}},required:['playerName']}},
     {name:'get_top_players',description:'Get top players filtered by position, budget, team, conference, sorted by stat. Use for finding shooters (sortBy 3PT_Rating), defenders (sortBy DRtg), scorers (sortBy PPG), etc.',
       parameters:{type:'OBJECT',properties:{
-        position:{type:'STRING',description:'guard, big, forward, center'},
+        position:{type:'STRING',description:'guard, wing, or big. Wings include small forwards and G-F/F-G players; bigs include power forwards and centers. Forward searches both Wings and Bigs.'},
         maxValue:{type:'NUMBER',description:'Max valuation $'},
         minPerf:{type:'NUMBER',description:'Min PerfScore'},
         team:{type:'STRING'},conference:{type:'STRING'},
@@ -623,14 +631,14 @@
     return {parts:[{text:`You are Scout AI, an expert basketball analytics and scouting assistant for the UToledo NCAA Basketball Dashboard. You are opinionated, knowledgeable, and proactive — like a real assistant coach.
 
 STATE: ${ctx.league}, ${ctx.position} tab, ${ctx.totalPlayers} players loaded
-ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetBigs}B
+ROSTER: ${ctx.rosterSize}/${ctx.maxRoster} | Budget: $${(+ctx.budget).toLocaleString()} | Cap: $${(+ctx.playerCap).toLocaleString()} | Target: ${ctx.targetGuards}G/${ctx.targetWings}W/${ctx.targetBigs}B
 ${ctx.roster.length?'PLAYERS:\n'+ctx.roster.map((r,i)=>(i+1)+'. '+r.player+' ('+r.team+', '+r.pos+', Perf:'+r.perf+', Val:'+r.value+')').join('\n'):'ROSTER: empty'}
 ${teamHubLine}
 
 DASHBOARD CAPABILITIES (know these):
 - Player Profiles: click a player name → shows percentile bars, archetype tags, Scout Report (Strengths / Weaknesses / Tendencies / Development Areas / Matchup Notes), Shot Chart (click makes/misses to filter), similar players, valuation.
 - Team Hub: load any team by name → Team DNA (ratings, four factors, scoring profile), Scout Report for the whole team, shot chart with zone breakdown. Load an opponent to get a side-by-side comparison and Matchup Insights. Press "🧠 Deep Analysis" for a full AI coach report rendered in-page.
-- Team Builder: build a roster, run gap analysis vs opponent, head-to-head category breakdown, AI-assisted swaps.
+- Team Builder: build a roster across Guards, Wings, and Bigs, set separate position targets, run gap analysis vs opponent, head-to-head category breakdown, AI-assisted swaps.
 - get_team_context: use this to look up adjusted efficiency (adjO/adjD/adjEM), wins/losses, conference rank, and top players for any team. Use it whenever the user asks about a team's overall performance or asks to compare two programs.
 
 RULES (strict):
@@ -648,7 +656,8 @@ RULES (strict):
  12) HEAD-TO-HEAD: For matchup/H2H requests → call get_head_to_head first. Then: (a) overall verdict, (b) MY team edges, (c) OPPONENT edges, (d) top 2-3 strategic recommendations. H2H tab auto-opens.
  13) SCOUT REPORT: When discussing a player's scouting profile, remind the user they can click the player's name to see their full Scout Report (Strengths / Weaknesses / Tendencies / Development Areas / Matchup Notes) and interactive Shot Chart in their profile modal.
  14) TEAM DEEP ANALYSIS: When discussing a specific team matchup, remind the user they can load both teams in the Team Hub and press "🧠 Deep Analysis" for a full data-driven AI breakdown rendered directly in the Matchup Insights panel — no chatbot needed.
- 15) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000. Give a clear opinion; don't hedge unnecessarily.`}]};
+ 15) POSITION GROUPS: The dashboard uses Guards, Wings, and Bigs in both MBB and WBB. Use the canonical position returned by tools. Wings are distinct from guards and bigs; SF and G-F/F-G are wings, PG/SG are guards, and PF/C are bigs. Listed F players may be classified using height and role evidence. Use position: "wing" to find wings; preserve position targets when recommending roster swaps.
+ 16) STYLE: Be concise. Use **bold** for emphasis. Format money like $125,000. Give a clear opinion; don't hedge unnecessarily.`}]};
   }
 
   // ---- API call ----
@@ -717,10 +726,7 @@ RULES (strict):
             const playerExists = addName && allPlayers().some(r=>(r.Player||'').toLowerCase().includes(addName));
             if(!playerExists && addName){
               const dropRow = app().tbRoster?.find(r=>(r.Player||'').toLowerCase().includes((call.args?.dropPlayer||'').toLowerCase()));
-              const dropPosStr = ((dropRow?.Position||'')+(dropRow?.Pos||'')).toLowerCase();
-              const isGuard = dropPosStr.includes('guard')||/\bg\b|pg|sg|g-f/.test(dropPosStr);
-              const isBig = dropPosStr.includes('big')||dropPosStr.includes('forward')||dropPosStr.includes('center')||/\bf\b|\bc\b|pf|sf|f-c|c-f/.test(dropPosStr);
-              const posHint = isGuard ? 'guard' : isBig ? 'big' : null;
+              const posHint = dropRow ? {Guards:'guard', Wings:'wing', Bigs:'big'}[bucketPosition(dropRow, dropRow._league || app().league)] : null;
               const ctx = getDashboardContext();
               const candidates = getTopPlayers({position: posHint||undefined, limit:10, maxValue: ctx.playerCap||undefined});
               chatHistory.push(modelMsg);

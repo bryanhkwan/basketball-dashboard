@@ -223,17 +223,14 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tabWBB').addEventListener('click', ()=> switchLeague('WBB'));
 
   // Position tabs
-  document.getElementById('tabGuards').addEventListener('click', ()=>{
-    pos = 'Guards';
-    setActiveTab(document.getElementById('tabGuards'), '.tab[data-pos]');
-    renderWeights();
-    reloadActiveSheet();
-  });
-  document.getElementById('tabBigs').addEventListener('click', ()=>{
-    pos = 'Bigs';
-    setActiveTab(document.getElementById('tabBigs'), '.tab[data-pos]');
-    renderWeights();
-    reloadActiveSheet();
+  POSITION_GROUPS.forEach(function(group){
+    var tab = document.getElementById('tab' + group);
+    tab.addEventListener('click', function(){
+      pos = group;
+      setActiveTab(tab, '.tab[data-pos]');
+      renderWeights();
+      reloadActiveSheet();
+    });
   });
 
   fitPresetEl.addEventListener('change', ()=>{
@@ -337,7 +334,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Team builder listeners
   tbClearBtn.addEventListener('click', ()=>{ tbRoster = []; clearWarn(); tbRefresh(); });
   tbMaxRosterEl.addEventListener('input', ()=>{ tbMaxLabelEl.textContent = tbMaxRosterEl.value; });
-  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl, tbWeakThreshEl, document.getElementById('tbTargetGuards'), document.getElementById('tbTargetBigs')].forEach(el => {
+  [tbBudgetEl, tbPlayerCapEl, tbMaxRosterEl, tbWeakThreshEl, document.getElementById('tbTargetGuards'), document.getElementById('tbTargetWings'), document.getElementById('tbTargetBigs')].forEach(el => {
     if(el) el.addEventListener('change', ()=> tbRefresh());
   });
   tbWeakThreshEl.addEventListener('input', () => {

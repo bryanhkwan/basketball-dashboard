@@ -9,7 +9,84 @@ const clamp01 = (x) => clamp(x, 0, 1);
 const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
 const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
 // Measurements are metadata, stored as inches/pounds; missing values stay blank.
-var PLAYER_BIO_FIELDS = ['Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt', 'EspnId', 'CbdId', 'Class', 'Hometown'];
+var PLAYER_BIO_FIELDS = ['Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt', 'EspnId', 'CbdId', 'Class', 'Hometown', 'ListedPosition', 'ListedPositionSource', 'PositionSource', 'PositionReason', 'PositionConfidence'];
+var POSITION_GROUPS = ['Guards', 'Wings', 'Bigs'];
+
+// Groups describe roster roles; the provider's listed position remains intact.
+// This is an explainable fallback, not a model of the position played on every possession.
+function classifyPlayerPosition(player, forLeague){
+  var row = player && typeof player === 'object' ? player : { Pos: player };
+  var leagueName = row._league || row.League || forLeague || 'MBB';
+  var womens = leagueName === 'WBB';
+  var listed = String(row.ListedPosition || row.Pos || row.Position || '').trim();
+  // Old Worker responses synthesized G for ATH/NA. Only a precise native label
+  // can supersede an unknown sidecar label; broad G must retain unknown-role inference.
+  if(/^(?:ATH|NA|N\/A|UNKNOWN|NOT AVAILABLE|-)$/i.test(listed) && /^(?:PG|SG|SF|PF|C|G-F|F-G|F-C|C-F)$/i.test(String(row.Pos || '').trim())) listed = String(row.Pos).trim();
+  var label = listed.toUpperCase().replace(/[–—/]/g, '-').replace(/\s+/g, ' ').replace(/\s*-\s*/g, '-');
+  var aliases = { 'POINT GUARD':'PG', 'SHOOTING GUARD':'SG', 'SMALL FORWARD':'SF', 'POWER FORWARD':'PF', 'CENTER':'C', 'CENTRE':'C', 'GUARD':'G', 'FORWARD':'F', 'GUARD-FORWARD':'G-F', 'FORWARD-GUARD':'F-G', 'FORWARD-CENTER':'F-C', 'CENTER-FORWARD':'C-F' };
+  label = aliases[label] || label.replace(/\s/g, '');
+  function result(group, source, reason, confidence){
+    return { group: group, source: source, reason: reason, confidence: confidence, listed: listed };
+  }
+  if(['G','PG','SG','PG-SG','SG-PG','CG','GUARDS'].includes(label)) return result('Guards', 'Listed', 'Listed ' + listed + ': guard position.', 'High');
+  if(['SF','G-F','F-G','GF','FG','SG-SF','SF-SG','W','WING','WINGS'].includes(label)) return result('Wings', 'Listed', 'Listed ' + listed + ': wing position.', 'High');
+  if(['PF','C','F-C','C-F','FC','CF','PF-C','C-PF','BIG','BIGS'].includes(label)) return result('Bigs', 'Listed', 'Listed ' + listed + ': frontcourt position.', 'High');
+  function number(key){
+    var value = row[key];
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+  }
+  var height = typeof PlayerBios !== 'undefined' ? PlayerBios.normalizeHeight(row.Height) : number('Height');
+  var games = number('G'), minutes = number('MP'), rebounds = number('RPG'), blocks = number('BPG'), assists = number('APG');
+  var threeAttempts = number('3PA/G');
+  if(threeAttempts === null && games > 0 && number('3PA') !== null) threeAttempts = number('3PA') / games;
+  var fieldAttempts = number('FGA/G');
+  if(fieldAttempts === null && games > 0 && number('FGA') !== null) fieldAttempts = number('FGA') / games;
+  // Require a meaningful sample; zero/absent attempts are never evidence of a role.
+  var sample = games >= 5 && minutes >= 10;
+  var perimeter = sample && threeAttempts >= 1.5 && (fieldAttempts === null || (fieldAttempts > 0 && threeAttempts / fieldAttempts >= 0.30));
+  var interior = sample && rebounds >= 5 && blocks >= 0.8;
+  var creator = sample && assists >= 2 && rebounds !== null && assists >= rebounds * 0.6;
+  var wingCreator = sample && assists >= 2.5 && rebounds !== null && rebounds < (womens ? 7 : 8) && blocks !== null && blocks < 0.75;
+  var forward = label === 'F' || label === 'SF-PF' || label === 'PF-SF';
+  var split = womens ? 73 : 79;
+  var tall = womens ? 75 : 82;
+  var short = womens ? 69 : 75;
+  var prefix = (listed ? 'Listed ' + listed : 'No specific listed position') + '; ';
+  if(forward){
+    if(height !== null){
+      if(height >= tall) return result('Bigs', 'Inferred', prefix + height + ' in meets the ' + leagueName + ' frontcourt height rule.', 'Medium');
+      if((perimeter || wingCreator) && !interior && height >= split - 1) return result('Wings', 'Inferred', prefix + (wingCreator ? 'passing creation with limited interior activity' : 'perimeter volume (at least 1.5 threes/game)') + ' at a hybrid forward height.', 'Medium');
+      return result(height < split ? 'Wings' : 'Bigs', 'Inferred', prefix + height + ' in is ' + (height < split ? 'below' : 'at or above') + ' the ' + leagueName + ' forward split (' + split + ' in).', 'Medium');
+    }
+    if(interior && !perimeter) return result('Bigs', 'Inferred', prefix + 'rebounding and rim-protection role; height unavailable.', 'Low');
+    return result('Wings', 'Inferred', prefix + (perimeter ? 'perimeter shooting role; height unavailable.' : 'provisional forward group; insufficient height/role data.'), 'Low');
+  }
+  if(height !== null){
+    if(height >= tall) return result('Bigs', 'Inferred', prefix + height + ' in meets the ' + leagueName + ' frontcourt height rule.', 'Low');
+    if(height <= short || (height <= short + 2 && creator)) return result('Guards', 'Inferred', prefix + 'guard size' + (creator ? ' and playmaking role.' : '.'), 'Low');
+    if(interior && !perimeter && height >= split) return result('Bigs', 'Inferred', prefix + 'frontcourt size, rebounding and rim-protection role.', 'Low');
+    return result('Wings', 'Inferred', prefix + 'intermediate size; provisional perimeter/forward group.', 'Low');
+  }
+  if(interior && !perimeter) return result('Bigs', 'Inferred', prefix + 'rebounding and rim-protection role; height unavailable.', 'Low');
+  if(creator) return result('Guards', 'Inferred', prefix + 'playmaking role; height unavailable.', 'Low');
+  return result('Wings', 'Inferred', prefix + 'provisional group; insufficient position, height and role data.', 'Low');
+}
+
+function applyPlayerPosition(row, forLeague){
+  var decision = classifyPlayerPosition(row, forLeague);
+  row.Position = decision.group;
+  row.PositionSource = decision.source;
+  row.PositionReason = decision.reason;
+  row.PositionConfidence = decision.confidence;
+  row._tbPosGroup = decision.group === 'Guards' ? 'guard' : decision.group === 'Wings' ? 'wing' : 'big';
+  return row;
+}
+
+function playerPositionExplanation(row){
+  if(!row) return '';
+  var decision = row.PositionReason ? { reason: row.PositionReason, source: row.PositionSource } : classifyPlayerPosition(row, row._league);
+  return (decision.source === 'Inferred' ? 'Inferred group. ' : '') + decision.reason;
+}
 function isPlayerBioField(key){
   return PLAYER_BIO_FIELDS.includes(key) || ['TeamId', 'PlayerId', 'AthleteId', 'CbdId', 'ID', 'Season'].includes(key);
 }
@@ -277,7 +354,38 @@ const WBB_BIG_DEFAULTS = [
   {stat:'USG%',  w:8,  min:12,   max:28,   dir:'higher'},
 ];
 
+// Editable wing defaults balance perimeter scoring, rebounding and two-way impact.
+// Each league totals 100; WBB uses only available ESPN box-score statistics.
+var WING_DEFAULTS = [
+  {stat:'PPG', w:12, min:0, max:28, dir:'higher'},
+  {stat:'eFG%', w:12, min:0.35, max:0.63, dir:'higher'},
+  {stat:'3P%', w:12, min:0.25, max:0.42, dir:'higher'},
+  {stat:'FT%', w:5, min:0.60, max:0.90, dir:'higher'},
+  {stat:'APG', w:6, min:0.5, max:5, dir:'higher'},
+  {stat:'A/TO', w:5, min:0.4, max:2.2, dir:'higher'},
+  {stat:'SPG', w:8, min:0.3, max:2, dir:'higher'},
+  {stat:'RPG', w:10, min:1.5, max:9, dir:'higher'},
+  {stat:'BPG', w:4, min:0.1, max:1.5, dir:'higher'},
+  {stat:'BPM', w:10, min:-3, max:8, dir:'higher'},
+  {stat:'WS/40', w:8, min:0.05, max:0.25, dir:'higher'},
+  {stat:'DRtg', w:5, min:115, max:90, dir:'lower'},
+  {stat:'TOPG', w:3, min:3.5, max:0.5, dir:'lower'},
+];
+var WBB_WING_DEFAULTS = [
+  {stat:'PPG', w:16, min:0, max:23, dir:'higher'},
+  {stat:'eFG%', w:16, min:0.35, max:0.62, dir:'higher'},
+  {stat:'3P%', w:14, min:0.25, max:0.40, dir:'higher'},
+  {stat:'FT%', w:7, min:0.60, max:0.90, dir:'higher'},
+  {stat:'APG', w:7, min:0.5, max:4, dir:'higher'},
+  {stat:'A/TO', w:6, min:0.4, max:2.2, dir:'higher'},
+  {stat:'SPG', w:12, min:0.3, max:2.2, dir:'higher'},
+  {stat:'RPG', w:14, min:1.5, max:9, dir:'higher'},
+  {stat:'BPG', w:3, min:0.1, max:1.5, dir:'higher'},
+  {stat:'TOPG', w:5, min:3, max:0.5, dir:'lower'},
+];
+
 const ROLE_DESCRIPTIONS = {
+  "Wing Role": "Perimeter/forward contributor. Wing group does not imply a proven shooting or defensive specialty.",
   "Shooter": "Elite perimeter threat. Strong 3P% that bends the defense and creates spacing.",
   "Efficient": "Scores with high efficiency (shot quality + finishing). Converts possessions into points at an above-average rate.",
   "Scorer": "Primary offensive producer. Creates points through shot volume and/or shot creation ability.",
@@ -446,6 +554,17 @@ const GAP_CATEGORIES = {
     {label:'Defense', stats:['DRtg','DR%'], icon:'🛡️'},
     {label:'Impact', stats:['BPM','WS/40'], icon:'📈'},
   ],
+  Wings: [
+    {label:'Scoring', stats:['PPG'], icon:'🏀'},
+    {label:'Shooting', stats:['3P%','eFG%'], icon:'🎯'},
+    {label:'Free throws', stats:['FT%'], icon:'📏'},
+    {label:'Playmaking', stats:['APG','A/TO'], icon:'🎯'},
+    {label:'Ball security', stats:['TOPG'], icon:'🔒'},
+    {label:'Rebounding', stats:['RPG'], icon:'🛡️'},
+    {label:'Steals', stats:['SPG'], icon:'🖐️'},
+    {label:'Defense', stats:['DRtg','BPG'], icon:'🛡️'},
+    {label:'Impact', stats:['BPM','WS/40'], icon:'📈'},
+  ],
   Bigs: [
     {label:'Scoring', stats:['PPG'], icon:'🏀'},
     {label:'Efficiency', stats:['eFG%','FG%'], icon:'🎯'},
@@ -461,6 +580,7 @@ const GAP_CATEGORIES = {
 
 // Plain-English explanations for each stat category
 const GAP_EXPLANATIONS = {
+  'Rebounding': 'Rebounds per game (RPG). How well your wings help secure possessions on the glass.',
   'Scoring': 'Points per game (PPG). How many points your players put up on average. A weak score here means your team may struggle to keep up on the scoreboard.',
   'Shooting': 'Three-point percentage (3P%) and effective field goal percentage (eFG%). Measures how efficiently your team shoots from the field, especially from beyond the arc. Weak shooting means missed open looks and lower offensive output.',
   'Free throws': 'Free throw percentage (FT%). How reliable your team is at the foul line. Weak free throw shooting loses you easy points, especially in close games.',
@@ -483,6 +603,8 @@ class Config {
   get DEFAULT_GS_API_KEY(){ return DEFAULT_GS_API_KEY; }
   get FIT_PRESETS(){ return FIT_PRESETS; }
   get GUARD_DEFAULTS(){ return GUARD_DEFAULTS; }
+  get WING_DEFAULTS(){ return WING_DEFAULTS; }
+  get WBB_WING_DEFAULTS(){ return WBB_WING_DEFAULTS; }
   get BIG_DEFAULTS(){ return BIG_DEFAULTS; }
   get ROLE_DESCRIPTIONS(){ return ROLE_DESCRIPTIONS; }
   get STAT_GLOSSARY(){ return STAT_GLOSSARY; }

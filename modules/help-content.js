@@ -56,7 +56,7 @@
         },
         {
           title: 'PerfScore',
-          body: 'PerfScore is built inside the selected Guards or Bigs bucket, so the player board stays role-aware when you re-rank or compare names.'
+          body: 'PerfScore is built inside the selected Guards, Wings, or Bigs bucket, so the player board stays role-aware when you re-rank or compare names.'
         },
         {
           title: 'Valuation',
@@ -72,7 +72,7 @@
         {
           target: '#tabGuards',
           title: 'Position Groups',
-          body: 'Switch between Guards and Bigs before you interpret the board. Every downstream ranking on this page stays inside the active position bucket.'
+          body: 'Switch between Guards, Wings, and Bigs before you interpret the board. Every downstream ranking on this page stays inside the active position bucket.'
         },
         {
           target: '#fitPreset',

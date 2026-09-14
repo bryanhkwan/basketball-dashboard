@@ -1,6 +1,6 @@
 // ============ TEAM BUILDER MODULE ============
 // Dependencies: config.js (safeNum, fmtMoney, GAP_CATEGORIES, GAP_EXPLANATIONS),
-//   data.js (league, pos, computed, statDist, statPercentile, tbAllComputed, clearWarn, showWarn),
+//   data.js (league, pos, computed, statPercentile, bucketPosition, tbAllComputed, clearWarn, showWarn),
 //   players.js (renderPlayersPage),
 //   profile.js (openProfile)
 
@@ -90,11 +90,51 @@ function tbPlayerLeague(r){
 }
 
 function tbPosGroup(r){
-  const p = (r.Position||r.Pos||'').toString().toLowerCase();
-  if(p === 'guards' || p.includes('guard') || p === 'g' || p === 'g-f' || p === 'f-g' || p === 'pg' || p === 'sg') return 'guard';
-  if(p === 'bigs' || p.includes('forward') || p.includes('center') || p === 'f' || p === 'c' || p === 'f-c' || p === 'c-f' || p === 'pf' || p === 'sf') return 'big';
-  if(r._tbPosGroup) return r._tbPosGroup;
-  return 'guard';
+  return {Guards:'guard', Wings:'wing', Bigs:'big'}[tbPositionLabel(r)];
+}
+
+function tbPositionLabel(r){
+  r = r || {};
+  if(!(r.Position || r.ListedPosition || r.Pos || '').toString().trim()){
+    var cachedLabel = {guard:'Guards', wing:'Wings', big:'Bigs'}[r._tbPosGroup];
+    if(cachedLabel) return cachedLabel;
+  }
+  return bucketPosition(r, r._league || league);
+}
+
+function tbPositionCounts(roster){
+  var counts = {guard:0, wing:0, big:0};
+  (roster || []).forEach(function(r){ counts[tbPosGroup(r)]++; });
+  return counts;
+}
+
+// A saved player's own cohort percentile stays valid when another position tab is active.
+function tbStatPercentile(r, stat){
+  var cached = r['_pct_' + stat];
+  if(Number.isFinite(cached)) return cached;
+  var value = safeNum(r[stat]);
+  if(value === null || (r._league || league) !== league || tbPositionLabel(r) !== pos) return NaN;
+  return statPercentile(stat, value);
+}
+
+function tbGapCategories(roster){
+  var groups = roster ? new Set(roster.map(tbPositionLabel)) : new Set(['Guards', 'Wings', 'Bigs']);
+  var categories = [];
+  var byLabel = new Map();
+  ['Guards', 'Wings', 'Bigs'].forEach(function(group){
+    if(!groups.has(group)) return;
+    (GAP_CATEGORIES[group] || []).forEach(function(category){
+      var existing = byLabel.get(category.label);
+      if(existing){
+        existing.stats = Array.from(new Set(existing.stats.concat(category.stats)));
+      } else {
+        var copy = Object.assign({}, category, {stats:category.stats.slice()});
+        byLabel.set(category.label, copy);
+        categories.push(copy);
+      }
+    });
+  });
+  return categories;
 }
 
 function tbGetAllPlayers(forLeague){
@@ -104,13 +144,14 @@ function tbGetAllPlayers(forLeague){
   const all = [];
   for(const [key, arr] of Object.entries(tbAllComputed)){
     if(!key.startsWith(lg + '_')) continue;
-    const posLabel = key.includes('Guards') ? 'guard' : 'big';
+    const posLabel = {Guards:'guard', Wings:'wing', Bigs:'big'}[key.slice(lg.length + 1)];
+    if(!posLabel) continue;
     arr.forEach(r => {
       const pk = tbPlayerKey(r);
       if(seen.has(pk)) return;
       seen.add(pk);
       r._league = lg;
-      if(!(r.Position||r.Pos||'').toString().trim()){
+      if(!(r.Position||r.ListedPosition||r.Pos||'').toString().trim()){
         r._tbPosGroup = posLabel;
       }
       all.push(r);
@@ -122,15 +163,13 @@ function tbGetAllPlayers(forLeague){
 }
 
 function tbPlayerAvgPct(r){
-  const pg = tbPosGroup(r);
-  const cats = pg === 'guard' ? (GAP_CATEGORIES.Guards || []) : (GAP_CATEGORIES.Bigs || []);
+  const cats = GAP_CATEGORIES[tbPositionLabel(r)] || [];
   let sum = 0, cnt = 0;
   cats.forEach(cat => {
     cat.stats.forEach(stat => {
-      if(!statDist[stat]) return;
       const x = safeNum(r[stat]);
       if(x === null) return;
-      const p = statPercentile(stat, x);
+      const p = tbStatPercentile(r, stat);
       if(Number.isFinite(p)){ sum += p; cnt++; }
     });
   });
@@ -196,6 +235,11 @@ function oppRefresh(){
   const totalCost = oppRoster.reduce((s,x) => s + (safeNum(x.ActualValuation_calc)||0), 0);
   if(oppCountEl) oppCountEl.textContent = oppRoster.length;
   if(oppCostEl) oppCostEl.textContent = tbDisplayMoney(totalCost);
+  var positionCounts = tbPositionCounts(oppRoster);
+  ['guard', 'wing', 'big'].forEach(function(group){
+    var el = document.getElementById('opp' + group.charAt(0).toUpperCase() + group.slice(1) + 'Count');
+    if(el) el.textContent = positionCounts[group];
+  });
 
   const frag = document.createDocumentFragment();
   oppRoster.forEach((r, i) => {
@@ -205,7 +249,7 @@ function oppRefresh(){
       <td style="font-size:11px;color:var(--muted)">${i+1}</td>
       <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span></td>
       <td style="font-size:11px">${r.Team||'—'}</td>
-      <td style="font-size:11px">${r.Position||r.Pos||(tbPosGroup(r)==='guard'?'Guard':'Big')}</td>
+      <td style="font-size:11px">${tbPositionLabel(r)}</td>
       <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'}</td>
       <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
@@ -234,18 +278,15 @@ function oppRefresh(){
   // Quick scout for opponent
   const oppScoutEl = document.getElementById('oppQuickScout');
   if(oppScoutEl && oppRoster.length >= 2){
-    const allCats = [...(GAP_CATEGORIES.Guards||[]),...(GAP_CATEGORIES.Bigs||[])];
-    const seen = new Set();
-    const cats = allCats.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
+    const cats = tbGapCategories(oppRoster);
     const weak = [], strong = [];
     cats.forEach(cat => {
       let sum = 0, count = 0;
       cat.stats.forEach(stat => {
-        if(!statDist[stat]) return;
         oppRoster.forEach(r => {
           const x = safeNum(r[stat]);
           if(x === null) return;
-          const p = statPercentile(stat, x);
+          const p = tbStatPercentile(r, stat);
           if(Number.isFinite(p)){ sum += p; count++; }
         });
       });
@@ -271,28 +312,16 @@ function tbRenderGapBarsForRoster(roster, barsEl, emptyEl, tagsEl){
   if(!roster.length){ if(emptyEl) emptyEl.style.display = 'block'; return; }
   if(emptyEl) emptyEl.style.display = 'none';
 
-  const hasGuards = roster.some(r => tbPosGroup(r) === 'guard');
-  const hasBigs = roster.some(r => tbPosGroup(r) !== 'guard');
-  let cats = [];
-  if(hasGuards && hasBigs){
-    const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
-    const seen = new Set();
-    cats = all.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
-  } else if(hasBigs){
-    cats = GAP_CATEGORIES.Bigs || [];
-  } else {
-    cats = GAP_CATEGORIES.Guards || [];
-  }
+  const cats = tbGapCategories(roster);
 
   const gaps = [];
   cats.forEach(cat => {
     let sum = 0, count = 0;
     cat.stats.forEach(stat => {
-      if(!statDist[stat]) return;
       roster.forEach(r => {
         const x = safeNum(r[stat]);
         if(x === null) return;
-        const p = statPercentile(stat, x);
+        const p = tbStatPercentile(r, stat);
         if(Number.isFinite(p)){ sum += p; count++; }
       });
     });
@@ -363,14 +392,7 @@ function h2hRefresh(){
   }
   if(emptyEl) emptyEl.style.display = 'none';
 
-  const hasGuards = tbRoster.some(r=>tbPosGroup(r)==='guard') || oppRoster.some(r=>tbPosGroup(r)==='guard');
-  const hasBigs = tbRoster.some(r=>tbPosGroup(r)!=='guard') || oppRoster.some(r=>tbPosGroup(r)!=='guard');
-  let cats = [];
-  if(hasGuards && hasBigs){
-    const all = [...(GAP_CATEGORIES.Guards||[]), ...(GAP_CATEGORIES.Bigs||[])];
-    const seen = new Set(); cats = all.filter(c=>{if(seen.has(c.label))return false;seen.add(c.label);return true;});
-  } else if(hasBigs){ cats = GAP_CATEGORIES.Bigs||[]; }
-  else { cats = GAP_CATEGORIES.Guards||[]; }
+  const cats = tbGapCategories(tbRoster.concat(oppRoster));
 
   // Legend
   const legend = document.createElement('div');
@@ -382,9 +404,8 @@ function h2hRefresh(){
   cats.forEach(cat => {
     let mySum=0, myCount=0, oppSum=0, oppCount=0;
     cat.stats.forEach(stat => {
-      if(!statDist[stat]) return;
-      tbRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){mySum+=p;myCount++;} });
-      oppRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=statPercentile(stat,x); if(Number.isFinite(p)){oppSum+=p;oppCount++;} });
+      tbRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=tbStatPercentile(r,stat); if(Number.isFinite(p)){mySum+=p;myCount++;} });
+      oppRoster.forEach(r=>{ const x=safeNum(r[stat]); if(x===null)return; const p=tbStatPercentile(r,stat); if(Number.isFinite(p)){oppSum+=p;oppCount++;} });
     });
     const myPct = Math.round((myCount>0?mySum/myCount:0.5)*100);
     const oppPct = Math.round((oppCount>0?oppSum/oppCount:0.5)*100);
@@ -509,7 +530,7 @@ function setupQuickAdd(inputId, dropdownId, addFn, getRoster){
         <div class="tbQuickAddItem" data-key="${tbPlayerKey(r)}">
           <div>
             <div class="qName">${r.Player}</div>
-            <div class="qMeta">${r.Team||''} · ${r.Position||r.Pos||''} · ${r.Score?r.Score.toFixed(1):'—'} perf</div>
+            <div class="qMeta">${r.Team||''} · ${tbPositionLabel(r)} · ${r.Score?r.Score.toFixed(1):'—'} perf</div>
           </div>
           <button class="qAdd${onRoster ? ' on-roster' : ''}" ${onRoster ? 'disabled' : ''}>${onRoster ? '✓ Added' : '+ Add'}</button>
         </div>`;
@@ -571,9 +592,12 @@ function _tbGetCachedEls(){
       badge: document.getElementById('tbLeagueBadge'),
       guardCount: document.getElementById('tbGuardCount'),
       guardTarget: document.getElementById('tbGuardTarget'),
+      wingCount: document.getElementById('tbWingCount'),
+      wingTarget: document.getElementById('tbWingTarget'),
       bigCount: document.getElementById('tbBigCount'),
       bigTarget: document.getElementById('tbBigTarget'),
       targetGuards: document.getElementById('tbTargetGuards'),
+      targetWings: document.getElementById('tbTargetWings'),
       targetBigs: document.getElementById('tbTargetBigs'),
       rebalSection: document.getElementById('tbRebalanceSection'),
       rebalInfo: document.getElementById('tbRebalanceInfo'),
@@ -606,147 +630,104 @@ function tbRefresh(){
   tbRemainingEl.textContent = tbDisplayMoney(rem);
   tbRemainingEl.style.color = rem < 0 ? 'var(--bad)' : rem < budget * 0.1 ? 'var(--warn)' : 'var(--good)';
 
-  let guards = 0, bigs = 0;
-  tbRoster.forEach(r => {
-    const pg = tbPosGroup(r);
-    if(pg === 'guard') guards++;
-    else bigs++;
-  });
-
+  const counts = tbPositionCounts(tbRoster);
   const _ce = _tbGetCachedEls();
-  const targetG = Number(_ce.targetGuards.value) || 0;
-  const targetB = Number(_ce.targetBigs.value) || 0;
-  _ce.guardCount.textContent = guards;
-  _ce.guardTarget.textContent = targetG;
-  _ce.bigCount.textContent = bigs;
-  _ce.bigTarget.textContent = targetB;
-
-  _ce.guardCount.style.color = guards > targetG ? 'var(--bad)' : guards < targetG ? 'var(--warn)' : 'var(--good)';
-  _ce.bigCount.style.color = bigs > targetB ? 'var(--bad)' : bigs < targetB ? 'var(--warn)' : 'var(--good)';
+  const groups = ['guard', 'wing', 'big'];
+  const inputNames = {guard:'targetGuards', wing:'targetWings', big:'targetBigs'};
+  const defaults = {guard:5, wing:5, big:3};
+  const targets = {};
+  groups.forEach(function(group){
+    const input = _ce[inputNames[group]];
+    targets[group] = input ? Math.max(0, Number(input.value) || 0) : defaults[group];
+    const countEl = _ce[group + 'Count'];
+    const targetEl = _ce[group + 'Target'];
+    if(countEl){
+      countEl.textContent = counts[group];
+      countEl.style.color = counts[group] > targets[group] ? 'var(--bad)' : counts[group] < targets[group] ? 'var(--warn)' : 'var(--good)';
+    }
+    if(targetEl) targetEl.textContent = targets[group];
+  });
 
   const rebalanceSection = _ce.rebalSection;
   const rebalanceInfo = _ce.rebalInfo;
-  const excessGuards = guards - targetG;
-  const excessBigs = bigs - targetB;
+  const excessGroups = groups.filter(function(group){ return counts[group] > targets[group]; });
 
-  if(tbRoster.length >= 2 && (excessGuards > 0 || excessBigs > 0)){
+  if(rebalanceSection && rebalanceInfo && tbRoster.length >= 2 && excessGroups.length){
     rebalanceSection.style.display = '';
+    rebalanceInfo.innerHTML = '';
     const allPool = tbGetAllPlayers();
     const rosterKeys = new Set(tbRoster.map(tbPlayerKey));
     const cap = Number(tbPlayerCapEl.value) || Infinity;
-    rebalanceInfo.innerHTML = '';
+    const rosterBudget = Number(tbBudgetEl.value) || Infinity;
+    const usedCandidateKeys = new Set();
+    const remainingNeed = {};
+    groups.forEach(function(group){ remainingNeed[group] = Math.max(0, targets[group] - counts[group]); });
 
-    if(excessGuards > 0 && bigs < targetB){
-      const neededBigs = targetB - bigs;
-      const swapCount = Math.min(excessGuards, neededBigs);
-      const rosterGuards = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)==='guard').sort((a,b)=>a.pct-b.pct);
-      const toDrop = rosterGuards.slice(0, swapCount);
-
-      const usedBigKeys = new Set();
-      const allBigs = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='big' && (safeNum(c.ActualValuation_calc)||0) <= cap)
-        .sort((a,b)=>(b.Score||0)-(a.Score||0));
-
-      const header = document.createElement('div');
-      header.style.cssText = 'margin-bottom:6px;font-size:11.5px';
-      header.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> and need <b style="color:var(--warn)">${neededBigs} more big${neededBigs>1?'s':''}</b>. Click a swap to execute:`;
-      rebalanceInfo.appendChild(header);
-
-      toDrop.forEach(({r: grd, i: gIdx, pct}) => {
-        const bigCand = allBigs.find(c => !usedBigKeys.has(tbPlayerKey(c)));
-        if(bigCand) usedBigKeys.add(tbPlayerKey(bigCand));
-
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
-        const gVal = safeNum(grd.ActualValuation_calc)||0;
-
-        if(bigCand){
-          const cVal = safeNum(bigCand.ActualValuation_calc)||0;
-          row.innerHTML = `
-            <span class="tbAddBtn" data-rebal-drop="${gIdx}" data-rebal-add="${tbPlayerKey(bigCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-            <b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(gVal)})</span>
-            <span style="color:var(--muted)">→</span>
-            <b style="color:var(--good)">${bigCand.Player}</b> <span class="muted">(${bigCand.Position||'Big'}, ${(bigCand.Score||0).toFixed(1)} perf, ${tbDisplayMoney(cVal)})</span>
-          `;
-        } else {
-          row.innerHTML = `<b style="color:var(--bad)">${grd.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(gVal)}) — no big candidates in budget</span>`;
-        }
-        rebalanceInfo.appendChild(row);
-      });
-    }
-
-    if(excessBigs > 0 && guards < targetG){
-      const neededGuards = targetG - guards;
-      const swapCount = Math.min(excessBigs, neededGuards);
-      const rosterBigs = tbRoster.map((r,i)=>({r,i,pct:tbPlayerAvgPct(r)})).filter(x=>tbPosGroup(x.r)!=='guard').sort((a,b)=>a.pct-b.pct);
-      const toDrop = rosterBigs.slice(0, swapCount);
-
-      const usedGrdKeys = new Set();
-      const allGrds = allPool.filter(c => !rosterKeys.has(tbPlayerKey(c)) && tbPosGroup(c)==='guard' && (safeNum(c.ActualValuation_calc)||0) <= cap)
-        .sort((a,b)=>(b.Score||0)-(a.Score||0));
-
+    excessGroups.forEach(function(dropGroup){
+      const excess = counts[dropGroup] - targets[dropGroup];
       const header = document.createElement('div');
       header.style.cssText = 'margin-bottom:6px;margin-top:8px;font-size:11.5px';
-      header.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> and need <b style="color:var(--warn)">${neededGuards} more guard${neededGuards>1?'s':''}</b>. Click a swap to execute:`;
+      header.innerHTML = `You have <b style="color:var(--warn)">${excess} extra ${dropGroup}${excess > 1 ? 's' : ''}</b>. Swap into an open position target or remove your weakest players:`;
       rebalanceInfo.appendChild(header);
+      const toDrop = tbRoster.map(function(r, i){ return {r:r, i:i, pct:tbPlayerAvgPct(r)}; })
+        .filter(function(item){ return tbPosGroup(item.r) === dropGroup; })
+        .sort(function(a, b){ return a.pct - b.pct; }).slice(0, excess);
 
-      toDrop.forEach(({r: big, i: bIdx, pct}) => {
-        const grdCand = allGrds.find(c => !usedGrdKeys.has(tbPlayerKey(c)));
-        if(grdCand) usedGrdKeys.add(tbPlayerKey(grdCand));
-
+      toDrop.forEach(function(item){
+        const neededGroups = groups.filter(function(group){ return remainingNeed[group] > 0; });
+        const dropValue = safeNum(item.r.ActualValuation_calc) || 0;
+        const available = rosterBudget - totalCost + dropValue;
+        const candidates = allPool.filter(function(candidate){
+          const key = tbPlayerKey(candidate);
+          const value = safeNum(candidate.ActualValuation_calc) || 0;
+          return !rosterKeys.has(key) && !usedCandidateKeys.has(key) && neededGroups.includes(tbPosGroup(candidate)) && value <= cap && value <= available;
+        }).sort(function(a, b){ return (b.Score || 0) - (a.Score || 0); });
+        const candidate = candidates[0];
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap;font-size:11.5px';
-        const bVal = safeNum(big.ActualValuation_calc)||0;
-
-        if(grdCand){
-          const cVal = safeNum(grdCand.ActualValuation_calc)||0;
+        if(candidate){
+          usedCandidateKeys.add(tbPlayerKey(candidate));
+          remainingNeed[tbPosGroup(candidate)]--;
           row.innerHTML = `
-            <span class="tbAddBtn" data-rebal-drop="${bIdx}" data-rebal-add="${tbPlayerKey(grdCand)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
-            <b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(bVal)})</span>
-            <span style="color:var(--muted)">→</span>
-            <b style="color:var(--good)">${grdCand.Player}</b> <span class="muted">(${grdCand.Position||'Guard'}, ${(grdCand.Score||0).toFixed(1)} perf, ${tbDisplayMoney(cVal)})</span>
+            <span class="tbAddBtn" data-rebal-drop="${item.i}" data-rebal-add="${tbPlayerKey(candidate)}" style="font-size:10px;border-color:rgba(251,191,36,.4);color:var(--warn)">Swap</span>
+            <b style="color:var(--bad)">${item.r.Player}</b> <span class="muted">(${Math.round(item.pct * 100)}th, ${tbDisplayMoney(dropValue)})</span>
+            <span style="color:var(--muted)">&rarr;</span>
+            <b style="color:var(--good)">${candidate.Player}</b> <span class="muted">(${tbPositionLabel(candidate)}, ${(candidate.Score || 0).toFixed(1)} perf, ${tbDisplayMoney(safeNum(candidate.ActualValuation_calc) || 0)})</span>
           `;
         } else {
-          row.innerHTML = `<b style="color:var(--bad)">${big.Player}</b> <span class="muted">(${Math.round(pct*100)}th, ${tbDisplayMoney(bVal)}) — no guard candidates in budget</span>`;
+          row.textContent = item.r.Player + ' (' + Math.round(item.pct * 100) + 'th, ' + tbDisplayMoney(dropValue) + ') — ' + (neededGroups.length ? 'no ' + neededGroups.join(' / ') + ' candidates within budget and cap' : 'consider removing to hit target');
         }
         rebalanceInfo.appendChild(row);
-      });
-    }
-
-    if(excessGuards > 0 && bigs >= targetB){
-      const note = document.createElement('div');
-      note.style.cssText = 'margin-top:6px;font-size:11.5px';
-      note.innerHTML = `You have <b style="color:var(--warn)">${excessGuards} extra guard${excessGuards>1?'s':''}</b> — consider removing your weakest guard(s) to hit target.`;
-      rebalanceInfo.appendChild(note);
-    }
-    if(excessBigs > 0 && guards >= targetG){
-      const note = document.createElement('div');
-      note.style.cssText = 'margin-top:6px;font-size:11.5px';
-      note.innerHTML = `You have <b style="color:var(--warn)">${excessBigs} extra big${excessBigs>1?'s':''}</b> — consider removing your weakest big(s) to hit target.`;
-      rebalanceInfo.appendChild(note);
-    }
-
-    rebalanceInfo.querySelectorAll('[data-rebal-drop]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const dropIdx = Number(btn.dataset.rebalDrop);
-        const addKey = btn.dataset.rebalAdd;
-        const replacement = tbGetAllPlayers().find(r => tbPlayerKey(r) === addKey);
-        if(replacement && dropIdx >= 0 && dropIdx < tbRoster.length){
-          tbRoster.splice(dropIdx, 1, replacement);
-          clearWarn();
-          tbRefresh();
-        }
       });
     });
 
-    tbPosNoteEl.style.display = 'none';
-  } else {
+    rebalanceInfo.querySelectorAll('[data-rebal-drop]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        const dropIdx = Number(btn.dataset.rebalDrop);
+        const replacement = tbGetAllPlayers().find(function(r){ return tbPlayerKey(r) === btn.dataset.rebalAdd; });
+        if(!replacement || dropIdx < 0 || dropIdx >= tbRoster.length) return;
+        const currentCost = tbRoster.reduce(function(sum, r){ return sum + (safeNum(r.ActualValuation_calc) || 0); }, 0);
+        const value = safeNum(replacement.ActualValuation_calc) || 0;
+        const currentCap = Number(tbPlayerCapEl.value) || Infinity;
+        const currentBudget = Number(tbBudgetEl.value) || Infinity;
+        if(tbRoster.some(function(r){ return tbPlayerKey(r) === tbPlayerKey(replacement); })) return;
+        if(tbPlayerLeague(replacement) !== league || value > currentCap || currentCost - (safeNum(tbRoster[dropIdx].ActualValuation_calc) || 0) + value > currentBudget){
+          showWarn('This swap no longer fits your league, budget, or player cap.');
+          return;
+        }
+        tbRoster.splice(dropIdx, 1, replacement);
+        clearWarn();
+        tbRefresh();
+      });
+    });
+  } else if(rebalanceSection){
     rebalanceSection.style.display = 'none';
-    if(tbRoster.length >= 3){
-      const ratio = guards / (tbRoster.length);
-      if(ratio > 0.75){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on guards (${guards}G / ${bigs}B)`; }
-      else if(ratio < 0.25){ tbPosNoteEl.style.display = ''; tbPosNoteEl.textContent = `⚠ Heavy on bigs (${guards}G / ${bigs}B)`; }
-      else { tbPosNoteEl.style.display = 'none'; }
-    } else { tbPosNoteEl.style.display = 'none'; }
+  }
+
+  if(tbPosNoteEl){
+    const heavyGroup = tbRoster.length >= 3 ? groups.find(function(group){ return counts[group] / tbRoster.length > 0.75; }) : null;
+    tbPosNoteEl.style.display = heavyGroup && !excessGroups.length ? '' : 'none';
+    if(heavyGroup) tbPosNoteEl.textContent = `⚠ Heavy on ${heavyGroup}s (${counts.guard}G / ${counts.wing}W / ${counts.big}B)`;
   }
 
   tbRenderRoster();
@@ -802,7 +783,7 @@ function tbRenderRoster(){
       <td style="font-size:11px;color:var(--muted)">${i+1}</td>
       <td><span class="link" style="font-size:11.5px">${r.Player||'—'}</span>${isWeak ? ' <span class="tbWeakestTag">weak</span>' : ''}</td>
       <td style="font-size:11px">${r.Team||'—'}</td>
-      <td style="font-size:11px">${r.Position||r.Pos||(tbPosGroup(r)==='guard'?'Guard':'Big')}</td>
+      <td style="font-size:11px">${tbPositionLabel(r)}</td>
       <td style="font-size:11.5px;font-weight:700">${Number.isFinite(r.Score)?r.Score.toFixed(1):'—'} <span class="muted" style="font-size:10px;font-weight:500">(${pctStr})</span></td>
       <td style="font-size:11.5px">${tbDisplayMoney(safeNum(r.ActualValuation_calc))}</td>
       <td><button class="tbRemoveBtn">✕</button></td>
@@ -825,7 +806,7 @@ function tbRenderRoster(){
     });
   }
 
-  if(weakPlayers.length > 0 && computed.length){
+  if(weakPlayers.length > 0 && tbGetAllPlayers().length){
     weakestSection.style.display = '';
     weakCountEl.textContent = `— ${weakPlayers.length} player${weakPlayers.length>1?'s':''} below ${Math.round(threshold*100)}th`;
     weakestInfo.innerHTML = '';
@@ -860,7 +841,7 @@ function tbRenderRoster(){
 
       let headerHtml = `<div class="swapHeader">
         <div><span style="color:var(--bad);font-weight:700">${weakPlayer.Player}</span>
-          <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${weakPlayer.Position||weakPlayer.Pos||(tbPosGroup(weakPlayer)==='guard'?'Guard':'Big')} · ${Math.round(avgPct*100)}th avg · ${tbDisplayMoney(weakVal)}</span></div>
+          <span class="muted" style="font-size:10.5px"> · ${weakPlayer.Team||'—'} · ${tbPositionLabel(weakPlayer)} · ${Math.round(avgPct*100)}th avg · ${tbDisplayMoney(weakVal)}</span></div>
       </div>`;
 
       let optsHtml = '';
@@ -874,7 +855,7 @@ function tbRenderRoster(){
           optsHtml += `<div class="tbSwapOpt">
             <span class="tbAddBtn" data-swap-weak="${weakIdx}" data-swap-key="${tbPlayerKey(c)}" style="font-size:10px">Swap</span>
             <b style="color:var(--good)">${c.Player}</b>
-            <span class="muted">${c.Team} · ${c.Position||c.Pos||(tbPosGroup(c)==='guard'?'Guard':'Big')}</span>
+            <span class="muted">${c.Team} · ${tbPositionLabel(c)}</span>
             <span style="font-weight:700">${c.Score.toFixed(1)} perf</span>
             <span style="font-weight:600;font-size:10.5px;color:var(--good)">+${perfGain.toFixed(1)}</span>
             <span style="font-size:10.5px;color:${costColor}">${costLabel}</span>
@@ -929,9 +910,7 @@ function tbRenderSuggestions(){
   if(!tbRoster.length || !allPool.length){ tbSuggestEmpty.style.display = 'block'; return; }
   tbSuggestEmpty.style.display = 'none';
 
-  const allCats = [...(GAP_CATEGORIES.Guards || []), ...(GAP_CATEGORIES.Bigs || [])];
-  const seenLabels = new Set();
-  const cats = allCats.filter(c => { if(seenLabels.has(c.label)) return false; seenLabels.add(c.label); return true; });
+  const cats = tbGapCategories();
 
   const budget = Number(tbBudgetEl.value) || Infinity;
   const cap = Number(tbPlayerCapEl.value) || Infinity;
@@ -944,11 +923,10 @@ function tbRenderSuggestions(){
   cats.forEach(cat => {
     let sum = 0, count = 0;
     cat.stats.forEach(stat => {
-      if(!statDist[stat]) return;
       tbRoster.forEach(r => {
         const x = safeNum(r[stat]);
         if(x === null) return;
-        const p = statPercentile(stat, x);
+        const p = tbStatPercentile(r, stat);
         if(Number.isFinite(p)){ sum += p; count++; }
       });
     });
@@ -972,7 +950,7 @@ function tbRenderSuggestions(){
       cat.stats.forEach(stat => {
         const x = safeNum(r[stat]);
         if(x === null) return;
-        const p = statPercentile(stat, x);
+        const p = tbStatPercentile(r, stat);
         if(!Number.isFinite(p)) return;
         gapScore += p;
         gapCount++;
@@ -990,7 +968,7 @@ function tbRenderSuggestions(){
     tr.dataset.ri = idx;
     const pct = Math.round(avg * 100);
     const gapColor = avg >= 0.7 ? 'var(--good)' : avg >= 0.5 ? 'var(--warn)' : 'var(--muted)';
-    const rPos = r.Position || r.Pos || (tbPosGroup(r)==='guard'?'Guard':'Big');
+    const rPos = tbPositionLabel(r);
     tr.innerHTML = `
       <td><span class="link" style="font-size:11px">${r.Player||'—'}</span></td>
       <td style="font-size:11px">${r.Team||'—'}</td>
@@ -1183,18 +1161,15 @@ function pctToGrade(pct){
 
 function getHeadToHead(){
   if(!tbRoster.length || !oppRoster.length) return {error:'Need players in both rosters.'};
-  const allCats = [...(GAP_CATEGORIES.Guards||[]),...(GAP_CATEGORIES.Bigs||[])];
-  const seen = new Set();
-  const cats = allCats.filter(c => { if(seen.has(c.label)) return false; seen.add(c.label); return true; });
+  const cats = tbGapCategories(tbRoster.concat(oppRoster));
 
   function rosterAvgPct(roster, cat){
     let sum = 0, count = 0;
     cat.stats.forEach(stat => {
-      if(!statDist[stat]) return;
       roster.forEach(r => {
         const x = safeNum(r[stat]);
         if(x === null) return;
-        const p = statPercentile(stat, x);
+        const p = tbStatPercentile(r, stat);
         if(Number.isFinite(p)){ sum += p; count++; }
       });
     });
@@ -1212,7 +1187,7 @@ function getHeadToHead(){
     };
   });
 
-  return {comparison, myTeamSize: tbRoster.length, oppTeamSize: oppRoster.length};
+  return {comparison, myTeamSize: tbRoster.length, oppTeamSize: oppRoster.length, myTeamPositions:tbPositionCounts(tbRoster), opponentPositions:tbPositionCounts(oppRoster)};
 }
 
 // --- Class wrapper (organizational) ---

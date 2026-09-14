@@ -3030,7 +3030,7 @@ function _thBuildMCMatchups(aName, bName) {
   }
   function posLabel(r) {
     var p = (r.Position || r.Pos || '').toString();
-    return p || (typeof tbPosGroup === 'function' && tbPosGroup(r) === 'guard' ? 'G' : 'F/C');
+    return p || { Guards: 'G', Wings: 'Wing', Bigs: 'PF/C' }[bucketPosition(r)];
   }
   function pctlBadge(r, stat) {
     if (typeof statPercentile !== 'function') return '';
@@ -3637,7 +3637,7 @@ function thDownloadDeepPDF() {
       var mBPlayers = mAll.filter(function(p) { return (p.Team || '').toLowerCase() === (bName || '').toLowerCase(); });
       if (mAPlayers.length && mBPlayers.length) {
         function topN(arr, stat, n) { return arr.slice().sort(function(a, b) { return (safeNum(b[stat]) || 0) - (safeNum(a[stat]) || 0); }).slice(0, n); }
-        function posLbl(r) { var p = (r.Position || r.Pos || '').toString(); return p || (typeof tbPosGroup === 'function' && tbPosGroup(r) === 'guard' ? 'G' : 'F/C'); }
+        function posLbl(r) { var p = (r.Position || r.Pos || '').toString(); return p || { Guards: 'G', Wings: 'Wing', Bigs: 'PF/C' }[bucketPosition(r)]; }
         function pdfPctlBadge(r, stat) {
           if (typeof statPercentile !== 'function') return '';
           var v = safeNum(r[stat]); if (v === null) return '';

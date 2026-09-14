@@ -257,6 +257,9 @@
     if (apgPct !== null && apgPct > 0.7 && posGroup === 'guard') {
       recs.push({ priority: 3, title: 'Leverage playmaking as a strength', detail: 'Top-tier passer — build plays that use drive-and-kick, pick-and-roll reads, and secondary break creation.' });
     }
+    if (apgPct !== null && apgPct > 0.7 && posGroup === 'wing') {
+      recs.push({ priority: 3, title: 'Build on secondary playmaking', detail: 'Strong passer among wings — develop closeout reads, second-side drive-and-kick, and quick extra passes.' });
+    }
 
     recs.sort(function(a, b) { return a.priority - b.priority; });
     return recs;
@@ -264,12 +267,8 @@
 
   // ── Build full analysis (main entry point) ─────────────────────────────────
   function devBuildAnalysis(r, shots, shootingRow) {
-    var lg = typeof league !== 'undefined' ? league : 'MBB';
-    var posRaw = (r.Pos || r.Position || '').toString();
-    var posGroup = 'default';
-    if (/PG|SG|G/i.test(posRaw)) posGroup = 'guard';
-    else if (/SF|SG|GF|F/i.test(posRaw)) posGroup = 'wing';
-    else if (/PF|C|FC/i.test(posRaw)) posGroup = 'big';
+    var lg = r._league || (typeof league !== 'undefined' ? league : 'MBB');
+    var posGroup = { Guards: 'guard', Wings: 'wing', Bigs: 'big' }[bucketPosition(r, lg)];
 
     var zoneData = shots && shots.length > 0 ? analyzeZones(shots, lg) : [];
     var shotMix = analyzeShotMix(shootingRow);
@@ -290,7 +289,7 @@
 
   // ── Simulator ──────────────────────────────────────────────────────────────
   function _devPosGroup(r) {
-    return typeof bucketPosition === 'function' && bucketPosition(r && (r.Pos || r.Position)) === 'Bigs' ? 'Bigs' : 'Guards';
+    return bucketPosition(r, (r && r._league) || (typeof league !== 'undefined' ? league : 'MBB'));
   }
 
   function devScoreRowForPlayer(r) {
@@ -401,7 +400,7 @@
   // ── AI plan generation (shot/zone/tendency data) ───────────────────────────
   async function devGenerateAIPlan(r, analysis, simResult, coachNotes) {
     var payload = {
-      player: { name: r.Player, team: r.Team, conference: r.Conference || r.Conf, pos: r.Pos || r.Position },
+      player: { name: r.Player, team: r.Team, conference: r.Conference || r.Conf, pos: r.Position || r.Pos },
       league: analysis.league,
       positionGroup: analysis.posGroup,
       shotData: {
