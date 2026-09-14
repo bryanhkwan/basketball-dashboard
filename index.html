@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://hidden-salad-773b.bryanhkwan.workers.dev" crossorigin>
   <link rel="preconnect" href="https://white-pine-7669.bryanhkwan.workers.dev" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=positions-20260914">
+  <link rel="stylesheet" href="styles.css?v=nba-model-20260914">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" media="print" onload="this.media='all'">
   <!-- Modules — load in dependency order (no deps first, coordinator last) -->
   <script src="modules/config.js?v=positions-20260914" defer></script>
@@ -18,12 +18,14 @@
   <script src="modules/notes.js" defer></script>
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
-  <script src="modules/data.js?v=positions-20260914" defer></script>
+  <script src="data/nba-valuation-model.js?v=nba-model-20260914" defer></script>
+  <script src="modules/nba-valuation.js?v=nba-model-20260914" defer></script>
+  <script src="modules/data.js?v=nba-model-20260914" defer></script>
   <script src="modules/eval-presets.js?v=positions-20260914" defer></script>
   <script src="modules/draft.js" defer></script>
   <script src="modules/player-development.js?v=positions-20260914" defer></script>
   <script src="modules/players.js?v=positions-20260914" defer></script>
-  <script src="modules/profile.js?v=positions-20260914" defer></script>
+  <script src="modules/profile.js?v=nba-model-20260914" defer></script>
   <script src="modules/teambuilder.js?v=positions-20260914" defer></script>
   <script src="modules/dashboard-prefs.js" defer></script>
   <script src="modules/admin.js" defer></script>
@@ -32,13 +34,14 @@
   <script src="modules/shot-analytics.js" defer></script>
   <script src="modules/lab.js" defer></script>
   <script src="modules/value-lab.js?v=positions-20260914" defer></script>
-  <script src="modules/chat.js?v=positions-20260914" defer></script>
+  <script src="modules/chat.js?v=nba-model-20260914" defer></script>
   <script src="modules/help-content.js?v=positions-20260914" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="modules/help.js" defer></script>
   <script src="modules/trends.js" defer></script>
   <script src="modules/shortcuts.js" defer></script>
-  <script src="app.js?v=positions-20260914" defer></script>
+  <script src="modules/nba-valuation-ui.js?v=nba-model-20260914" defer></script>
+  <script src="app.js?v=nba-model-20260914" defer></script>
   <script src="modules/profile-dossier.js?v=positions-20260914" defer></script>
   <script src="modules/profile-route.js" defer></script>
   <script src="modules/team-explainer.js" defer></script>
@@ -330,11 +333,32 @@
 
       <div class="kpis playersSnapshotStrip">
         <span class="pill">Players: <b id="kpiPlayers">—</b></span>
-        <span class="pill">Stats used: <b id="kpiStats">—</b></span>
-        <span class="pill">Total weight: <b id="kpiTotalW">—</b></span>
+        <span class="pill">Production stats: <b id="kpiStats">—</b></span>
+        <span class="pill">Production weight: <b id="kpiTotalW">—</b></span>
         <span class="pill">Avg PerfScore: <b id="kpiAvgPerf">—</b></span>
         <span class="pill">Star PerfScore (p): <b id="kpiStarPerf">—</b></span>
       </div>
+
+      <details id="nbaValuationPanel" class="nbaModelPanel">
+        <summary>
+          <span><span class="nbaModelEyebrow">Valuation research</span><strong>NBA salary model</strong></span>
+          <span id="nbaModelStatus" class="nbaModelStatus">Loading model</span>
+        </summary>
+        <div class="nbaModelBody">
+          <div id="nbaModelControls" class="nbaModelToolbar" hidden>
+            <div>
+              <label for="nbaModelGroup">NBA position group</label>
+              <select id="nbaModelGroup">
+                <option value="Guards">Guards</option>
+                <option value="Wings">Wings</option>
+                <option value="Bigs">Bigs</option>
+              </select>
+            </div>
+            <p class="nbaModelIntro">Explore the salary associations behind the college valuation. Production and fit scores remain separate scouting views.</p>
+          </div>
+          <div id="nbaModelContent"><p class="nbaModelNote">Loading the NBA salary reference.</p></div>
+        </div>
+      </details>
 
       <div style="margin-top:12px" class="scrollY playersTableShell">
         <table>
@@ -349,10 +373,9 @@
         <b>Percentiles</b> are computed within the currently selected sheet (league+position).
         If a stat is “lower is better” in your weights (Min &gt; Max), percentiles are automatically inverted (so lower = higher percentile).
         <br><br>
-        <b>Valuation</b> uses an exponential curve anchored to your average pay and a “star” target:
-        <span class="muted">Pred = clamp(min,max, avgPay × exp(k × (Perf − avgPerf)))</span>,
-        with <span class="muted">k = ln(starValue/avgPay) / (starPerf − avgPerf)</span>.
-        Then a minutes multiplier is applied to avoid low-MP inflation.
+        <b>Valuation</b> maps your selected valuation signal to editable college average-pay and star-pay anchors, bounded by the minimum and maximum.
+        NBA learned mode uses salary coefficients and college peer comparisons. Custom stat weights mode uses PerfScore and the selected minutes adjustment.
+        Production and fit scores remain separate scouting views.
       </div>
     </div>
   </div>
@@ -434,7 +457,7 @@
   <span class="pill">Remaining: <b id="wRemaining">—</b></span>
   <span class="pill" id="wOverBox" style="display:none; border-color:#3b2a2a; background:#1a1111; color:#ffd0d0">Over by: <b id="wOver">—</b></span>
 </div>
-<div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). Defaults are optimized to avoid multicollinearity. Add any available stat with W=0 if you want to customize.</div>
+<div class="hint">Tip: rows with <b>W ≠ 0</b> are your default selections (highlighted). Direction shows as ↑ (higher is better) or ↓ (lower is better). Add any available stat with W=0 if you want to customize. These weights set the production score; they drive dollar valuations only when <b>Custom stat weights</b> is selected as the valuation basis.</div>
       </div>
 
       <div class="card playerSideCard" id="valuationCard">
@@ -448,9 +471,18 @@
 
         <div class="divider"></div>
 
+        <div class="nbaBasisControl">
+          <label for="nbaValuationBasis">Valuation basis</label>
+          <select id="nbaValuationBasis" aria-describedby="nbaValuationBasisHint">
+            <option value="nba" selected>NBA learned coefficients</option>
+            <option value="custom">Custom stat weights</option>
+          </select>
+          <p id="nbaValuationBasisHint" class="hint">NBA salary associations are calibrated to your college pay anchors. College transfer performance has not been validated.</p>
+        </div>
+
         <div class="row">
           <div>
-            <label>Average pay</label><br/>
+            <label>Pay at mean signal</label><br/>
             <input id="avgPay" type="number" step="1000" value="90000">
           </div>
           <div>
@@ -469,14 +501,14 @@
             <input id="starValue" type="number" step="5000" value="325000">
           </div>
           <div>
-            <label>Star percentile (PerfScore)</label><br/>
+            <label>Star percentile (valuation signal)</label><br/>
             <input id="starPct" type="number" step="0.01" min="0.5" max="0.999" value="0.97">
           </div>
         </div>
 
         <div class="row" style="margin-top:10px">
           <div>
-            <label>Minutes adjust</label><br/>
+            <label>Minutes adjust (custom weights)</label><br/>
             <select id="mpMode">
               <option value="on" selected>On (min(1, sqrt(MP/MP_p)))</option>
               <option value="off">Off</option>
@@ -488,9 +520,11 @@
           </div>
         </div>
 
+        <p id="nbaMinutesHint" class="hint" hidden>Minutes are already an NBA model input; learned mode applies no second minutes adjustment.</p>
+
         <div class="hint">
           If you change <b>starValue</b>, you are changing the slope of the curve:
-          bigger starValue → higher top-end valuations (more spread above average), while keeping average anchored at avgPay.
+          bigger starValue → higher top-end valuations (more spread above the mean signal), while keeping pay at the mean signal anchored at avgPay. This anchor is not the arithmetic average of all player quotes.
         </div>
       </div>
 
@@ -499,7 +533,7 @@
         <div class="row" style="justify-content:space-between">
           <div>
             <div class="playersPanelTitle">Conference multiplier</div>
-            <div class="playersPanelSub">Multiplies PerfScore by conference strength. <span id="confMultLeagueNote" style="color:var(--warn)"></span></div>
+            <div class="playersPanelSub">Adjusts valuation for conference context. <span id="confMultLeagueNote" style="color:var(--warn)"></span></div>
           </div>
           <div class="row" style="gap:10px">
             <label class="toggleSwitch" title="Toggle conference multiplier on/off">
@@ -2249,6 +2283,10 @@
               <div class="muted" style="font-size:12px">Open a player to view their projection band.</div>
             </div>
           </div>
+          <details id="mNbaValuationPanel" class="nbaModelPanel nbaProfilePanel" hidden>
+            <summary><strong>NBA model contribution</strong><span id="mNbaValuationStatus" class="nbaModelStatus">College peer comparison</span></summary>
+            <div id="mNbaValuationContent" class="nbaModelBody"></div>
+          </details>
         </div>
 
         <!-- TAB: Game Data -->

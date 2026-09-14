@@ -190,3 +190,20 @@ data/
 - Chrome, Firefox, Safari, Edge (all modern versions)
 - JavaScript required
 - HTTPS required (GitHub Pages + Cloudflare Workers)
+
+## NBA salary reference for college valuation
+
+The default valuation basis uses separate NBA salary regressions for Guards, Wings, and Bigs, trained on the supplied 2022–23 workbook with sourced ESPN heights. Open **Players → NBA salary model** for coefficients, bootstrap stability, and held-out regression/tree comparisons. Approved staff can inspect each player's input contributions and the subsequent college pay adjustments in the profile. **Model settings → Valuation basis** switches between the NBA reference and custom scouting weights. The selection is saved in this browser; evaluation presets still manage scouting weights and college pay anchors.
+
+College inputs are standardized within their league and position. NBA age and salary levels are not transferred. The existing college pay anchors set the dollar scale; conference, translation, and scouting adjustments remain separate assumptions. Minutes are not discounted a second time. Production and fit scores remain independent of the learned valuation. These are experimental estimates, not reported NCAA compensation, and the men's NBA sample does not validate WBB pay.
+
+Training and verification are offline Python/Node tools, with no frontend build step:
+
+```powershell
+python tools/enrich-nba-heights.py --validate-only
+python tools/train-nba-valuation.py
+node --test tools/nba-valuation.test.cjs tools/test-data-bios.cjs
+node --use-system-ca --use-env-proxy tools/audit-nba-valuations.cjs --season 2026
+```
+
+Training requires the original workbook in the repository root and the dependencies in `tools/requirements-nba-valuation.txt`. The original workbook is never overwritten. The height tool can refresh the sourced height snapshot; recorded heights are current listed bios, not verified 2022–23 measurements. Reports, enriched NBA data, coefficient tables, and recalculated college CSVs are generated under `reports/nba-valuation/`. The browser uses the generated `data/nba-valuation-model.js`, with an identical JSON version retained for auditing.

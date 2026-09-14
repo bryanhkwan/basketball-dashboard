@@ -14,3 +14,6 @@ both_p*.json
 *.pyc
 __pycache__/
 *.bak
+
+# Reproducible local research exports; deployed coefficients live in data/.
+/reports/nba-valuation/

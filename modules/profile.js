@@ -386,9 +386,9 @@ function openProfile(r){
     const laneBits = [`Lane: <b>${laneLabel}</b>`];
     if (Number.isFinite(marketGap)) laneBits.push(`gap to pressure: <b>${profileDisplayMoney(marketGap)}</b>`);
     if (Number.isFinite(marketDemandPremium) && marketDemandPremium > 1.01) laneBits.push(`demand premium: <b>${marketDemandPremium.toFixed(2)}x</b>`);
-    if (Number.isFinite(r.MinMultiplier_calc)) laneBits.push(`minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b>`);
+    if (!r.NBAModel_calc && Number.isFinite(r.MinMultiplier_calc)) laneBits.push(`minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b>`);
     metaBlocks.push(`<div class="muted">${laneBits.join(' • ')}</div>`);
-  } else if (Number.isFinite(r.MinMultiplier_calc)) {
+  } else if (!r.NBAModel_calc && Number.isFinite(r.MinMultiplier_calc)) {
     metaBlocks.push(`<div class="muted">Minutes multiplier: <b>${r.MinMultiplier_calc.toFixed(2)}x</b></div>`);
   }
   if (bossLine) metaBlocks.push(`<div class="muted">${bossLine}</div>`);
@@ -396,6 +396,16 @@ function openProfile(r){
     metaBlocks.push(`
       <div class="muted">
         Demo mode keeps the player profile and decision outputs visible, but the exact valuation curves, weighting recipe, and shot-detail internals stay limited to approved staff accounts.
+      </div>
+    `);
+  } else if (r.NBAModel_calc) {
+    metaBlocks.push(`
+      <div class="muted">
+        Toledo max bid uses NBA salary coefficients applied to this player's college league and position peers,
+        calibrated so the cohort mean signal is priced at <b>${fmtMoney(avgPay)}</b>, with star pay anchored at <b>${fmtMoney(starValue)}</b>.
+        Minutes are already an input; no second minutes adjustment is applied. Conference context adjusts dollars after calibration.
+        Existing translation-risk and manual scouting adjustments then affect the final bid as separate college assumptions.
+        Production and fit scores remain separate scouting views. This NBA-to-college transfer has not been validated, including for WBB.
       </div>
     `);
   } else {
@@ -420,6 +430,7 @@ function openProfile(r){
   mMeta.querySelector('[data-position-explanation]').textContent = 'Position: ' + playerPositionExplanation(r);
 
   renderProjectionDetails(r);
+  if(window.NbaValuationUI && typeof window.NbaValuationUI.renderProfile === 'function') window.NbaValuationUI.renderProfile(r);
 
   const exclude = new Set([
     'PerfScore_calc','PredictedValue_calc','ActualValuationCurve_calc','ActualValuationBase_calc','ActualValuation_calc','MinMultiplier_calc','MP_num','FitScore_calc',
@@ -432,7 +443,8 @@ function openProfile(r){
     'ProjectionMedicalRisk_calc','ProjectionMedicalRiskLabel_calc','ProjectionMedicalRiskTone_calc','ProjectionMedicalRiskSource_calc',
     'ProjectionHealthyTalentLabel_calc','ProjectionReasonSummary_calc','ProjectionManualBoost_calc','ProjectionDelta_calc'
   ]);
-  const all = Object.keys(r).filter(k => !exclude.has(k));
+  // NBA model internals have a structured, staff-gated explanation panel.
+  const all = Object.keys(r).filter(k => !exclude.has(k) && !/^NBA/.test(k));
   const container = document.createElement('div');
   container.className = 'panel';
   container.style.border = 'none';

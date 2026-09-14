@@ -444,11 +444,12 @@ function isLikelyNumericColumn(key){
   if(isPlayerBioField(k)) return false;
   const bad = new Set([
     'Player','Name','Team','School','Conference','Conf','Position','Pos','Class','Yr','Year','ID','URL','Link','Height','Hometown',
+    'FieldGoalAttempts','ThreePointAttempts','FreeThrowAttempts',
     'Rank','Score','PerfScore','PerfScore_calc','FitScore','FitScore_calc','PredictedValue','PredictedValue_calc',
     'ActualValuation','ActualValuation_calc','MinMultiplier','MinMultiplier_calc','MP_num',
     'MarketPressurePredicted_calc','MarketPressure_calc','MarketPressureMinMultiplier_calc','MarketGap_calc','MarketGapPct_calc','BidToPressureRatio_calc'
   ]);
-  if(k.startsWith('Norm_')) return false;
+  if(k.startsWith('Norm_') || k.startsWith('NBA')) return false;
   if(bad.has(k)) return false;
   return true;
 }
@@ -491,6 +492,7 @@ function minMaxForStat(rowArr, stat){
 function ensureWeightsCoverStats(forPos, rowArr){
   const allowed = new Set((baseStatsAll || []).filter(function(key){ return !isPlayerBioField(key); }));
   const exclude = new Set(['Player','Season','Team','Conference','G','GS','MP','Pos','Class','Rk',
+    'FieldGoalAttempts','ThreePointAttempts','FreeThrowAttempts',
     'FG','FGA','2P','2PA','3P','3PA','FT','FTA','ORB','DRB','TRB','AST','STL','BLK','TOV','PF','PTS',
     'Position','PerfScore_calc','PerfScore_raw','ConfMult_calc','MP_num','PredictedValue_calc',
     'ActualValuation_calc','MinMultiplier_calc','Score','FitScore_calc','CalcRank','BossRank',
@@ -499,11 +501,11 @@ function ensureWeightsCoverStats(forPos, rowArr){
   if(rowArr && rowArr.length){
     const sample = rowArr[0] || {};
     for(const k of Object.keys(sample)){
-      if(!exclude.has(k) && !isPlayerBioField(k) && typeof sample[k] === 'number') allowed.add(k);
+      if(!exclude.has(k) && !k.startsWith('NBA') && !isPlayerBioField(k) && typeof sample[k] === 'number') allowed.add(k);
     }
   }
 
-  const existing = (currentWeights[forPos] || []).filter(function(rule){ return !isPlayerBioField(rule.stat); });
+  const existing = (currentWeights[forPos] || []).filter(function(rule){ return !String(rule.stat || '').startsWith('NBA') && !isPlayerBioField(rule.stat); });
   const existingSet = new Set(existing.map(x=>x.stat));
 
   for(const stat of allowed){
@@ -1670,7 +1672,13 @@ function projectionCalcMetrics(row, ctx, memo){
   }
 
   let healthyValue = NaN;
-  if(Number.isFinite(healthyPerf) && Number.isFinite(ctx.avgPay) && ctx.avgPay > 0){
+  if(row.NBAModel_calc){
+    // Projection remains a scouting scenario around the newly learned bid. Its
+    // legacy performance index must never enter the NBA log-score dollar curve.
+    const scenarioRatio = Number.isFinite(healthyPerf) && Number.isFinite(productionPerf) && productionPerf > 0
+      ? clamp(healthyPerf / productionPerf, 0.75, 1.25) : 1;
+    if(Number.isFinite(productionValue)) healthyValue = clamp(productionValue * scenarioRatio, ctx.minPay, ctx.maxPay);
+  } else if(Number.isFinite(healthyPerf) && Number.isFinite(ctx.avgPay) && ctx.avgPay > 0){
     healthyValue = ctx.avgPay * Math.exp(ctx.k * (healthyPerf - ctx.lastPerfAvg));
     healthyValue = clamp(healthyValue, ctx.minPay, ctx.maxPay);
   }
@@ -1704,6 +1712,7 @@ function projectionCalcMetrics(row, ctx, memo){
   if(manualBoost < 0) reasons.push('scout fade applied');
   if(manualMedicalFlag) reasons.push('manual medical flag ' + manualMedicalFlag.toLowerCase());
   if(manualScoutNote) reasons.push('scout note attached');
+  if(row.NBAModel_calc) reasons.push('scouting scenario around NBA-based college bid; not a trained salary forecast');
   if(!reasons.length) reasons.push('stable projection profile');
 
   return {
@@ -2038,6 +2047,9 @@ function computeAll(options){
 
   const bidSettings = getRecommendedBidSettings();
   const marketSettings = getValuationModelDefaults('market', league);
+  const nbaContext = typeof NbaValuation !== 'undefined' ? NbaValuation.createContext(rows, league, pos) : null;
+  const nbaScores = nbaContext ? new Array(rows.length) : null;
+  const nbaSignalPool = [];
 
   // First light pass to get perfArr/mpArr for percentile anchors
   const _tempPerfs = new Float64Array(rows.length);
@@ -2054,14 +2066,19 @@ function computeAll(options){
     _tempPerfs[i] = adjPerf;
     _tempCms[i] = cm;
     _tempMps[i] = Number.isFinite(mp) ? mp : NaN;
+    if(nbaContext){
+      nbaScores[i] = NbaValuation.score(r, nbaContext);
+      if(nbaScores[i].coverage >= 0.5 && Number.isFinite(mp)) nbaSignalPool.push(nbaScores[i].score);
+    }
     if(Number.isFinite(adjPerf)) perfArr.push(adjPerf);
     if(Number.isFinite(mp)) mpArr.push(mp);
   }
 
-  const bidCtx = buildValuationContext(perfArr, mpArr, bidSettings);
-  const marketCtx = buildValuationContext(perfArr, mpArr, marketSettings);
-  lastPerfAvg = bidCtx.perfAvg;
-  lastPerfStar = bidCtx.perfStar;
+  const scoringCtx = buildValuationContext(perfArr, mpArr, bidSettings);
+  const bidCtx = nbaContext ? buildValuationContext(nbaSignalPool, mpArr, bidSettings) : scoringCtx;
+  const marketCtx = buildValuationContext(nbaContext ? nbaSignalPool : perfArr, mpArr, marketSettings);
+  lastPerfAvg = scoringCtx.perfAvg;
+  lastPerfStar = scoringCtx.perfStar;
 
   const _pickValKeys = ['Valuation','Value','ActualValuation','PredictedValue','Pay','Salary'];
   function _pickActualValuation(row){
@@ -2072,7 +2089,7 @@ function computeAll(options){
     return NaN;
   }
 
-  const projectionCtx = { confMultOn, avgPay: bidCtx.avgPay, minPay: bidCtx.minPay, maxPay: bidCtx.maxPay, k: bidCtx.k, lastPerfAvg, perfPool: perfArr };
+  const projectionCtx = { confMultOn, avgPay: bidCtx.avgPay, minPay: bidCtx.minPay, maxPay: bidCtx.maxPay, k: scoringCtx.k, lastPerfAvg, perfPool: perfArr };
 
   // Main single-pass: score + valuation + projection + boss delta
   computed = new Array(rows.length);
@@ -2087,9 +2104,11 @@ function computeAll(options){
     const manualBoostTone = scoutAdjustmentTone(manualBoost);
     const manualScoutNote = projectionGetManualScoutNote(r);
 
-    const bidQuote = applyValuationContext(adjPerf, mp, bidCtx);
-    const marketQuote = applyValuationContext(adjPerf, mp, marketCtx);
-    const marketDemand = marketDemandPremiumForRow(r, adjPerf, league);
+    const bidQuote = nbaContext ? NbaValuation.quote(nbaScores[i], r, bidCtx, cm) : applyValuationContext(adjPerf, mp, bidCtx);
+    const marketQuote = nbaContext ? NbaValuation.quote(nbaScores[i], r, marketCtx, cm) : applyValuationContext(adjPerf, mp, marketCtx);
+    // NBA production and minutes already enter the fitted signal. A second
+    // handcrafted production premium would obscure the learned contributions.
+    const marketDemand = nbaContext ? { mult: 1, reasons: '' } : marketDemandPremiumForRow(r, adjPerf, league);
     const marketPressure = Number.isFinite(marketQuote.final)
       ? clamp(marketQuote.final * marketDemand.mult, marketCtx.minPay, marketCtx.maxPay)
       : marketQuote.final;
@@ -2105,6 +2124,7 @@ function computeAll(options){
     const deltaPct = (Number.isFinite(delta) && bossVal !== 0) ? (delta / bossVal) : NaN;
 
     const out = Object.assign({}, r);
+    if(typeof NbaValuation !== 'undefined') NbaValuation.annotate(out, nbaContext ? nbaScores[i] : null, bidQuote);
     out.PerfScore_calc = adjPerf; out.PerfScore_raw = rawPerf; out.ConfMult_calc = cm; out.MP_num = mp;
     out.Score = adjPerf; out.PredictedValue_calc = pred; out.MinMultiplier_calc = mult; out.ActualValuationCurve_calc = curveBase; out.ActualValuationBase_calc = curveBase; out.ActualValuation_calc = final;
     out.MarketPressurePredicted_calc = marketQuote.pred; out.MarketPressureMinMultiplier_calc = marketQuote.mult; out.MarketPressureBase_calc = marketQuote.final; out.MarketDemandPremium_calc = marketDemand.mult; out.MarketDemandReasons_calc = marketDemand.reasons; out.MarketPressure_calc = marketPressure;
@@ -2168,6 +2188,8 @@ function computeAll(options){
   _dataRefreshScoredReferences(league, pos);
 
   if(!skipRender) renderPlayers();
+  if(!options.background && typeof NbaValuationUI !== 'undefined') NbaValuationUI.render();
+  if(!options.background && !skipRender && wb) _scheduleSiblingPoolCompute(league, pos, _dataGetLeagueRows(league));
 }
 
 // --- Google Sheets load ---
@@ -3176,7 +3198,7 @@ async function _wbbLoadAllPlayerPages(year) {
   return players;
 }
 
-// Bio updates patch row objects. Recompute only when class or inferred group changes.
+// Bio updates patch row objects and refresh scores when a scoring input changes.
 function _dataRenderBioStatus(){
   var el = document.getElementById('playerBioStatus');
   if(!el) return;
@@ -3199,6 +3221,8 @@ function _dataSyncPlayerBios(players, targetLeague, season){
   var seen = new Set();
   var classChanged = false;
   var positionChanged = false;
+  var heightChanged = false;
+  var heightAffectsScores = typeof NbaValuation !== 'undefined' && NbaValuation.isEnabled();
   function patch(p){
     if(!p || seen.has(p)) return;
     if(p._league && p._league !== targetLeague) return;
@@ -3209,7 +3233,9 @@ function _dataSyncPlayerBios(players, targetLeague, season){
     PLAYER_BIO_FIELDS.forEach(function(field){
       if(field === 'Height' || field === 'Weight'){
         if(Object.prototype.hasOwnProperty.call(source, field)){
-          p[field] = field === 'Height' ? PlayerBios.normalizeHeight(source[field]) : PlayerBios.normalizeWeight(source[field]);
+          var measurement = field === 'Height' ? PlayerBios.normalizeHeight(source[field]) : PlayerBios.normalizeWeight(source[field]);
+          if(field === 'Height' && PlayerBios.normalizeHeight(p.Height) !== measurement) heightChanged = true;
+          p[field] = measurement;
         }
         return;
       }
@@ -3236,9 +3262,11 @@ function _dataSyncPlayerBios(players, targetLeague, season){
   });
   var saved = leagueRosters[targetLeague];
   if(saved){ saved.tb.forEach(patch); saved.opp.forEach(patch); }
-  // Class affects projection confidence; measurements can resolve an inferred position.
-  function refreshClassScores(){
-    if(!classChanged && !positionChanged) return;
+  // Height changes the NBA signal even when the listed position stays the same.
+  // Manual scoring keeps its existing metadata-only behavior for height updates.
+  function scoresChanged(){ return classChanged || positionChanged || (heightAffectsScores && heightChanged); }
+  function refreshBioScores(){
+    if(!scoresChanged()) return;
     _dataResetLeagueRowsCache(targetLeague);
     delete tbAllComputed[targetLeague + '_Guards'];
     delete tbAllComputed[targetLeague + '_Wings'];
@@ -3251,10 +3279,10 @@ function _dataSyncPlayerBios(players, targetLeague, season){
     computed.forEach(patch);
     if(typeof tbRoster !== 'undefined') tbRoster.forEach(patch);
     if(typeof oppRoster !== 'undefined') oppRoster.forEach(patch);
-    refreshClassScores();
+    if(typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer) patch(_currentProfilePlayer);
+    refreshBioScores();
     if(typeof _currentProfilePlayer !== 'undefined' && _currentProfilePlayer){
-      patch(_currentProfilePlayer);
-      var freshProfile = (classChanged || positionChanged) && computed.find(function(p){ return key(p) === key(_currentProfilePlayer); });
+      var freshProfile = scoresChanged() && computed.find(function(p){ return key(p) === key(_currentProfilePlayer); });
       if(freshProfile && typeof openProfile === 'function') openProfile(freshProfile);
       else if(typeof profileRefreshMeasurements === 'function') profileRefreshMeasurements(_currentProfilePlayer);
     }
@@ -3264,7 +3292,7 @@ function _dataSyncPlayerBios(players, targetLeague, season){
     if(typeof renderPlayers === 'function'){
       renderPlayers({ preservePage: true });
     }
-  } else refreshClassScores();
+  } else refreshBioScores();
   return true;
 }
 
@@ -3323,6 +3351,12 @@ function _calcWbbDerivedStats(p) {
   const pts = p._PTS  || 0;
   const ast = p._AST  || 0, tov = p._TOV  || 0;
   const g   = p.G     || 1;
+
+  // Keep exact denominators for the learned model's missing-percentage checks.
+  // Displayed per-game volumes may round a nonzero season total down to 0.0.
+  p.FieldGoalAttempts = fga;
+  p.ThreePointAttempts = p._3PA || 0;
+  p.FreeThrowAttempts = fta;
 
   p['eFG%'] = fga > 0 ? +((fgm + 0.5 * m3) / fga).toFixed(4) : 0;
   p['TS%']  = (fga + 0.44 * fta) > 0 ? +(pts / (2 * (fga + 0.44 * fta))).toFixed(4) : 0;
@@ -3594,10 +3628,20 @@ function reloadActiveSheet(){
 function exportCSV(){
   const cols = ['Rank','Player','Team','Conference','ConfMult_calc','Position','MP','Score','ProjectionPerf_calc','ProjectionFloorPerf_calc','ProjectionCeilingPerf_calc','FitScore_calc','PredictedValue_calc','ActualValuationCurve_calc','TranslationRiskPct_calc','TranslationRiskLabel_calc','TranslationRiskLevel_calc','TranslationRiskReasons_calc','TranslationRiskSource_calc','ActualValuationBase_calc','ActualValuation_calc','ScoutAdjustmentPct_calc','ScoutAdjustmentLabel_calc','ScoutAdjustmentNote_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','MarketLaneLabel_calc','ProjectionMedianValue_calc','ProjectionFloorValue_calc','ProjectionCeilingValue_calc','ProjectionConfidence_calc','ProjectionMedicalRiskLabel_calc','ProjectionManualBoostLabel_calc','ProjectionManualMedicalFlag_calc'];
   cols.splice(6, 0, 'Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt', 'Pos', 'ListedPosition', 'ListedPositionSource', 'PositionSource', 'PositionReason', 'PositionConfidence');
+  cols.push('NBAModel_calc', 'NBAModelVersion_calc', 'NBAPosition_calc', 'NBAScore_calc', 'NBACoverage_calc', 'NBAStatus_calc', 'NBAConferenceMultiplier_calc');
+  var nbaExportFeatures = typeof NbaValuation !== 'undefined' && NbaValuation.getGroup(pos) ? NbaValuation.getGroup(pos).features : [];
+  nbaExportFeatures.forEach(function(feature){ cols.push('NBA contribution: ' + feature.key); });
   const lines = [];
   lines.push(cols.map(c => `"${c.replaceAll('"','""')}"`).join(','));
   computed.forEach(r => {
-    const row = cols.map(c => `"${(r[c] ?? '').toString().replaceAll('"','""')}"`).join(',');
+    const row = cols.map(c => {
+      var value = r[c];
+      if(c.startsWith('NBA contribution: ')){
+        var feature = (r.NBAContributions_calc || []).find(function(item){ return item.key === c.slice(18); });
+        value = feature ? feature.contribution : '';
+      }
+      return `"${(value ?? '').toString().replaceAll('"','""')}"`;
+    }).join(',');
     lines.push(row);
   });
   const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});

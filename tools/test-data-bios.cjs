@@ -62,6 +62,116 @@ test('metadata reaches both position pools and rosters without scoring or class 
   assert.equal(ctx._leagueRowsCache.MBB.wsRef, sheet);
 });
 
+function learnedDashboard(){
+  const ctx = dashboard();
+  ctx.NBA_VALUATION_MODEL = { version: 'bio-refresh-fixture', groups: {} };
+  ['Guards', 'Wings', 'Bigs'].forEach(group => {
+    ctx.NBA_VALUATION_MODEL.groups[group] = { features: [
+      { key: 'Height', coefficient: 1 }, { key: 'MP', coefficient: 0.2 }, { key: 'PPG', coefficient: 0.1 },
+    ] };
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'modules/nba-valuation.js'), 'utf8'), ctx);
+  // Keep the real valuation engine, computeAll, workbook parsing, sibling
+  // scheduling and reference refresh. Unrelated scouting/rendering is stubbed.
+  ctx.ensureWeightsCoverStats = () => {};
+  ctx.renderWeights = () => {};
+  ctx.renderPlayers = () => {};
+  ctx.clearWarn = () => {};
+  ctx.scoreRow = row => row.PPG;
+  ctx.fitScoreForRow = () => 50;
+  ctx.buildStatDistributions = () => { ctx.statDist = {}; };
+  ctx.projectionGetManualBoost = () => 0;
+  ctx.projectionGetManualScoutNote = () => '';
+  ctx.projectionBuildInputs = () => ({});
+  ctx.applyResolvedTranslationRiskToRow = row => row;
+  ctx._applyInferredClassToPool = () => {};
+  ctx._scheduleTeamListRefresh = () => {};
+  ctx._scheduleValueLabDataChange = () => {};
+  ctx.getRecommendedBidSettings = () => ({ avgPay: 35000, minPay: 5000, maxPay: 100000, starValue: 70000, starPct: 0.95, mpMode: 'on', mpPct: 0.95 });
+  ctx.activeSheetEl = {};
+  ctx.kpiPlayers = {}; ctx.kpiAvgPerf = {}; ctx.kpiStarPerf = {};
+  ctx.confMultToggleEl = { checked: false };
+  ctx.tbRoster = []; ctx.oppRoster = [];
+  ctx.flushTimers = () => {
+    let count = 0;
+    while(ctx.timers.length){
+      assert.ok(++count < 30, 'Bio refresh must not recursively schedule work');
+      ctx.timers.shift().fn();
+    }
+  };
+  return ctx;
+}
+
+test('late heights update NBA bids, all position pools and saved roster/profile references', () => {
+  const ctx = learnedDashboard();
+  const groups = ['Guards', 'Wings', 'Bigs'];
+  const sources = [];
+  groups.forEach((group, index) => {
+    const pos = ['G', 'SF', 'C'][index], baseHeight = [70, 76, 82][index];
+    [null, baseHeight, baseHeight + 2].forEach((height, offset) => sources.push({
+      Player: group + offset, Team: 'Example', Pos: pos, ListedPosition: pos,
+      Class: 'Jr', Height: height, MP: [20, 22, 18][offset], PPG: [10, 12, 8][offset], G: 30,
+    }));
+  });
+  ctx._mbbActivePlayersRef = sources;
+  ctx._dataCommitLeaguePlayers('MBB', sources);
+  ctx.reloadActiveSheet();
+  ctx.flushTimers();
+  const before = groups.map(group => ctx.tbAllComputed['MBB_' + group].find(row => row.Player === group + '0'));
+  const oldBids = before.map(row => row.ActualValuation_calc);
+  before.forEach(row => assert.ok(row.NBAMissing_calc.includes('Height')));
+  ctx.tbRoster = before.map(row => ({ ...row }));
+  ctx.oppRoster = before.map(row => ({ ...row }));
+  ctx.leagueRosters.MBB.tb = before.map(row => ({ ...row }));
+  ctx._currentProfilePlayer = { ...before[0] };
+  ctx.openProfile = row => { ctx._currentProfilePlayer = row; };
+  const oldCache = ctx._leagueRowsCache.MBB;
+  const otherLeaguePool = [{ Player: 'Other league', Height: 64 }];
+  ctx.tbAllComputed.WBB_Guards = otherLeaguePool;
+  groups.forEach((group, index) => { sources[index * 3].Height = [76, 82, 88][index]; });
+
+  assert.equal(ctx._dataSyncPlayerBios(sources, 'MBB', 2026), true);
+  assert.notEqual(ctx._leagueRowsCache.MBB, oldCache, 'The full league normalization context must be rebuilt');
+  ctx.flushTimers();
+  groups.forEach((group, index) => {
+    const fresh = ctx.tbAllComputed['MBB_' + group].find(row => row.Player === group + '0');
+    assert.equal(fresh.Position, group, 'Listed position remains unchanged');
+    assert.equal(fresh.Class, 'Jr');
+    assert.equal(fresh.Height, [76, 82, 88][index]);
+    assert.equal(fresh.NBAMissing_calc.includes('Height'), false);
+    assert.ok(fresh.NBAContributions_calc.find(item => item.key === 'Height').contribution > 0);
+    assert.ok(fresh.ActualValuation_calc > oldBids[index], 'The newly observed tall height must affect the learned bid');
+    [ctx.tbRoster[index], ctx.oppRoster[index], ctx.leagueRosters.MBB.tb[index]].forEach(row => {
+      assert.equal(row.ActualValuation_calc, fresh.ActualValuation_calc);
+      assert.equal(row.NBAScore_calc, fresh.NBAScore_calc);
+    });
+  });
+  assert.equal(ctx._currentProfilePlayer.ActualValuation_calc, ctx.tbRoster[0].ActualValuation_calc);
+  assert.equal(ctx.tbAllComputed.WBB_Guards, otherLeaguePool);
+
+  const stableCache = ctx._leagueRowsCache.MBB;
+  sources[0].Height = "6'4\"";
+  ctx._dataSyncPlayerBios(sources, 'MBB', 2026);
+  assert.equal(ctx._leagueRowsCache.MBB, stableCache, 'Equivalent normalized units must not cause another recalculation');
+  assert.equal(ctx.timers.length, 0, 'Repeated identical bios must not create a refresh loop');
+});
+
+test('disabled NBA mode preserves height-only metadata updates without recalculation', () => {
+  const ctx = dashboard();
+  ctx.NbaValuation = { isEnabled: () => false };
+  const source = [{ Player: 'Listed guard', Team: 'Example', Pos: 'G', Class: 'Jr', Height: 76 }];
+  const row = { ...source[0], Position: 'Guards', Height: null, ActualValuation_calc: 40000 };
+  ctx._mbbActivePlayersRef = source;
+  ctx.wb = { Sheets: {} };
+  ctx.rows = [row]; ctx.computed = [row];
+  ctx.tbAllComputed = { MBB_Guards: [row] };
+  ctx.renderPlayers = () => {};
+  ctx.reloadActiveSheet = () => assert.fail('Manual scoring does not depend on height');
+  assert.equal(ctx._dataSyncPlayerBios(source, 'MBB', 2026), true);
+  assert.equal(row.Height, 76);
+  assert.equal(row.ActualValuation_calc, 40000);
+});
+
 test('stale season and stale player-array completions cannot modify current data', () => {
   const ctx = dashboard();
   const stale = [{ Player: 'Old', Team: 'Team', Height: 72 }];

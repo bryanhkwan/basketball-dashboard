@@ -167,6 +167,7 @@ function refreshGuestDemoUI() {
     exportBtn.setAttribute('aria-disabled', locked ? 'true' : 'false');
   }
   if (locked) setPlayersSettingsOpen(false);
+  if (typeof NbaValuationUI !== 'undefined') NbaValuationUI.render();
 }
 
 window.addEventListener('DOMContentLoaded', () => {

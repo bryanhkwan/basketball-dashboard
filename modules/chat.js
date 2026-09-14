@@ -242,6 +242,7 @@
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null,
       value:formatChatMoney(r.ActualValuation_calc), marketPressure:formatChatMoney(r.MarketPressure_calc), marketLane:r.MarketLaneLabel_calc||'',
+      valuationBasis:r.NBAModel_calc ? 'Experimental NBA-informed college estimate; not reported pay' : 'Custom scouting-weight estimate; not reported pay',
       translationRisk:r.TranslationRiskLevel_calc||'', translationAdj:r.TranslationRiskLabel_calc||'',
       ppg:r.PPG!=null?+Number(r.PPG).toFixed(1):null, apg:r.APG!=null?+Number(r.APG).toFixed(1):null,
       rpg:r.RPG!=null?+Number(r.RPG).toFixed(1):null, spg:r.SPG!=null?+Number(r.SPG).toFixed(1):null,
@@ -259,6 +260,7 @@
   function getDashboardContext(){
     const a=app(), roster=a.tbRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
+      valuationBasis:typeof NbaValuation !== 'undefined' && NbaValuation.isEnabled() ? 'NBA salary associations, college pay anchors, separate conference/translation/scouting adjustments; unvalidated college transfer' : 'Custom scouting-weight valuation',
       rosterSize:roster.length, rosterPositions:roster.reduce(function(counts, r){ counts[bucketPosition(r, r._league || a.league)]++; return counts; }, {Guards:0, Wings:0, Bigs:0}), roster:roster.map(r=>({player:r.Player,team:r.Team,pos:bucketPosition(r, r._league || a.league),
       perf:r.Score?r.Score.toFixed(1):'N/A',value:formatChatMoney(r.ActualValuation_calc)||'N/A',pressure:formatChatMoney(r.MarketPressure_calc)||'N/A',lane:r.MarketLaneLabel_calc||''})),
       budget:document.getElementById('tbBudget')?.value||'500000',
@@ -282,6 +284,10 @@
     m = m || all.find(r=>(r.Player||'').toLowerCase().includes(pn));
     if(!m) return null;
     const out={}; for(const[k,v]of Object.entries(m)){ if(v!=null&&v!==''&&!k.startsWith('_')) out[k]=typeof v==='number'?+v.toFixed(3):v; }
+    out.ValuationBasis = m.NBAModel_calc ? 'Experimental NBA-informed college estimate; not reported pay' : 'Custom scouting-weight estimate; not reported pay';
+    if(typeof demoCanViewSensitiveModeling === 'function' && !demoCanViewSensitiveModeling()){
+      Object.keys(out).forEach(function(key){ if(key.startsWith('NBA')) delete out[key]; });
+    }
     if (typeof demoIsGuestMode === 'function' && demoIsGuestMode()) {
       var band = typeof demoFormatMoney === 'function' ? demoFormatMoney(m.ActualValuation_calc) : null;
       ['ActualValuation_calc','ActualValuation','PredictedValue_calc','PredictedValue','ValueDelta_calc','ValueDeltaPct_calc','MarketPressurePredicted_calc','MarketPressureMinMultiplier_calc','MarketPressure_calc','MarketGap_calc','MarketGapPct_calc','BidToPressureRatio_calc'].forEach(function (key) {
@@ -649,6 +655,7 @@ RULES (strict):
  5) ROSTER ACTIONS: For swap requests, call get_top_players first to find real candidates, then pick from those results. Give reasoning, then IMMEDIATELY call swap_roster_player — Yes/No buttons appear automatically. Do NOT ask permission first.
  6) WEB_SEARCH REQUIRED: If the user mentions latest/recent/today/this week/injuries/suspensions/transfer portal/role changes/NIL/coaching news, OR asks valuation (worth $, fair, overpay, steal, invest) → call web_search AFTER dashboard lookup.
  7) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality. Web = current status/news. If web changes your recommendation, say so and reduce confidence.
+    VALUATION BASIS: ${ctx.valuationBasis}. These are estimates, not observed NCAA compensation. NBA coefficients describe salary associations, not causal stat or height premiums. College dollar anchors and later conference/translation/scout adjustments are assumptions. NBA validation does not establish NCAA accuracy, especially WBB. Production and fit scores are separate from the NBA valuation signal. Staff can inspect the NBA salary model panel and player contributions on the Players page.
  8) WEB REPORTING: Always include concrete dates from search results. If sources conflict, state the conflict and be conservative.
  9) OUTPUT FORMAT: (1) Verdict (2) Dashboard evidence (3) Web evidence w/ dates if used (4) Risks/assumptions (5) Suggested next action.
  10) EFFICIENCY: ≤1 web_search per turn unless user explicitly asks for more verification.
