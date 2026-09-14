@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://hidden-salad-773b.bryanhkwan.workers.dev" crossorigin>
   <link rel="preconnect" href="https://white-pine-7669.bryanhkwan.workers.dev" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=nba-model-20260914">
+  <link rel="stylesheet" href="styles.css?v=salary-evidence-20260914">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" media="print" onload="this.media='all'">
   <!-- Modules — load in dependency order (no deps first, coordinator last) -->
   <script src="modules/config.js?v=positions-20260914" defer></script>
@@ -19,6 +19,7 @@
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
   <script src="data/nba-valuation-model.js?v=nba-model-20260914" defer></script>
+  <script src="data/nba-salary-evidence.js?v=salary-evidence-20260914" defer></script>
   <script src="modules/nba-valuation.js?v=nba-model-20260914" defer></script>
   <script src="modules/data.js?v=nba-model-20260914" defer></script>
   <script src="modules/eval-presets.js?v=positions-20260914" defer></script>
@@ -34,13 +35,13 @@
   <script src="modules/shot-analytics.js" defer></script>
   <script src="modules/lab.js" defer></script>
   <script src="modules/value-lab.js?v=positions-20260914" defer></script>
-  <script src="modules/chat.js?v=nba-model-20260914" defer></script>
+  <script src="modules/chat.js?v=salary-evidence-20260914" defer></script>
   <script src="modules/help-content.js?v=positions-20260914" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="modules/help.js" defer></script>
   <script src="modules/trends.js" defer></script>
   <script src="modules/shortcuts.js" defer></script>
-  <script src="modules/nba-valuation-ui.js?v=nba-model-20260914" defer></script>
+  <script src="modules/nba-valuation-ui.js?v=salary-evidence-20260914" defer></script>
   <script src="app.js?v=nba-model-20260914" defer></script>
   <script src="modules/profile-dossier.js?v=positions-20260914" defer></script>
   <script src="modules/profile-route.js" defer></script>
@@ -346,6 +347,10 @@
         </summary>
         <div class="nbaModelBody">
           <div id="nbaModelControls" class="nbaModelToolbar" hidden>
+            <div class="nbaEvidenceView" role="group" aria-label="NBA model view">
+              <button type="button" data-nba-view="evidence" aria-pressed="true">Salary evidence</button>
+              <button type="button" data-nba-view="prediction" aria-pressed="false">Prediction weights</button>
+            </div>
             <div>
               <label for="nbaModelGroup">NBA position group</label>
               <select id="nbaModelGroup">
@@ -354,7 +359,6 @@
                 <option value="Bigs">Bigs</option>
               </select>
             </div>
-            <p class="nbaModelIntro">Explore the salary associations behind the college valuation. Production and fit scores remain separate scouting views.</p>
           </div>
           <div id="nbaModelContent"><p class="nbaModelNote">Loading the NBA salary reference.</p></div>
         </div>
@@ -2284,7 +2288,7 @@
             </div>
           </div>
           <details id="mNbaValuationPanel" class="nbaModelPanel nbaProfilePanel" hidden>
-            <summary><strong>NBA model contribution</strong><span id="mNbaValuationStatus" class="nbaModelStatus">College peer comparison</span></summary>
+            <summary><strong>NBA prediction contributions</strong><span id="mNbaValuationStatus" class="nbaModelStatus">College peer comparison</span></summary>
             <div id="mNbaValuationContent" class="nbaModelBody"></div>
           </details>
         </div>

@@ -193,7 +193,7 @@ data/
 
 ## NBA salary reference for college valuation
 
-The default valuation basis uses separate NBA salary regressions for Guards, Wings, and Bigs, trained on the supplied 2022–23 workbook with sourced ESPN heights. Open **Players → NBA salary model** for coefficients, bootstrap stability, and held-out regression/tree comparisons. Approved staff can inspect each player's input contributions and the subsequent college pay adjustments in the profile. **Model settings → Valuation basis** switches between the NBA reference and custom scouting weights. The selection is saved in this browser; evaluation presets still manage scouting weights and college pay anchors.
+The default valuation basis uses separate NBA salary regressions for Guards, Wings, and Bigs, trained on the supplied 2022–23 workbook with sourced ESPN heights. Open **Players → NBA salary model → Prediction weights** for ridge coefficients, bootstrap stability, and held-out regression/tree comparisons. Approved staff can inspect each player's input contributions and the subsequent college pay adjustments in the profile. **Model settings → Valuation basis** switches between the NBA reference and custom scouting weights. The selection is saved in this browser; evaluation presets still manage scouting weights and college pay anchors.
 
 College inputs are standardized within their league and position. NBA age and salary levels are not transferred. The existing college pay anchors set the dollar scale; conference, translation, and scouting adjustments remain separate assumptions. Minutes are not discounted a second time. Production and fit scores remain independent of the learned valuation. These are experimental estimates, not reported NCAA compensation, and the men's NBA sample does not validate WBB pay.
 
@@ -207,3 +207,19 @@ node --use-system-ca --use-env-proxy tools/audit-nba-valuations.cjs --season 202
 ```
 
 Training requires the original workbook in the repository root and the dependencies in `tools/requirements-nba-valuation.txt`. The original workbook is never overwritten. The height tool can refresh the sourced height snapshot; recorded heights are current listed bios, not verified 2022–23 measurements. Reports, enriched NBA data, coefficient tables, and recalculated college CSVs are generated under `reports/nba-valuation/`. The browser uses the generated `data/nba-valuation-model.js`, with an identical JSON version retained for auditing.
+
+## Position-level salary evidence
+
+**Players → NBA salary model → Salary evidence** reports a separate explanatory analysis for coaches. It shows a fixed association for each position/statistic, an explicit unit such as one inch or five percentage points, a pointwise 95% interval, the raw p-value, and the Holm-adjusted p-value. The primary adjustment covers all 36 basketball associations at a fixed 0.05 threshold. Direct tests compare position slopes on the same units. Approved staff can export the evidence for discussion; guest access follows the existing modeling gate.
+
+This analysis uses OLS on recorded log salary with HC3 robust uncertainty, all twelve basketball inputs, age, and explicit three-point/free-throw percentage-availability indicators. The primary sample retains traditional nonshooting centers and excludes one one-game guard with unavailable effective field-goal percentage. Accuracy slopes describe players with usable recorded percentages. The [analysis specification](docs/nba-salary-evidence-method.md) explains sample selection, testing families, diagnostics, and limitations.
+
+The OLS coefficients and p-values belong to **Salary evidence**. **Prediction weights** retains the validated ridge model and its bootstrap stability summaries; player profiles retain individual contributions to that prediction model. The evidence view does not change the NCAA valuation engine or remove predictive inputs merely because an explanatory p-value is large. Neither analysis establishes a causal skill premium or validates NCAA compensation.
+
+```powershell
+python tools/analyze-nba-evidence.py
+python -m unittest discover -s tools -p test_nba_evidence.py
+node --test tools/nba-salary-evidence.test.cjs tools/nba-valuation.test.cjs
+```
+
+The browser consumes `data/nba-salary-evidence.js`; `data/nba-salary-evidence.json` contains the same aggregate results. Local research exports are generated under `reports/nba-evidence/`. The original workbook remains unchanged. The explanatory analysis is exploratory because the data and prior prediction results were already inspected; its full results and fixed sensitivity checks are reported, including uncertain associations.

@@ -96,7 +96,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       summaries.push({ league, groups: initial, customChangedCurves: changes, restoredNbaDifferences: restored, reconciliation, profile, efgEdge });
     }
     console.log('Checking all coefficient groups, guest gating, and narrow layout...');
-    await evaluate('document.getElementById("nbaValuationPanel").open=true;');
+    await evaluate('document.getElementById("nbaValuationPanel").open=true;document.querySelector(\'[data-nba-view="prediction"]\').click();');
     for (const group of ['Guards', 'Wings', 'Bigs']) {
       await evaluate('document.getElementById("nbaModelGroup").value=' + JSON.stringify(group) + ';document.getElementById("nbaModelGroup").dispatchEvent(new Event("change",{bubbles:true}));');
       const panel = await evaluate(`({selected:document.getElementById('nbaModelGroup').value,coefficients:document.querySelectorAll('#nbaModelContent [aria-label="NBA salary coefficients"] tbody tr').length,validation:document.querySelectorAll('#nbaModelContent [aria-label="Held-out NBA salary validation"] tbody tr').length,text:document.getElementById('nbaModelContent').textContent,invalid:['undefined','NaN','[object Object]'].some(s=>document.getElementById('nbaModelContent').textContent.includes(s))})`);

@@ -117,6 +117,52 @@
     .nbaModelLocked{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
     .nbaModelLocked p{flex:1 1 240px}
     .nbaModelLocked button{min-height:44px}
+    .nbaEvidenceView{display:flex;flex-wrap:wrap;gap:6px;border:1px solid var(--line);border-radius:10px;padding:4px;background:rgba(0,0,0,.15)}
+    .nbaEvidenceView button{min-height:44px;border:1px solid transparent;border-radius:7px;padding:9px 15px;background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer}
+    .nbaEvidenceView button[aria-pressed="true"]{color:var(--text);background:rgba(var(--accent-rgb),.12);border-color:rgba(var(--accent-rgb),.32)}
+    .nbaEvidenceView button:hover{color:var(--text);background:rgba(var(--accent-rgb),.07)}
+    .nbaEvidenceHeading{display:flex;align-items:start;justify-content:space-between;gap:18px;margin-bottom:10px}
+    .nbaEvidenceHeading h3{font-size:16px;line-height:1.5;color:var(--text);margin:0 0 5px}
+    .nbaEvidenceHeading button{min-height:44px;flex-shrink:0;font-size:12px}
+    .nbaEvidenceSummary{border:1px solid rgba(var(--accent-rgb),.22);border-radius:12px;background:rgba(var(--accent-rgb),.03);padding:16px;margin:14px 0}
+    .nbaEvidenceSummary h3{font-size:14px;line-height:1.5;margin:0 0 12px;color:var(--text)}
+    .nbaEvidenceLead{font-size:13px;line-height:1.7;color:var(--text);max-width:900px;margin-bottom:14px}
+    .nbaEvidenceSummaryGrid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:16px;margin:12px 0}
+    .nbaEvidenceSummaryGrid h4{font-size:12px;line-height:1.5;margin:0 0 5px;color:var(--text)}
+    .nbaEvidenceSummaryGrid p{font-size:12px;line-height:1.65;color:var(--muted);margin:0}
+    .nbaEvidenceForestWrap{margin:12px 0}
+    .nbaEvidenceForest{display:block;width:100%;min-width:760px;height:auto;background:rgba(0,0,0,.06)}
+    .nbaEvidenceForest text{font-family:inherit;fill:var(--text);font-variant-numeric:tabular-nums}
+    .nbaEvidenceForest .nbaEvidenceStat{font-size:11px;font-weight:700}
+    .nbaEvidenceForest .nbaEvidenceIncrement,.nbaEvidenceForest .nbaEvidenceTick{font-size:10px;fill:var(--muted)}
+    .nbaEvidenceForest .nbaEvidenceEstimate{font-size:11px;font-weight:700}
+    .nbaEvidenceGrid{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+    .nbaEvidenceZero{stroke:var(--muted);stroke-width:1.2}
+    .nbaEvidenceInterval{stroke:var(--muted);stroke-width:1.5}
+    .nbaEvidencePoint{fill:var(--bg);stroke:var(--text);stroke-width:1.6}
+    [data-evidence-status="supported"] .nbaEvidencePoint{fill:var(--accent);stroke:var(--accent)}
+    [data-evidence-status="supported"] .nbaEvidenceInterval{stroke:var(--accent);stroke-width:2}
+    .nbaEvidenceTable{min-width:1030px}
+    .nbaEvidenceTable th[scope="row"],.nbaModelTable th[scope="row"]{text-align:left;font-size:12px;color:var(--text);font-weight:700;background:transparent}
+    .nbaEvidenceTable td{white-space:nowrap}
+    .nbaEvidenceTable td:last-child{white-space:normal;min-width:135px;text-align:left}
+    .nbaEvidenceDecision{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:4px 7px;font-size:10px;line-height:1.5;color:var(--muted);white-space:normal}
+    .nbaEvidenceDecision[data-evidence-status="supported"]{color:var(--text);border-color:rgba(var(--accent-rgb),.4);background:rgba(var(--accent-rgb),.08)}
+    .nbaEvidenceDecision[data-evidence-status="suggestive"]{color:var(--text);border-style:dashed}
+    .nbaEvidenceComparisonControl{margin:16px 0 10px}
+    .nbaEvidenceComparisonControl label{display:block;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px}
+    .nbaEvidenceComparisonControl select{min-height:44px;width:min(100%,300px)}
+    .nbaEvidenceSensitivity{min-width:920px}
+    .nbaEvidenceSensitivity td:last-child{white-space:normal;min-width:130px}
+    .nbaEvidenceChecksDownload{min-height:44px;margin-top:10px;font-size:12px}
+    .nbaEvidenceDefinitions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:8px 0 16px}
+    .nbaEvidenceDefinitions h4{font-size:12px;color:var(--text);margin:0 0 6px}
+    .nbaEvidenceDefinitions p,.nbaEvidenceNotes{font-size:12px;line-height:1.7;color:var(--muted)}
+    .nbaEvidenceNotes{padding-left:20px;margin:12px 0}
+    .nbaEvidenceNotes li+li{margin-top:8px}
+    .nbaModelNote a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+    .nbaModelNote a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+    @media(max-width:640px){.nbaEvidenceView{width:100%}.nbaEvidenceView button{flex:1;padding:9px 6px}.nbaEvidenceHeading{flex-direction:column;gap:10px}.nbaEvidenceHeading h3{font-size:15px}.nbaEvidenceSummary{padding:12px}.nbaEvidenceSummaryGrid,.nbaEvidenceDefinitions{grid-template-columns:1fr;gap:12px}.nbaEvidenceTable{min-width:1030px}.nbaEvidenceSummaryGrid h4{margin-bottom:3px}}
     .nbaProfilePanel{margin-top:12px}
     .nbaReconciliation{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px}
     .nbaReconciliation>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:11px 12px;border-bottom:1px solid var(--line);font-size:12px;line-height:1.6}

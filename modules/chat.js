@@ -257,10 +257,39 @@
   }
 
   // ---- Tool implementations ----
+  function getSalaryEvidenceContext(){
+    if(typeof demoCanViewSensitiveModeling !== 'function' || !demoCanViewSensitiveModeling()){
+      return {available:false, message:'Salary evidence details require staff access.'};
+    }
+    const evidence = typeof NBA_SALARY_EVIDENCE !== 'undefined' ? NBA_SALARY_EVIDENCE : null;
+    if(!evidence || !evidence.groups) return {available:false, message:'Salary evidence has not loaded.'};
+    const groups = {};
+    ['Guards','Wings','Bigs'].forEach(function(group){
+      const source = evidence.groups[group];
+      if(!source) return;
+      groups[group] = {n:source.n, associations:(source.features || []).map(function(feature){
+        return {stat:feature.key, increment:feature.incrementLabel,
+          logSalaryCoefficientPerOriginalUnit:feature.coefficient,
+          originalUnit:feature.unit,
+          salaryAssociationPct:feature.effectPct,
+          pointwise95IntervalPct:[feature.effectCiLowPct,feature.effectCiHighPct],
+          pValue:feature.pValue, holmAdjustedP:feature.pAdjustedHolm,
+          observedInputs:feature.observedN};
+      })};
+    });
+    return {available:true, id:evidence.id, source:'2022–23 recorded NBA salaries',
+      interpretation:'Exploratory OLS associations conditional on the other model inputs and age; not causal effects or NCAA pay evidence.',
+      uncertainty:'HC3 robust inference; intervals are pointwise. Holm-adjusted p-values cover all 36 position/statistic tests at a fixed 0.05 threshold.',
+      accuracy:'Three-point and free-throw accuracy slopes apply to players with usable recorded percentages. Unavailable percentages have separate indicators.',
+      positionDifferences:'Separate group p-values do not establish differences between positions. Use the direct comparison tests in the Salary evidence panel.',
+      groups:groups};
+  }
+
   function getDashboardContext(){
     const a=app(), roster=a.tbRoster||[];
     return { league:a.league||'MBB', position:a.pos||'Guards', totalPlayers:allPlayers().length,
       valuationBasis:typeof NbaValuation !== 'undefined' && NbaValuation.isEnabled() ? 'NBA salary associations, college pay anchors, separate conference/translation/scouting adjustments; unvalidated college transfer' : 'Custom scouting-weight valuation',
+      salaryEvidence:getSalaryEvidenceContext(),
       rosterSize:roster.length, rosterPositions:roster.reduce(function(counts, r){ counts[bucketPosition(r, r._league || a.league)]++; return counts; }, {Guards:0, Wings:0, Bigs:0}), roster:roster.map(r=>({player:r.Player,team:r.Team,pos:bucketPosition(r, r._league || a.league),
       perf:r.Score?r.Score.toFixed(1):'N/A',value:formatChatMoney(r.ActualValuation_calc)||'N/A',pressure:formatChatMoney(r.MarketPressure_calc)||'N/A',lane:r.MarketLaneLabel_calc||''})),
       budget:document.getElementById('tbBudget')?.value||'500000',
@@ -656,6 +685,7 @@ RULES (strict):
  6) WEB_SEARCH REQUIRED: If the user mentions latest/recent/today/this week/injuries/suspensions/transfer portal/role changes/NIL/coaching news, OR asks valuation (worth $, fair, overpay, steal, invest) → call web_search AFTER dashboard lookup.
  7) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality. Web = current status/news. If web changes your recommendation, say so and reduce confidence.
     VALUATION BASIS: ${ctx.valuationBasis}. These are estimates, not observed NCAA compensation. NBA coefficients describe salary associations, not causal stat or height premiums. College dollar anchors and later conference/translation/scout adjustments are assumptions. NBA validation does not establish NCAA accuracy, especially WBB. Production and fit scores are separate from the NBA valuation signal. Staff can inspect the NBA salary model panel and player contributions on the Players page.
+    SALARY EVIDENCE: get_dashboard_context includes the separate explanatory OLS analysis for staff. Use its exact estimates and Holm-adjusted p-values when discussing evidence; never invent p-values or attach these OLS p-values to the ridge prediction weights. A pointwise interval excluding zero can still fail the 36-test adjustment. The fixed threshold is 0.05; a small sample does not automatically justify changing it to 0.10. A nonsignificant finding does not prove no association. Describe estimated associations with recorded NBA salaries, not proof of NCAA value or the pay caused by improving a skill. Three-point attempt volume and three-point accuracy are different variables. Never infer that positions differ merely because one group's p-value is smaller; direct position comparison tests are in Players → NBA salary model → Salary evidence.
  8) WEB REPORTING: Always include concrete dates from search results. If sources conflict, state the conflict and be conservative.
  9) OUTPUT FORMAT: (1) Verdict (2) Dashboard evidence (3) Web evidence w/ dates if used (4) Risks/assumptions (5) Suggested next action.
  10) EFFICIENCY: ≤1 web_search per turn unless user explicitly asks for more verification.

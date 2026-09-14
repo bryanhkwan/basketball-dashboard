@@ -17,3 +17,4 @@ __pycache__/
 
 # Reproducible local research exports; deployed coefficients live in data/.
 /reports/nba-valuation/
+/reports/nba-evidence/
