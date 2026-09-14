@@ -1,4 +1,4 @@
-"""Outcome-independent shared predictor selection for the NBA model family."""
+"""Outcome-independent predictor selection for the NBA model family."""
 from __future__ import annotations
 
 import numpy as np
@@ -65,3 +65,31 @@ def select_shared(designs, candidate_keys, threshold=THRESHOLD):
             "trace": trace, "selectionN": {group: len(frame) for group, frame in designs.items()},
             "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in any position; candidate order breaks exact ties. Recompute all VIFs after each removal.",
             "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation."}
+
+
+def select_independent(designs, candidate_keys, threshold=THRESHOLD):
+    """Screen each position separately: another group's X can never change its mask.
+
+    The shared selector remains available only for the separately labeled common-
+    adjustment comparison models. Calling it with one design is local screening.
+    """
+    per_group = {}
+    for group, frame in designs.items():
+        local = select_shared({group: frame}, candidate_keys, threshold)
+        local.update({"policyId": "position-x-only-vif5-v1", "scope": "single-position", "group": group,
+                      "beforeVifs": local["perGroupBeforeVifs"][group], "afterVifs": local["perGroupAfterVifs"][group],
+                      "selectionN": len(frame),
+                      "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal."})
+        per_group[group] = local
+    union = [key for key in candidate_keys if any(key in item["retainedKeys"] for item in per_group.values())]
+    return {"policyId": "position-x-only-vif5-v1", "scope": "independent-position", "threshold": threshold,
+            "candidateKeys": list(candidate_keys), "retainedKeys": union,
+            "excludedKeys": [key for key in candidate_keys if key not in union],
+            "retainedKeysMeaning": "Union for display compatibility; each position's actual coefficients use only its own retained keys",
+            "excludedKeysMeaning": "Excluded from all positions; consult perGroup for position-specific exclusions",
+            "protectedKeys": ["Height", "Age"], "perGroup": per_group,
+            "perGroupBeforeVifs": {group: item["beforeVifs"] for group, item in per_group.items()},
+            "perGroupAfterVifs": {group: item["afterVifs"] for group, item in per_group.items()},
+            "selectionN": {group: len(frame) for group, frame in designs.items()},
+            "rankingPolicy": "Independent within-position VIF screening. No other position's predictors or salary values affect removal.",
+            "interpretation": "VIF <=5 limits redundant linear information within a position; it does not imply zero correlation or no basketball value for excluded inputs."}

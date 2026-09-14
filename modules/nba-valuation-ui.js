@@ -192,7 +192,7 @@ var NbaValuationUI = (function () {
     var keys = omnibus.length ? omnibus : pairs.filter(function (item, index) { return pairs.findIndex(function (other) { return other.key === item.key; }) === index; });
     if (!keys.some(function (item) { return item.key === comparisonStat; })) comparisonStat = keys[0].key;
     var selectedPairs = pairs.filter(function (item) { return item.key === comparisonStat; });
-    return '<details class="nbaModelSubdetails nbaEvidenceComparisons"><summary>Do salary associations differ by position?</summary><p class="nbaModelNote">A supported result in one position and an uncertain result in another does not establish a difference. These tests directly compare slopes in the same raw stat units.</p>'
+    return '<details class="nbaModelSubdetails nbaEvidenceComparisons" data-nba-comparison-specification="' + escape(comparisons.specification || 'common-covariate-model') + '"><summary>Do salary associations differ by position?</summary><p class="nbaModelNote"><strong>Separate common-input comparison model.</strong> The primary position regressions use different retained inputs, so subtracting their table coefficients would compare different adjustment sets. These tests instead refit all three positions with the same inputs: ' + escape(excludedInputNames(comparisons.selection && comparisons.selection.retainedKeys || keys.map(function (item) { return item.key; }))) + '. Each position still has its own coefficients. These comparison fits do not set player valuations.</p><p class="nbaModelNote">A supported result in one position and an uncertain result in another does not establish a difference. These tests directly compare slopes in the same raw stat units and with the same adjustment set.</p>'
       + '<div class="nbaModelTableWrap" tabindex="0" role="region" aria-label="Direct overall position comparisons"><table class="nbaModelTable"><caption>Overall tests ask whether the stat\u2019s salary association differs anywhere across the three positions. Holm correction retains the original 12 candidate overall tests as a separate family.</caption><thead><tr><th scope="col">Stat</th><th scope="col">Raw p</th><th scope="col">Holm p · 12 tests</th><th scope="col">Fixed 0.05 decision</th></tr></thead><tbody>'
       + omnibus.map(function (item) { return '<tr><th scope="row">' + escape(item.label || item.key) + '</th><td>' + pHtml(item.pRaw) + '</td><td>' + pHtml(item.pHolm) + '</td><td>' + decisionBadge(item, true) + '</td></tr>'; }).join('') + '</tbody></table></div>'
       + '<div class="nbaEvidenceComparisonControl"><label for="nbaEvidenceComparisonStat">Compare a stat directly</label><select id="nbaEvidenceComparisonStat">' + keys.map(function (item) { return '<option value="' + escape(item.key) + '"' + (item.key === comparisonStat ? ' selected' : '') + '>' + escape(item.label || item.key) + '</option>'; }).join('') + '</select></div>'
@@ -228,7 +228,7 @@ var NbaValuationUI = (function () {
       if (!inputs.some(function (item) { return item.key === input.key; })) inputs.push(input);
     }); });
     return inputs.map(function (input) {
-      return { key: input.key, label: input.label || input.key, incrementLabel: input.incrementLabel, positions: groups.map(function (name) {
+      return { key: input.key, label: input.label || input.key, incrementLabel: input.incrementLabel || 'Not retained in OLS', positions: groups.map(function (name) {
         var fit = model && model.groups && model.groups[name];
         var weight = (fit && fit.features || []).find(function (item) { return item.key === input.key; });
         var estimate = evidenceEstimates(evidence.groups[name]).find(function (item) { return item.key === input.key; });
@@ -246,10 +246,16 @@ var NbaValuationUI = (function () {
   function selectionNote(evidence, model) {
     var e = evidence.selection, m = model && model.selection;
     if (!e && !m) return '';
-    var excluded = e && m && JSON.stringify(e.excludedKeys) === JSON.stringify(m.excludedKeys)
-      ? 'Removed from both models: ' + excludedInputNames(e.excludedKeys) + '.'
-      : 'Removed from ridge: ' + excludedInputNames(m && m.excludedKeys) + '. Removed from OLS: ' + excludedInputNames(e && e.excludedKeys) + '.';
-    return '<p class="nbaModelNote nbaSelectionNote"><strong>Redundancy filter: VIF ≤ ' + escape(fixed((e || m).threshold, 0)) + '.</strong> ' + escape(excluded) + ' Their original scouting stats remain available; exclusion does not mean they lack basketball value.</p>';
+    return '<section class="nbaSelectionNote" aria-label="Inputs selected separately by position"><p class="nbaModelNote"><strong>Inputs selected separately for each position · VIF ≤ ' + escape(fixed((e || m).threshold, 0)) + '.</strong> Redundancy in guards cannot remove an input from wings or bigs. Excluded inputs remain available in scouting views; exclusion does not mean they lack basketball value.</p><div class="nbaSelectionGroups">'
+      + groups.map(function (name) { return '<div data-nba-selection-group="' + name + '"><strong>' + name + '</strong>' + [['ridge', model], ['ols', evidence]].map(function (entry) {
+        var selection = positionSelection(entry[1], name), count = selection.retainedKeys.length;
+        return '<p class="nbaModelNote" data-nba-selection-model="' + entry[0] + '"><b>' + (entry[0] === 'ridge' ? 'Prediction' : 'OLS') + ':</b> ' + count + ' inputs. Excluded: ' + escape(excludedInputNames(selection.excludedKeys)) + '.</p>';
+      }).join('') + '</div>'; }).join('') + '</div></section>';
+  }
+  function positionSelection(source, name) {
+    var group = source && source.groups && source.groups[name], selection = group && group.selection || source && source.selection && source.selection.perGroup && source.selection.perGroup[name] || source && source.selection || {};
+    var inputs = group && (group.features || group.estimates) || [];
+    return { retainedKeys: inputs.map(function (item) { return item.key; }), excludedKeys: selection.excludedKeys || [], trace: selection.trace || [] };
   }
   function selectionAudit(evidence) {
     var e = evidence.selection, runtime = api(), model = runtime && runtime.getModel ? runtime.getModel() : null;
@@ -259,12 +265,12 @@ var NbaValuationUI = (function () {
     return '<details class="nbaModelSubdetails nbaSelectionAudit"><summary>Redundancy selection · ' + escape(selectedGroup) + '</summary>'
       + selectionNote(evidence, model)
       + '<dl class="nbaModelMetrics">' + metric('Ridge VIF before → after', fixed(maxVif(m, 'perGroupBeforeVifs'), 2) + ' → ' + fixed(maxVif(m, 'perGroupAfterVifs'), 2)) + metric('OLS VIF before → after', fixed(maxVif(e, 'perGroupBeforeVifs'), 2) + ' → ' + fixed(maxVif(e, 'perGroupAfterVifs'), 2)) + '</dl>'
-      + '<p class="nbaModelNote">The same retained inputs are used across positions within each model type. The highest unprotected VIF across the three groups determines each removal; the design is checked again after every removal. Height, age, and applicable percentage-availability controls are protected. No salary outcome, coefficient sign, or p-value determines selection. Ridge validation repeats selection inside training folds.</p>'
-      + '<ol class="nbaEvidenceNotes">' + (e.trace || []).map(function (step) { return '<li>OLS removed ' + escape(excludedInputNames([step.excludedKey])) + ' · worst position VIF ' + escape(fixed(step.worstGroupVif, 2)) + '.</li>'; }).join('') + '</ol>'
+      + '<p class="nbaModelNote">Each position starts with the same candidate statistics and independently removes its own redundant inputs. The highest unprotected VIF within that position determines each removal; its design is checked again after every removal. Height, age, and applicable percentage-availability controls are protected. No salary outcome, coefficient sign, or p-value determines selection. Ridge validation repeats selection inside each training fold.</p>'
+      + [['Ridge', model], ['OLS', evidence]].map(function (entry) { var selection = positionSelection(entry[1], selectedGroup); return '<p class="nbaModelNote"><strong>' + entry[0] + ' retained · ' + escape(selectedGroup) + ':</strong> ' + escape(excludedInputNames(selection.retainedKeys)) + '.</p><ol class="nbaEvidenceNotes">' + selection.trace.map(function (step) { return '<li>' + entry[0] + ' removed ' + escape(excludedInputNames([step.excludedKey])) + ' · VIF ' + escape(fixed(step.worstGroupVif, 2)) + '.</li>'; }).join('') + '</ol>'; }).join('')
       + '<p class="nbaModelNote">VIF ≤ 5 limits severe linear overlap; it does not mean zero correlation. The reported OLS intervals and p-values are conditional on the selected design, with no separate selection-uncertainty correction. Earlier inspection, omitted variables, and contract timing still limit the evidence.</p></details>';
   }
   function coefficientMatrix(evidence, model) {
-    return '<div class="nbaModelTableWrap nbaCoefficientMatrixWrap" tabindex="0" role="region" aria-label="Cross-position coefficient table"><table class="nbaModelTable nbaCoefficientMatrix"><caption>Retained basketball inputs, side by side. Sample counts are ridge / OLS. Excluded means the input is not used in that model. Scroll the table sideways on a small screen.</caption><thead><tr><th scope="col">Input<span class="nbaModelFeatureNote">Stated increase for OLS β</span></th>'
+    return '<div class="nbaModelTableWrap nbaCoefficientMatrixWrap" tabindex="0" role="region" aria-label="Cross-position coefficient table"><table class="nbaModelTable nbaCoefficientMatrix"><caption>Three separate position regressions with independently selected inputs. Sample counts are ridge / OLS. Excluded means the input is not used in that position’s model. Scroll the table sideways on a small screen.</caption><thead><tr><th scope="col">Input<span class="nbaModelFeatureNote">Stated increase for OLS β</span></th>'
       + groups.map(function (name) { return '<th scope="col">' + name + '<span class="nbaModelFeatureNote">n = ' + escape(fixed(model && model.groups && model.groups[name] && model.groups[name].n, 0)) + ' / ' + escape(fixed(evidence.groups[name] && evidence.groups[name].n, 0)) + '</span></th>'; }).join('') + '</tr></thead><tbody>'
       + coefficientRows(evidence, model).map(function (row) {
         return '<tr data-nba-coefficient-key="' + escape(row.key) + '"><th scope="row">' + escape(row.label) + '<span class="nbaModelFeatureNote">' + escape(row.incrementLabel) + '</span></th>'
@@ -276,7 +282,8 @@ var NbaValuationUI = (function () {
     var runtime = api(), model = runtime && runtime.getModel ? runtime.getModel() : null;
     var tests = groups.reduce(function (items, name) { return items.concat(evidenceEstimates(evidence.groups[name])); }, []);
     var supported = tests.filter(function (item) { return number(item.pHolm) !== null && item.pHolm <= 0.05; }).length;
-    return '<section class="nbaCoachSummary" aria-label="Coach summary"><div class="nbaCoachHeading"><h3>Coefficients by position</h3><div class="nbaCoachDownloads"><a class="nbaCoachBrief" href="output/pdf/nba-salary-coach-brief.pdf?v=coefficients-table-20260914" download>Download 1-page table (PDF)</a><button type="button" class="secondary" data-nba-coefficient-download>Download table CSV</button></div></div>'
+    return '<section class="nbaCoachSummary" aria-label="Coach summary"><div class="nbaCoachHeading"><h3>Coefficients by position</h3><div class="nbaCoachDownloads"><a class="nbaCoachBrief" href="output/pdf/nba-salary-coach-brief.pdf?v=position-models-20260914" download>Download 1-page table (PDF)</a><button type="button" class="secondary" data-nba-coefficient-download>Download table CSV</button></div></div>'
+      + '<p class="nbaModelNote nbaPositionModelNote"><strong>Guards are fitted on guards, wings on wings, and bigs on bigs.</strong> Each position has its own retained inputs and coefficients. Read each column within its position; different input sets mean coefficient differences alone do not establish different priorities. Direct position tests use a separate common-input model in Full statistical details.</p>'
       + '<p class="nbaModelNote nbaMatrixLegend"><strong>Valuation weight:</strong> the ridge coefficient used in a player’s valuation signal, per one standard deviation (SD) above their peers. <strong>OLS β:</strong> a separate coefficient for the stated stat increase, measured in log NBA salary. The 95% interval and both p-values apply only to OLS β. Neither coefficient is a percent of a player’s value.</p>'
       + coefficientMatrix(evidence, model)
       + selectionNote(evidence, model)
@@ -329,14 +336,15 @@ var NbaValuationUI = (function () {
     function push(item, family, a, b, size, meaning) { rows.push([evidence.id, evidence.season, family, a, b || '', item.key, item.unit, item.coefficientRaw === undefined ? item.differenceRaw : item.coefficientRaw, item.seRaw, item.ciLowRaw, item.ciHighRaw, item.increment, item.incrementLabel, item.n, item.nObserved, item.logEffect, item.logEffectCiLow, item.logEffectCiHigh, item.associationPct, item.associationPctCiLow, item.associationPctCiHigh, item.pRaw, item.pHolm, item.status, size, meaning]); }
     groups.forEach(function (name) {
       var group = evidence.groups && evidence.groups[name];
-      evidenceEstimates(group).forEach(function (item) { push(item, 'Primary OLS HC3', name, '', 36, 'Conditional salary association; exploratory; not causal or NCAA pay evidence. Pointwise intervals; Holm decision.'); });
+      evidenceEstimates(group).forEach(function (item) { push(item, 'Primary OLS HC3', name, '', 36, 'Position-specific inputs: ' + positionSelection(evidence, name).retainedKeys.join('; ') + '. Conditional salary association; exploratory; not causal or NCAA pay evidence. Different adjustment sets across positions. Pointwise intervals; Holm decision.'); });
       (group && group.sensitivities || []).forEach(function (sensitivity) {
         if (sensitivity.available === false) return;
         evidenceEstimates(sensitivity).forEach(function (item) { push(item, 'Descriptive sensitivity: ' + (sensitivity.label || sensitivity.id), name, '', '', 'Sensitivity only; no adjusted primary decision. ' + (typeof sensitivity.specification === 'string' ? sensitivity.specification : '')); });
       });
     });
-    ((evidence.comparisons || {}).omnibus || []).forEach(function (item) { push(item, 'Overall position comparison', 'All positions', '', 12, 'Direct test of equal slopes across all positions; separate Holm family.'); });
-    ((evidence.comparisons || {}).pairwise || []).forEach(function (item) { push(item, 'Pairwise position comparison', item.groupA, item.groupB, 36, 'Ratio of multiplicative salary associations; not salary-level difference; separate Holm family.'); });
+    var comparisonMeaning = 'Separate common-input comparison model; not a contrast of primary coefficients. Inputs: ' + ((evidence.comparisons || {}).selection && evidence.comparisons.selection.retainedKeys || []).join('; ') + '. ';
+    ((evidence.comparisons || {}).omnibus || []).forEach(function (item) { push(item, 'Overall position comparison', 'All positions', '', 12, comparisonMeaning + 'Direct test of equal slopes across all positions; separate Holm family.'); });
+    ((evidence.comparisons || {}).pairwise || []).forEach(function (item) { push(item, 'Pairwise position comparison', item.groupA, item.groupB, 36, comparisonMeaning + 'Ratio of multiplicative salary associations; not salary-level difference; separate Holm family.'); });
     return rows.map(function (row) { return row.map(function (value) { var str = value === null || value === undefined ? '' : String(value); if (typeof value === 'string' && /^[=+\-@]/.test(str)) str = "'" + str; return '"' + str.replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
   }
   function downloadEvidence() {
@@ -356,7 +364,9 @@ var NbaValuationUI = (function () {
       return result;
     }
     function exclusionsOnly(items) { return (Array.isArray(items) ? items : []).map(function (item) { return { player: item.player, group: item.group, missing: item.missing || [], reason: item.reason }; }); }
-    var report = { id: evidence.id, season: evidence.season, generatedAt: evidence.generatedAt, protocol: evidence.protocol, selection: evidence.selection, limitations: evidence.limitations, groups: {} };
+    var report = { id: evidence.id, season: evidence.season, generatedAt: evidence.generatedAt, protocol: evidence.protocol, selection: evidence.selection,
+      comparisonModel: evidence.comparisons ? { specification: evidence.comparisons.specification, primaryCoefficientsComparable: evidence.comparisons.primaryCoefficientsComparable, selection: evidence.comparisons.selection, groups: evidence.comparisons.groups } : null,
+      limitations: evidence.limitations, groups: {} };
     groups.forEach(function (name) {
       var group = evidence.groups[name] || {}, attrition = group.attrition || {};
       report.groups[name] = { nInput: group.nInput, n: group.n, nExcluded: group.nExcluded, diagnostics: diagnosticsOnly(group.diagnostics), excluded: exclusionsOnly(attrition.excluded), missingByFeatureInInput: attrition.missingByFeatureInInput, unavailablePercentageCountsInPrimary: attrition.unavailablePercentageCountsInPrimary, sensitivities: (group.sensitivities || []).map(function (item) { return { id: item.id, label: item.label, nInput: item.nInput, n: item.n, specification: item.specification, descriptiveOnly: true, available: item.available, reason: item.reason, directionChanges: sensitivityChanges(evidenceEstimates(group), item), diagnostics: diagnosticsOnly(item.diagnostics), excluded: exclusionsOnly(item.excluded) }; }) };

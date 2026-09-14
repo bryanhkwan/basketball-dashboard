@@ -267,7 +267,10 @@
     ['Guards','Wings','Bigs'].forEach(function(group){
       const source = evidence.groups[group];
       if(!source) return;
-      groups[group] = {n:source.n, associations:(source.features || []).map(function(feature){
+      groups[group] = {n:source.n,
+        retainedInputs:(source.features || []).map(function(feature){return feature.key;}),
+        excludedInputs:source.selection ? source.selection.excludedKeys : [],
+        associations:(source.features || []).map(function(feature){
         return {stat:feature.key, increment:feature.incrementLabel,
           logSalaryCoefficientPerOriginalUnit:feature.coefficient,
           originalUnit:feature.unit,
@@ -278,11 +281,11 @@
       })};
     });
     return {available:true, id:evidence.id, source:'2022–23 recorded NBA salaries',
-      selection:evidence.selection ? {threshold:evidence.selection.threshold, retainedInputs:evidence.selection.retainedKeys, excludedInputs:evidence.selection.excludedKeys, plannedFamilySize:evidence.policy.familySize, testedCount:evidence.policy.testedCount} : null,
+      selection:evidence.selection ? {scope:evidence.selection.scope, threshold:evidence.selection.threshold, candidateInputs:evidence.selection.candidateKeys, plannedFamilySize:evidence.policy.familySize, testedCount:evidence.policy.testedCount} : null,
       interpretation:'Exploratory OLS associations conditional on the other model inputs and age; not causal effects or NCAA pay evidence.',
       uncertainty:'HC3 robust inference; intervals are pointwise. Holm-adjusted p-values retain the original 36 candidate position/statistic tests at a fixed 0.05 threshold after redundancy selection. Excluded inputs have no estimated effect, not a zero effect.',
       accuracy:'Three-point and free-throw accuracy slopes apply to players with usable recorded percentages. Unavailable percentages have separate indicators.',
-      positionDifferences:'Separate group p-values do not establish differences between positions. Use the direct comparison tests under Coach summary > Full statistical details.',
+      positionDifferences:'Primary models select inputs independently for each position and can have different adjustment sets. Neither their coefficient differences nor separate group p-values establish differences between positions. Direct tests under Coach summary > Full statistical details use separate common-input comparison fits, not these primary coefficients.',
       groups:groups};
   }
 
@@ -686,7 +689,7 @@ RULES (strict):
  6) WEB_SEARCH REQUIRED: If the user mentions latest/recent/today/this week/injuries/suspensions/transfer portal/role changes/NIL/coaching news, OR asks valuation (worth $, fair, overpay, steal, invest) → call web_search AFTER dashboard lookup.
  7) SOURCE OF TRUTH: Dashboard = stats, PerfScore, archetypes, fit score, model valuation, roster legality. Web = current status/news. If web changes your recommendation, say so and reduce confidence.
     VALUATION BASIS: ${ctx.valuationBasis}. These are estimates, not observed NCAA compensation. NBA coefficients describe salary associations, not causal stat or height premiums. College dollar anchors and later conference/translation/scout adjustments are assumptions. NBA validation does not establish NCAA accuracy, especially WBB. Production and fit scores are separate from the NBA valuation signal. Staff can inspect the NBA salary model panel and player contributions on the Players page.
-    SALARY EVIDENCE: get_dashboard_context includes the separate explanatory OLS analysis for staff. Use its exact estimates and Holm-adjusted p-values when discussing evidence; never invent p-values or attach these OLS p-values to the ridge prediction weights. A pointwise interval excluding zero can still fail the planned 36-test adjustment. Redundant inputs are removed by an outcome-independent VIF rule; coefficients and p-values remain exploratory after selection. Excluded inputs have no estimate and must not be described as worthless or assigned a zero coefficient. The fixed threshold is 0.05; a small sample does not automatically justify changing it to 0.10. A nonsignificant finding does not prove no association. Describe estimated associations with recorded NBA salaries, not proof of NCAA value or the pay caused by improving a skill. Three-point attempt volume and three-point accuracy are different variables. Never infer that positions differ merely because one group's p-value is smaller; direct position comparison tests are in Players → NBA salary model → Coach summary → Full statistical details.
+    SALARY EVIDENCE: get_dashboard_context includes the separate explanatory OLS analysis for staff. Use its exact estimates and Holm-adjusted p-values when discussing evidence; never invent p-values or attach these OLS p-values to the ridge prediction weights. A pointwise interval excluding zero can still fail the planned 36-test adjustment. Redundant inputs are removed independently within each position by an outcome-independent VIF rule; coefficients and p-values remain exploratory after selection. Different primary adjustment sets mean coefficients cannot be subtracted to establish position differences. Direct comparisons come from separate common-input fits. Excluded inputs have no estimate and must not be described as worthless or assigned a zero coefficient. The fixed threshold is 0.05; a small sample does not automatically justify changing it to 0.10. A nonsignificant finding does not prove no association. Describe estimated associations with recorded NBA salaries, not proof of NCAA value or the pay caused by improving a skill. Three-point attempt volume and three-point accuracy are different variables. Never infer that positions differ merely because one group's p-value is smaller; direct position comparison tests are in Players → NBA salary model → Coach summary → Full statistical details.
  8) WEB REPORTING: Always include concrete dates from search results. If sources conflict, state the conflict and be conservative.
  9) OUTPUT FORMAT: (1) Verdict (2) Dashboard evidence (3) Web evidence w/ dates if used (4) Risks/assumptions (5) Suggested next action.
  10) EFFICIENCY: ≤1 web_search per turn unless user explicitly asks for more verification.

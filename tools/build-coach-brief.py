@@ -48,7 +48,7 @@ def read_facts(evidence_path=EVIDENCE_PATH, model_path=MODEL_PATH):
         raise ValueError("Review the basketball-input table design before rebuilding.")
     rows = []
     for key, item in inputs.items():
-        row = {"key": key, "label": item.get("label", key), "incrementLabel": item.get("incrementLabel", "OLS not retained"), "groups": {}}
+        row = {"key": key, "label": item.get("label", key), "incrementLabel": item.get("incrementLabel", "Not retained in OLS"), "groups": {}}
         for group in GROUPS:
             e = next((x for x in evidence["groups"][group]["estimates"] if x["key"] == key), None)
             w = next((x for x in model["groups"][group]["features"] if x["key"] == key), None)
@@ -70,7 +70,10 @@ def read_facts(evidence_path=EVIDENCE_PATH, model_path=MODEL_PATH):
         "testedCount": len(estimates),
         "supportedCount": sum(e["pHolm"] <= evidence["policy"]["alpha"] for e in estimates),
         "familySize": evidence["policy"]["familySize"],
-        "excludedInputs": {"ridge": model.get("selection", {}).get("excludedKeys", []), "ols": evidence.get("selection", {}).get("excludedKeys", [])},
+        "selectionByGroup": {g: {
+            "ridge": {"retained": [f["key"] for f in model["groups"][g]["features"]], "excluded": model["groups"][g].get("selection", {}).get("excludedKeys", [])},
+            "ols": {"retained": [f["key"] for f in evidence["groups"][g]["estimates"]], "excluded": evidence["groups"][g].get("selection", {}).get("excludedKeys", [])},
+        } for g in GROUPS},
     }
 
 
@@ -88,7 +91,7 @@ def build():
     PREVIEW.parent.mkdir(parents=True, exist_ok=True)
     width, height = landscape(letter)
     content_width = width - 60
-    large = len(facts["rows"]) <= 10
+    large = len(facts["rows"]) <= 8
     styles = {
         "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=21, leading=25, textColor=NAVY),
         "small": ParagraphStyle("small", fontName="Helvetica", fontSize=9, leading=12, textColor=MUTED),
@@ -121,22 +124,16 @@ def build():
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 4 if large else 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4 if large else 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4 if large else 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4 if large else 2),
     ]))
-    names = {"MP": "minutes/game", "PPG": "points/game", "RPG": "rebounds/game", "TOPG": "turnovers/game"}
-    excluded = facts["excludedInputs"]
-    subtitle = escape(evidence["season"]) + " NBA salary sample"
-    if excluded["ridge"] == excluded["ols"] and excluded["ols"]:
-        subtitle += " | Removed by VIF &lt;= 5 rule: " + escape(", ".join(names.get(k, k) for k in excluded["ols"]))
-    else:
-        subtitle += " | One table for all retained basketball inputs"
+    subtitle = escape(evidence["season"]) + " NBA salary sample | Three separate regressions; inputs selected independently within each position (VIF &lt;= 5)"
     story = [paragraph("NBA coefficients by position", "title"), Spacer(1, 4),
         paragraph(subtitle), Spacer(1, 7),
         paragraph("<b>Weight:</b> ridge prediction coefficient per 1 standard deviation (SD), used in the NCAA peer signal. <b>OLS beta:</b> separate log-salary coefficient for the stated increase. <b>Intervals and p-values apply only to OLS beta.</b> Neither number is a percentage of player value.", "small"),
         Spacer(1, 9), table, Spacer(1, 9),
         paragraph(f"<b>{facts['supportedCount']} of {facts['testedCount']} retained OLS associations meet Holm p &lt;= 0.05</b> using the original {facts['familySize']}-candidate correction family. Excluded means not retained, never a zero effect. Age and percentage-availability controls are outside this basketball-input table.", "foot"),
-        Spacer(1, 4), paragraph("<b>Interpretation:</b> a positive salary coefficient does not show that a stat helps winning; per-game turnovers can also track workload. Redundancy screening and coefficient inference remain exploratory. These NBA results do not validate NCAA or WBB pay.", "foot"),
+        Spacer(1, 4), paragraph("<b>Read within each position:</b> different retained inputs mean the columns have different adjustment sets; coefficient differences alone do not establish position priorities. Separate common-input tests are in Full statistical details. These exploratory NBA results do not validate NCAA or WBB pay.", "foot"),
         Spacer(1, 4), paragraph("<b>Sources:</b> supplied 2022-23 NBA salary workbook; ESPN heights retrieved September 2026, not verified 2022-23 measurements. Full selection policy, excluded inputs, and model checks are in the dashboard's Full statistical details.", "foot")]
 
     def footer(canvas, doc):

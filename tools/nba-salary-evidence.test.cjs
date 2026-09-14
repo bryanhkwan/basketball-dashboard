@@ -41,8 +41,32 @@ test('staff context preserves exact p-values and distinguishes adjusted evidence
   });
   assert.match(result.uncertainty, /pointwise/);
   assert.match(result.interpretation, /Exploratory OLS/);
-  assert.match(result.positionDifferences, /do not establish/);
+  assert.match(result.positionDifferences, /different adjustment sets/);
+  assert.match(result.positionDifferences, /common-input comparison fits/);
   assert.equal(chatContext(null, true).available, false);
+});
+
+test('staff AI context preserves each position mask instead of the display union', () => {
+  const result = chatContext({ id: 'independent-positions',
+    selection: { scope: 'independent-position', threshold: 5,
+      candidateKeys: ['Height', 'RPG', 'BPG'], retainedKeys: ['Height', 'RPG', 'BPG'], excludedKeys: [] },
+    policy: { familySize: 36, testedCount: 5 },
+    groups: {
+      Guards: { n: 197, selection: { excludedKeys: ['BPG'] }, features: [{ key: 'Height' }, { key: 'RPG' }] },
+      Wings: { n: 91, selection: { excludedKeys: ['RPG', 'BPG'] }, features: [{ key: 'Height' }] },
+      Bigs: { n: 178, selection: { excludedKeys: ['RPG'] }, features: [{ key: 'Height' }, { key: 'BPG' }] }
+    }
+  }, true);
+  assert.equal(result.selection.scope, 'independent-position');
+  assert.equal(result.selection.retainedInputs, undefined, 'The display union must not be described as a shared model');
+  assert.deepEqual(result.groups.Guards.retainedInputs, ['Height', 'RPG']);
+  assert.deepEqual(result.groups.Wings.retainedInputs, ['Height']);
+  assert.deepEqual(result.groups.Bigs.retainedInputs, ['Height', 'BPG']);
+  assert.deepEqual(result.groups.Wings.excludedInputs, ['RPG', 'BPG']);
+  assert.deepEqual(result.groups.Bigs.excludedInputs, ['RPG']);
+  assert.deepEqual(result.groups.Wings.associations.map(row => row.stat), ['Height']);
+  assert.equal(result.selection.plannedFamilySize, 36);
+  assert.equal(result.selection.testedCount, 5);
 });
 
 test('published evidence JSON and browser global agree', () => {
@@ -69,12 +93,28 @@ test('source fingerprints distinguish archived inputs from portable text hashes'
 
 test('retained estimates keep the planned Holm family and natural-unit effects reconcile', () => {
   const evidence = JSON.parse(fs.readFileSync(path.join(root, 'data/nba-salary-evidence.json'), 'utf8'));
+  assert.equal(evidence.selection.scope, 'independent-position');
   const rows = [];
   for (const group of ['Guards', 'Wings', 'Bigs']) {
     const population = evidence.groups[group];
+    const selection = evidence.selection.perGroup[group];
+    const retained = population.features.map(row => row.key);
     assert.ok(population.features.length > 0 && population.features.length <= 12);
-    assert.equal(new Set(population.features.map(row => row.key)).size, population.features.length);
-    assert.deepEqual(population.features.map(row => row.key), evidence.groups.Guards.features.map(row => row.key), 'Position evidence uses the same adjustment set');
+    assert.equal(new Set(retained).size, population.features.length);
+    assert.deepEqual(retained, selection.retainedKeys, group + ' uses its own selected adjustment set');
+    assert.deepEqual(retained, population.selection.retainedKeys);
+    assert.ok(retained.includes('Height'), 'The specified height question remains protected');
+    assert.deepEqual(population.excludedFeatures.map(row => row.key), selection.excludedKeys);
+    assert.deepEqual(selection.candidateKeys.filter(key => !retained.includes(key)), selection.excludedKeys);
+    for (const value of Object.values(selection.afterVifs)) {
+      assert.ok(Number.isFinite(value) && value <= selection.threshold + 1e-9, group + ': every retained design term meets the VIF rule');
+    }
+    for (const excluded of population.excludedFeatures) {
+      assert.equal(excluded.status, 'excluded');
+      assert.equal(excluded.coefficient, undefined, 'Exclusion is not a fitted zero effect');
+      assert.equal(excluded.pValue, undefined, 'An untested slot has no displayed p-value');
+      assert.equal(excluded.pAdjustedHolm, undefined);
+    }
     assert.ok(population.n > 0);
     for (const row of population.features) {
       assert.ok(Number.isFinite(row.coefficient), group + ' ' + row.key + ' coefficient');
@@ -90,6 +130,10 @@ test('retained estimates keep the planned Holm family and natural-unit effects r
       rows.push(row);
     }
   }
+  assert.equal(evidence.policy.testedCount, rows.length);
+  assert.deepEqual(evidence.selection.retainedKeys,
+    evidence.selection.candidateKeys.filter(key => rows.some(row => row.key === key)),
+    'Top-level retained keys are a display union, not a shared model mask');
   rows.sort((a, b) => a.pValue - b.pValue);
   let cumulative = 0;
   rows.forEach((row, index) => {
@@ -98,20 +142,36 @@ test('retained estimates keep the planned Holm family and natural-unit effects r
   });
 });
 
-test('position comparisons test raw-unit slope differences with independent-group HC3 covariance', () => {
+test('position comparisons use separate common-specification fits and independent-group HC3 covariance', () => {
   const evidence = JSON.parse(fs.readFileSync(path.join(root, 'data/nba-salary-evidence.json'), 'utf8'));
   const comparisons = evidence.comparisons;
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) <= 1e-8 * Math.max(1, Math.abs(expected)));
-  const row = (group, key) => evidence.groups[group].features.find(item => item.key === key);
-  assert.equal(comparisons.n, Object.values(evidence.groups).reduce((sum, group) => sum + group.n, 0));
-  assert.equal(comparisons.pairwise.length, evidence.groups.Guards.features.length * 3);
-  assert.equal(comparisons.omnibus.length, evidence.groups.Guards.features.length);
+  assert.equal(comparisons.specification, 'separate-common-covariate-model');
+  assert.equal(comparisons.primaryCoefficientsComparable, false);
+  const commonKeys = comparisons.selection.retainedKeys;
+  const row = (group, key) => comparisons.groups[group].estimates.find(item => item.key === key);
+  for (const group of ['Guards', 'Wings', 'Bigs']) {
+    assert.deepEqual(comparisons.groups[group].retainedKeys, commonKeys);
+    assert.deepEqual(comparisons.groups[group].estimates.map(item => item.key), commonKeys);
+    assert.equal(comparisons.groups[group].n, evidence.groups[group].n, 'Comparison eligibility stays aligned with primary eligibility');
+    for (const estimate of comparisons.groups[group].estimates) {
+      assert.equal(estimate.pValue, undefined, 'Common-fit slopes support contrasts, not a second primary significance family');
+      assert.equal(estimate.pAdjustedHolm, undefined);
+      assert.equal(estimate.status, undefined);
+    }
+  }
+  assert.equal(comparisons.n, Object.values(comparisons.groups).reduce((sum, group) => sum + group.n, 0));
+  assert.equal(comparisons.pairwise.length, commonKeys.length * 3);
+  assert.equal(comparisons.omnibus.length, commonKeys.length);
+  assert.equal(comparisons.pairwiseFamilySize, 36);
+  assert.equal(comparisons.omnibusFamilySize, 12);
   for (const pair of comparisons.pairwise) {
     const a = row(pair.groupA, pair.key), b = row(pair.groupB, pair.key);
     close(pair.differenceRaw, a.coefficient - b.coefficient);
     close(pair.seRaw, Math.hypot(a.seRaw, b.seRaw));
     close(pair.logEffect, pair.differenceRaw * pair.increment);
     close(pair.associationPct, Math.expm1(pair.logEffect) * 100);
+    assert.equal(pair.dfResidual, comparisons.dfResidual);
   }
   for (const overall of comparisons.omnibus) {
     const a = row('Guards', overall.key), b = row('Wings', overall.key), c = row('Bigs', overall.key);
@@ -122,6 +182,7 @@ test('position comparisons test raw-unit slope differences with independent-grou
       (v1 * v2 - offDiagonal * offDiagonal) / 2;
     close(overall.statisticF, f);
     assert.equal(overall.dfNum, 2);
+    assert.equal(overall.dfDen, comparisons.dfResidual);
   }
   for (const family of [comparisons.omnibus, comparisons.pairwise]) {
     const plannedFamilySize = family === comparisons.omnibus ? 12 : 36;

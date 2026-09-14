@@ -6,6 +6,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 const groups = ['Guards', 'Wings', 'Bigs'];
 const keys = ['Height', 'MP', 'PPG', 'RPG', 'APG', 'SPG', 'BPG', 'TOPG', 'eFG%', '3P%', 'FT%', '3PA/G'];
+const shortLabels = {Height:'height',MP:'minutes/game',PPG:'points/game',RPG:'rebounds/game',APG:'assists/game',SPG:'steals/game',BPG:'blocks/game',TOPG:'turnovers/game','eFG%':'effective FG%','3P%':'three-point %','FT%':'free-throw %','3PA/G':'three-point attempts/game'};
+const inputNames = values => values.map(key => shortLabels[key] || key).join(', ') || 'None';
+const plainHtml = html => html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&#39;/g, "'");
 function csvRecords(text) {
   text = text.replace(/^\ufeff/, '');
   const rows = [], row = []; let cell = '', quoted = false;
@@ -127,6 +130,7 @@ test('actual aggregate checks retain complete-case exclusions and omit individua
   h.click('[data-nba-checks-download]');
   const text = await h.blobs[0].text(), report = JSON.parse(text);
   assert.doesNotMatch(text, /"salary":|"topInfluence":/);
+  assert.deepEqual(report.comparisonModel, JSON.parse(JSON.stringify({specification:e.comparisons.specification,primaryCoefficientsComparable:e.comparisons.primaryCoefficientsComparable,selection:e.comparisons.selection,groups:e.comparisons.groups})));
   groups.forEach(group => {
     const actual = report.groups[group].sensitivities.find(s => s.id === 'fullComplete');
     const expected = e.groups[group].sensitivities.find(s => s.id === 'fullComplete');
@@ -144,7 +148,7 @@ test('coach summary leads with one cross-position coefficient table and download
   const e = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
   const h = harness(e), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
   assert.match(top, /Coefficients by position/);
-  assert.match(top, /Download 1-page table \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=coefficients-table-20260914/);
+  assert.match(top, /Download 1-page table \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=position-models-20260914/);
   assert.match(top, /Download table CSV/);
   assert.match(top, /aria-label="Cross-position coefficient table"/);
   assert.equal((top.match(/<table\b/g) || []).length, 1);
@@ -192,7 +196,7 @@ test('table CSV has one wide row per input with source-exact ridge and OLS value
   assert.equal(records.length, retained.length + 1); assert.ok(records.every(row => row.length === 2 + groups.length * 6));
   orderedKeys.forEach((key, index) => {
     const source = groups.flatMap(group => evidence.groups[group].estimates).find(item => item.key === key) || groups.flatMap(group => model.groups[group].features).find(item => item.key === key);
-    const row = records[index + 1]; assert.equal(row[0], source.label || source.key); assert.equal(row[1], /^[=+\-@]/.test(source.incrementLabel) ? "'" + source.incrementLabel : source.incrementLabel || '');
+    const row = records[index + 1]; assert.equal(row[0], source.label || source.key); assert.equal(row[1], /^[=+\-@]/.test(source.incrementLabel) ? "'" + source.incrementLabel : source.incrementLabel || 'Not retained in OLS');
     groups.forEach((group, groupIndex) => {
       const estimate = evidence.groups[group].estimates.find(item => item.key === source.key), ridge = model.groups[group].features.find(item => item.key === source.key);
       const expected = [ridge && ridge.coefficient, estimate && estimate.logEffect, estimate && estimate.logEffectCiLow, estimate && estimate.logEffectCiHigh, estimate && estimate.pRaw, estimate && estimate.pHolm].map(value => value === undefined || value === null ? '' : String(value));
@@ -219,6 +223,61 @@ test('ridge and OLS exclusions are independent, remain explicit and are never sh
   const records = csvRecords(await h.blobs[0].text()), row = records.find(item => item[0] === 'Height');
   assert.deepEqual(row.slice(2, 8), ['', '', '', '', '', '']); assert.equal(row[8], ''); assert.equal(Number(row[9]), .01);
   assert.equal(Number(row[14]), .25); assert.deepEqual(row.slice(15, 20), ['', '', '', '', '']);
+});
+
+test('position selection notes report each model mask instead of applying a global exclusion list', () => {
+  const evidence = fixture(), model = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+  evidence.selection = {scope:'independent-position',threshold:5,excludedKeys:[]}; model.selection = {...evidence.selection};
+  const omitted = {Guards:{ridge:['MP'],ols:['MP','RPG']},Wings:{ridge:['RPG','TOPG'],ols:['PPG']},Bigs:{ridge:['PPG','TOPG'],ols:['MP','TOPG']}};
+  groups.forEach(group => {
+    const ridgeKeys = keys.filter(key => !omitted[group].ridge.includes(key));
+    model.groups[group].features = ridgeKeys.map(key => ({key,label:key,coefficient:.25}));
+    model.groups[group].selection = {retainedKeys:ridgeKeys,excludedKeys:omitted[group].ridge,trace:[]};
+    evidence.groups[group].estimates = evidence.groups[group].estimates.filter(item => !omitted[group].ols.includes(item.key));
+    evidence.groups[group].selection = {retainedKeys:evidence.groups[group].estimates.map(item=>item.key),excludedKeys:omitted[group].ols,trace:[]};
+  });
+  const h = harness(evidence, model), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
+  assert.match(top, /Guards are fitted on guards, wings on wings, and bigs on bigs/);
+  assert.match(top, /coefficient differences alone do not establish/);
+  const notes = [...top.matchAll(/<div data-nba-selection-group="([^"]+)">([\s\S]*?)<\/div>/g)];
+  assert.deepEqual(notes.map(note=>note[1]), groups);
+  for (const [_, group, html] of notes) for (const kind of ['ridge','ols']) {
+    const note = [...html.matchAll(/<p\b[^>]*data-nba-selection-model="([^"]+)"[^>]*>([\s\S]*?)<\/p>/g)].find(item=>item[1]===kind);
+    assert.ok(note); assert.equal(plainHtml(note[2]), (kind==='ridge'?'Prediction':'OLS')+': '+(keys.length-omitted[group][kind].length)+' inputs. Excluded: '+inputNames(omitted[group][kind])+'.');
+  }
+  for (const group of groups) {
+    h.group(group);
+    const audit = h.html().match(/<details class="nbaModelSubdetails nbaSelectionAudit">([\s\S]*?)<\/details>/)[1];
+    assert.ok(plainHtml(audit).includes('Ridge retained · '+group+': '+inputNames(model.groups[group].selection.retainedKeys)));
+    assert.ok(plainHtml(audit).includes('OLS retained · '+group+': '+inputNames(evidence.groups[group].selection.retainedKeys)));
+    assert.doesNotMatch(audit, /same retained inputs are used across positions/);
+  }
+});
+
+test('direct comparison values and exports come from the separate common-input fit, not primary coefficient differences', async () => {
+  const evidence = fixture();
+  evidence.comparisons.specification = 'separate-common-covariate-model';
+  evidence.comparisons.primaryCoefficientsComparable = false;
+  evidence.comparisons.selection = {retainedKeys:['Height','FT%']};
+  evidence.comparisons.omnibus = evidence.comparisons.omnibus.filter(item=>['Height','FT%'].includes(item.key));
+  evidence.comparisons.pairwise = evidence.comparisons.pairwise.filter(item=>['Height','FT%'].includes(item.key));
+  evidence.groups.Guards.estimates.find(item=>item.key==='Height').logEffect = 9;
+  evidence.groups.Wings.estimates = evidence.groups.Wings.estimates.filter(item=>item.key!=='MP');
+  evidence.comparisons.pairwise.find(item=>item.key==='Height').associationPct = 77.7;
+  const h = harness(evidence), comparison = h.html().match(/<details class="nbaModelSubdetails nbaEvidenceComparisons"[\s\S]*?<\/details>/)[0];
+  assert.match(comparison, /data-nba-comparison-specification="separate-common-covariate-model"/);
+  assert.match(comparison, /Separate common-input comparison model/);
+  assert.match(comparison, /primary position regressions use different retained inputs/);
+  assert.match(comparison, /same inputs: height, free-throw %/);
+  assert.match(comparison, /\+77\.7%/);
+  h.click('[data-nba-evidence-download]');
+  const records = csvRecords(await h.blobs[0].text()), header = records[0];
+  const comparisons = records.slice(1).filter(row=>/position comparison/.test(row[header.indexOf('Family')]));
+  assert.equal(comparisons.length, evidence.comparisons.omnibus.length + evidence.comparisons.pairwise.length);
+  comparisons.forEach(row => assert.match(row[header.indexOf('Interpretation')], /Separate common-input comparison model; not a contrast of primary coefficients/));
+  const exported = comparisons.find(row=>row[header.indexOf('Family')]==='Pairwise position comparison'&&row[header.indexOf('Group A')]==='Guards'&&row[header.indexOf('Group B')]==='Wings'&&row[header.indexOf('Stat')]==='Height');
+  assert.equal(Number(exported[header.indexOf('Salary association percent')]),77.7);
+  assert.equal(h.actions.enabledChanges,0);
 });
 test('reduced-model explanations do not describe excluded minutes as an active prediction input', () => {
   const h = harness(); h.click('[data-nba-view]', 'prediction');

@@ -1,16 +1,18 @@
 {
-  "schemaVersion": 2,
-  "id": "nba-2022-23-age-adjusted-ridge-v2-vif5",
-  "generatedAt": "2026-09-14T21:00:49.033589+00:00",
+  "schemaVersion": 3,
+  "id": "nba-2022-23-age-adjusted-ridge-v3-position-vif5",
+  "generatedAt": "2026-09-14T21:27:30.760807+00:00",
   "season": "2022-23",
   "target": "natural log of workbook Salary (recorded season compensation, not verified annualized rate)",
   "modelType": "age-adjusted standardized ridge; age held neutral for NCAA",
   "experimental": true,
   "featureKeys": [
     "Height",
+    "RPG",
     "APG",
     "SPG",
     "BPG",
+    "TOPG",
     "eFG%",
     "3P%",
     "FT%",
@@ -31,7 +33,8 @@
     "3PA/G"
   ],
   "selection": {
-    "policyId": "shared-x-only-vif5-v1",
+    "policyId": "position-x-only-vif5-v1",
+    "scope": "independent-position",
     "threshold": 5.0,
     "candidateKeys": [
       "Height",
@@ -49,9 +52,11 @@
     ],
     "retainedKeys": [
       "Height",
+      "RPG",
       "APG",
       "SPG",
       "BPG",
+      "TOPG",
       "eFG%",
       "3P%",
       "FT%",
@@ -59,14 +64,406 @@
     ],
     "excludedKeys": [
       "MP",
-      "PPG",
-      "RPG",
-      "TOPG"
+      "PPG"
     ],
+    "retainedKeysMeaning": "Union for display compatibility; each position's actual coefficients use only its own retained keys",
+    "excludedKeysMeaning": "Excluded from all positions; consult perGroup for position-specific exclusions",
     "protectedKeys": [
       "Height",
       "Age"
     ],
+    "perGroup": {
+      "Guards": {
+        "policyId": "position-x-only-vif5-v1",
+        "threshold": 5.0,
+        "candidateKeys": [
+          "Height",
+          "MP",
+          "PPG",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "retainedKeys": [
+          "Height",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "excludedKeys": [
+          "MP",
+          "PPG"
+        ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Guards": {
+            "Height": 1.3753122265359488,
+            "MP": 10.986709587469722,
+            "PPG": 8.955353855475675,
+            "RPG": 4.709591881530323,
+            "APG": 5.2070346747597265,
+            "SPG": 2.863908740222067,
+            "BPG": 1.6989367071807189,
+            "TOPG": 5.66627908986234,
+            "eFG%": 2.5719863832931233,
+            "3P%": 2.1849506556081457,
+            "FT%": 1.2775801739333705,
+            "3PA/G": 4.122430961636887,
+            "Age": 1.2866269695301347
+          }
+        },
+        "perGroupAfterVifs": {
+          "Guards": {
+            "Height": 1.3651625837854229,
+            "RPG": 3.9341572820583237,
+            "APG": 4.920936455335714,
+            "SPG": 2.2487499029901836,
+            "BPG": 1.6096431579008332,
+            "TOPG": 4.656544924646404,
+            "eFG%": 2.282091034466679,
+            "3P%": 2.165674118285804,
+            "FT%": 1.2265963580462063,
+            "3PA/G": 2.488838245674137,
+            "Age": 1.2535485818184398
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "MP",
+            "worstGroupVif": 10.986709587469722,
+            "maximumVifBefore": 10.986709587469722,
+            "groupVifsBefore": {
+              "Guards": 10.986709587469722
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "PPG",
+            "worstGroupVif": 8.038687830681722,
+            "maximumVifBefore": 8.038687830681722,
+            "groupVifsBefore": {
+              "Guards": 8.038687830681722
+            }
+          }
+        ],
+        "selectionN": 198,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Guards",
+        "beforeVifs": {
+          "Height": 1.3753122265359488,
+          "MP": 10.986709587469722,
+          "PPG": 8.955353855475675,
+          "RPG": 4.709591881530323,
+          "APG": 5.2070346747597265,
+          "SPG": 2.863908740222067,
+          "BPG": 1.6989367071807189,
+          "TOPG": 5.66627908986234,
+          "eFG%": 2.5719863832931233,
+          "3P%": 2.1849506556081457,
+          "FT%": 1.2775801739333705,
+          "3PA/G": 4.122430961636887,
+          "Age": 1.2866269695301347
+        },
+        "afterVifs": {
+          "Height": 1.3651625837854229,
+          "RPG": 3.9341572820583237,
+          "APG": 4.920936455335714,
+          "SPG": 2.2487499029901836,
+          "BPG": 1.6096431579008332,
+          "TOPG": 4.656544924646404,
+          "eFG%": 2.282091034466679,
+          "3P%": 2.165674118285804,
+          "FT%": 1.2265963580462063,
+          "3PA/G": 2.488838245674137,
+          "Age": 1.2535485818184398
+        }
+      },
+      "Wings": {
+        "policyId": "position-x-only-vif5-v1",
+        "threshold": 5.0,
+        "candidateKeys": [
+          "Height",
+          "MP",
+          "PPG",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "retainedKeys": [
+          "Height",
+          "APG",
+          "SPG",
+          "BPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "excludedKeys": [
+          "MP",
+          "PPG",
+          "RPG",
+          "TOPG"
+        ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Wings": {
+            "Height": 1.1329750244208543,
+            "MP": 10.392517492627288,
+            "PPG": 10.693072434513885,
+            "RPG": 6.502210018960367,
+            "APG": 8.987679673366324,
+            "SPG": 3.907864674387513,
+            "BPG": 2.0130582918039246,
+            "TOPG": 11.15356778680911,
+            "eFG%": 2.5935220334580493,
+            "3P%": 2.6100617852238925,
+            "FT%": 1.5866127858546564,
+            "3PA/G": 3.957702140284582,
+            "Age": 1.5721102437588494
+          }
+        },
+        "perGroupAfterVifs": {
+          "Wings": {
+            "Height": 1.1180013766379586,
+            "APG": 2.236875308511765,
+            "SPG": 2.5632972135372345,
+            "BPG": 1.8250494867679234,
+            "eFG%": 2.2960400816807,
+            "3P%": 2.2959800549319413,
+            "FT%": 1.2993469653780694,
+            "3PA/G": 1.6684449048282473,
+            "Age": 1.3135255153468477
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "TOPG",
+            "worstGroupVif": 11.15356778680911,
+            "maximumVifBefore": 11.15356778680911,
+            "groupVifsBefore": {
+              "Wings": 11.15356778680911
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "MP",
+            "worstGroupVif": 10.2587324976575,
+            "maximumVifBefore": 10.2587324976575,
+            "groupVifsBefore": {
+              "Wings": 10.2587324976575
+            }
+          },
+          {
+            "step": 3,
+            "excludedKey": "PPG",
+            "worstGroupVif": 7.208880029044564,
+            "maximumVifBefore": 7.208880029044564,
+            "groupVifsBefore": {
+              "Wings": 7.208880029044564
+            }
+          },
+          {
+            "step": 4,
+            "excludedKey": "RPG",
+            "worstGroupVif": 5.737749679396986,
+            "maximumVifBefore": 5.737749679396986,
+            "groupVifsBefore": {
+              "Wings": 5.737749679396986
+            }
+          }
+        ],
+        "selectionN": 91,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Wings",
+        "beforeVifs": {
+          "Height": 1.1329750244208543,
+          "MP": 10.392517492627288,
+          "PPG": 10.693072434513885,
+          "RPG": 6.502210018960367,
+          "APG": 8.987679673366324,
+          "SPG": 3.907864674387513,
+          "BPG": 2.0130582918039246,
+          "TOPG": 11.15356778680911,
+          "eFG%": 2.5935220334580493,
+          "3P%": 2.6100617852238925,
+          "FT%": 1.5866127858546564,
+          "3PA/G": 3.957702140284582,
+          "Age": 1.5721102437588494
+        },
+        "afterVifs": {
+          "Height": 1.1180013766379586,
+          "APG": 2.236875308511765,
+          "SPG": 2.5632972135372345,
+          "BPG": 1.8250494867679234,
+          "eFG%": 2.2960400816807,
+          "3P%": 2.2959800549319413,
+          "FT%": 1.2993469653780694,
+          "3PA/G": 1.6684449048282473,
+          "Age": 1.3135255153468477
+        }
+      },
+      "Bigs": {
+        "policyId": "position-x-only-vif5-v1",
+        "threshold": 5.0,
+        "candidateKeys": [
+          "Height",
+          "MP",
+          "PPG",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "retainedKeys": [
+          "Height",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "excludedKeys": [
+          "MP",
+          "PPG",
+          "TOPG"
+        ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Bigs": {
+            "Height": 1.5824855973363567,
+            "MP": 12.371395542788473,
+            "PPG": 7.083569854732149,
+            "RPG": 5.997497100619124,
+            "APG": 5.306559041117787,
+            "SPG": 2.3456572872913273,
+            "BPG": 2.044904351914611,
+            "TOPG": 7.596367972626238,
+            "eFG%": 1.4781883068166741,
+            "3P%": 1.318277415824482,
+            "FT%": 1.1865966401192747,
+            "3PA/G": 3.1634024777523573,
+            "Age": 1.0928079453161499
+          }
+        },
+        "perGroupAfterVifs": {
+          "Bigs": {
+            "Height": 1.4306337368902484,
+            "RPG": 3.1759869043834126,
+            "APG": 2.328262383740894,
+            "SPG": 1.7948441402553297,
+            "BPG": 1.7720186845859325,
+            "eFG%": 1.40737169235089,
+            "3P%": 1.2913377297613198,
+            "FT%": 1.1409382545415612,
+            "3PA/G": 1.4636761432634975,
+            "Age": 1.0651224340624192
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "MP",
+            "worstGroupVif": 12.371395542788473,
+            "maximumVifBefore": 12.371395542788473,
+            "groupVifsBefore": {
+              "Bigs": 12.371395542788473
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "TOPG",
+            "worstGroupVif": 7.5474304136104164,
+            "maximumVifBefore": 7.5474304136104164,
+            "groupVifsBefore": {
+              "Bigs": 7.5474304136104164
+            }
+          },
+          {
+            "step": 3,
+            "excludedKey": "PPG",
+            "worstGroupVif": 5.004562979764268,
+            "maximumVifBefore": 5.004562979764268,
+            "groupVifsBefore": {
+              "Bigs": 5.004562979764268
+            }
+          }
+        ],
+        "selectionN": 178,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Bigs",
+        "beforeVifs": {
+          "Height": 1.5824855973363567,
+          "MP": 12.371395542788473,
+          "PPG": 7.083569854732149,
+          "RPG": 5.997497100619124,
+          "APG": 5.306559041117787,
+          "SPG": 2.3456572872913273,
+          "BPG": 2.044904351914611,
+          "TOPG": 7.596367972626238,
+          "eFG%": 1.4781883068166741,
+          "3P%": 1.318277415824482,
+          "FT%": 1.1865966401192747,
+          "3PA/G": 3.1634024777523573,
+          "Age": 1.0928079453161499
+        },
+        "afterVifs": {
+          "Height": 1.4306337368902484,
+          "RPG": 3.1759869043834126,
+          "APG": 2.328262383740894,
+          "SPG": 1.7948441402553297,
+          "BPG": 1.7720186845859325,
+          "eFG%": 1.40737169235089,
+          "3P%": 1.2913377297613198,
+          "FT%": 1.1409382545415612,
+          "3PA/G": 1.4636761432634975,
+          "Age": 1.0651224340624192
+        }
+      }
+    },
     "perGroupBeforeVifs": {
       "Guards": {
         "Height": 1.3753122265359488,
@@ -116,15 +513,17 @@
     },
     "perGroupAfterVifs": {
       "Guards": {
-        "Height": 1.2460733967579476,
-        "APG": 2.468122885651,
-        "SPG": 2.119579619429684,
-        "BPG": 1.4728069227511678,
-        "eFG%": 2.2474048977274714,
-        "3P%": 2.1182914623048332,
-        "FT%": 1.209385853816905,
-        "3PA/G": 1.9395410621448237,
-        "Age": 1.1805232940783632
+        "Height": 1.3651625837854229,
+        "RPG": 3.9341572820583237,
+        "APG": 4.920936455335714,
+        "SPG": 2.2487499029901836,
+        "BPG": 1.6096431579008332,
+        "TOPG": 4.656544924646404,
+        "eFG%": 2.282091034466679,
+        "3P%": 2.165674118285804,
+        "FT%": 1.2265963580462063,
+        "3PA/G": 2.488838245674137,
+        "Age": 1.2535485818184398
       },
       "Wings": {
         "Height": 1.1180013766379586,
@@ -138,70 +537,25 @@
         "Age": 1.3135255153468477
       },
       "Bigs": {
-        "Height": 1.3149149814283154,
-        "APG": 1.7658330262945943,
-        "SPG": 1.6084733744455273,
-        "BPG": 1.3628954988041764,
-        "eFG%": 1.3821941965751265,
-        "3P%": 1.289384804068312,
-        "FT%": 1.1376202590610283,
-        "3PA/G": 1.4616715636804696,
-        "Age": 1.0510312077148458
+        "Height": 1.4306337368902484,
+        "RPG": 3.1759869043834126,
+        "APG": 2.328262383740894,
+        "SPG": 1.7948441402553297,
+        "BPG": 1.7720186845859325,
+        "eFG%": 1.40737169235089,
+        "3P%": 1.2913377297613198,
+        "FT%": 1.1409382545415612,
+        "3PA/G": 1.4636761432634975,
+        "Age": 1.0651224340624192
       }
     },
-    "trace": [
-      {
-        "step": 1,
-        "excludedKey": "MP",
-        "worstGroupVif": 12.371395542788473,
-        "maximumVifBefore": 12.371395542788473,
-        "groupVifsBefore": {
-          "Guards": 10.986709587469722,
-          "Wings": 10.392517492627288,
-          "Bigs": 12.371395542788473
-        }
-      },
-      {
-        "step": 2,
-        "excludedKey": "TOPG",
-        "worstGroupVif": 11.009985636352104,
-        "maximumVifBefore": 11.009985636352104,
-        "groupVifsBefore": {
-          "Guards": 5.666225528503713,
-          "Wings": 11.009985636352104,
-          "Bigs": 7.5474304136104164
-        }
-      },
-      {
-        "step": 3,
-        "excludedKey": "PPG",
-        "worstGroupVif": 7.208880029044564,
-        "maximumVifBefore": 7.208880029044564,
-        "groupVifsBefore": {
-          "Guards": 6.606251521489057,
-          "Wings": 7.208880029044564,
-          "Bigs": 5.004562979764268
-        }
-      },
-      {
-        "step": 4,
-        "excludedKey": "RPG",
-        "worstGroupVif": 5.737749679396986,
-        "maximumVifBefore": 5.737749679396986,
-        "groupVifsBefore": {
-          "Guards": 3.7141822303301804,
-          "Wings": 5.737749679396986,
-          "Bigs": 3.1759869043834126
-        }
-      }
-    ],
     "selectionN": {
       "Guards": 198,
       "Wings": 91,
       "Bigs": 178
     },
-    "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in any position; candidate order breaks exact ties. Recompute all VIFs after each removal.",
-    "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation."
+    "rankingPolicy": "Independent within-position VIF screening. No other position's predictors or salary values affect removal.",
+    "interpretation": "VIF <=5 limits redundant linear information within a position; it does not imply zero correlation or no basketball value for excluded inputs."
   },
   "positionMapping": {
     "PG": "Guards",
@@ -227,13 +581,13 @@
     {
       "type": "trainingCode",
       "file": "tools/train-nba-valuation.py",
-      "sha256": "4810db7137c0fc7084f618bf911bdf863e70b53477fdb0047f0c37d8c87ff0a4",
+      "sha256": "d9c4766790ea522c8786b401b75672961c28daee20525626bb69df3aa136d744",
       "sha256Basis": "utf8-lf"
     },
     {
       "type": "selectionCode",
       "file": "tools/nba_redundancy.py",
-      "sha256": "40cf2cb4b060ef81c9a672a67a8a5d45192942d700bec8c6158d8a202de0329d",
+      "sha256": "4252c67ea35863e0afe3d0b101c5ca91d7b21815f913cd863e6e19bb87747901",
       "sha256Basis": "utf8-lf"
     }
   ],
@@ -262,7 +616,7 @@
     ],
     "dollarPrediction": "exp(logPrediction) is a modeled geometric salary level (legacy salaryMedianMAE); mean uses training-only Duan residual smearing",
     "metricAggregation": "all outer-heldout predictions pooled across repeats; no in-sample scores",
-    "featureSelection": "Shared worst-group VIF<=5 selector recomputed using only each inner/outer training split; imputation also training-only. Full-reference ridge uses all candidates on identical folds.",
+    "featureSelection": "Independent position-specific VIF<=5 selector recomputed from that position alone within each inner/outer training split; imputation also training-only. Full-reference ridge uses all candidates on identical folds.",
     "bootstrapSubsetReselected": false,
     "heightAblation": "Conditional on each fold-selected set: omit Height and retune penalty, without rescreening other predictors"
   },
@@ -284,7 +638,7 @@
     "Recorded NBA salaries mix contract and tenure circumstances; no experience or contract terms are supplied.",
     "One season, small position cohorts and correlated features limit coefficient stability.",
     "Age is controlled in training and held neutral in the transferred score.",
-    "MP, PPG, RPG and TOPG were removed for overlapping predictor information; remaining associations no longer condition on them.",
+    "Each position removes its own redundant inputs; its remaining associations no longer condition on those inputs. Other positions may retain them.",
     "Removing redundancy can weaken held-out prediction; the all-input reference uses identical folds to quantify this tradeoff.",
     "NCAA anchors determine dollars; this model supplies a relative basketball score."
   ],
@@ -379,14 +733,30 @@
           "mean": 75.71212121212122,
           "scale": 2.0032686787969896,
           "median": 76.0,
-          "coefficient": 0.19009894980400024,
-          "ciLow": 0.030678197173933632,
-          "ciHigh": 0.3551301182608339,
-          "positiveShare": 0.988,
-          "importanceShare": 0.10710892831852241,
-          "associatedSalaryChangePctPerSD": 20.936925858804223,
-          "rawCoefficient": 0.0948943852694583,
-          "intervalCrossesZero": false
+          "coefficient": 0.16774088546304286,
+          "ciLow": -0.010489702672389092,
+          "ciHigh": 0.342245550662505,
+          "positiveShare": 0.97,
+          "importanceShare": 0.09269630263404492,
+          "associatedSalaryChangePctPerSD": 18.263013428364854,
+          "rawCoefficient": 0.08373359362048992,
+          "intervalCrossesZero": true
+        },
+        {
+          "key": "RPG",
+          "label": "Rebounds per game",
+          "unit": "rebounds/game",
+          "mean": 2.638383838383838,
+          "scale": 1.4185785367011963,
+          "median": 2.5,
+          "coefficient": 0.04712233712941364,
+          "ciLow": -0.17388400996617334,
+          "ciHigh": 0.2498073113302076,
+          "positiveShare": 0.642,
+          "importanceShare": 0.026040558992601735,
+          "associatedSalaryChangePctPerSD": 4.825024116113413,
+          "rawCoefficient": 0.03321799668490212,
+          "intervalCrossesZero": true
         },
         {
           "key": "APG",
@@ -395,14 +765,14 @@
           "mean": 2.888888888888889,
           "scale": 2.2848817527430074,
           "median": 2.25,
-          "coefficient": 0.30910149717337676,
-          "ciLow": 0.0623382921644248,
-          "ciHigh": 0.5210884111111778,
-          "positiveShare": 0.992,
-          "importanceShare": 0.1741594582086139,
-          "associatedSalaryChangePctPerSD": 36.2200622999991,
-          "rawCoefficient": 0.13528117890665436,
-          "intervalCrossesZero": false
+          "coefficient": 0.0943407062227056,
+          "ciLow": -0.14750411916296793,
+          "ciHigh": 0.34693696966028764,
+          "positiveShare": 0.752,
+          "importanceShare": 0.05213418678808736,
+          "associatedSalaryChangePctPerSD": 9.89340958266722,
+          "rawCoefficient": 0.04128909783162708,
+          "intervalCrossesZero": true
         },
         {
           "key": "SPG",
@@ -411,13 +781,13 @@
           "mean": 0.7212121212121213,
           "scale": 0.44625777921470666,
           "median": 0.7,
-          "coefficient": -0.11874332521191203,
-          "ciLow": -0.4360956221667621,
-          "ciHigh": 0.3122609133288022,
-          "positiveShare": 0.352,
-          "importanceShare": 0.06690447433580744,
-          "associatedSalaryChangePctPerSD": -11.1964292111171,
-          "rawCoefficient": -0.26608684653266607,
+          "coefficient": -0.13324497516422548,
+          "ciLow": -0.4461566140655135,
+          "ciHigh": 0.29957940492316143,
+          "positiveShare": 0.328,
+          "importanceShare": 0.0736333095428313,
+          "associatedSalaryChangePctPerSD": -12.474934882851754,
+          "rawCoefficient": -0.29858297461772143,
           "intervalCrossesZero": true
         },
         {
@@ -427,13 +797,29 @@
           "mean": 0.2404040404040404,
           "scale": 0.19639127710020338,
           "median": 0.2,
-          "coefficient": 0.2631292869512112,
-          "ciLow": 0.03032685127404512,
-          "ciHigh": 0.4718065062685888,
-          "positiveShare": 0.988,
-          "importanceShare": 0.14825697860834858,
-          "associatedSalaryChangePctPerSD": 30.099490974447473,
-          "rawCoefficient": 1.3398216602917477,
+          "coefficient": 0.2195819212750072,
+          "ciLow": -0.009803397161284746,
+          "ciHigh": 0.43178162666749526,
+          "positiveShare": 0.962,
+          "importanceShare": 0.12134449017176341,
+          "associatedSalaryChangePctPerSD": 24.55558813022028,
+          "rawCoefficient": 1.1180838808995137,
+          "intervalCrossesZero": true
+        },
+        {
+          "key": "TOPG",
+          "label": "Turnovers per game",
+          "unit": "turnovers/game",
+          "mean": 1.2626262626262625,
+          "scale": 0.8886018820398818,
+          "median": 1.0,
+          "coefficient": 0.3604166011262641,
+          "ciLow": 0.13601069651500577,
+          "ciHigh": 0.609908402957643,
+          "positiveShare": 0.998,
+          "importanceShare": 0.1991719922075579,
+          "associatedSalaryChangePctPerSD": 43.39266656078451,
+          "rawCoefficient": 0.4055996373751638,
           "intervalCrossesZero": false
         },
         {
@@ -443,13 +829,13 @@
           "mean": 0.5071868686868687,
           "scale": 0.08878256511259774,
           "median": 0.519,
-          "coefficient": 0.23740197788489859,
-          "ciLow": -0.06673611875893394,
-          "ciHigh": 0.4051048885382422,
-          "positiveShare": 0.946,
-          "importanceShare": 0.13376124096511957,
-          "associatedSalaryChangePctPerSD": 26.795070348927236,
-          "rawCoefficient": 2.6739707011598,
+          "coefficient": 0.23184689424000277,
+          "ciLow": -0.05908460581547968,
+          "ciHigh": 0.3877404512623395,
+          "positiveShare": 0.95,
+          "importanceShare": 0.12812231087196532,
+          "associatedSalaryChangePctPerSD": 26.092665891423483,
+          "rawCoefficient": 2.6114011680780442,
           "intervalCrossesZero": true
         },
         {
@@ -459,13 +845,13 @@
           "mean": 0.3446717171717172,
           "scale": 0.09611235170141542,
           "median": 0.356,
-          "coefficient": -0.03519747581778471,
-          "ciLow": -0.23538156768331878,
-          "ciHigh": 0.23397732401489588,
-          "positiveShare": 0.434,
-          "importanceShare": 0.01983158727729435,
-          "associatedSalaryChangePctPerSD": -3.458524863519391,
-          "rawCoefficient": -0.366211784382614,
+          "coefficient": -0.06139704677860215,
+          "ciLow": -0.2756807667167004,
+          "ciHigh": 0.21183362453073637,
+          "positiveShare": 0.386,
+          "importanceShare": 0.0339289924058487,
+          "associatedSalaryChangePctPerSD": -5.955023691181305,
+          "rawCoefficient": -0.638804957861602,
           "intervalCrossesZero": true
         },
         {
@@ -475,13 +861,13 @@
           "mean": 0.7888484848484849,
           "scale": 0.12834312151860208,
           "median": 0.812,
-          "coefficient": -0.07455839345631303,
-          "ciLow": -0.26904014403493104,
-          "ciHigh": 0.10830474309819241,
-          "positiveShare": 0.208,
-          "importanceShare": 0.042009014928752524,
-          "associatedSalaryChangePctPerSD": -7.184672560113438,
-          "rawCoefficient": -0.5809301860053834,
+          "coefficient": -0.0613718702825011,
+          "ciLow": -0.23621279958839592,
+          "ciHigh": 0.12133637669924206,
+          "positiveShare": 0.234,
+          "importanceShare": 0.033915079470457875,
+          "associatedSalaryChangePctPerSD": -5.952655938396209,
+          "rawCoefficient": -0.47818589384711085,
           "intervalCrossesZero": true
         },
         {
@@ -491,13 +877,13 @@
           "mean": 3.4959595959595964,
           "scale": 2.334909389452484,
           "median": 3.2,
-          "coefficient": 0.5465879887106434,
-          "ciLow": 0.3322042000873239,
-          "ciHigh": 0.7462416950790618,
+          "coefficient": 0.4325114777765842,
+          "ciLow": 0.20628640622674743,
+          "ciHigh": 0.6401005175765127,
           "positiveShare": 1.0,
-          "importanceShare": 0.3079683173575412,
-          "associatedSalaryChangePctPerSD": 72.73492166489062,
-          "rawCoefficient": 0.234093875839359,
+          "importanceShare": 0.23901277691484155,
+          "associatedSalaryChangePctPerSD": 54.112316385854186,
+          "rawCoefficient": 0.1852369431252338,
           "intervalCrossesZero": false
         }
       ],
@@ -508,13 +894,13 @@
         "mean": 25.414141414141415,
         "scale": 4.181513188507075,
         "median": 24.5,
-        "coefficient": 0.40589121070465534,
-        "ciLow": 0.26392215687183646,
-        "ciHigh": 0.5243305437276504,
+        "coefficient": 0.44168018452919355,
+        "ciLow": 0.3012118701277766,
+        "ciHigh": 0.553968182884252,
         "positiveShare": 1.0,
         "importanceShare": null,
-        "associatedSalaryChangePctPerSD": 50.06392900866467,
-        "rawCoefficient": 0.09706802117000393,
+        "associatedSalaryChangePctPerSD": 55.53182460480337,
+        "rawCoefficient": 0.10562687826578077,
         "intervalCrossesZero": false
       },
       "metrics": {
@@ -540,127 +926,127 @@
           "heldoutPredictions": 594
         },
         "unadjustedRidge": {
-          "logR2": 0.256415258738493,
-          "logRMSE": 1.4495542769860628,
-          "logMAE": 1.00543217515704,
-          "salaryMedianMAE": 6015333.331202965,
-          "salaryMeanMAE": 6589187.085074833,
-          "spearman": 0.6070554854858685,
-          "medianMultiplicativeError": 2.1502315986176224,
+          "logR2": 0.2690728522328947,
+          "logRMSE": 1.4371638790576402,
+          "logMAE": 1.0094234361021261,
+          "salaryMedianMAE": 5989904.17555083,
+          "salaryMeanMAE": 6224227.392033572,
+          "spearman": 0.6196973176020408,
+          "medianMultiplicativeError": 2.1828107234583523,
           "repeatLogR2": [
-            0.28526035307664166,
-            0.24105468469936409,
-            0.2429307384394731
+            0.2960149467291615,
+            0.23821643446011942,
+            0.27298717550940366
           ],
           "repeatLogRMSE": [
-            1.4211606818509037,
-            1.4644498009628635,
-            1.4626386780769431
+            1.4104281469444322,
+            1.4671855687056168,
+            1.433310501982345
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
         },
         "ageAdjustedRidge": {
-          "logR2": 0.3194247887346632,
-          "logRMSE": 1.386779172017905,
-          "logMAE": 0.954341263050814,
-          "salaryMedianMAE": 6112489.950047816,
-          "salaryMeanMAE": 6933004.092857835,
-          "spearman": 0.6677107865718892,
-          "medianMultiplicativeError": 1.982159001876132,
+          "logR2": 0.3299707625265623,
+          "logRMSE": 1.3759926816761356,
+          "logMAE": 0.9463000984270861,
+          "salaryMedianMAE": 5727037.73899099,
+          "salaryMeanMAE": 6203238.828874931,
+          "spearman": 0.6754019981753606,
+          "medianMultiplicativeError": 1.9948098570079347,
           "repeatLogR2": [
-            0.35562470157545467,
-            0.3182555913549846,
-            0.2843940732735506
+            0.3485913775757774,
+            0.3200503492682575,
+            0.3212705607356525
           ],
           "repeatLogRMSE": [
-            1.349393733342682,
-            1.3879698727398162,
-            1.4220216596838866
+            1.356738029469461,
+            1.3861416864445184,
+            1.3848973696887865
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
         },
         "deployedRidge": {
-          "logR2": 0.2427722810583114,
-          "logRMSE": 1.4627917378960285,
-          "logMAE": 1.0307822083853075,
-          "salaryMedianMAE": 6247791.178598521,
-          "salaryMeanMAE": 6995444.6870381,
-          "spearman": 0.5867891807036847,
-          "medianMultiplicativeError": 2.1505031305144953,
+          "logR2": 0.24922715640389104,
+          "logRMSE": 1.4565437187479753,
+          "logMAE": 1.0321865280274867,
+          "salaryMedianMAE": 6238401.8450818155,
+          "salaryMeanMAE": 6714351.85179225,
+          "spearman": 0.5952689768436015,
+          "medianMultiplicativeError": 2.178451398981645,
           "repeatLogR2": [
-            0.2756496429952946,
-            0.234041505278209,
-            0.2186256949014309
+            0.2702210603048142,
+            0.2360750338941101,
+            0.24138537501274904
           ],
           "repeatLogRMSE": [
-            1.430683558713128,
-            1.47120050584479,
-            1.4859315703627218
+            1.4360346203220378,
+            1.4692462768233279,
+            1.4641307186005879
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
         },
         "noHeightRidge": {
-          "logR2": 0.24838001606073223,
-          "logRMSE": 1.4573652382549693,
-          "logMAE": 1.020271908878319,
-          "salaryMedianMAE": 5979990.522317724,
-          "salaryMeanMAE": 6596605.383594956,
-          "spearman": 0.5920810544963439,
-          "medianMultiplicativeError": 2.166512922028467,
+          "logR2": 0.2511144565292084,
+          "logRMSE": 1.454711829837621,
+          "logMAE": 1.026076888726118,
+          "salaryMedianMAE": 6067424.84723973,
+          "salaryMeanMAE": 6595607.720138556,
+          "spearman": 0.597868102001301,
+          "medianMultiplicativeError": 2.215829623520044,
           "repeatLogR2": [
-            0.289487140802574,
-            0.22466212691242482,
-            0.230990780467198
+            0.2903060774589097,
+            0.2167924366251568,
+            0.2462448555035589
           ],
           "repeatLogRMSE": [
-            1.4169522600895266,
-            1.4801807312536077,
-            1.474127405780996
+            1.4161354355301552,
+            1.4876736934312464,
+            1.4594337716104182
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
         },
         "noHeightAgeAdjustedRidge": {
-          "logR2": 0.3140081276617832,
-          "logRMSE": 1.3922868848244137,
-          "logMAE": 0.9531691841711344,
-          "salaryMedianMAE": 5847591.175037164,
-          "salaryMeanMAE": 6812218.51667825,
-          "spearman": 0.6648275270446699,
-          "medianMultiplicativeError": 1.9756356538728015,
+          "logR2": 0.3229675795991517,
+          "logRMSE": 1.3831649652092903,
+          "logMAE": 0.947911101287114,
+          "salaryMedianMAE": 5686241.349763485,
+          "salaryMeanMAE": 6481516.218067879,
+          "spearman": 0.6722583966668793,
+          "medianMultiplicativeError": 2.007829948589372,
           "repeatLogR2": [
-            0.35586114337089647,
-            0.29732430196196624,
-            0.28883893765248736
+            0.36050237518207406,
+            0.29080635954179945,
+            0.31759400407358174
           ],
           "repeatLogRMSE": [
-            1.3491461428849927,
-            1.4091158953790925,
-            1.4175984577766496
+            1.3442768354737915,
+            1.415636211807652,
+            1.3886431753242812
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
         },
         "portableTree": {
-          "logR2": 0.18401729793027832,
-          "logRMSE": 1.5184822623005072,
-          "logMAE": 1.095490966755426,
-          "salaryMedianMAE": 5988932.860515215,
-          "salaryMeanMAE": 6776573.018692126,
-          "spearman": 0.565419770570638,
-          "medianMultiplicativeError": 2.317980101932187,
+          "logR2": 0.21473809902884156,
+          "logRMSE": 1.489623484705687,
+          "logMAE": 1.0793579675084877,
+          "salaryMedianMAE": 6018579.888797383,
+          "salaryMeanMAE": 6661392.928191938,
+          "spearman": 0.5911964935952916,
+          "medianMultiplicativeError": 2.28847971375687,
           "repeatLogR2": [
-            0.20270655581111785,
-            0.2240704323858247,
-            0.12527490559389243
+            0.22604611966528387,
+            0.19579838673200867,
+            0.22236979068923235
           ],
           "repeatLogRMSE": [
-            1.500991882688646,
-            1.4807454191386908,
-            1.572190037675591
+            1.4788590659046992,
+            1.5074805486407241,
+            1.482367241010636
           ],
           "uniquePlayers": 198,
           "heldoutPredictions": 594
@@ -688,12 +1074,29 @@
         }
       },
       "selection": {
+        "policyId": "position-x-only-vif5-v1",
         "threshold": 5.0,
-        "retainedKeys": [
+        "candidateKeys": [
           "Height",
+          "MP",
+          "PPG",
+          "RPG",
           "APG",
           "SPG",
           "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
+        "retainedKeys": [
+          "Height",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
           "eFG%",
           "3P%",
           "FT%",
@@ -701,10 +1104,69 @@
         ],
         "excludedKeys": [
           "MP",
-          "PPG",
-          "RPG",
-          "TOPG"
+          "PPG"
         ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Guards": {
+            "Height": 1.3753122265359488,
+            "MP": 10.986709587469722,
+            "PPG": 8.955353855475675,
+            "RPG": 4.709591881530323,
+            "APG": 5.2070346747597265,
+            "SPG": 2.863908740222067,
+            "BPG": 1.6989367071807189,
+            "TOPG": 5.66627908986234,
+            "eFG%": 2.5719863832931233,
+            "3P%": 2.1849506556081457,
+            "FT%": 1.2775801739333705,
+            "3PA/G": 4.122430961636887,
+            "Age": 1.2866269695301347
+          }
+        },
+        "perGroupAfterVifs": {
+          "Guards": {
+            "Height": 1.3651625837854229,
+            "RPG": 3.9341572820583237,
+            "APG": 4.920936455335714,
+            "SPG": 2.2487499029901836,
+            "BPG": 1.6096431579008332,
+            "TOPG": 4.656544924646404,
+            "eFG%": 2.282091034466679,
+            "3P%": 2.165674118285804,
+            "FT%": 1.2265963580462063,
+            "3PA/G": 2.488838245674137,
+            "Age": 1.2535485818184398
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "MP",
+            "worstGroupVif": 10.986709587469722,
+            "maximumVifBefore": 10.986709587469722,
+            "groupVifsBefore": {
+              "Guards": 10.986709587469722
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "PPG",
+            "worstGroupVif": 8.038687830681722,
+            "maximumVifBefore": 8.038687830681722,
+            "groupVifsBefore": {
+              "Guards": 8.038687830681722
+            }
+          }
+        ],
+        "selectionN": 198,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Guards",
         "beforeVifs": {
           "Height": 1.3753122265359488,
           "MP": 10.986709587469722,
@@ -721,121 +1183,115 @@
           "Age": 1.2866269695301347
         },
         "afterVifs": {
-          "Height": 1.2460733967579476,
-          "APG": 2.468122885651,
-          "SPG": 2.119579619429684,
-          "BPG": 1.4728069227511678,
-          "eFG%": 2.2474048977274714,
-          "3P%": 2.1182914623048332,
-          "FT%": 1.209385853816905,
-          "3PA/G": 1.9395410621448237,
-          "Age": 1.1805232940783632
+          "Height": 1.3651625837854229,
+          "RPG": 3.9341572820583237,
+          "APG": 4.920936455335714,
+          "SPG": 2.2487499029901836,
+          "BPG": 1.6096431579008332,
+          "TOPG": 4.656544924646404,
+          "eFG%": 2.282091034466679,
+          "3P%": 2.165674118285804,
+          "FT%": 1.2265963580462063,
+          "3PA/G": 2.488838245674137,
+          "Age": 1.2535485818184398
         },
         "modelN": 198
       },
       "excludedFeatures": [
         {
           "key": "MP",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "PPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
-        },
-        {
-          "key": "RPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
-        },
-        {
-          "key": "TOPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         }
       ],
       "refinementComparison": {
         "reference": "fullReferenceRidge",
         "sameFolds": true,
-        "logR2Change": -0.025257330345180518,
-        "logRMSEImprovement": -0.024602603832808656
+        "logR2Change": -0.01880245499960087,
+        "logRMSEImprovement": -0.01835458468475548
       },
       "treePermutationImportance": [
         {
           "key": "Height",
-          "meanIncreaseInHeldoutLogMSE": 0.0,
-          "foldSD": 0.0,
-          "positiveFoldShare": 0.0,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "RPG",
-          "meanIncreaseInHeldoutLogMSE": 0.0013437960654291148,
-          "foldSD": 0.0026875921308582296,
-          "positiveFoldShare": 0.25,
-          "selectedOuterFolds": 4,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "SPG",
-          "meanIncreaseInHeldoutLogMSE": 0.0025523792567310514,
-          "foldSD": 0.009885322354524623,
+          "meanIncreaseInHeldoutLogMSE": -0.010047781058661628,
+          "foldSD": 0.04070300514621396,
           "positiveFoldShare": 0.06666666666666667,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
-          "key": "BPG",
-          "meanIncreaseInHeldoutLogMSE": 0.19204397149421057,
-          "foldSD": 0.2634839277532595,
-          "positiveFoldShare": 0.7333333333333333,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "TOPG",
-          "meanIncreaseInHeldoutLogMSE": 0.275780760670128,
-          "foldSD": 0.10648811565021418,
-          "positiveFoldShare": 1.0,
-          "selectedOuterFolds": 6,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "eFG%",
-          "meanIncreaseInHeldoutLogMSE": 0.03234424971858167,
-          "foldSD": 0.11005334868649437,
+          "key": "RPG",
+          "meanIncreaseInHeldoutLogMSE": -0.0011169490401619373,
+          "foldSD": 0.059990462448919986,
           "positiveFoldShare": 0.2,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
+          "key": "APG",
+          "meanIncreaseInHeldoutLogMSE": 0.1484383636248509,
+          "foldSD": 0.14318167995666267,
+          "positiveFoldShare": 0.7142857142857143,
+          "selectedOuterFolds": 7,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "SPG",
+          "meanIncreaseInHeldoutLogMSE": -0.005401566727587236,
+          "foldSD": 0.020920177979373455,
+          "positiveFoldShare": 0.0,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "BPG",
+          "meanIncreaseInHeldoutLogMSE": 0.1167824232172089,
+          "foldSD": 0.19645959110814742,
+          "positiveFoldShare": 0.5333333333333333,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "TOPG",
+          "meanIncreaseInHeldoutLogMSE": 0.282391379825853,
+          "foldSD": 0.20486026499954088,
+          "positiveFoldShare": 0.9230769230769231,
+          "selectedOuterFolds": 13,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "eFG%",
+          "meanIncreaseInHeldoutLogMSE": 0.002810158099996199,
+          "foldSD": 0.03304735362469604,
+          "positiveFoldShare": 0.06666666666666667,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
           "key": "3P%",
-          "meanIncreaseInHeldoutLogMSE": 0.011828966650251944,
-          "foldSD": 0.11848805670612947,
-          "positiveFoldShare": 0.26666666666666666,
+          "meanIncreaseInHeldoutLogMSE": 0.02871956129692894,
+          "foldSD": 0.09496876652569922,
+          "positiveFoldShare": 0.2,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "FT%",
-          "meanIncreaseInHeldoutLogMSE": 0.003325651675065851,
-          "foldSD": 0.05885532805687723,
-          "positiveFoldShare": 0.13333333333333333,
+          "meanIncreaseInHeldoutLogMSE": 0.008205964353067164,
+          "foldSD": 0.03178156327900084,
+          "positiveFoldShare": 0.06666666666666667,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "3PA/G",
-          "meanIncreaseInHeldoutLogMSE": 0.9271051953496309,
-          "foldSD": 0.4896049868640483,
+          "meanIncreaseInHeldoutLogMSE": 0.8900255671451944,
+          "foldSD": 0.345611314386627,
           "positiveFoldShare": 1.0,
           "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "APG",
-          "meanIncreaseInHeldoutLogMSE": 0.2146911392637643,
-          "foldSD": 0.1832630970126405,
-          "positiveFoldShare": 0.8888888888888888,
-          "selectedOuterFolds": 9,
           "totalOuterFolds": 15
         }
       ],
@@ -843,94 +1299,73 @@
         {
           "sample": "atLeast20Games",
           "n": 158,
-          "available": true,
+          "available": false,
+          "reason": "Fixed retained subset exceeds VIF 5 in this restricted sample",
           "vifs": {
-            "Height": 1.2711610024516264,
-            "APG": 2.3747778443558327,
-            "SPG": 2.435835286370535,
-            "BPG": 1.6190216817014649,
-            "eFG%": 1.9301652792259667,
-            "3P%": 1.8980573402205074,
-            "FT%": 1.6322549938959026,
-            "3PA/G": 1.8950107371254081,
-            "Age": 1.1973786643264153
+            "Height": 1.399220326361006,
+            "RPG": 3.9965900303247635,
+            "APG": 5.047303955539432,
+            "SPG": 2.5535964357801655,
+            "BPG": 1.7945837904705118,
+            "TOPG": 5.862518348046864,
+            "eFG%": 2.0716210338305996,
+            "3P%": 1.8990890736991617,
+            "FT%": 1.651426155136702,
+            "3PA/G": 2.5799105629559365,
+            "Age": 1.256575276468542
           },
-          "alpha": 30.0,
-          "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.08668608193008062,
-            "APG": 0.2648648032013087,
-            "SPG": 0.10283438782993053,
-            "BPG": 0.18534365533942473,
-            "eFG%": 0.03743542718499005,
-            "3P%": 0.03758618757262407,
-            "FT%": -0.07832952088686146,
-            "3PA/G": 0.32794972590293037,
-            "Age": 0.32991001784652507
-          }
+          "alpha": null,
+          "coefficientsOnPrimaryTrainingSD": {}
         },
         {
           "sample": "ageAtLeast23",
           "n": 146,
-          "available": true,
+          "available": false,
+          "reason": "Fixed retained subset exceeds VIF 5 in this restricted sample",
           "vifs": {
-            "Height": 1.2505534150109443,
-            "APG": 2.1894582373929454,
-            "SPG": 1.9178335673099036,
-            "BPG": 1.461192904278535,
-            "eFG%": 2.6831488710584295,
-            "3P%": 2.6355318923309747,
-            "FT%": 1.137108877791174,
-            "3PA/G": 1.8216919340818778,
-            "Age": 1.1064926805748934
+            "Height": 1.416333049818767,
+            "RPG": 3.843850053274581,
+            "APG": 5.255492401702026,
+            "SPG": 2.1137490113724082,
+            "BPG": 1.5663882424548934,
+            "TOPG": 4.834856087645688,
+            "eFG%": 2.7347463819276556,
+            "3P%": 2.636521628465026,
+            "FT%": 1.165659699935494,
+            "3PA/G": 2.411788339464808,
+            "Age": 1.1372695979921361
           },
-          "alpha": 30.0,
-          "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.2107885194851925,
-            "APG": 0.3066495434948225,
-            "SPG": -0.07091603239995192,
-            "BPG": 0.2269574330354609,
-            "eFG%": 0.23273877023515768,
-            "3P%": 0.17144477237717007,
-            "FT%": -0.07190650835985399,
-            "3PA/G": 0.5277082653678186,
-            "Age": 0.5462358466617491
-          }
+          "alpha": null,
+          "coefficientsOnPrimaryTrainingSD": {}
         },
         {
           "sample": "salaryAtLeastOneMillion",
           "n": 164,
-          "available": true,
+          "available": false,
+          "reason": "Fixed retained subset exceeds VIF 5 in this restricted sample",
           "vifs": {
-            "Height": 1.2112321334493221,
-            "APG": 2.406117298308261,
-            "SPG": 2.3987673963408733,
-            "BPG": 1.5958781310772356,
-            "eFG%": 1.986413167700474,
-            "3P%": 1.9237103349635598,
-            "FT%": 1.2912763780843954,
-            "3PA/G": 1.8325201575943426,
-            "Age": 1.1824672917577326
+            "Height": 1.3466088593111696,
+            "RPG": 4.065469104816805,
+            "APG": 5.16439513166284,
+            "SPG": 2.4977278042798607,
+            "BPG": 1.8345044681443758,
+            "TOPG": 5.742349835410115,
+            "eFG%": 2.1340521815122835,
+            "3P%": 1.9335671084873711,
+            "FT%": 1.3048120660352025,
+            "3PA/G": 2.4700396854875875,
+            "Age": 1.2592455023354538
           },
-          "alpha": 10.0,
-          "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.09036018797673274,
-            "APG": 0.2810388644480702,
-            "SPG": 0.03470524376196779,
-            "BPG": 0.21641566514848593,
-            "eFG%": 0.06154512477211526,
-            "3P%": -0.09323315442116842,
-            "FT%": -0.08745212968335839,
-            "3PA/G": 0.3502738496165509,
-            "Age": 0.393734743781807
-          }
+          "alpha": null,
+          "coefficientsOnPrimaryTrainingSD": {}
         }
       ],
       "heightAblation": {
         "method": "Conditional ablation within each selected fold mask; other predictors not rescreened",
-        "logRMSEImprovement": -0.005426499641059124,
-        "logR2Improvement": -0.005607735002420844,
-        "ageAdjustedLogRMSEImprovement": 0.005507712806508636,
-        "ageAdjustedLogR2Improvement": 0.005416661072879969
+        "logRMSEImprovement": -0.0018318889103543512,
+        "logR2Improvement": -0.0018873001253173483,
+        "ageAdjustedLogRMSEImprovement": 0.007172283533154689,
+        "ageAdjustedLogR2Improvement": 0.007003182927410645
       }
     },
     "Wings": {
@@ -1106,20 +1541,20 @@
           "heldoutPredictions": 273
         },
         "unadjustedRidge": {
-          "logR2": 0.42760481975363285,
-          "logRMSE": 1.144237684019567,
-          "logMAE": 0.8335118690843188,
-          "salaryMedianMAE": 4941990.289246252,
-          "salaryMeanMAE": 5398898.3817739645,
-          "spearman": 0.7016417491179554,
-          "medianMultiplicativeError": 1.9070794053479088,
+          "logR2": 0.42834667894488954,
+          "logRMSE": 1.1434959425660753,
+          "logMAE": 0.8329951021623968,
+          "salaryMedianMAE": 4934607.454164294,
+          "salaryMeanMAE": 5364364.13274768,
+          "spearman": 0.702315153881521,
+          "medianMultiplicativeError": 1.90158489775353,
           "repeatLogR2": [
-            0.4072289195687947,
+            0.40945449714256466,
             0.4227410215964731,
             0.45284451809563075
           ],
           "repeatLogRMSE": [
-            1.164425657359507,
+            1.1622376654200142,
             1.149088850433297,
             1.1187257639315142
           ],
@@ -1127,20 +1562,20 @@
           "heldoutPredictions": 273
         },
         "ageAdjustedRidge": {
-          "logR2": 0.5115117606498545,
-          "logRMSE": 1.057049484220312,
-          "logMAE": 0.7741356010838712,
-          "salaryMedianMAE": 4665548.745837128,
-          "salaryMeanMAE": 5058551.217884396,
-          "spearman": 0.7495039263212848,
-          "medianMultiplicativeError": 1.9065860867538031,
+          "logR2": 0.5112818744986858,
+          "logRMSE": 1.0572981825871883,
+          "logMAE": 0.7740806995916769,
+          "salaryMedianMAE": 4632607.523642548,
+          "salaryMeanMAE": 4999615.137856171,
+          "spearman": 0.7491703210704778,
+          "medianMultiplicativeError": 1.896561916263494,
           "repeatLogR2": [
-            0.4797535521822379,
+            0.4790638937287315,
             0.5128720306669706,
             0.5419096991003551
           ],
           "repeatLogRMSE": [
-            1.0908695626974276,
+            1.091592372296046,
             1.055576700441496,
             1.0236318981629329
           ],
@@ -1148,20 +1583,20 @@
           "heldoutPredictions": 273
         },
         "deployedRidge": {
-          "logR2": 0.423970854873972,
-          "logRMSE": 1.1478641477854934,
-          "logMAE": 0.8438822513407661,
-          "salaryMedianMAE": 4935070.329475259,
-          "salaryMeanMAE": 5447236.163907869,
-          "spearman": 0.6883170067660892,
-          "medianMultiplicativeError": 2.0232123491646403,
+          "logR2": 0.42469227827874156,
+          "logRMSE": 1.1471451255713387,
+          "logMAE": 0.8430183196561336,
+          "salaryMedianMAE": 4922844.336046172,
+          "salaryMeanMAE": 5411179.186749593,
+          "spearman": 0.6886877775886042,
+          "medianMultiplicativeError": 1.974342001493282,
           "repeatLogR2": [
-            0.3928533341674304,
+            0.39501760438173894,
             0.4241775131395584,
             0.4548817173149272
           ],
           "repeatLogRMSE": [
-            1.1784606069720582,
+            1.1763583273124092,
             1.1476582234014459,
             1.1166411712757307
           ],
@@ -1169,20 +1604,20 @@
           "heldoutPredictions": 273
         },
         "noHeightRidge": {
-          "logR2": 0.4286798254738614,
-          "logRMSE": 1.1431626923173688,
-          "logMAE": 0.819064941776396,
-          "salaryMedianMAE": 4542305.714547637,
-          "salaryMeanMAE": 4958012.783560358,
-          "spearman": 0.7019328794296676,
+          "logR2": 0.4293096679622087,
+          "logRMSE": 1.1425323881396583,
+          "logMAE": 0.8189005469251562,
+          "salaryMedianMAE": 4541508.1998331025,
+          "salaryMeanMAE": 4923507.743839376,
+          "spearman": 0.7025116004748344,
           "medianMultiplicativeError": 1.8697900945487966,
           "repeatLogR2": [
-            0.38307267572020853,
+            0.38496220318525043,
             0.43979684510414396,
             0.46316995559723195
           ],
           "repeatLogRMSE": [
-            1.187914724323389,
+            1.1860941542684376,
             1.13198595301105,
             1.1081196836263838
           ],
@@ -1190,20 +1625,20 @@
           "heldoutPredictions": 273
         },
         "noHeightAgeAdjustedRidge": {
-          "logR2": 0.5074787807648673,
-          "logRMSE": 1.061404037821115,
-          "logMAE": 0.7648149998643488,
-          "salaryMedianMAE": 4276536.075141604,
-          "salaryMeanMAE": 4498739.4964653235,
-          "spearman": 0.7511330172144834,
-          "medianMultiplicativeError": 1.8836519172619846,
+          "logR2": 0.5071505334882658,
+          "logRMSE": 1.0617576722850492,
+          "logMAE": 0.7650024833887554,
+          "salaryMedianMAE": 4245886.897480613,
+          "salaryMeanMAE": 4442905.587531143,
+          "spearman": 0.7506613684116182,
+          "medianMultiplicativeError": 1.9099092645117637,
           "repeatLogR2": [
-            0.46296747268635763,
+            0.4619827308565526,
             0.5194919119904078,
             0.5399769576178366
           ],
           "repeatLogRMSE": [
-            1.108328645613381,
+            1.1093443361494166,
             1.04837972554778,
             1.0257890420949478
           ],
@@ -1211,20 +1646,20 @@
           "heldoutPredictions": 273
         },
         "portableTree": {
-          "logR2": 0.24962807098971063,
-          "logRMSE": 1.3101063510309963,
-          "logMAE": 0.9943310709193494,
-          "salaryMedianMAE": 5864765.483099644,
-          "salaryMeanMAE": 6168691.861193742,
-          "spearman": 0.574683111140336,
-          "medianMultiplicativeError": 2.1769711299154975,
+          "logR2": 0.23753195756568035,
+          "logRMSE": 1.3206236953091426,
+          "logMAE": 1.004875355154933,
+          "salaryMedianMAE": 5948147.409993623,
+          "salaryMeanMAE": 6269669.902848567,
+          "spearman": 0.5623115831500513,
+          "medianMultiplicativeError": 2.1938707859892443,
           "repeatLogR2": [
-            0.33408214137156356,
+            0.2977938010994726,
             0.15154566351509624,
             0.26325640808247197
           ],
           "repeatLogRMSE": [
-            1.2341802533260458,
+            1.2673617394022163,
             1.3931006644236827,
             1.2981546880543964
           ],
@@ -1254,7 +1689,22 @@
         }
       },
       "selection": {
+        "policyId": "position-x-only-vif5-v1",
         "threshold": 5.0,
+        "candidateKeys": [
+          "Height",
+          "MP",
+          "PPG",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
         "retainedKeys": [
           "Height",
           "APG",
@@ -1271,6 +1721,83 @@
           "RPG",
           "TOPG"
         ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Wings": {
+            "Height": 1.1329750244208543,
+            "MP": 10.392517492627288,
+            "PPG": 10.693072434513885,
+            "RPG": 6.502210018960367,
+            "APG": 8.987679673366324,
+            "SPG": 3.907864674387513,
+            "BPG": 2.0130582918039246,
+            "TOPG": 11.15356778680911,
+            "eFG%": 2.5935220334580493,
+            "3P%": 2.6100617852238925,
+            "FT%": 1.5866127858546564,
+            "3PA/G": 3.957702140284582,
+            "Age": 1.5721102437588494
+          }
+        },
+        "perGroupAfterVifs": {
+          "Wings": {
+            "Height": 1.1180013766379586,
+            "APG": 2.236875308511765,
+            "SPG": 2.5632972135372345,
+            "BPG": 1.8250494867679234,
+            "eFG%": 2.2960400816807,
+            "3P%": 2.2959800549319413,
+            "FT%": 1.2993469653780694,
+            "3PA/G": 1.6684449048282473,
+            "Age": 1.3135255153468477
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "TOPG",
+            "worstGroupVif": 11.15356778680911,
+            "maximumVifBefore": 11.15356778680911,
+            "groupVifsBefore": {
+              "Wings": 11.15356778680911
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "MP",
+            "worstGroupVif": 10.2587324976575,
+            "maximumVifBefore": 10.2587324976575,
+            "groupVifsBefore": {
+              "Wings": 10.2587324976575
+            }
+          },
+          {
+            "step": 3,
+            "excludedKey": "PPG",
+            "worstGroupVif": 7.208880029044564,
+            "maximumVifBefore": 7.208880029044564,
+            "groupVifsBefore": {
+              "Wings": 7.208880029044564
+            }
+          },
+          {
+            "step": 4,
+            "excludedKey": "RPG",
+            "worstGroupVif": 5.737749679396986,
+            "maximumVifBefore": 5.737749679396986,
+            "groupVifsBefore": {
+              "Wings": 5.737749679396986
+            }
+          }
+        ],
+        "selectionN": 91,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Wings",
         "beforeVifs": {
           "Height": 1.1329750244208543,
           "MP": 10.392517492627288,
@@ -1302,26 +1829,26 @@
       "excludedFeatures": [
         {
           "key": "MP",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "PPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "RPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "TOPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         }
       ],
       "refinementComparison": {
         "reference": "fullReferenceRidge",
         "sameFolds": true,
-        "logR2Change": -0.032866756400715125,
-        "logRMSEImprovement": -0.03322804073169694
+        "logR2Change": -0.032145332995945575,
+        "logRMSEImprovement": -0.03250901851754229
       },
       "treePermutationImportance": [
         {
@@ -1342,9 +1869,9 @@
         },
         {
           "key": "SPG",
-          "meanIncreaseInHeldoutLogMSE": 0.13566372927727954,
-          "foldSD": 0.3417815216750058,
-          "positiveFoldShare": 0.4,
+          "meanIncreaseInHeldoutLogMSE": 0.11224771652893448,
+          "foldSD": 0.3379678039947784,
+          "positiveFoldShare": 0.3333333333333333,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
@@ -1358,50 +1885,50 @@
         },
         {
           "key": "TOPG",
-          "meanIncreaseInHeldoutLogMSE": 0.4517702970150486,
-          "foldSD": 0.9715238037690348,
-          "positiveFoldShare": 0.5,
-          "selectedOuterFolds": 6,
+          "meanIncreaseInHeldoutLogMSE": 0.0691042682816559,
+          "foldSD": 0.28561067034150517,
+          "positiveFoldShare": 0.4,
+          "selectedOuterFolds": 5,
           "totalOuterFolds": 15
         },
         {
           "key": "eFG%",
-          "meanIncreaseInHeldoutLogMSE": -0.009144258528097348,
-          "foldSD": 0.03541556099273617,
-          "positiveFoldShare": 0.0,
+          "meanIncreaseInHeldoutLogMSE": -0.004612713455812501,
+          "foldSD": 0.04063348829304582,
+          "positiveFoldShare": 0.06666666666666667,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "3P%",
-          "meanIncreaseInHeldoutLogMSE": -0.024869682724788237,
-          "foldSD": 0.09631986701856714,
+          "meanIncreaseInHeldoutLogMSE": -0.0356945707833372,
+          "foldSD": 0.10226586894638996,
           "positiveFoldShare": 0.0,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "FT%",
-          "meanIncreaseInHeldoutLogMSE": 0.007678472933511741,
-          "foldSD": 0.11809711095287237,
-          "positiveFoldShare": 0.13333333333333333,
+          "meanIncreaseInHeldoutLogMSE": 0.007596425755763692,
+          "foldSD": 0.11810233785921449,
+          "positiveFoldShare": 0.06666666666666667,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "3PA/G",
-          "meanIncreaseInHeldoutLogMSE": 0.21450826318480318,
-          "foldSD": 0.3126135896751888,
+          "meanIncreaseInHeldoutLogMSE": 0.18444665051954928,
+          "foldSD": 0.282757891133096,
           "positiveFoldShare": 0.4666666666666667,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "APG",
-          "meanIncreaseInHeldoutLogMSE": 1.3870430911187255,
-          "foldSD": 0.5584413217769273,
+          "meanIncreaseInHeldoutLogMSE": 1.5355516791743036,
+          "foldSD": 0.7055168116988367,
           "positiveFoldShare": 1.0,
-          "selectedOuterFolds": 9,
+          "selectedOuterFolds": 10,
           "totalOuterFolds": 15
         }
       ],
@@ -1484,10 +2011,10 @@
       ],
       "heightAblation": {
         "method": "Conditional ablation within each selected fold mask; other predictors not rescreened",
-        "logRMSEImprovement": -0.004701455468124616,
-        "logR2Improvement": -0.004708970599889395,
-        "ageAdjustedLogRMSEImprovement": 0.004354553600802946,
-        "ageAdjustedLogR2Improvement": 0.004032979884987187
+        "logRMSEImprovement": -0.004612737431680447,
+        "logR2Improvement": -0.0046173896834671435,
+        "ageAdjustedLogRMSEImprovement": 0.004459489697860919,
+        "ageAdjustedLogR2Improvement": 0.004131341010420009
       }
     },
     "Bigs": {
@@ -1502,13 +2029,29 @@
           "mean": 81.17977528089888,
           "scale": 2.1043657015074877,
           "median": 81.0,
-          "coefficient": 0.18368405856228723,
-          "ciLow": 0.0025440784236056835,
-          "ciHigh": 0.32216446932772336,
-          "positiveShare": 0.974,
-          "importanceShare": 0.1316227136913977,
-          "associatedSalaryChangePctPerSD": 20.163611647468535,
-          "rawCoefficient": 0.0872871376066921,
+          "coefficient": 0.12339473119608341,
+          "ciLow": -0.06453873178087967,
+          "ciHigh": 0.2739586454679298,
+          "positiveShare": 0.898,
+          "importanceShare": 0.08613517364717099,
+          "associatedSalaryChangePctPerSD": 13.133090442228273,
+          "rawCoefficient": 0.05863749400006287,
+          "intervalCrossesZero": true
+        },
+        {
+          "key": "RPG",
+          "label": "Rebounds per game",
+          "unit": "rebounds/game",
+          "mean": 4.723033707865169,
+          "scale": 2.6934539475185213,
+          "median": 4.1,
+          "coefficient": 0.3525884079573916,
+          "ciLow": 0.2078271109740851,
+          "ciHigh": 0.4765597447971022,
+          "positiveShare": 1.0,
+          "importanceShare": 0.24612285671362163,
+          "associatedSalaryChangePctPerSD": 42.27454322062768,
+          "rawCoefficient": 0.1309056753252571,
           "intervalCrossesZero": false
         },
         {
@@ -1518,13 +2061,13 @@
           "mean": 1.4752808988764043,
           "scale": 1.4605509887568946,
           "median": 1.0,
-          "coefficient": 0.10814867729469349,
-          "ciLow": -0.21788544688610156,
-          "ciHigh": 0.3657535462431688,
-          "positiveShare": 0.772,
-          "importanceShare": 0.07749623184004167,
-          "associatedSalaryChangePctPerSD": 11.421339130499941,
-          "rawCoefficient": 0.07404649213016595,
+          "coefficient": -0.018226009625562478,
+          "ciLow": -0.3316191517290989,
+          "ciHigh": 0.24420291476281436,
+          "positiveShare": 0.492,
+          "importanceShare": 0.012722589439399527,
+          "associatedSalaryChangePctPerSD": -1.8060920406189256,
+          "rawCoefficient": -0.0124788588456436,
           "intervalCrossesZero": true
         },
         {
@@ -1534,13 +2077,13 @@
           "mean": 0.4960674157303371,
           "scale": 0.305081009604681,
           "median": 0.4,
-          "coefficient": 0.5334287801167792,
-          "ciLow": 0.2596518494078683,
-          "ciHigh": 0.806954420504378,
+          "coefficient": 0.448718493998033,
+          "ciLow": 0.15609204494876797,
+          "ciHigh": 0.7492658894628105,
           "positiveShare": 1.0,
-          "importanceShare": 0.38223972264993106,
-          "associatedSalaryChangePctPerSD": 70.47675721389919,
-          "rawCoefficient": 1.7484824139266733,
+          "importanceShare": 0.3132260593671475,
+          "associatedSalaryChangePctPerSD": 56.630367124790816,
+          "rawCoefficient": 1.4708175201710363,
           "intervalCrossesZero": false
         },
         {
@@ -1550,13 +2093,13 @@
           "mean": 0.5842696629213483,
           "scale": 0.45639005503854774,
           "median": 0.5,
-          "coefficient": 0.2717124755674563,
-          "ciLow": 0.11898145832325363,
-          "ciHigh": 0.43921411271929245,
-          "positiveShare": 1.0,
-          "importanceShare": 0.1947013456579782,
-          "associatedSalaryChangePctPerSD": 31.220965472917257,
-          "rawCoefficient": 0.5953514380248861,
+          "coefficient": 0.1568521998079358,
+          "ciLow": 0.019010596532165677,
+          "ciHigh": 0.29683736684620965,
+          "positiveShare": 0.986,
+          "importanceShare": 0.10949001903434706,
+          "associatedSalaryChangePctPerSD": 16.98227011030519,
+          "rawCoefficient": 0.34368014393891144,
           "intervalCrossesZero": false
         },
         {
@@ -1566,13 +2109,13 @@
           "mean": 0.5703033707865168,
           "scale": 0.09900770648638407,
           "median": 0.567,
-          "coefficient": -0.06163746229149608,
-          "ciLow": -0.24670574893400324,
-          "ciHigh": 0.09934833596376146,
-          "positiveShare": 0.264,
-          "importanceShare": 0.04416763281124274,
-          "associatedSalaryChangePctPerSD": -5.977630844731589,
-          "rawCoefficient": -0.6225521676938623,
+          "coefficient": -0.09242687319255655,
+          "ciLow": -0.28133926007126353,
+          "ciHigh": 0.06832313167860138,
+          "positiveShare": 0.162,
+          "importanceShare": 0.06451819048460801,
+          "associatedSalaryChangePctPerSD": -8.828412060163695,
+          "rawCoefficient": -0.9335321105056348,
           "intervalCrossesZero": true
         },
         {
@@ -1582,13 +2125,13 @@
           "mean": 0.31826966292134834,
           "scale": 0.14230180493023703,
           "median": 0.333,
-          "coefficient": 0.09735493358616953,
-          "ciLow": -0.028728971031144853,
-          "ciHigh": 0.21678315332493178,
-          "positiveShare": 0.942,
-          "importanceShare": 0.06976174552192925,
-          "associatedSalaryChangePctPerSD": 10.22515302880909,
-          "rawCoefficient": 0.6841440530841999,
+          "coefficient": 0.10334070025773529,
+          "ciLow": -0.022774759980414592,
+          "ciHigh": 0.22898826944487335,
+          "positiveShare": 0.948,
+          "importanceShare": 0.07213654161112842,
+          "associatedSalaryChangePctPerSD": 10.886913672707703,
+          "rawCoefficient": 0.7262079374776568,
           "intervalCrossesZero": true
         },
         {
@@ -1598,13 +2141,13 @@
           "mean": 0.7119662921348314,
           "scale": 0.15010063661081136,
           "median": 0.73,
-          "coefficient": 0.005336968285463767,
-          "ciLow": -0.24064060073413354,
-          "ciHigh": 0.19211636968657447,
-          "positiveShare": 0.508,
-          "importanceShare": 0.003824317984456234,
-          "associatedSalaryChangePctPerSD": 0.5351235270226795,
-          "rawCoefficient": 0.03555593371200505,
+          "coefficient": 0.01563976269426821,
+          "ciLow": -0.21048477367644286,
+          "ciHigh": 0.19507151658383362,
+          "positiveShare": 0.556,
+          "importanceShare": 0.010917270635572305,
+          "associatedSalaryChangePctPerSD": 1.5762703870246368,
+          "rawCoefficient": 0.10419517896396263,
           "intervalCrossesZero": true
         },
         {
@@ -1614,13 +2157,13 @@
           "mean": 1.799438202247191,
           "scale": 1.8125807906368017,
           "median": 1.3,
-          "coefficient": 0.13423130097316696,
-          "ciLow": -0.03198090485857934,
-          "ciHigh": 0.3225031448160346,
-          "positiveShare": 0.946,
-          "importanceShare": 0.0961862898430231,
-          "associatedSalaryChangePctPerSD": 14.36573181047392,
-          "rawCoefficient": 0.07405534785900958,
+          "coefficient": 0.1213835815214772,
+          "ciLow": -0.025017243700543867,
+          "ciHigh": 0.291534001986331,
+          "positiveShare": 0.952,
+          "importanceShare": 0.08473129906700452,
+          "associatedSalaryChangePctPerSD": 12.905791506901531,
+          "rawCoefficient": 0.0669672668652923,
           "intervalCrossesZero": true
         }
       ],
@@ -1631,13 +2174,13 @@
         "mean": 26.40449438202247,
         "scale": 4.59779893877811,
         "median": 25.0,
-        "coefficient": 0.3727196242491225,
-        "ciLow": 0.2490758050881985,
-        "ciHigh": 0.5002361986210423,
+        "coefficient": 0.3921142080946266,
+        "ciLow": 0.26865806952701726,
+        "ciHigh": 0.514502950253712,
         "positiveShare": 1.0,
         "importanceShare": null,
-        "associatedSalaryChangePctPerSD": 45.16772676649063,
-        "rawCoefficient": 0.0810647940921433,
+        "associatedSalaryChangePctPerSD": 48.01067419206167,
+        "rawCoefficient": 0.08528302636018117,
         "intervalCrossesZero": false
       },
       "metrics": {
@@ -1663,127 +2206,127 @@
           "heldoutPredictions": 534
         },
         "unadjustedRidge": {
-          "logR2": 0.265485784516458,
-          "logRMSE": 1.1910743808982667,
-          "logMAE": 0.8272554326970162,
-          "salaryMedianMAE": 4930035.1925064465,
-          "salaryMeanMAE": 4899754.252504898,
-          "spearman": 0.6229860916462452,
-          "medianMultiplicativeError": 1.907350382242867,
+          "logR2": 0.29897980114470957,
+          "logRMSE": 1.16360089486483,
+          "logMAE": 0.8097150806188932,
+          "salaryMedianMAE": 4707069.236379802,
+          "salaryMeanMAE": 4503068.70215042,
+          "spearman": 0.6435265617810827,
+          "medianMultiplicativeError": 1.9033388692249467,
           "repeatLogR2": [
-            0.28290848283064807,
-            0.2658807289503059,
-            0.2476681417684199
+            0.31260609120524796,
+            0.30081342748854867,
+            0.28351988474033163
           ],
           "repeatLogRMSE": [
-            1.1768634449185427,
-            1.1907541206241106,
-            1.2054341951047054
+            1.1522364786135442,
+            1.1620781097285193,
+            1.1763616331012972
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
         },
         "ageAdjustedRidge": {
-          "logR2": 0.3742654684763971,
-          "logRMSE": 1.0993445859360276,
-          "logMAE": 0.7398959917332301,
-          "salaryMedianMAE": 4332307.204002305,
-          "salaryMeanMAE": 4430323.8966836035,
-          "spearman": 0.7099885346817149,
-          "medianMultiplicativeError": 1.7815520129394427,
+          "logR2": 0.3995341865351849,
+          "logRMSE": 1.0769187142549734,
+          "logMAE": 0.7170468552955844,
+          "salaryMedianMAE": 4056522.5443392266,
+          "salaryMeanMAE": 4195436.754449884,
+          "spearman": 0.7280200555860755,
+          "medianMultiplicativeError": 1.7268009729331566,
           "repeatLogR2": [
-            0.38126222577422964,
-            0.3684895614718158,
-            0.3730446181831455
+            0.40278253148714394,
+            0.40790730899881866,
+            0.3879127191195919
           ],
           "repeatLogRMSE": [
-            1.0931810534381585,
-            1.1044067377731157,
-            1.1004165110746704
+            1.0740018559626177,
+            1.069383873896011,
+            1.0872901613542578
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
         },
         "deployedRidge": {
-          "logR2": 0.2771183887362817,
-          "logRMSE": 1.1816051341624723,
-          "logMAE": 0.8291134192516363,
-          "salaryMedianMAE": 4846087.713819422,
-          "salaryMeanMAE": 5068345.6734788455,
-          "spearman": 0.618636749772717,
-          "medianMultiplicativeError": 1.947383178792919,
+          "logR2": 0.2973611838667922,
+          "logRMSE": 1.1649434657268254,
+          "logMAE": 0.8155509310883005,
+          "salaryMedianMAE": 4659840.2388556665,
+          "salaryMeanMAE": 4804162.05474196,
+          "spearman": 0.6327461902548237,
+          "medianMultiplicativeError": 1.9162577970144379,
           "repeatLogR2": [
-            0.2831686717948627,
-            0.2801687546765971,
-            0.2680177397373855
+            0.2962595013412108,
+            0.32093569572439096,
+            0.27488835453477467
           ],
           "repeatLogRMSE": [
-            1.176649919409989,
-            1.1791094707182477,
-            1.189019723323521
+            1.1658563779921605,
+            1.145233996558944,
+            1.1834263111996082
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
         },
         "noHeightRidge": {
-          "logR2": 0.27448485965977076,
-          "logRMSE": 1.1837555294963968,
-          "logMAE": 0.827270750613795,
-          "salaryMedianMAE": 4870349.829408942,
-          "salaryMeanMAE": 5011561.8527262295,
-          "spearman": 0.6170214555810288,
-          "medianMultiplicativeError": 1.9572632031309163,
+          "logR2": 0.29845273157156105,
+          "logRMSE": 1.1640382455948788,
+          "logMAE": 0.8178841990486136,
+          "salaryMedianMAE": 4683664.613874946,
+          "salaryMeanMAE": 4830221.064322984,
+          "spearman": 0.6327343678571681,
+          "medianMultiplicativeError": 1.9171131481637331,
           "repeatLogR2": [
-            0.27110344371411843,
-            0.28482419839145645,
-            0.2675269368737375
+            0.2924493032956782,
+            0.31247322796701005,
+            0.2904356634519947
           ],
           "repeatLogRMSE": [
-            1.1865108935820288,
-            1.1752903936918908,
-            1.1894182825005757
+            1.1690082125461452,
+            1.152347828504058,
+            1.1706704885510946
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
         },
         "noHeightAgeAdjustedRidge": {
-          "logR2": 0.3687071084887028,
-          "logRMSE": 1.1042164946102384,
-          "logMAE": 0.7410760462486453,
-          "salaryMedianMAE": 4367344.631710693,
-          "salaryMeanMAE": 4424619.136682835,
-          "spearman": 0.7058484492466912,
-          "medianMultiplicativeError": 1.7752220299910408,
+          "logR2": 0.3969882740929196,
+          "logRMSE": 1.0791993109712563,
+          "logMAE": 0.7215701122087425,
+          "salaryMedianMAE": 4109031.4596175146,
+          "salaryMeanMAE": 4227442.918552449,
+          "spearman": 0.7236992056908973,
+          "medianMultiplicativeError": 1.755091538907942,
           "repeatLogR2": [
-            0.36654820993378945,
-            0.37604231529181187,
-            0.3635308002405069
+            0.39802085148488286,
+            0.3966841010744875,
+            0.3962598697193884
           ],
           "repeatLogRMSE": [
-            1.1061029856456956,
-            1.097782617158344,
-            1.1087342835497704
+            1.0782749224246704,
+            1.0794714631636169,
+            1.0798509203996516
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
         },
         "portableTree": {
-          "logR2": 0.1374761450991291,
-          "logRMSE": 1.2906971121082276,
-          "logMAE": 0.9325350064872748,
-          "salaryMedianMAE": 5485150.176415975,
-          "salaryMeanMAE": 6089831.434045966,
-          "spearman": 0.5030077844591986,
-          "medianMultiplicativeError": 2.098342462739262,
+          "logR2": 0.14981823079178147,
+          "logRMSE": 1.2814293730454411,
+          "logMAE": 0.9030785949243544,
+          "salaryMedianMAE": 5191031.470745367,
+          "salaryMeanMAE": 5706148.706365162,
+          "spearman": 0.5228805153350635,
+          "medianMultiplicativeError": 1.945610577244672,
           "repeatLogR2": [
-            0.12167558490250563,
-            0.20633607648989427,
-            0.08441677390498747
+            0.08695700760592029,
+            0.21628951079046232,
+            0.1462081739789618
           ],
           "repeatLogRMSE": [
-            1.3024655895679351,
-            1.238103925418472,
-            1.3298041823773818
+            1.327958167954042,
+            1.230315825713436,
+            1.2841471050756252
           ],
           "uniquePlayers": 178,
           "heldoutPredictions": 534
@@ -1811,9 +2354,25 @@
         }
       },
       "selection": {
+        "policyId": "position-x-only-vif5-v1",
         "threshold": 5.0,
+        "candidateKeys": [
+          "Height",
+          "MP",
+          "PPG",
+          "RPG",
+          "APG",
+          "SPG",
+          "BPG",
+          "TOPG",
+          "eFG%",
+          "3P%",
+          "FT%",
+          "3PA/G"
+        ],
         "retainedKeys": [
           "Height",
+          "RPG",
           "APG",
           "SPG",
           "BPG",
@@ -1825,9 +2384,77 @@
         "excludedKeys": [
           "MP",
           "PPG",
-          "RPG",
           "TOPG"
         ],
+        "protectedKeys": [
+          "Height",
+          "Age"
+        ],
+        "perGroupBeforeVifs": {
+          "Bigs": {
+            "Height": 1.5824855973363567,
+            "MP": 12.371395542788473,
+            "PPG": 7.083569854732149,
+            "RPG": 5.997497100619124,
+            "APG": 5.306559041117787,
+            "SPG": 2.3456572872913273,
+            "BPG": 2.044904351914611,
+            "TOPG": 7.596367972626238,
+            "eFG%": 1.4781883068166741,
+            "3P%": 1.318277415824482,
+            "FT%": 1.1865966401192747,
+            "3PA/G": 3.1634024777523573,
+            "Age": 1.0928079453161499
+          }
+        },
+        "perGroupAfterVifs": {
+          "Bigs": {
+            "Height": 1.4306337368902484,
+            "RPG": 3.1759869043834126,
+            "APG": 2.328262383740894,
+            "SPG": 1.7948441402553297,
+            "BPG": 1.7720186845859325,
+            "eFG%": 1.40737169235089,
+            "3P%": 1.2913377297613198,
+            "FT%": 1.1409382545415612,
+            "3PA/G": 1.4636761432634975,
+            "Age": 1.0651224340624192
+          }
+        },
+        "trace": [
+          {
+            "step": 1,
+            "excludedKey": "MP",
+            "worstGroupVif": 12.371395542788473,
+            "maximumVifBefore": 12.371395542788473,
+            "groupVifsBefore": {
+              "Bigs": 12.371395542788473
+            }
+          },
+          {
+            "step": 2,
+            "excludedKey": "TOPG",
+            "worstGroupVif": 7.5474304136104164,
+            "maximumVifBefore": 7.5474304136104164,
+            "groupVifsBefore": {
+              "Bigs": 7.5474304136104164
+            }
+          },
+          {
+            "step": 3,
+            "excludedKey": "PPG",
+            "worstGroupVif": 5.004562979764268,
+            "maximumVifBefore": 5.004562979764268,
+            "groupVifsBefore": {
+              "Bigs": 5.004562979764268
+            }
+          }
+        ],
+        "selectionN": 178,
+        "rankingPolicy": "Repeatedly remove the unprotected basketball input with the highest VIF in this position only; candidate order breaks exact ties. Recompute after each removal.",
+        "interpretation": "VIF <=5 is a heuristic for limiting redundant linear information, not proof of zero correlation, causality, or independent confirmation.",
+        "scope": "single-position",
+        "group": "Bigs",
         "beforeVifs": {
           "Height": 1.5824855973363567,
           "MP": 12.371395542788473,
@@ -1844,121 +2471,118 @@
           "Age": 1.0928079453161499
         },
         "afterVifs": {
-          "Height": 1.3149149814283154,
-          "APG": 1.7658330262945943,
-          "SPG": 1.6084733744455273,
-          "BPG": 1.3628954988041764,
-          "eFG%": 1.3821941965751265,
-          "3P%": 1.289384804068312,
-          "FT%": 1.1376202590610283,
-          "3PA/G": 1.4616715636804696,
-          "Age": 1.0510312077148458
+          "Height": 1.4306337368902484,
+          "RPG": 3.1759869043834126,
+          "APG": 2.328262383740894,
+          "SPG": 1.7948441402553297,
+          "BPG": 1.7720186845859325,
+          "eFG%": 1.40737169235089,
+          "3P%": 1.2913377297613198,
+          "FT%": 1.1409382545415612,
+          "3PA/G": 1.4636761432634975,
+          "Age": 1.0651224340624192
         },
         "modelN": 178
       },
       "excludedFeatures": [
         {
           "key": "MP",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "PPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
-        },
-        {
-          "key": "RPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         },
         {
           "key": "TOPG",
-          "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"
+          "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"
         }
       ],
       "refinementComparison": {
         "reference": "fullReferenceRidge",
         "sameFolds": true,
-        "logR2Change": -0.03813787549089409,
-        "logRMSEImprovement": -0.03159196223680527
+        "logR2Change": -0.017895080360383564,
+        "logRMSEImprovement": -0.0149302938011584
       },
       "treePermutationImportance": [
         {
           "key": "Height",
-          "meanIncreaseInHeldoutLogMSE": -0.005805734450111532,
-          "foldSD": 0.022485512837784636,
-          "positiveFoldShare": 0.0,
+          "meanIncreaseInHeldoutLogMSE": 0.01932337602170966,
+          "foldSD": 0.06479528228204778,
+          "positiveFoldShare": 0.26666666666666666,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
-          "key": "RPG",
-          "meanIncreaseInHeldoutLogMSE": 0.583006391180114,
-          "foldSD": 0.6664427562333007,
+          "key": "PPG",
+          "meanIncreaseInHeldoutLogMSE": 0.232167215674484,
+          "foldSD": 0.1791513303403049,
           "positiveFoldShare": 0.75,
           "selectedOuterFolds": 4,
           "totalOuterFolds": 15
         },
         {
-          "key": "SPG",
-          "meanIncreaseInHeldoutLogMSE": 0.2964228805469126,
-          "foldSD": 0.2509601902849112,
-          "positiveFoldShare": 0.8666666666666667,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "BPG",
-          "meanIncreaseInHeldoutLogMSE": 0.04427959140456574,
-          "foldSD": 0.07121102912871391,
-          "positiveFoldShare": 0.4,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "TOPG",
-          "meanIncreaseInHeldoutLogMSE": 0.1864394226411602,
-          "foldSD": 0.4098991919259393,
-          "positiveFoldShare": 0.5,
-          "selectedOuterFolds": 6,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "eFG%",
-          "meanIncreaseInHeldoutLogMSE": -0.0018697078571454937,
-          "foldSD": 0.0547064286652874,
-          "positiveFoldShare": 0.13333333333333333,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "3P%",
-          "meanIncreaseInHeldoutLogMSE": -0.012984009168381572,
-          "foldSD": 0.09361178303679768,
-          "positiveFoldShare": 0.13333333333333333,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "FT%",
-          "meanIncreaseInHeldoutLogMSE": 0.0006325981367155046,
-          "foldSD": 0.10247705902578963,
-          "positiveFoldShare": 0.3333333333333333,
-          "selectedOuterFolds": 15,
-          "totalOuterFolds": 15
-        },
-        {
-          "key": "3PA/G",
-          "meanIncreaseInHeldoutLogMSE": 0.09656922039728359,
-          "foldSD": 0.13926761550039365,
-          "positiveFoldShare": 0.5333333333333333,
+          "key": "RPG",
+          "meanIncreaseInHeldoutLogMSE": 0.4671174677831978,
+          "foldSD": 0.47158916872815615,
+          "positiveFoldShare": 0.7333333333333333,
           "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         },
         {
           "key": "APG",
-          "meanIncreaseInHeldoutLogMSE": 0.38156253287389,
-          "foldSD": 0.33846548696458034,
-          "positiveFoldShare": 0.7777777777777778,
-          "selectedOuterFolds": 9,
+          "meanIncreaseInHeldoutLogMSE": 0.16524953712970142,
+          "foldSD": 0.24437371553328818,
+          "positiveFoldShare": 0.4666666666666667,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "SPG",
+          "meanIncreaseInHeldoutLogMSE": 0.11193781689823427,
+          "foldSD": 0.18678811618020902,
+          "positiveFoldShare": 0.6,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "BPG",
+          "meanIncreaseInHeldoutLogMSE": 0.002308715972277014,
+          "foldSD": 0.01645069341783315,
+          "positiveFoldShare": 0.13333333333333333,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "eFG%",
+          "meanIncreaseInHeldoutLogMSE": -0.022349134100970336,
+          "foldSD": 0.05359865870751078,
+          "positiveFoldShare": 0.0,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "3P%",
+          "meanIncreaseInHeldoutLogMSE": 0.0,
+          "foldSD": 0.0,
+          "positiveFoldShare": 0.0,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "FT%",
+          "meanIncreaseInHeldoutLogMSE": -0.019717141023798297,
+          "foldSD": 0.050242473701709346,
+          "positiveFoldShare": 0.2,
+          "selectedOuterFolds": 15,
+          "totalOuterFolds": 15
+        },
+        {
+          "key": "3PA/G",
+          "meanIncreaseInHeldoutLogMSE": 0.034236851843749104,
+          "foldSD": 0.077993971056717,
+          "positiveFoldShare": 0.2,
+          "selectedOuterFolds": 15,
           "totalOuterFolds": 15
         }
       ],
@@ -1968,27 +2592,29 @@
           "n": 149,
           "available": true,
           "vifs": {
-            "Height": 1.4807802892137951,
-            "APG": 1.999233804977189,
-            "SPG": 1.9699748023490087,
-            "BPG": 1.4882033180089502,
-            "eFG%": 1.6807416780815359,
-            "3P%": 1.2430384712077,
-            "FT%": 1.2734044278427974,
-            "3PA/G": 1.73627154821699,
-            "Age": 1.1416274510824702
+            "Height": 1.6318039999422862,
+            "RPG": 3.03506742331088,
+            "APG": 2.4574464504697007,
+            "SPG": 2.198894207487965,
+            "BPG": 1.7771330703676018,
+            "eFG%": 1.7243216075360979,
+            "3P%": 1.2432806703061197,
+            "FT%": 1.3009981685736514,
+            "3PA/G": 1.7563434733579686,
+            "Age": 1.1660131305507557
           },
           "alpha": 10.0,
           "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.09448363581280135,
-            "APG": 0.2799813620255097,
-            "SPG": 0.31065274711316154,
-            "BPG": 0.2367145420838855,
-            "eFG%": 0.11886960822686257,
-            "3P%": -0.00903141392094645,
-            "FT%": -0.006524720380381144,
-            "3PA/G": 0.2353893141937459,
-            "Age": 0.32896954239701565
+            "Height": 0.013637692060130343,
+            "RPG": 0.3813625626396057,
+            "APG": 0.14257170334268038,
+            "SPG": 0.20254365195090562,
+            "BPG": 0.12592924114451273,
+            "eFG%": 0.05368533744752976,
+            "3P%": -0.006406038392483546,
+            "FT%": 0.03682074739500991,
+            "3PA/G": 0.20711103465739392,
+            "Age": 0.3600496445265894
           }
         },
         {
@@ -1996,27 +2622,29 @@
           "n": 142,
           "available": true,
           "vifs": {
-            "Height": 1.2942422543093859,
-            "APG": 1.8107805940007082,
-            "SPG": 1.6041093158176623,
-            "BPG": 1.335108419835145,
-            "eFG%": 1.371403430482558,
-            "3P%": 1.279157435204443,
-            "FT%": 1.1283726452234066,
-            "3PA/G": 1.4367889382725392,
-            "Age": 1.0685863531980502
+            "Height": 1.4409887762388665,
+            "RPG": 3.429728753219148,
+            "APG": 2.431873422425565,
+            "SPG": 1.8068124724522032,
+            "BPG": 1.7868367334474062,
+            "eFG%": 1.378028285269135,
+            "3P%": 1.281955059827446,
+            "FT%": 1.1360598560568582,
+            "3PA/G": 1.4377285203945203,
+            "Age": 1.1104001431493284
           },
           "alpha": 30.0,
           "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.22613631999005437,
-            "APG": 0.07730136747790708,
-            "SPG": 0.5444230277282417,
-            "BPG": 0.3065219939229928,
-            "eFG%": -0.05265065554659762,
-            "3P%": 0.07924146815846415,
-            "FT%": 0.006892817645567575,
-            "3PA/G": 0.13032084283861378,
-            "Age": 0.45722761591749345
+            "Height": 0.15965351514650908,
+            "RPG": 0.3557262526370319,
+            "APG": -0.04772295965091689,
+            "SPG": 0.4595917627590003,
+            "BPG": 0.18531224478967986,
+            "eFG%": -0.07213361921711758,
+            "3P%": 0.08696828558669749,
+            "FT%": 0.02006445030663394,
+            "3PA/G": 0.11828537568802112,
+            "Age": 0.49253689856231264
           }
         },
         {
@@ -2024,36 +2652,38 @@
           "n": 155,
           "available": true,
           "vifs": {
-            "Height": 1.4092524227942846,
-            "APG": 1.882885981913061,
-            "SPG": 1.8123852672045329,
-            "BPG": 1.500765480229004,
-            "eFG%": 1.442415296322727,
-            "3P%": 1.1860804183957303,
-            "FT%": 1.2522023081349047,
-            "3PA/G": 1.604845241089705,
-            "Age": 1.0802496145596991
+            "Height": 1.5425539837518272,
+            "RPG": 3.1034917222248364,
+            "APG": 2.3786596348036713,
+            "SPG": 1.9976145399483376,
+            "BPG": 1.8135369588597003,
+            "eFG%": 1.5138606523868623,
+            "3P%": 1.187916861304476,
+            "FT%": 1.2637213013456434,
+            "3PA/G": 1.623014077320257,
+            "Age": 1.1136178946306647
           },
           "alpha": 10.0,
           "coefficientsOnPrimaryTrainingSD": {
-            "Height": 0.13296586321362258,
-            "APG": 0.2580822401735589,
-            "SPG": 0.31192885047485236,
-            "BPG": 0.20517960524483306,
-            "eFG%": 0.07261992708905411,
-            "3P%": -0.021479073090496303,
-            "FT%": 0.023998948443941223,
-            "3PA/G": 0.20941594923338377,
-            "Age": 0.26845111896275226
+            "Height": 0.0649147343921629,
+            "RPG": 0.33268484962163963,
+            "APG": 0.13263173712763607,
+            "SPG": 0.22845742769499017,
+            "BPG": 0.10447934979347759,
+            "eFG%": 0.010623916838912176,
+            "3P%": -0.013805338757326343,
+            "FT%": 0.04757053792278039,
+            "3PA/G": 0.18467729745222083,
+            "Age": 0.29922446251009244
           }
         }
       ],
       "heightAblation": {
         "method": "Conditional ablation within each selected fold mask; other predictors not rescreened",
-        "logRMSEImprovement": 0.002150395333924582,
-        "logR2Improvement": 0.002633529076510932,
-        "ageAdjustedLogRMSEImprovement": 0.004871908674210834,
-        "ageAdjustedLogR2Improvement": 0.005558359987694272
+        "logRMSEImprovement": -0.0009052201319466047,
+        "logR2Improvement": -0.001091547704768825,
+        "ageAdjustedLogRMSEImprovement": 0.00228059671628289,
+        "ageAdjustedLogR2Improvement": 0.002545912442265319
       }
     }
   }

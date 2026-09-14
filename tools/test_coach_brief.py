@@ -47,7 +47,7 @@ class CoachBriefTests(unittest.TestCase):
     def test_all_retained_coefficients_and_ols_uncertainty_are_printed(self):
         evidence, model, facts = brief.read_facts()
         text = " ".join(PdfReader(brief.OUTPUT).pages[0].extract_text().split())
-        for phrase in ["NBA coefficients by position", "Intervals and p-values apply only to OLS beta", "not validate NCAA or WBB pay", "not verified 2022-23 measurements"]:
+        for phrase in ["NBA coefficients by position", "Intervals and p-values apply only to OLS beta", "not validate NCAA or WBB pay", "not verified 2022-23 measurements", "inputs selected independently within each position", "different adjustment sets", "Separate common-input tests"]:
             self.assertIn(phrase, text)
         for row in facts["rows"]:
             self.assertIn(row["label"], text)
@@ -56,6 +56,8 @@ class CoachBriefTests(unittest.TestCase):
                 raw_weight = next((x["coefficient"] for x in model["groups"][group]["features"] if x["key"] == row["key"]), None)
                 self.assertEqual(cell["weight"], raw_weight)
                 self.assertIn("Weight " + brief.signed(cell["weight"]), text)
+                self.assertEqual(facts["selectionByGroup"][group]["ridge"]["retained"], [f["key"] for f in model["groups"][group]["features"]])
+                self.assertEqual(facts["selectionByGroup"][group]["ols"]["retained"], [f["key"] for f in evidence["groups"][group]["estimates"]])
                 e = next((x for x in evidence["groups"][group]["estimates"] if x["key"] == row["key"]), None)
                 if e:
                     self.assertEqual(cell["beta"], e["coefficientRaw"] * e["increment"])

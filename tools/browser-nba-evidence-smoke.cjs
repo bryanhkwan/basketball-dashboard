@@ -8,6 +8,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const base = process.argv[2] || 'http://127.0.0.1:8766/';
 const groups = ['Guards', 'Wings', 'Bigs'];
+const shortLabels = {Height:'height',MP:'minutes/game',PPG:'points/game',RPG:'rebounds/game',APG:'assists/game',SPG:'steals/game',BPG:'blocks/game',TOPG:'turnovers/game','eFG%':'effective FG%','3P%':'three-point %','FT%':'free-throw %','3PA/G':'three-point attempts/game'};
+const inputNames = values => values.map(key=>shortLabels[key]||key).join(', ') || 'None';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function csvRecords(text) {
   text = text.replace(/^\ufeff/, '');
@@ -38,7 +40,7 @@ function csvRecords(text) {
   async function evaluate(expression) { const r = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; }
   async function waitFor(expression, label) { const start = Date.now(); while (Date.now() - start < 90000) { if (await evaluate(expression)) return; await delay(500); } throw new Error('Timed out: ' + label); }
   async function screenshot(file) { await delay(250); const r = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); const target = path.resolve(__dirname, '..', file); fs.writeFileSync(target, Buffer.from(r.data, 'base64')); return target; }
-  let initialization, csvRows = 0, checksSummary, mobile, keyboard, model, downloaded, coach, matrix, matrixCsvRows = 0, pdf, profileShortcut, evidenceGroups = [], screenshots = [];
+  let initialization, csvRows = 0, checksSummary, mobile, keyboard, model, downloaded, coach, positionNotes, matrix, matrixCsvRows = 0, pdf, profileShortcut, evidenceGroups = [], screenshots = [];
   try {
     await call('Runtime.enable'); await call('Page.enable');
     await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1300, deviceScaleFactor: 1, mobile: false });
@@ -47,6 +49,7 @@ function csvRecords(text) {
     await waitFor('document.readyState!=="loading" && typeof NBA_SALARY_EVIDENCE!=="undefined" && typeof NbaValuationUI!=="undefined" && typeof refreshGuestDemoUI==="function" && typeof showDashboardPage==="function"', 'salary evidence assets and dashboard navigation');
     const expected = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
     const expectedPrediction = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/nba-valuation-model.json'), 'utf8'));
+    assert.equal(expected.selection.scope,'independent-position'); assert.equal(expectedPrediction.selection.scope,'independent-position');
     model = await evaluate('({id:NBA_SALARY_EVIDENCE.id,generatedAt:NBA_SALARY_EVIDENCE.generatedAt})');
     assert.deepEqual(model, { id: expected.id, generatedAt: expected.generatedAt }, 'Stale evidence asset');
     assert.deepEqual(await evaluate('({id:NbaValuation.getModel().id,generatedAt:NbaValuation.getModel().generatedAt})'), {id:expectedPrediction.id,generatedAt:expectedPrediction.generatedAt}, 'Stale prediction asset');
@@ -58,7 +61,15 @@ function csvRecords(text) {
     const luminance = color => color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
     const fg = luminance(ctaColors.foreground), bg = luminance(ctaColors.background); coach.pdfContrast = (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05); assert.ok(coach.pdfContrast >= 4.5, 'PDF CTA text contrast');
     assert.match(coach.text, /Coefficients by position/); assert.match(coach.text, /OLS/); assert.match(coach.text, /ridge/i); assert.match(coach.text, /p-values/); assert.equal(coach.download, true);
-    assert.match(coach.pdf, /coefficients-table-20260914/);
+    assert.match(coach.pdf, /position-models-20260914/);
+    positionNotes = await evaluate(`Array.from(document.querySelectorAll('.nbaCoachSummary [data-nba-selection-group]')).map(el=>({group:el.getAttribute('data-nba-selection-group'),models:Object.fromEntries(Array.from(el.querySelectorAll('[data-nba-selection-model]')).map(note=>[note.getAttribute('data-nba-selection-model'),note.textContent]))}))`);
+    assert.deepEqual(positionNotes.map(note=>note.group),groups);
+    for(const note of positionNotes) for(const kind of ['ridge','ols']) {
+      const source=kind==='ridge'?expectedPrediction:expected,group=source.groups[note.group],features=kind==='ridge'?group.features:group.estimates;
+      assert.deepEqual([...group.selection.retainedKeys].sort(),features.map(item=>item.key).sort());
+      assert.equal(note.models[kind],(kind==='ridge'?'Prediction':'OLS')+': '+features.length+' inputs. Excluded: '+inputNames(group.selection.excludedKeys)+'.');
+    }
+    assert.match(coach.text,/Guards are fitted on guards, wings on wings, and bigs on bigs/); assert.match(coach.text,/different input sets mean coefficient differences alone do not establish/);
     matrix = await evaluate(`(()=>{var p=document.querySelector('[aria-label="Cross-position coefficient table"]');return {headings:Array.from(p.querySelectorAll('thead th')).map(th=>th.textContent),rows:Array.from(p.querySelectorAll('[data-nba-coefficient-key]')).map(r=>({key:r.getAttribute('data-nba-coefficient-key'),label:r.querySelector('th').textContent,cells:Array.from(r.querySelectorAll('[data-nba-coefficient-group]')).map(c=>({group:c.getAttribute('data-nba-coefficient-group'),text:c.textContent,values:Object.fromEntries(Array.from(c.querySelectorAll('[data-nba-value]')).map(v=>[v.getAttribute('data-nba-value'),{text:v.textContent,title:v.getAttribute('title')||v.querySelector('[title]')?.title}]))}))})),accessible:p.tabIndex===0&&p.getAttribute('role')==='region'};})()`);
     const matrixKeys = [...new Set(groups.flatMap(group=>[...expectedPrediction.groups[group].features.map(item=>item.key),...expected.groups[group].estimates.map(item=>item.key)]))];
     assert.equal(matrix.rows.length, matrixKeys.length); assert.equal(matrix.headings.length, groups.length + 1); assert.equal(matrix.accessible, true);
@@ -91,7 +102,7 @@ function csvRecords(text) {
     assert.equal(matrixCsvRows,matrixKeys.length); assert.ok(tableRecords.every(row=>row.length===2+groups.length*6));
     matrix.rows.forEach((matrixRow,index)=>{
       const source=groups.flatMap(group=>expected.groups[group].estimates).find(item=>item.key===matrixRow.key)||groups.flatMap(group=>expectedPrediction.groups[group].features).find(item=>item.key===matrixRow.key);
-      const row=tableRecords[index+1]; assert.equal(row[0],source.label||source.key); assert.equal(row[1],/^[=+\-@]/.test(source.incrementLabel)?"'"+source.incrementLabel:source.incrementLabel||'');
+      const row=tableRecords[index+1]; assert.equal(row[0],source.label||source.key); assert.equal(row[1],/^[=+\-@]/.test(source.incrementLabel)?"'"+source.incrementLabel:source.incrementLabel||'Not retained in OLS');
       groups.forEach((group,groupIndex)=>{const e=expected.groups[group].estimates.find(item=>item.key===source.key),r=expectedPrediction.groups[group].features.find(item=>item.key===source.key),values=row.slice(2+groupIndex*6,8+groupIndex*6),sourceValues=[r&&r.coefficient,e&&e.logEffect,e&&e.logEffectCiLow,e&&e.logEffectCiHigh,e&&e.pRaw,e&&e.pHolm].map(value=>value===undefined||value===null?'':String(value));assert.deepEqual(values,sourceValues);});
     });
     assert.doesNotMatch(matrixCsv,/Descriptive sensitivity|Pairwise|Player|salary records/);
@@ -115,15 +126,21 @@ function csvRecords(text) {
         assert.notEqual(state.rows[i][3], '0.000'); assert.notEqual(state.rows[i][4], '0.000');
         assert.ok(state.rows[i][5].includes(estimate.nObserved + ' / ' + estimate.n));
       });
+      const selectionAudit = await evaluate('document.querySelector(".nbaSelectionAudit").textContent');
+      assert.ok(selectionAudit.includes('Ridge retained · '+group+': '+inputNames(expectedPrediction.groups[group].features.map(item=>item.key))));
+      assert.ok(selectionAudit.includes('OLS retained · '+group+': '+inputNames(expected.groups[group].estimates.map(item=>item.key))));
+      assert.doesNotMatch(selectionAudit,/same retained inputs are used across positions/);
       evidenceGroups.push({ group, n: expected.groups[group].n, rows: state.rows.length, chartIntervals: state.marks, supported: state.supported, sensitivityChecks: state.sensitivityRows });
     }
     const comparisonKey = expected.comparisons.pairwise[0]?.key || expected.comparisons.omnibus[0]?.key;
     assert.ok(comparisonKey, 'At least one directly estimated position comparison');
     await evaluate('document.querySelector(".nbaEvidenceComparisons").open=true;document.getElementById("nbaEvidenceComparisonStat").value='+JSON.stringify(comparisonKey)+';document.getElementById("nbaEvidenceComparisonStat").dispatchEvent(new Event("change",{bubbles:true}));');
-    const comparison = await evaluate(`({open:document.querySelector('.nbaEvidenceComparisons').open,focused:document.activeElement.id,overall:document.querySelectorAll('[aria-label="Direct overall position comparisons"] tbody tr').length,pairs:Array.from(document.querySelectorAll('[aria-label="Direct pairwise position comparisons"] tbody tr')).map(r=>r.textContent),caption:document.querySelector('[aria-label="Direct pairwise position comparisons"] caption').textContent})`);
+    const comparison = await evaluate(`({open:document.querySelector('.nbaEvidenceComparisons').open,specification:document.querySelector('.nbaEvidenceComparisons').getAttribute('data-nba-comparison-specification'),description:document.querySelector('.nbaEvidenceComparisons').querySelector('p').textContent,focused:document.activeElement.id,overall:document.querySelectorAll('[aria-label="Direct overall position comparisons"] tbody tr').length,pairs:Array.from(document.querySelectorAll('[aria-label="Direct pairwise position comparisons"] tbody tr')).map(r=>r.textContent),pTitles:Array.from(document.querySelectorAll('[aria-label="Direct pairwise position comparisons"] tbody tr')).map(r=>[r.cells[3].querySelector('[title]').title,r.cells[4].querySelector('[title]').title]),caption:document.querySelector('[aria-label="Direct pairwise position comparisons"] caption').textContent})`);
     const expectedPairs = expected.comparisons.pairwise.filter(item=>item.key===comparisonKey);
     assert.equal(comparison.open, true); assert.equal(comparison.focused, 'nbaEvidenceComparisonStat'); assert.equal(comparison.overall, expected.comparisons.omnibus.length); assert.equal(comparison.pairs.length, expectedPairs.length);
-    comparison.pairs.forEach((text,index)=>assert.ok(text.includes(expectedPairs[index].incrementLabel))); assert.match(comparison.caption, /not a difference in salary levels/);
+    assert.equal(expected.comparisons.primaryCoefficientsComparable,false); assert.equal(comparison.specification,'separate-common-covariate-model');
+    assert.match(comparison.description,/Separate common-input comparison model/); assert.match(comparison.description,/primary position regressions use different retained inputs/); assert.ok(comparison.description.includes('same inputs: '+inputNames(expected.comparisons.selection.retainedKeys)));
+    comparison.pairs.forEach((text,index)=>{const item=expectedPairs[index];assert.ok(text.includes(item.incrementLabel));assert.deepEqual(comparison.pTitles[index],['Unrounded p-value: '+item.pRaw,'Unrounded p-value: '+item.pHolm]);}); assert.match(comparison.caption, /not a difference in salary levels/);
     await evaluate('document.querySelector(".nbaEvidenceComparisons").scrollIntoView({block:"start"});');
     screenshots.push(await screenshot('tmp_nba_evidence_comparisons.png'));
     await evaluate('document.querySelector(".nbaEvidenceRobustness").open=true;document.querySelector("[data-nba-evidence-download]").click();document.querySelector("[data-nba-checks-download]").click();');
@@ -133,7 +150,12 @@ function csvRecords(text) {
     const sensitivityCount = groups.reduce((sum, g) => sum + expected.groups[g].sensitivities.filter(s => s.available).reduce((n, s) => n + s.estimates.length, 0), 0);
     assert.equal(csvRows, 1 + groups.reduce((n,g)=>n+expected.groups[g].estimates.length,0) + expected.comparisons.omnibus.length + expected.comparisons.pairwise.length + sensitivityCount);
     assert.ok(downloaded[0].includes('Coefficient per raw unit')); assert.ok(downloaded[0].includes('Descriptive sensitivity:'));
+    const evidenceRecords=csvRecords(downloaded[0]),evidenceHeader=evidenceRecords[0];
+    const exportedComparisons=evidenceRecords.slice(1).filter(row=>/position comparison/.test(row[evidenceHeader.indexOf('Family')]));
+    assert.equal(exportedComparisons.length,expected.comparisons.omnibus.length+expected.comparisons.pairwise.length);
+    exportedComparisons.forEach(row=>assert.match(row[evidenceHeader.indexOf('Interpretation')],/Separate common-input comparison model; not a contrast of primary coefficients/));
     const checks = JSON.parse(downloaded[1]); assert.equal(checks.id, expected.id); assert.ok(!downloaded[1].includes('"salary":')); assert.ok(!downloaded[1].includes('topInfluence'));
+    assert.deepEqual(checks.comparisonModel,{specification:expected.comparisons.specification,primaryCoefficientsComparable:false,selection:expected.comparisons.selection,groups:expected.comparisons.groups});
     checksSummary = groups.map(group => { const item=checks.groups[group], complete=item.sensitivities.find(s=>s.id==='fullComplete'); const expectedComplete=expected.groups[group].sensitivities.find(s=>s.id==='fullComplete'); assert.equal(complete.excluded.length,(expectedComplete.excluded||[]).length); return {group, sensitivities:item.sensitivities.length,completeCaseExclusions:complete.excluded.length,primaryExclusions:item.excluded.length}; });
     await evaluate('document.querySelector(".nbaEvidenceRobustness").open=true;document.querySelector(".nbaEvidenceRobustness").scrollIntoView({block:"start"});');
     screenshots.push(await screenshot('tmp_nba_evidence_checks.png'));
@@ -166,6 +188,8 @@ function csvRecords(text) {
     assert.deepEqual(profileShortcut, {page:'pagePlayers',profileClosed:true,profileCleared:true,group:'Wings',open:true,detailsOpen:false,focused:true,coach:true});
     assert.equal(await evaluate('__nbaEvidenceBasisChanges'), 0);
     screenshots.push(await screenshot('tmp_nba_evidence.png'));
+    await evaluate('document.querySelector(".nbaCoachSummary .nbaSelectionNote").scrollIntoView({block:"end"});');
+    screenshots.push(await screenshot('tmp_nba_position_selection.png'));
     await call('Emulation.setDeviceMetricsOverride', { width: 375, height: 844, deviceScaleFactor: 1, mobile: true });
     await evaluate('document.getElementById("nbaValuationPanel").scrollIntoView({block:"start"});');
     mobile = await evaluate('(()=>{var p=document.getElementById("nbaValuationPanel"),r=p.getBoundingClientRect();return {viewport:innerWidth,left:r.left,right:r.right,client:p.clientWidth,scroll:p.scrollWidth,buttons:Array.from(p.querySelectorAll("[data-nba-view]")).map(b=>({height:b.getBoundingClientRect().height,width:b.getBoundingClientRect().width})),tables:Array.from(p.querySelectorAll(".nbaModelTableWrap")).map(t=>({client:t.clientWidth,scroll:t.scrollWidth}))};})()');
@@ -180,10 +204,12 @@ function csvRecords(text) {
     screenshots.push(await screenshot('tmp_nba_coefficient_mobile_table.png'));
     await evaluate('document.querySelector(".nbaCoefficientMatrixWrap").scrollLeft=10000;');
     screenshots.push(await screenshot('tmp_nba_coefficient_mobile_table_right.png'));
+    await evaluate('document.querySelector(".nbaCoachSummary .nbaSelectionNote").scrollIntoView({block:"start"});');
+    screenshots.push(await screenshot('tmp_nba_position_selection_mobile.png'));
     await evaluate('demoIsGuestMode=__nbaEvidenceGate;refreshGuestDemoUI();');
     const guest = await evaluate('({tables:document.querySelectorAll("#nbaModelContent table").length,charts:document.querySelectorAll("#nbaModelContent svg").length,controlsHidden:document.getElementById("nbaModelControls").hidden,downloads:document.querySelectorAll("#nbaModelContent [data-nba-evidence-download],#nbaModelContent [data-nba-checks-download],#nbaModelContent [data-nba-coefficient-download],#nbaModelContent .nbaCoachBrief").length,profileShortcutHidden:document.getElementById("mNbaCoachShortcut").hidden})');
     assert.deepEqual(guest, { tables: 0, charts: 0, controlsHidden: true, downloads: 0, profileShortcutHidden: true }); assert.deepEqual(exceptions, []);
-    console.log(JSON.stringify({ passed: true, url: base, model, coach, matrix:{rows:matrix.rows.length,groups:groups.length,coefficientAndEvidenceValues:matrix.rows.reduce((total,row)=>total+row.cells.reduce((n,cell)=>n+Object.keys(cell.values).length,0),0),excludedCells:matrix.rows.reduce((total,row)=>total+row.cells.filter(cell=>Object.keys(cell.values).length===0).length,0),sourceValuesMatch:true,csvRows:matrixCsvRows}, pdf, profileShortcut, evidenceGroups, comparison: { overall: comparison.overall, pairs: comparison.pairs.length, focusPreserved: true }, csvRows, checksSummary, keyboard, predictionBasisChanges: 0, mobile, guest, screenshots, exceptions }, null, 2));
+    console.log(JSON.stringify({ passed: true, url: base, model, coach, positionNotes, matrix:{rows:matrix.rows.length,groups:groups.length,coefficientAndEvidenceValues:matrix.rows.reduce((total,row)=>total+row.cells.reduce((n,cell)=>n+Object.keys(cell.values).length,0),0),excludedCells:matrix.rows.reduce((total,row)=>total+row.cells.filter(cell=>Object.keys(cell.values).length===0).length,0),sourceValuesMatch:true,csvRows:matrixCsvRows}, pdf, profileShortcut, evidenceGroups, comparison: { overall: comparison.overall, pairs: comparison.pairs.length, specification:comparison.specification,focusPreserved: true }, csvRows, checksSummary, keyboard, predictionBasisChanges: 0, mobile, guest, screenshots, exceptions }, null, 2));
   } finally {
     try { await evaluate('if(window.__nbaEvidenceGate)demoIsGuestMode=__nbaEvidenceGate;if(window.__nbaEvidenceSetter)NbaValuation.setEnabled=__nbaEvidenceSetter;if(window.__nbaEvidenceUrl)URL.createObjectURL=__nbaEvidenceUrl;if(typeof closeProfile==="function")closeProfile();if(typeof refreshGuestDemoUI==="function")refreshGuestDemoUI();'); if (initialization) await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: initialization.identifier }); await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false }); } catch (_) {}
     pending.forEach(p => clearTimeout(p.timer)); ws.close();

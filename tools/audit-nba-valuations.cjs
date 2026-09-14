@@ -57,13 +57,16 @@ async function main() {
       var previous = new Map(legacy.computed.map(function (row) { return [identity(row), row.ActualValuation_calc]; }));
       var settings = ctx.getValuationModelDefaults('recommended', league);
       var finite = 0, changed = 0, heights = 0, clipped = 0, covered = 0, lightSample = 0;
-      var featureCoverage = Object.fromEntries(featureKeys.map(function (key) { return [key, 0]; }));
+      var positionKeys = ctx.NbaValuation.getModel().groups[group].features.map(function (feature) { return feature.key; });
+      var featureCoverage = Object.fromEntries(positionKeys.map(function (key) { return [key, 0]; }));
       ctx.computed.forEach(function (row) {
         count++;
         assert.equal(row.NBAModel_calc, true);
         assert.equal(row.NBAPosition_calc, group);
         assert.equal(row.MinMultiplier_calc, 1);
         assert.equal(row.MarketDemandPremium_calc, 1);
+        assert.deepEqual(Array.from(row.NBAContributions_calc, function (feature) { return feature.key; }), Array.from(positionKeys), 'Contributions use only this position\'s retained prediction inputs');
+        assert.ok(Math.abs(row.NBACoverage_calc - (positionKeys.length - row.NBAMissing_calc.length) / positionKeys.length) < 1e-12, 'Coverage denominator uses this position\'s input count');
         var sum = row.NBAContributions_calc.reduce(function (value, feature) { return value + feature.contribution; }, 0);
         assert.ok(Math.abs(sum - row.NBAScore_calc) < 1e-9, 'Contributions must sum to score');
         row.NBAContributions_calc.forEach(function (feature) { if (!feature.missing) featureCoverage[feature.key]++; });
@@ -86,7 +89,7 @@ async function main() {
       var top = ctx.computed.slice().sort(function (a, b) { return b.ActualValuation_calc - a.ActualValuation_calc; }).slice(0, 5);
       groups.push({ league: league, position: group, players: ctx.computed.length, calculated: finite, changedFromLegacy: changed,
         heights: heights, averageInputCoverage: covered / ctx.computed.length, fewerThan5GamesOr10Minutes: lightSample,
-        cappedOutlierPlayers: clipped, featureCoverage: featureCoverage,
+        cappedOutlierPlayers: clipped, retainedInputs: positionKeys, featureCoverage: featureCoverage,
         top: top.map(function (row) { return { player: row.Player, team: row.Team, value: row.ActualValuation_calc, score: row.NBAScore_calc }; }) });
       assert.equal(finite, ctx.computed.length, league + ' ' + group + ' has unavailable valuations');
     }

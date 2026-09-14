@@ -57,6 +57,27 @@ test('excluded inputs cannot alter the learned signal or college bid', function 
   assert.ok(!withoutMinutes.missing.includes('MP'));
   close(c.NbaValuation.quote(original, pool[1], settings, 1).final, c.NbaValuation.quote(withoutMinutes, edited, settings, 1).final);
 });
+test('each position uses its own inputs and coverage in both college leagues', function () {
+  var model = fixture();
+  model.featureKeys = ['Height', 'TOPG', 'RPG'];
+  model.groups.Guards.features = [{key:'Height', coefficient:0.1}, {key:'TOPG', coefficient:0.4}];
+  model.groups.Wings.features = [{key:'Height', coefficient:0.2}];
+  model.groups.Bigs.features = [{key:'Height', coefficient:0.3}, {key:'RPG', coefficient:0.8}];
+  var c = runtime.createRuntime({model:model});
+  ['MBB', 'WBB'].forEach(function (league) {
+    var pool = [Object.assign(player('A',10,70,20), {TOPG:1,RPG:2,_league:league}), Object.assign(player('B',20,78,30), {TOPG:3,RPG:6,_league:league})];
+    var edited = Object.assign({}, pool[1], {TOPG:5});
+    ['Guards','Wings','Bigs'].forEach(function (group) {
+      var context = c.NbaValuation.createContext(pool,league,group);
+      var original = c.NbaValuation.score(pool[1],context), changed = c.NbaValuation.score(edited,context);
+      assert.deepEqual(Array.from(original.contributions,function (f) { return f.key; }),model.groups[group].features.map(function (f) { return f.key; }));
+      if (group === 'Guards') assert.ok(changed.score > original.score);
+      else close(changed.score,original.score);
+      var missing = c.NbaValuation.score(Object.assign({},pool[1],{TOPG:null}),context);
+      close(missing.coverage,group === 'Guards' ? 0.5 : 1);
+    });
+  });
+});
 test('missing height is neutral and documented, percentage formats and zero attempts handled', function () {
   var c = runtime.createRuntime({ model: fixture() });
   var pool = [player('A', 10, 70, 20), player('B', 20, 78, 30)];

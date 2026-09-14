@@ -166,6 +166,10 @@
     .nbaCoachDownloads button{min-height:44px;font-size:12px;padding:10px 14px}
     .nbaMatrixLegend{margin:0 0 14px;max-width:1100px}
     .nbaModelTable.nbaCoefficientMatrix{min-width:860px;table-layout:fixed}
+    .nbaSelectionGroups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}
+    .nbaSelectionGroups>div{padding:12px;border:1px solid var(--line);border-radius:10px;min-width:0}
+    .nbaSelectionGroups p{margin:7px 0 0;overflow-wrap:anywhere}
+    @media(max-width:640px){.nbaSelectionGroups{grid-template-columns:1fr}}
     .nbaCoefficientMatrix th:first-child{width:23%}
     .nbaCoefficientMatrix td{vertical-align:top;white-space:normal;padding:13px 14px;text-align:left;font-variant-numeric:tabular-nums}
     .nbaCoefficientMatrix tbody th{font-size:13px;white-space:normal;vertical-align:middle}

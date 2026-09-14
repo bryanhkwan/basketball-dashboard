@@ -38,11 +38,23 @@ class RedundancyTests(unittest.TestCase):
         changed["Salary"] = np.linspace(1, 1e15, len(data))
         changed["LogSalary"] = np.log(changed.Salary)
         self.assertEqual(selected, trainer.prediction_selection(changed))
-        self.assertTrue(selected["excludedKeys"])
+        self.assertTrue(any(item["excludedKeys"] for item in selected["perGroup"].values()))
         self.assertIn("Height", selected["retainedKeys"])
         for values in selected["perGroupAfterVifs"].values():
             self.assertLessEqual(max(values.values()), 5 + 1e-9)
             self.assertIn("Age", values)
+
+    def test_another_position_cannot_change_a_local_selection(self):
+        data = synthetic_data(90)
+        first = trainer.prediction_selection(data)
+        altered = data.copy()
+        wings = altered.PositionGroup.eq("Wings")
+        altered.loc[wings, "RPG"] = altered.loc[wings, "APG"]
+        altered.loc[wings, "PPG"] = altered.loc[wings, "MP"]
+        second = trainer.prediction_selection(altered)
+        self.assertEqual(first["perGroup"]["Guards"], second["perGroup"]["Guards"])
+        self.assertEqual(first["perGroup"]["Bigs"], second["perGroup"]["Bigs"])
+        self.assertNotEqual(first["perGroup"]["Wings"]["retainedKeys"], second["perGroup"]["Wings"]["retainedKeys"])
 
     def test_exact_redundancy_tie_follows_candidate_order(self):
         rng = np.random.default_rng(7)
@@ -96,27 +108,38 @@ class RedundancyTests(unittest.TestCase):
         with patch.object(trainer, "prediction_selection", side_effect=record), patch.object(trainer, "ALPHAS", [30.]):
             _, log = trainer.joint_nested_validation(data, repeats=1, folds=3, seed=seed)
         self.assertEqual(observed, expected)
-        self.assertEqual(sum(row["stage"] == "inner" for row in log), 12)
-        self.assertEqual(sum(row["stage"] == "outer" for row in log), 3)
+        self.assertEqual(sum(row["stage"] == "inner" for row in log), 36)
+        self.assertEqual(sum(row["stage"] == "outer" for row in log), 9)
         self.assertTrue(all(len(indices) < len(data) for indices in observed))
 
     def test_published_masks_are_actual_coefficients_and_preserve_families(self):
         ridge = json.loads((ROOT / "data/nba-valuation-model.json").read_text(encoding="utf-8"))
         ols = json.loads((ROOT / "data/nba-salary-evidence.json").read_text(encoding="utf-8"))
         for asset, coefficient_key in [(ridge, "features"), (ols, "estimates")]:
-            kept = asset["selection"]["retainedKeys"]
-            removed = asset["selection"]["excludedKeys"]
-            self.assertFalse(set(kept) & set(removed))
-            self.assertEqual(set(kept) | set(removed), set(trainer.KEYS))
+            union = asset["selection"]["retainedKeys"]
+            self.assertEqual(asset["selection"]["scope"], "independent-position")
             for group in trainer.GROUPS:
+                kept = asset["selection"]["perGroup"][group]["retainedKeys"]
+                removed = asset["selection"]["perGroup"][group]["excludedKeys"]
+                self.assertFalse(set(kept) & set(removed))
+                self.assertEqual(set(kept) | set(removed), set(trainer.KEYS))
                 self.assertEqual([r["key"] for r in asset["groups"][group][coefficient_key]], kept)
                 self.assertLessEqual(max(asset["selection"]["perGroupAfterVifs"][group].values()), 5 + 1e-9)
                 for row in asset["groups"][group]["excludedFeatures"]:
                     self.assertNotIn("coefficient", row)
                     self.assertNotIn("pHolm", row)
+            actual_union = {row["key"] for item in asset["groups"].values() for row in item[coefficient_key]}
+            self.assertEqual(set(union), actual_union)
         self.assertEqual(ols["policy"]["familySize"], 36)
-        self.assertEqual(ols["policy"]["testedCount"], 3 * len(ols["selection"]["retainedKeys"]))
+        self.assertEqual(ols["policy"]["testedCount"], sum(len(x["estimates"]) for x in ols["groups"].values()))
         self.assertTrue(all(ridge["groups"][g]["refinementComparison"]["sameFolds"] for g in trainer.GROUPS))
+        self.assertFalse(ols["comparisons"]["primaryCoefficientsComparable"])
+        for item in ols["comparisons"]["groups"].values():
+            self.assertEqual(item["retainedKeys"], ols["comparisons"]["selection"]["retainedKeys"])
+            for row in item["estimates"]:
+                self.assertNotIn("pHolm", row)
+                self.assertNotIn("status", row)
+                self.assertNotIn("pRaw", row)
 
 
 if __name__ == "__main__":

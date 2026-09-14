@@ -142,6 +142,14 @@ class RobustEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(rows[1]["pHolm"], .35)
         self.assertEqual(rows[2]["pHolm"], 1.)
 
+    def test_different_primary_adjustment_sets_cannot_be_directly_compared(self):
+        fits = {}
+        for i, group in enumerate(evidence.GROUPS):
+            keys = [key for key in evidence.KEYS if group != "Wings" or key != "RPG"]
+            _, fits[group] = evidence.fit_group(sample_data(group=group, seed=10 + i), selected_keys=keys)
+        with self.assertRaisesRegex(ValueError, "same retained basketball adjustment set"):
+            evidence.position_comparisons(fits)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

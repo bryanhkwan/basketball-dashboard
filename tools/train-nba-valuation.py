@@ -158,7 +158,7 @@ def prediction_selection(data):
         subset = data[data.PositionGroup.eq(group)]
         imputer = SimpleImputer(strategy="median", keep_empty_features=True)
         designs[group] = pd.DataFrame(imputer.fit_transform(subset[KEYS + ["Age"]]), columns=KEYS + ["Age"])
-    return redundancy.select_shared(designs, KEYS)
+    return redundancy.select_independent(designs, KEYS)
 
 
 def source_fingerprint(path):
@@ -198,13 +198,14 @@ def tune_joint(training, seed, selection_log=None, outer_repeat=-1, outer_fold=-
     for inner, (train, test) in enumerate(StratifiedKFold(n_splits=4, shuffle=True, random_state=seed).split(training, training.PositionGroup)):
         inside = training.iloc[train]; holdout = training.iloc[test]
         selection = prediction_selection(inside)
-        selected = selection["retainedKeys"]
-        if selection_log is not None:
-            selection_log.append({"stage": "inner", "repeat": outer_repeat, "fold": outer_fold, "inner": inner,
-                                  "trainingN": len(inside), "heldoutN": len(holdout), "retainedKeys": selected,
-                                  "excludedKeys": selection["excludedKeys"]})
         for group in GROUPS:
             a = inside[inside.PositionGroup.eq(group)]; b = holdout[holdout.PositionGroup.eq(group)]
+            local = selection["perGroup"][group]
+            selected = local["retainedKeys"]
+            if selection_log is not None:
+                selection_log.append({"stage": "inner", "group": group, "repeat": outer_repeat, "fold": outer_fold, "inner": inner,
+                                      "trainingN": len(a), "heldoutN": len(b), "retainedKeys": selected,
+                                      "excludedKeys": local["excludedKeys"]})
             for kind in kinds:
                 xa, xb = matrix_for(a, selected, kind), matrix_for(b, selected, kind)
                 for index, parameter in enumerate(parameters[kind]):
@@ -222,11 +223,12 @@ def joint_nested_validation(data, repeats, folds, seed):
             fold_seed = seed + repeat * 100 + fold
             parameters = tune_joint(training, fold_seed, selection_log, repeat, fold)
             selection = prediction_selection(training)
-            selected = selection["retainedKeys"]
-            selection_log.append({"stage": "outer", "repeat": repeat, "fold": fold, "inner": None,
-                                  "trainingN": len(training), "heldoutN": len(holdout), "retainedKeys": selected, "excludedKeys": selection["excludedKeys"]})
             for group in GROUPS:
                 a = training[training.PositionGroup.eq(group)]; b = holdout[holdout.PositionGroup.eq(group)]
+                local = selection["perGroup"][group]
+                selected = local["retainedKeys"]
+                selection_log.append({"stage": "outer", "group": group, "repeat": repeat, "fold": fold, "inner": None,
+                                      "trainingN": len(a), "heldoutN": len(b), "retainedKeys": selected, "excludedKeys": local["excludedKeys"]})
                 fitted = {kind: fit_candidate(matrix_for(a, selected, kind), a.LogSalary, kind, parameter, fold_seed)
                           for kind, parameter in parameters[group].items()}
                 dummy = DummyRegressor(strategy="mean").fit(np.zeros((len(a), 1)), a.LogSalary)
@@ -255,7 +257,8 @@ def joint_nested_validation(data, repeats, folds, seed):
                 for j, key in enumerate(selected):
                     importance_rows.append({"group": group, "repeat": repeat, "fold": fold, "key": key,
                                             "increaseInHeldoutLogMSE": float(perm.importances_mean[j])})
-            print(f"Validation repeat {repeat + 1}/{repeats}, fold {fold + 1}/{folds}: retained {','.join(selected)}", flush=True)
+            masks = '; '.join(group + ':' + ','.join(selection['perGroup'][group]['retainedKeys']) for group in GROUPS)
+            print(f"Validation repeat {repeat + 1}/{repeats}, fold {fold + 1}/{folds}: {masks}", flush=True)
     predictions = pd.DataFrame(prediction_rows); fold_metrics = pd.DataFrame(fold_rows); importance_frame = pd.DataFrame(importance_rows)
     result = {}
     for group in GROUPS:
@@ -449,19 +452,23 @@ def json_safe(value):
 
 def write_plots(model, predictions, output):
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.spines.top": False, "axes.spines.right": False})
-    fig, axes = plt.subplots(1, 3, figsize=(15, 6), sharey=True, sharex=True)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 7), sharey=True, sharex=True)
+    union_keys = model["featureKeys"]
     for ax, group in zip(axes, GROUPS):
         features = model["groups"][group]["features"]
         values = np.array([f["coefficient"] for f in features])
         low = np.array([f["ciLow"] for f in features])
         high = np.array([f["ciHigh"] for f in features])
-        y = np.arange(len(features))
+        y = np.array([union_keys.index(f["key"]) for f in features])
         ax.barh(y, values, color=["#1b7c80" if v >= 0 else "#bc4b51" for v in values], height=.65)
         ax.hlines(y, low, high, color="#273444", linewidth=1.4)
         ax.plot(low, y, "|", color="#273444")
         ax.plot(high, y, "|", color="#273444")
         ax.axvline(0, color="#67788a", linewidth=.8)
-        ax.set_yticks(y, [f["key"] for f in features])
+        ax.set_yticks(range(len(union_keys)), union_keys)
+        for key in union_keys:
+            if key not in {f["key"] for f in features}:
+                ax.text(.015, union_keys.index(key), "Excluded", color="#77818b", va="center", fontsize=9)
         ax.set_title(f"{group} (n={model['groups'][group]['n']})")
         ax.set_xlabel("Log-salary association per NBA feature SD")
         ax.grid(axis="x", alpha=.15)
@@ -510,16 +517,16 @@ def write_report(model, output):
              "NBA positions map PG/SG → Guards, SF → Wings, PF/C → Bigs. A hybrid uses its first listed position. "
              "The workbook has one row per player, with season totals already combined for traded players; no salary is summed across teams. "
              "The Team field can name the last team even when the statistics cover the full season.", "",
-             f"Each position gets a ridge regression for natural log recorded salary, with the same {len(model['featureKeys'])} retained basketball features plus age. "
+             "Each position gets a ridge regression for natural log recorded salary with its own independently screened basketball inputs plus age. "
              "Features are median-imputed and standardized inside each training fold. Age is a diagnostic control for some contract/tenure "
              "confounding; it is not experience, rookie-contract status, draft slot, injury history, future potential, or past performance. "
              "No salary-derived predictors, team identity, player name, totals duplicating per-game statistics, or unavailable NCAA advanced metrics enter the models.", "",
              "Starting from the original 12 basketball candidates plus age, the fixed outcome-independent rule repeatedly removes "
-             "the eligible basketball input with the highest VIF in any position until every group's VIF is at most 5. Height and age "
-             "are protected; exact ties follow candidate order. The full-data removal order is "
-             + " → ".join(step["excludedKey"] for step in model["selection"]["trace"]) + ". Retained inputs are "
-             + ", ".join(model["featureKeys"]) + ". This changes the conditional model: remaining coefficients can absorb information "
-             "previously represented by minutes, points, rebounds and turnovers. Removed inputs are excluded for overlapping information, "
+             "the eligible basketball input with the highest VIF within that position until its VIFs are at most 5. No other position's "
+             "predictors can influence a removal. Height and age are protected; exact ties follow candidate order. Original candidates "
+             "are reconsidered independently in all positions. The top-level featureKeys is only the display union, not a shared model. "
+             "Each actual coefficient list and exclusion trace is given below. Remaining coefficients can absorb information previously "
+             "represented by locally excluded inputs. Removed inputs are excluded for overlapping information, "
              "not estimated to have zero value. VIF 5 is a heuristic, not a claim of zero correlation or a cure for omitted-variable bias.", "",
              "Attempt volumes in this workbook are rounded per-game values. A positive percentage is retained even when its attempt "
              "volume rounds to 0.0; zero or missing percentages with zero rounded volume are treated as unavailable because exact "
@@ -532,8 +539,8 @@ def write_report(model, output):
              f"Outer validation uses {model['validation']['folds']} folds repeated {model['validation']['repeats']} times. "
              "The same outer splits compare a log-mean baseline, unadjusted portable ridge, age-adjusted ridge, age-neutral deployed ridge, "
              "paired no-height models, and a constrained decision tree. Ridge penalties and tree depth/leaf size are selected by four-fold "
-             "inner CV on outer-training data only. The shared VIF selector and its median imputation are independently refitted using "
-             "only each inner training split and then each outer training split; the final full-data mask is never supplied to validation. "
+             "inner CV on outer-training data only. Each position's VIF selector and median imputation are independently refitted using "
+             "only that position's inner training rows and then its outer training rows; the final full-data mask is never supplied to validation. "
              "All tree inputs use that fold's selected mask. Median imputation and scaling also stay inside the fitting pipeline. "
              "The deployed validation holds test age at that fold's training mean, matching the dashboard's deliberate omission of age. "
              "Ages are used normally only in the diagnostic observed-age result. An unscreened all-12-input ridge is separately tuned "
@@ -546,6 +553,8 @@ def write_report(model, output):
     for group in GROUPS:
         item = model["groups"][group]
         lines.extend([f"### {group} (n={item['n']})", ""])
+        lines.extend(["Retained: " + ", ".join(item["selection"]["retainedKeys"]) + ". Removal order: "
+                      + " → ".join(step["excludedKey"] for step in item["selection"]["trace"]) + ".", ""])
         for key, label in [("baseline", "Baseline"), ("unadjustedRidge", "Unadjusted ridge"), ("ageAdjustedRidge", "Ridge with observed age"),
                            ("deployedRidge", "Ridge with neutral age, exported coefficients"), ("portableTree", "Portable decision tree"),
                            ("fullReferenceRidge", "All-input reference ridge on the same folds, neutral age")]:
@@ -653,7 +662,7 @@ def main():
     validations, selection_log = joint_nested_validation(data, args.repeats, args.folds, args.seed)
     final_parameters = tune_joint(data, args.seed)
     model = {
-        "schemaVersion": 2, "id": "nba-2022-23-age-adjusted-ridge-v2-vif5", "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "schemaVersion": 3, "id": "nba-2022-23-age-adjusted-ridge-v3-position-vif5", "generatedAt": datetime.now(timezone.utc).isoformat(),
         "season": "2022-23", "target": "natural log of workbook Salary (recorded season compensation, not verified annualized rate)",
         "modelType": "age-adjusted standardized ridge; age held neutral for NCAA", "experimental": True,
         "featureKeys": selected_keys, "candidateFeatureKeys": KEYS, "selection": selection,
@@ -668,7 +677,7 @@ def main():
                        "selectionMetric": "log RMSE", "ridgeAlphaGrid": ALPHAS,
                        "dollarPrediction": "exp(logPrediction) is a modeled geometric salary level (legacy salaryMedianMAE); mean uses training-only Duan residual smearing",
                        "metricAggregation": "all outer-heldout predictions pooled across repeats; no in-sample scores",
-                       "featureSelection": "Shared worst-group VIF<=5 selector recomputed using only each inner/outer training split; imputation also training-only. Full-reference ridge uses all candidates on identical folds.",
+                       "featureSelection": "Independent position-specific VIF<=5 selector recomputed from that position alone within each inner/outer training split; imputation also training-only. Full-reference ridge uses all candidates on identical folds.",
                        "bootstrapSubsetReselected": False,
                        "heightAblation": "Conditional on each fold-selected set: omit Height and retune penalty, without rescreening other predictors"},
         "transfer": {"featureScaling": "within NCAA league and position: (value-mean)/populationSD", "zClip": 3,
@@ -679,7 +688,7 @@ def main():
                         "Recorded NBA salaries mix contract and tenure circumstances; no experience or contract terms are supplied.",
                         "One season, small position cohorts and correlated features limit coefficient stability.",
                         "Age is controlled in training and held neutral in the transferred score.",
-                        "MP, PPG, RPG and TOPG were removed for overlapping predictor information; remaining associations no longer condition on them.",
+                        "Each position removes its own redundant inputs; its remaining associations no longer condition on those inputs. Other positions may retain them.",
                         "Removing redundancy can weaken held-out prediction; the all-input reference uses identical folds to quantify this tradeoff.",
                         "NCAA anchors determine dollars; this model supplies a relative basketball score."],
         "audit": audit, "groups": {},
@@ -687,6 +696,8 @@ def main():
     all_predictions, all_folds, all_coefficients, all_importance, all_sensitivity, all_correlations = [], [], [], [], [], []
     for group_index, group in enumerate(GROUPS):
         subset = data[data.PositionGroup.eq(group)].copy().reset_index(drop=True)
+        local_selection = selection["perGroup"][group]
+        selected_keys = local_selection["retainedKeys"]
         seed = args.seed + group_index * 1000
         print(f"Fitting {group}: {len(subset)} players", flush=True)
         validation, predictions, fold_metrics, importance, importance_folds = validations[group]
@@ -699,9 +710,8 @@ def main():
         group_model = {
             "n": len(subset), "intercept": float(final.named_steps["model"].intercept_), "alpha": float(final.named_steps["model"].alpha),
             "features": features[:-1], "ageControl": features[-1], "metrics": validation,
-            "selection": {"threshold": selection["threshold"], "retainedKeys": selected_keys, "excludedKeys": selection["excludedKeys"],
-                          "beforeVifs": selection["perGroupBeforeVifs"][group], "afterVifs": selection["perGroupAfterVifs"][group], "modelN": len(subset)},
-            "excludedFeatures": [{"key": key, "reason": "Excluded for redundant linear information by shared X-only VIF<=5 policy"} for key in selection["excludedKeys"]],
+            "selection": {**local_selection, "modelN": len(subset)},
+            "excludedFeatures": [{"key": key, "reason": "Excluded for redundant linear information within this position by X-only VIF<=5 policy"} for key in local_selection["excludedKeys"]],
             "refinementComparison": {"reference": "fullReferenceRidge", "sameFolds": True,
                                      "logR2Change": validation["deployedRidge"]["logR2"] - validation["fullReferenceRidge"]["logR2"],
                                      "logRMSEImprovement": validation["fullReferenceRidge"]["logRMSE"] - validation["deployedRidge"]["logRMSE"]},
