@@ -13,6 +13,27 @@ A comprehensive single-page scouting, valuation, and team-building tool for NCAA
 
 ## Core Features
 
+### Player Height and Weight
+
+MBB and WBB now load listed measurements from season-specific snapshots in `data/player-bios-*.json`. Height is stored/exported in **inches** and weight in **pounds**. The player board, profile, dossier, CSV export, and AI summaries include these fields. The board reports measurement coverage; missing values stay blank and display as a dash.
+
+MBB uses the [CBD bulk roster endpoint](https://api.collegebasketballdata.com/api/teams) through the existing Worker proxy, with ESPN fallbacks. WBB uses [ESPN bulk athlete biographies](https://sports.core.api.espn.com/v3/sports/basketball/womens-college-basketball/seasons/2026/athletes?limit=1000&page=1), matched by ESPN ID to the selected season's statistics population. Some WBB weights are published, but most are unavailable. No height or weight is estimated. Historical ESPN bio endpoints may return updated measurements; the roster season is **not** a verified measurement date. `HeightSource`, `WeightSource`, `BioSeason`, and `BioUpdatedAt` preserve that distinction in exports.
+
+Refresh the saved datasets with Node (no npm install or build step):
+
+```sh
+node tools/refresh-player-bios.js --league ALL --seasons 2022,2023,2024,2025,2026
+```
+
+For a smaller update use `--league MBB --seasons 2026` or `--league WBB --seasons 2026`. Browsers reuse the saved snapshots and a seven-day local cache, including known missing fields. The refresh script uses public JSON APIs; it does not need a new API key or Worker deployment.
+
+```sh
+node --test tools/test-data-bios.cjs tools/player-bios.test.js
+node tools/audit-player-bios.cjs --seasons 2026 --sample 0
+```
+
+Measurement refreshes update existing player objects without rerunning valuation. A changed class/eligibility label still triggers projection recalculation. Biography fields and IDs are excluded from scoring. WBB statistics now use 1,000-row pages with bounded concurrency, and a failed page causes a visible load failure instead of silently dropping players. Team Builder retains only the top displayed suggestions instead of sorting its full candidate pools.
+
 ### Player Scoring & Valuation
 - **Weighted Composite Scoring**: Stats normalized between configurable Min/Max bounds, scaled by custom weights, adjusted for direction. Outputs a single Performance Score for ranking.
 - **Dollar Valuation Model**: Exponential curve predicting player value anchored to average pay and star performer targets, with minutes-played multiplier.

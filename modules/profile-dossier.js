@@ -62,9 +62,7 @@
   }
 
   function pdHeight(row) {
-    var h = pdNum(row && row.Height);
-    if (Number.isFinite(h) && h > 0) return Math.floor(h / 12) + "'" + (h % 12) + '"';
-    return String((row && row.Height) || '').trim();
+    return formatPlayerHeight(row && row.Height);
   }
 
   function pdAllPlayers(targetLeague) {
@@ -75,7 +73,7 @@
   }
 
   function pdPlayerLabel(row) {
-    return [row && row.Team, row && (row.Conference || row.Conf), row && (row.Pos || row.Position), pdHeight(row)]
+    return [row && row.Team, row && (row.Conference || row.Conf), row && (row.Pos || row.Position), pdHeight(row), formatPlayerWeight(row && row.Weight)]
       .filter(Boolean).join(' - ');
   }
 
@@ -241,7 +239,8 @@
       row.Conference || row.Conf,
       row.Pos || row.Position,
       row.Class || row.Year || row.Yr,
-      pdHeight(row)
+      pdHeight(row),
+      formatPlayerWeight(row.Weight)
     ].filter(Boolean).join(' - ');
     return '<div class="pdGlimpseMeta">' + pdEsc(meta || 'Loaded player row') + '</div>' + rowsHtml;
   }
@@ -1188,6 +1187,14 @@
   });
 
   window.ProfileDossier = {
+    refreshMeasurements: function(patch){
+      if(!pdState.player || !pdState.body) return;
+      patch(pdState.player);
+      var subtitle = pdState.body.querySelector('.pdSub');
+      if(subtitle) subtitle.textContent = pdPlayerLabel(pdState.player);
+      var summary = pdState.body.querySelector('.pdGlimpseMeta');
+      if(summary) summary.textContent = [pdPlayerLabel(pdState.player), pdState.player.Class].filter(Boolean).join(' - ');
+    },
     open: pdOpen,
     close: pdClose,
     findPlayer: pdFindPlayer,

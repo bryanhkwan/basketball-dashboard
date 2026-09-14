@@ -17,6 +17,7 @@ const LIST_COLS = [
   {key:'Team', label:'Team'},
   {key:'Conference', label:'Conf'},
   {key:'Height', label:'Ht'},
+  {key:'Weight', label:'Wt (lb)'},
   {key:'ConfMult_calc', label:'CM'},
   {key:'MP', label:'MP'},
   {key:'Score', label:'Perf'},
@@ -54,6 +55,16 @@ function sortData(data){
   var out = data.slice();
   var n = out.length;
   if(!n) return out;
+  if(k === 'Height' || k === 'Weight'){
+    var normalize = k === 'Height' ? PlayerBios.normalizeHeight : PlayerBios.normalizeWeight;
+    var direction = dir === 'asc' ? 1 : -1;
+    out.sort(function(a,b){
+      var av = normalize(a[k]), bv = normalize(b[k]);
+      if(!av || !bv) return av ? -1 : bv ? 1 : 0;
+      return (av - bv) * direction;
+    });
+    return out;
+  }
   var isNumeric = Number.isFinite(Number(out[0][k]));
   if(isNumeric){
     var m = dir === 'asc' ? 1 : -1;
@@ -67,20 +78,22 @@ function sortData(data){
 
 // --- Render ---
 var _lastHeaderKey = '';
-function renderPlayers(){
+function renderPlayers(opts){
+  var requestedPage = opts && opts.preservePage ? currentPage : 0;
+  if(typeof _dataRenderBioStatus === 'function') _dataRenderBioStatus();
   const q = (searchInput.value || '').toLowerCase().trim();
   let data = computed;
   if(q){
     data = data.filter(r => {
       var hay = r._searchStr;
       if(typeof hay !== 'string'){
-        hay = ((r.Player || '') + ' ' + (r.Team || '') + ' ' + (r.Conference || r.Conf || '') + ' ' + (r.Position || r.Pos || '') + ' ' + (r.Height || '')).toLowerCase();
+        hay = playerSearchText(r);
         r._searchStr = hay;
       }
       return hay.includes(q);
     });
   }
-  currentPage = 0;
+  currentPage = requestedPage;
   var playersPage = document.getElementById('pagePlayers');
   if(playersPage && playersPage.style.display === 'none'){
     filteredData = data;
@@ -88,6 +101,7 @@ function renderPlayers(){
     return;
   }
   filteredData = sortData(data);
+  currentPage = Math.min(currentPage, Math.max(0, Math.ceil(filteredData.length / PAGE_SIZE) - 1));
   // Only rebuild headers when the column set actually changes (league switch, etc.)
   var headerKey = (typeof league !== 'undefined' ? league : '') + '|' + (typeof oppAddPlayer !== 'undefined' ? '1' : '0') + '|' + (typeof draftBadgeHtml === 'function' ? '1' : '0') + '|' + playerValueView;
   if(headerKey !== _lastHeaderKey){
@@ -111,6 +125,8 @@ function renderPlayersPage(){
     colsToShow.forEach(c => {
       const th = document.createElement('th');
       th.textContent = playerBoardColLabel(c);
+      if(c.key === 'Height') th.title = 'Listed height (feet and inches); missing measurements sort last';
+      if(c.key === 'Weight') th.title = 'Listed weight in pounds; missing measurements sort last';
       if(c.key === 'Score') th.classList.add('playersPerfHead');
       th.addEventListener('click', ()=>{
         if(sort.key === c.key) sort.dir = (sort.dir === 'asc' ? 'desc' : 'asc');
@@ -199,12 +215,12 @@ function renderPlayersPage(){
         } else {
           _html.push('<td>', Number.isFinite(cm) ? cm.toFixed(2) : '\u2014', '</td>');
         }
-      }else if(c.key === 'Height'){
-        var h = Number(r.Height);
-        _html.push('<td style="color:var(--muted)">');
-        if(Number.isFinite(h) && h > 0) _html.push(Math.floor(h/12), "'", (h%12), '"');
-        else _html.push(_esc(r.Height || '\u2014'));
-        _html.push('</td>');
+      }else if(c.key === 'Height' || c.key === 'Weight'){
+        var measurement = c.key === 'Height' ? formatPlayerHeight(r.Height) : formatPlayerWeight(r.Weight).replace(' lb', '');
+        var source = r[c.key + 'Source'] || '';
+        var measurementTitle = measurement ? (source ? 'Listed by ' + source : 'Listed measurement') : 'Not listed by the source';
+        if(measurement && r.BioSeason) measurementTitle += ' (roster season ' + r.BioSeason + ')';
+        _html.push('<td style="color:var(--muted)" title="', _esc(measurementTitle), '">', _esc(measurement || '\u2014'), '</td>');
       }else if(c.key === 'Score'){
         var sv = _isProjection ? safeNum(r.ProjectionPerf_calc) : Number(r.Score);
         _html.push('<td class="playersPerfCell">', Number.isFinite(sv) ? sv.toFixed(2) : '\u2014', '</td>');

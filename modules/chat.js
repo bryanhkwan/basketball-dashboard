@@ -238,6 +238,7 @@
   }
   function statLine(r){
     return { player:r.Player, team:r.Team, pos:r.Position||r.Pos||'', conf:r.Conference||'',
+      heightInches:PlayerBios.normalizeHeight(r.Height), weightPounds:PlayerBios.normalizeWeight(r.Weight),
       cls:r.Class||'', mpg:r.MPG!=null?+Number(r.MPG).toFixed(1):null,
       perf:r.Score?+r.Score.toFixed(1):null,
       value:formatChatMoney(r.ActualValuation_calc), marketPressure:formatChatMoney(r.MarketPressure_calc), marketLane:r.MarketLaneLabel_calc||'',

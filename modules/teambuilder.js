@@ -65,6 +65,20 @@ function initTeamBuilderDOMRefs(){
 
 function tbPlayerKey(r){ return (r.Player||'') + '||' + (r.Team||''); }
 
+// Keep only the displayed results; equal scores retain their original pool order.
+function tbInsertTopScore(top, item, scoreKey, limit){
+  var score = item[scoreKey];
+  if(top.length === limit && score <= top[top.length - 1][scoreKey]) return;
+  var lo = 0, hi = top.length;
+  while(lo < hi){
+    var mid = (lo + hi) >> 1;
+    if(top[mid][scoreKey] >= score) lo = mid + 1;
+    else hi = mid;
+  }
+  top.splice(lo, 0, item);
+  if(top.length > limit) top.pop();
+}
+
 function tbPlayerLeague(r){
   if(r && r._league) return r._league;
   for(const [key, arr] of Object.entries(tbAllComputed)){
@@ -828,26 +842,18 @@ function tbRenderRoster(){
       const weakPosGroup = tbPosGroup(weakPlayer);
       const remaining = budget - totalCost + weakVal;
 
-      const candidates = allPool.filter(c => {
-        if(rosterKeys.has(tbPlayerKey(c))) return false;
-        if(tbPosGroup(c) !== weakPosGroup) return false;
-        const val = safeNum(c.ActualValuation_calc) || 0;
-        if(val > cap) return false;
-        if(val > remaining) return false;
-        if(!Number.isFinite(c.Score) || c.Score <= weakPerf) return false;
-        return true;
-      });
-
-      const scored = candidates.map(c => {
+      const top3 = [];
+      allPool.forEach(c => {
+        if(rosterKeys.has(tbPlayerKey(c))) return;
+        if(tbPosGroup(c) !== weakPosGroup) return;
         const cVal = safeNum(c.ActualValuation_calc) || 0;
+        if(cVal > cap || cVal > remaining) return;
+        if(!Number.isFinite(c.Score) || c.Score <= weakPerf) return;
         const perfGain = (c.Score - weakPerf);
         const costDelta = cVal - weakVal;
         const bfb = perfGain / Math.max(0.5, (costDelta / 10000) + 1);
-        return {c, perfGain, costDelta, bfb, cVal};
+        tbInsertTopScore(top3, {c, perfGain, costDelta, bfb, cVal}, 'bfb', 3);
       });
-
-      scored.sort((a,b) => b.bfb - a.bfb);
-      const top3 = scored.slice(0, 3);
 
       const card = document.createElement('div');
       card.className = 'tbSwapCard';
@@ -952,15 +958,13 @@ function tbRenderSuggestions(){
 
   const targetCats = weakCats.length > 0 ? weakCats : cats;
 
-  const candidates = allPool.filter(r => {
-    if(rosterKeys.has(tbPlayerKey(r))) return false;
+  const topSuggestions = [];
+  allPool.forEach(r => {
+    if(rosterKeys.has(tbPlayerKey(r))) return;
     const val = safeNum(r.ActualValuation_calc) || 0;
-    if(val > cap) return false;
-    if(tbRoster.length < maxR && val > remaining) return false;
-    return true;
-  });
+    if(val > cap) return;
+    if(tbRoster.length < maxR && val > remaining) return;
 
-  const scored = candidates.map(r => {
     let gapScore = 0, gapCount = 0;
     let bestGap = '';
     let bestGapScore = -1;
@@ -976,12 +980,9 @@ function tbRenderSuggestions(){
       });
     });
     const avg = gapCount > 0 ? gapScore / gapCount : 0;
-    return {r, avg, bestGap};
+    tbInsertTopScore(topSuggestions, {r, avg, bestGap}, 'avg', 30);
   });
 
-  scored.sort((a,b) => b.avg - a.avg);
-
-  const topSuggestions = scored.slice(0, 30);
   _tbSuggestRows = topSuggestions.map(item => item.r);
   const frag = document.createDocumentFragment();
   topSuggestions.forEach(({r, avg, bestGap}, idx) => {

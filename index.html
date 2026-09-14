@@ -12,18 +12,19 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" media="print" onload="this.media='all'">
   <!-- Modules — load in dependency order (no deps first, coordinator last) -->
-  <script src="modules/config.js" defer></script>
+  <script src="modules/config.js?v=player-bios-20260914" defer></script>
+  <script src="modules/player-bios.js?v=player-bios-20260914" defer></script>
   <script src="modules/auth.js" defer></script>
   <script src="modules/notes.js" defer></script>
   <script src="modules/favorites.js" defer></script>
   <script src="modules/shares.js" defer></script>
-  <script src="modules/data.js" defer></script>
+  <script src="modules/data.js?v=player-bios-20260914" defer></script>
   <script src="modules/eval-presets.js" defer></script>
   <script src="modules/draft.js" defer></script>
   <script src="modules/player-development.js" defer></script>
-  <script src="modules/players.js" defer></script>
-  <script src="modules/profile.js" defer></script>
-  <script src="modules/teambuilder.js" defer></script>
+  <script src="modules/players.js?v=player-bios-20260914" defer></script>
+  <script src="modules/profile.js?v=player-bios-20260914" defer></script>
+  <script src="modules/teambuilder.js?v=player-bios-20260914" defer></script>
   <script src="modules/dashboard-prefs.js" defer></script>
   <script src="modules/admin.js" defer></script>
   <script src="modules/portal.js" defer></script>
@@ -31,14 +32,14 @@
   <script src="modules/shot-analytics.js" defer></script>
   <script src="modules/lab.js" defer></script>
   <script src="modules/value-lab.js" defer></script>
-  <script src="modules/chat.js" defer></script>
+  <script src="modules/chat.js?v=player-bios-20260914" defer></script>
   <script src="modules/help-content.js" defer></script>
   <script src="modules/tour.js" defer></script>
   <script src="modules/help.js" defer></script>
   <script src="modules/trends.js" defer></script>
   <script src="modules/shortcuts.js" defer></script>
   <script src="app.js" defer></script>
-  <script src="modules/profile-dossier.js" defer></script>
+  <script src="modules/profile-dossier.js?v=player-bios-20260914" defer></script>
   <script src="modules/profile-route.js" defer></script>
   <script src="modules/team-explainer.js" defer></script>
 </head>
@@ -265,6 +266,7 @@
       <div class="playersControlCell playersRefreshBlock" style="display:flex;flex-direction:column;justify-content:flex-end">
         <button class="primary" id="loadGs">Refresh data</button>
         <div id="gsStatus" style="margin-top:10px;color:#fff;font-family:system-ui;font-size:14px;"></div>
+        <div id="playerBioStatus" class="hint" role="status" aria-live="polite"></div>
       </div>
 
 

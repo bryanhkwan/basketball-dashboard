@@ -8,6 +8,23 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const clamp01 = (x) => clamp(x, 0, 1);
 const fmtMoney = (n) => Number.isFinite(n) ? n.toLocaleString(undefined, {style:'currency', currency:'USD', maximumFractionDigits:0}) : '—';
 const safeNum = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+// Measurements are metadata, stored as inches/pounds; missing values stay blank.
+var PLAYER_BIO_FIELDS = ['Height', 'Weight', 'HeightSource', 'WeightSource', 'BioSeason', 'BioUpdatedAt', 'EspnId', 'CbdId', 'Class', 'Hometown'];
+function isPlayerBioField(key){
+  return PLAYER_BIO_FIELDS.includes(key) || ['TeamId', 'PlayerId', 'AthleteId', 'CbdId', 'ID', 'Season'].includes(key);
+}
+function formatPlayerHeight(value){
+  var inches = PlayerBios.normalizeHeight(value);
+  return inches ? Math.floor(inches / 12) + "'" + +(inches % 12).toFixed(1) + '"' : '';
+}
+function formatPlayerWeight(value){
+  var pounds = PlayerBios.normalizeWeight(value);
+  return pounds ? +pounds.toFixed(1) + ' lb' : '';
+}
+function playerSearchText(row){
+  return [row.Player, row.Team, row.Conference || row.Conf, row.Position || row.Pos,
+    row.Height, formatPlayerHeight(row.Height), row.Weight, formatPlayerWeight(row.Weight)].filter(Boolean).join(' ').toLowerCase();
+}
 const _scriptLoadPromises = Object.create(null);
 const DASHBOARD_SEASON_OPTIONS = [
   { value: '2022', label: '2021-2022' },
@@ -280,7 +297,8 @@ const ROLE_DESCRIPTIONS = {
 };
 
 const STAT_GLOSSARY = {
-  'Height': 'Player height (feet and inches). Sourced from ESPN roster data for WBB players.',
+  'Height': 'Listed player height, displayed in feet and inches and exported in inches. CBD roster data with ESPN fallbacks. A dash means the source did not list a valid measurement.',
+  'Weight': 'Listed player weight in pounds. CBD roster data with ESPN fallbacks. A dash means the source did not list a valid measurement; missing weights are never estimated.',
   'G': 'Games Played. Number of games a player appeared in during the season.',
   'MP': 'Minutes Per Game. Average minutes played per game. Used to derive the minutes multiplier in valuation — higher MP signals a larger role.',
   'PPG': 'Points per game. Overall scoring volume (pace/role dependent).',

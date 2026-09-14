@@ -248,6 +248,16 @@ function profileBuildGuestShotProfileHtml(p) {
 
 // --- Profile modal functions ---
 
+function profileRefreshMeasurements(r){
+  if(!r || !mSub) return;
+  mSub.textContent = [r.Team, r.Conference || r.Conf, r.Pos || r.Position,
+    formatPlayerHeight(r.Height), formatPlayerWeight(r.Weight)].filter(Boolean).join(' \u2022 ');
+  if(mAllStats) mAllStats.querySelectorAll('[data-bio-field]').forEach(function(el){
+    var key = el.getAttribute('data-bio-field');
+    el.textContent = (key === 'Height' ? formatPlayerHeight(r.Height) : key === 'Weight' ? formatPlayerWeight(r.Weight) : r[key]) || '\u2014';
+  });
+}
+
 function openProfile(r){
   const player = (r['Player'] ?? 'Player').toString();
   const team = (r['Team'] ?? '').toString();
@@ -255,9 +265,7 @@ function openProfile(r){
   const position = (r['Pos'] ?? r['Position'] ?? pos).toString();
 
   mTitle.textContent = player;
-  const _hin = Number(r['Height']);
-  const height = (Number.isFinite(_hin) && _hin > 0) ? Math.floor(_hin/12) + "'" + (_hin%12) + '"' : (r['Height'] || '').toString().trim();
-  mSub.textContent = [team, conf, position, height].filter(Boolean).join(' • ');
+  profileRefreshMeasurements(r);
   document.getElementById('mLearnMore').href = 'https://www.google.com/search?q=' + encodeURIComponent(player + ' ' + team + ' basketball');
   var mScoreLabel = document.getElementById('mScoreLabel');
   var mValLabel = document.getElementById('mValLabel');
@@ -423,7 +431,16 @@ function openProfile(r){
   all.forEach(k => {
     const div = document.createElement('div');
     div.className = 'statRow';
-    div.innerHTML = `<span class="k">${k}</span><span>${(r[k] ?? '—')}</span>`;
+    const label = document.createElement('span');
+    label.className = 'k';
+    label.textContent = k;
+    const value = document.createElement('span');
+    value.textContent = (k === 'Height' ? formatPlayerHeight(r[k]) : k === 'Weight' ? formatPlayerWeight(r[k]) : r[k]) ?? '\u2014';
+    if(isPlayerBioField(k)){
+      value.setAttribute('data-bio-field', k);
+      if(!value.textContent) value.textContent = '\u2014';
+    }
+    div.append(label, value);
     container.appendChild(div);
   });
   mAllStats.innerHTML = '';
