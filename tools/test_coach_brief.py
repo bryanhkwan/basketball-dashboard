@@ -3,6 +3,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -44,10 +45,10 @@ class CoachBriefTests(unittest.TestCase):
                 self.assertLessEqual(x1, 768)
                 self.assertLessEqual(y1, 604)
 
-    def test_all_retained_coefficients_and_ols_uncertainty_are_printed(self):
+    def test_all_salary_explanations_and_ols_uncertainty_are_printed(self):
         evidence, model, facts = brief.read_facts()
         text = " ".join(PdfReader(brief.OUTPUT).pages[0].extract_text().split())
-        for phrase in ["NBA coefficients by position", "Intervals and p-values apply only to OLS beta", "not validate NCAA or WBB pay", "not verified 2022-23 measurements", "inputs selected independently within each position", "different adjustment sets", "Separate common-input tests"]:
+        for phrase in ["How player stats relate to NBA salary", "associations, not guaranteed raises", "not validate NCAA or WBB pay", "not verified 2022-23 measurements", "inputs selected independently within each position", "different adjustment factors", "not ridge prediction weights", "35% shooting becomes 40%"]:
             self.assertIn(phrase, text)
         for row in facts["rows"]:
             self.assertIn(row["label"], text)
@@ -55,15 +56,32 @@ class CoachBriefTests(unittest.TestCase):
             for group, cell in row["groups"].items():
                 raw_weight = next((x["coefficient"] for x in model["groups"][group]["features"] if x["key"] == row["key"]), None)
                 self.assertEqual(cell["weight"], raw_weight)
-                self.assertIn("Weight " + brief.signed(cell["weight"]), text)
                 self.assertEqual(facts["selectionByGroup"][group]["ridge"]["retained"], [f["key"] for f in model["groups"][group]["features"]])
                 self.assertEqual(facts["selectionByGroup"][group]["ols"]["retained"], [f["key"] for f in evidence["groups"][group]["estimates"]])
                 e = next((x for x in evidence["groups"][group]["estimates"] if x["key"] == row["key"]), None)
                 if e:
                     self.assertEqual(cell["beta"], e["coefficientRaw"] * e["increment"])
-                    self.assertIn("OLS beta " + brief.signed(cell["beta"]), text)
-                    self.assertIn("[" + brief.signed(cell["ciLow"]) + ", " + brief.signed(cell["ciHigh"]) + "]", text)
-                    self.assertIn("p " + brief.pvalue(cell["pRaw"]) + " | Holm p " + brief.pvalue(cell["pHolm"]), text)
+                    self.assertAlmostEqual(cell["salaryPct"], 100 * math.expm1(e["coefficientRaw"] * e["increment"]), places=10)
+                    self.assertAlmostEqual(cell["salaryPctLow"], e["associationPctCiLow"], places=10)
+                    self.assertAlmostEqual(cell["salaryPctHigh"], e["associationPctCiHigh"], places=10)
+                    self.assertLessEqual(cell["salaryPctLow"], cell["salaryPct"])
+                    self.assertGreaterEqual(cell["salaryPctHigh"], cell["salaryPct"])
+                for line in brief.explanation(cell):
+                    self.assertIn(line, text)
+
+    def test_percentages_are_not_ridge_weights_and_decision_uses_adjusted_p(self):
+        cell = {"weight": .353, "beta": .185, "salaryPct": 100 * math.expm1(.185),
+                "salaryPctLow": 100 * math.expm1(.094), "salaryPctHigh": 100 * math.expm1(.277), "pHolm": .0035}
+        self.assertEqual(brief.explanation(cell), ["20.3% higher modeled salary", "95% range: +9.9% to +31.9%", "Supported | adjusted p 0.0035"])
+        cell.update(weight=99, pRaw=.001, pHolm=.08)
+        self.assertEqual(brief.explanation(cell)[0], "20.3% higher modeled salary")
+        self.assertEqual(brief.explanation(cell)[2], "Uncertain | adjusted p 0.0800")
+        cell.update(beta=-.185, salaryPct=100 * math.expm1(-.185))
+        self.assertEqual(brief.explanation(cell)[0], "16.9% lower modeled salary")
+        cell.update(beta=None)
+        self.assertEqual(brief.explanation(cell), ["Prediction input only", "No salary estimate", "No interval or p-value"])
+        cell.update(weight=None)
+        self.assertEqual(brief.explanation(cell)[0], "Not included in this model")
 
     def test_excluded_features_have_no_invented_coefficients(self):
         evidence, model, _ = brief.read_facts()

@@ -6,9 +6,10 @@
   "sourceSha256": "dd85dcead33e2b1956b679376090d837cab8e9fea512c9be04805f9fb32c244f",
   "ridgeSourceSha256": "53bf3839a600aee136ef72eca101ac59aff4f940463e1e55d0f413f8694b4383",
   "sourceHashBasis": "utf8-lf",
-  "pdfSha256": "1b8ed608c355604d5fa104a270e62bfc47f280a993c8592c8b9d710807397920",
+  "pdfSha256": "c5887f8d32af4ad3fb5be506572845f31e026cb09910f0798900f4077a350ee8",
   "pages": 1,
   "pageSize": "US Letter landscape",
+  "presentation": "plain-language-ols-percentages-v1",
   "facts": {
     "rows": [
       {
@@ -22,7 +23,10 @@
             "ciLow": -0.03627020043578845,
             "ciHigh": 0.2091942719653318,
             "pRaw": 0.16624116758758384,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 9.030997414771644,
+            "salaryPctLow": -3.562031753436439,
+            "salaryPctHigh": 23.26844513010098
           },
           "Wings": {
             "weight": 0.0998666508838323,
@@ -30,7 +34,10 @@
             "ciLow": -0.0700366324882774,
             "ciHigh": 0.3231058298277828,
             "pRaw": 0.20384708891678507,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 13.488871613670542,
+            "salaryPctLow": -6.764033537412913,
+            "salaryPctHigh": 38.14115377151647
           },
           "Bigs": {
             "weight": 0.12339473119608341,
@@ -38,7 +45,10 @@
             "ciLow": -0.06443406720198312,
             "ciHigh": 0.18320828246013166,
             "pRaw": 0.3450319660857211,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 6.11859544186529,
+            "salaryPctLow": -6.2402069320852815,
+            "salaryPctHigh": 20.106454270833094
           }
         }
       },
@@ -53,7 +63,10 @@
             "ciLow": -0.28558789236924303,
             "ciHigh": 0.34824902343972725,
             "pRaw": 0.8455729646512268,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 3.1826533807473156,
+            "salaryPctLow": -24.842771919313652,
+            "salaryPctHigh": 41.65849686821257
           },
           "Wings": {
             "weight": null,
@@ -61,7 +74,10 @@
             "ciLow": null,
             "ciHigh": null,
             "pRaw": null,
-            "pHolm": null
+            "pHolm": null,
+            "salaryPct": null,
+            "salaryPctLow": null,
+            "salaryPctHigh": null
           },
           "Bigs": {
             "weight": 0.3525884079573916,
@@ -69,7 +85,10 @@
             "ciLow": 0.09371231245814934,
             "ciHigh": 0.27687060907800065,
             "pRaw": 9.732163374677051e-05,
-            "pHolm": 0.0035035788148837384
+            "pHolm": 0.0035035788148837384,
+            "salaryPct": 20.356918220971238,
+            "salaryPctLow": 9.824374942060183,
+            "salaryPctHigh": 31.899569392421263
           }
         }
       },
@@ -84,7 +103,10 @@
             "ciLow": -0.060545251907543285,
             "ciHigh": 0.3198286834862414,
             "pRaw": 0.1803248670794041,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 13.842043218182603,
+            "salaryPctLow": -5.874882535645543,
+            "salaryPctHigh": 37.68918598161177
           },
           "Wings": {
             "weight": 0.36598138130404617,
@@ -92,7 +114,10 @@
             "ciLow": 0.09593170363565559,
             "ciHigh": 0.4952770253132338,
             "pRaw": 0.004219341774073333,
-            "pHolm": 0.14345762031849332
+            "pHolm": 0.14345762031849332,
+            "salaryPct": 34.39383418843412,
+            "salaryPctLow": 10.068388871901718,
+            "salaryPctHigh": 64.09527615497895
           },
           "Bigs": {
             "weight": -0.018226009625562478,
@@ -100,7 +125,10 @@
             "ciLow": -0.5192230244917944,
             "ciHigh": 0.29024902257860535,
             "pRaw": 0.5772545836343657,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -10.817646880443043,
+            "salaryPctLow": -40.50173446250875,
+            "salaryPctHigh": 33.67603300855333
           }
         }
       },
@@ -115,7 +143,10 @@
             "ciLow": -0.8666257737180167,
             "ciHigh": 0.44419531177966426,
             "pRaw": 0.5256917533892959,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -19.040020282116114,
+            "salaryPctLow": -57.963242577316265,
+            "salaryPctHigh": 55.923499284539076
           },
           "Wings": {
             "weight": 0.38739518057151767,
@@ -123,7 +154,10 @@
             "ciLow": -0.008402383896709109,
             "ciHigh": 1.421539069439641,
             "pRaw": 0.05268732427455761,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 102.702326056981,
+            "salaryPctLow": -0.8367182529929542,
+            "salaryPctHigh": 314.34926582742673
           },
           "Bigs": {
             "weight": 0.448718493998033,
@@ -131,7 +165,10 @@
             "ciLow": -0.07783440800309427,
             "ciHigh": 1.779335044822302,
             "pRaw": 0.07227973405220484,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 134.140299078023,
+            "salaryPctLow": -7.48823940677122,
+            "salaryPctHigh": 492.59146405606964
           }
         }
       },
@@ -146,7 +183,10 @@
             "ciLow": -0.32017843140677593,
             "ciHigh": 1.400735582701078,
             "pRaw": 0.2169961160623285,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 71.64849664980244,
+            "salaryPctLow": -27.39805191617287,
+            "salaryPctHigh": 305.81839991564203
           },
           "Wings": {
             "weight": -0.08195438717947345,
@@ -154,7 +194,10 @@
             "ciLow": -2.083210722154986,
             "ciHigh": 0.7736950733478993,
             "pRaw": 0.36435524201579356,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -48.04321259880066,
+            "salaryPctLow": -87.54702607538295,
+            "salaryPctHigh": 116.77615109408018
           },
           "Bigs": {
             "weight": 0.1568521998079358,
@@ -162,7 +205,10 @@
             "ciLow": -0.138819188999485,
             "ciHigh": 0.3757892905667545,
             "pRaw": 0.36456809967881215,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 12.579004429723545,
+            "salaryPctLow": -12.96146105153731,
+            "salaryPctHigh": 45.61402789507151
           }
         }
       },
@@ -177,7 +223,10 @@
             "ciLow": -0.1615637757811993,
             "ciHigh": 0.3650610849056005,
             "pRaw": 0.4468096267850136,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 10.710517092070436,
+            "salaryPctLow": -14.91877314820178,
+            "salaryPctHigh": 44.060200449901814
           },
           "Wings": {
             "weight": -0.047499658999025335,
@@ -185,7 +234,10 @@
             "ciLow": -0.2501542616167893,
             "ciHigh": 0.31751804813564694,
             "pRaw": 0.8138887134634077,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 3.4255550731266613,
+            "salaryPctLow": -22.13193467306015,
+            "salaryPctHigh": 37.37140376189097
           },
           "Bigs": {
             "weight": -0.09242687319255655,
@@ -193,7 +245,10 @@
             "ciLow": -0.20409320578569715,
             "ciHigh": 0.10298982830462018,
             "pRaw": 0.5165559879449267,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -4.929521333075311,
+            "salaryPctLow": -18.46136310817397,
+            "salaryPctHigh": 10.848013389640691
           }
         }
       },
@@ -208,7 +263,10 @@
             "ciLow": -0.2820174282791153,
             "ciHigh": 0.2075004618771711,
             "pRaw": 0.7642635110770527,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -3.6572926552566485,
+            "salaryPctLow": -24.573946104466167,
+            "salaryPctHigh": 23.05982852252159
           },
           "Wings": {
             "weight": -0.0953875349743914,
@@ -216,7 +274,10 @@
             "ciLow": -0.5642039417959099,
             "ciHigh": 0.35102841287581177,
             "pRaw": 0.6441985864564214,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -10.110384643634651,
+            "salaryPctLow": -43.11872253495845,
+            "salaryPctHigh": 42.052768661555774
           },
           "Bigs": {
             "weight": 0.10334070025773529,
@@ -224,7 +285,10 @@
             "ciLow": -0.02575366527318425,
             "ciHigh": 0.11143015430781729,
             "pRaw": 0.21928636518246733,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 4.37690458290351,
+            "salaryPctLow": -2.5424868258982194,
+            "salaryPctHigh": 11.787566247931336
           }
         }
       },
@@ -239,7 +303,10 @@
             "ciLow": -0.12023450999922687,
             "ciHigh": 0.053504330170615205,
             "pRaw": 0.4495560230610901,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": -3.2814614506702866,
+            "salaryPctLow": -11.328753060760963,
+            "salaryPctHigh": 5.496155992124776
           },
           "Wings": {
             "weight": 0.10880495536542044,
@@ -247,7 +314,10 @@
             "ciLow": -0.18654109959924453,
             "ciHigh": 0.19396867523701444,
             "pRaw": 0.9691050361209272,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 0.3720692473695177,
+            "salaryPctLow": -17.017554420210054,
+            "salaryPctHigh": 21.405825227358203
           },
           "Bigs": {
             "weight": 0.01563976269426821,
@@ -255,7 +325,10 @@
             "ciLow": -0.11105541310333084,
             "ciHigh": 0.11678187678227779,
             "pRaw": 0.9604806657189363,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 0.2867334802733923,
+            "salaryPctLow": -10.511084103035872,
+            "salaryPctHigh": 12.38742598830144
           }
         }
       },
@@ -270,7 +343,10 @@
             "ciLow": 0.13163656479911487,
             "ciHigh": 0.4091470221402832,
             "pRaw": 0.00016618313111521645,
-            "pHolm": 0.005816409589032576
+            "pHolm": 0.005816409589032576,
+            "salaryPct": 31.047778680487635,
+            "salaryPctLow": 14.06936756885907,
+            "salaryPctHigh": 50.55330509063363
           },
           "Wings": {
             "weight": 0.3604606181451,
@@ -278,7 +354,10 @@
             "ciLow": 0.035997663942228475,
             "ciHigh": 0.34742331141991895,
             "pRaw": 0.016471382665408783,
-            "pHolm": 0.5435556279584899
+            "pHolm": 0.5435556279584899,
+            "salaryPct": 21.131977419838513,
+            "salaryPctLow": 3.665342480580574,
+            "salaryPctHigh": 41.54157602275731
           },
           "Bigs": {
             "weight": 0.1213835815214772,
@@ -286,14 +365,17 @@
             "ciLow": -0.09489510376697491,
             "ciHigh": 0.21211153321827353,
             "pRaw": 0.4520127171164515,
-            "pHolm": 1.0
+            "pHolm": 1.0,
+            "salaryPct": 6.035972602302991,
+            "salaryPctLow": -9.053167073333785,
+            "salaryPctHigh": 23.628576431930316
           }
         }
       },
       {
         "key": "TOPG",
         "label": "Turnovers per game",
-        "incrementLabel": "Not retained in OLS",
+        "incrementLabel": "Not tested in salary regression",
         "groups": {
           "Guards": {
             "weight": 0.3604166011262641,
@@ -301,7 +383,10 @@
             "ciLow": null,
             "ciHigh": null,
             "pRaw": null,
-            "pHolm": null
+            "pHolm": null,
+            "salaryPct": null,
+            "salaryPctLow": null,
+            "salaryPctHigh": null
           },
           "Wings": {
             "weight": null,
@@ -309,7 +394,10 @@
             "ciLow": null,
             "ciHigh": null,
             "pRaw": null,
-            "pHolm": null
+            "pHolm": null,
+            "salaryPct": null,
+            "salaryPctLow": null,
+            "salaryPctHigh": null
           },
           "Bigs": {
             "weight": null,
@@ -317,7 +405,10 @@
             "ciLow": null,
             "ciHigh": null,
             "pRaw": null,
-            "pHolm": null
+            "pHolm": null,
+            "salaryPct": null,
+            "salaryPctLow": null,
+            "salaryPctHigh": null
           }
         }
       }

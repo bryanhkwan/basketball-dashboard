@@ -148,7 +148,7 @@ test('coach summary leads with one cross-position coefficient table and download
   const e = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/nba-salary-evidence.json'), 'utf8'));
   const h = harness(e), top = h.html().split('<details id="nbaEvidenceDetails"')[0];
   assert.match(top, /Coefficients by position/);
-  assert.match(top, /Download 1-page table \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=position-models-20260914/);
+  assert.match(top, /Download 1-page table \(PDF\)/); assert.match(top, /output\/pdf\/nba-salary-coach-brief\.pdf\?v=salary-explained-20260915/);
   assert.match(top, /Download table CSV/);
   assert.match(top, /aria-label="Cross-position coefficient table"/);
   assert.equal((top.match(/<table\b/g) || []).length, 1);

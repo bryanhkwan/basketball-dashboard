@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build one printable coefficient matrix from the published model snapshots."""
+"""Build a one-page, plain-language salary-association table from frozen models."""
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -48,7 +49,7 @@ def read_facts(evidence_path=EVIDENCE_PATH, model_path=MODEL_PATH):
         raise ValueError("Review the basketball-input table design before rebuilding.")
     rows = []
     for key, item in inputs.items():
-        row = {"key": key, "label": item.get("label", key), "incrementLabel": item.get("incrementLabel", "Not retained in OLS"), "groups": {}}
+        row = {"key": key, "label": item.get("label", key), "incrementLabel": item.get("incrementLabel", "Not tested in salary regression"), "groups": {}}
         for group in GROUPS:
             e = next((x for x in evidence["groups"][group]["estimates"] if x["key"] == key), None)
             w = next((x for x in model["groups"][group]["features"] if x["key"] == key), None)
@@ -61,6 +62,9 @@ def read_facts(evidence_path=EVIDENCE_PATH, model_path=MODEL_PATH):
                 "ciHigh": e["logEffectCiHigh"] if e else None,
                 "pRaw": e["pRaw"] if e else None,
                 "pHolm": e["pHolm"] if e else None,
+                "salaryPct": 100 * math.expm1(e["logEffect"]) if e else None,
+                "salaryPctLow": 100 * math.expm1(e["logEffectCiLow"]) if e else None,
+                "salaryPctHigh": 100 * math.expm1(e["logEffectCiHigh"]) if e else None,
             }
         rows.append(row)
     estimates = [e for group in GROUPS for e in evidence["groups"][group]["estimates"]]
@@ -85,12 +89,24 @@ def pvalue(value):
     return "Excluded" if value is None else f"{value:.3g}" if value < .001 else f"{value:.4f}"
 
 
+def explanation(cell, alpha=.05):
+    """Printed text uses unrounded OLS estimates; never convert a ridge weight."""
+    if cell["beta"] is None:
+        return ["Prediction input only" if cell["weight"] is not None else "Not included in this model",
+                "No salary estimate", "No interval or p-value"]
+    value = cell["salaryPct"]
+    amount = f"{abs(value):.1f}%" if abs(value) >= .05 else "<0.1%"
+    estimate = f"{amount} {'higher' if value > 0 else 'lower'} modeled salary" if value else "0.0% modeled salary difference"
+    interval = f"95% range: {cell['salaryPctLow']:+.1f}% to {cell['salaryPctHigh']:+.1f}%"
+    decision = "Supported" if cell["pHolm"] <= alpha else "Uncertain"
+    return [estimate, interval, f"{decision} | adjusted p {pvalue(cell['pHolm'])}"]
+
+
 def build():
     evidence, model, facts = read_facts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     PREVIEW.parent.mkdir(parents=True, exist_ok=True)
     width, height = landscape(letter)
-    content_width = width - 60
     large = len(facts["rows"]) <= 8
     styles = {
         "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=21, leading=25, textColor=NAVY),
@@ -104,16 +120,13 @@ def build():
     def paragraph(text, style="small"):
         return Paragraph(text, styles[style])
 
-    data = [[paragraph("Input / stated increase", "header")] + [paragraph(f"{g}<br/><font size=8>Ridge / OLS n: {facts['groupCounts'][g]['ridge']} / {facts['groupCounts'][g]['ols']}</font>", "header") for g in GROUPS]]
+    data = [[paragraph("Input / stated increase", "header")] + [paragraph(f"{g}<br/><font size=8>{facts['groupCounts'][g]['ols']} NBA players</font>", "header") for g in GROUPS]]
     for row in facts["rows"]:
         cells = [paragraph(escape(row["label"]) + "<br/><font name=Helvetica size=8>" + escape(row["incrementLabel"]) + "</font>", "label")]
         for group in GROUPS:
             c = row["groups"][group]
-            text = f"<b>Weight</b> {signed(c['weight'])} | <b>OLS beta</b> {signed(c['beta'])}"
-            if c["beta"] is not None:
-                text += f"<br/>95% beta CI: [{signed(c['ciLow'])}, {signed(c['ciHigh'])}]<br/>p {pvalue(c['pRaw'])} | Holm p {pvalue(c['pHolm'])}"
-            else:
-                text += "<br/>OLS input not retained; no interval or p-value."
+            lines = explanation(c, evidence["policy"]["alpha"])
+            text = "<b>" + escape(lines[0]) + "</b><br/>" + escape(lines[1]) + "<br/>" + escape(lines[2])
             cells.append(paragraph(text, "cell"))
         data.append(cells)
     table = Table(data, colWidths=[156, 192, 192, 192], repeatRows=1, hAlign="LEFT")
@@ -127,14 +140,19 @@ def build():
         ("TOPPADDING", (0, 0), (-1, -1), 4 if large else 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4 if large else 2),
     ]))
-    subtitle = escape(evidence["season"]) + " NBA salary sample | Three separate regressions; inputs selected independently within each position (VIF &lt;= 5)"
-    story = [paragraph("NBA coefficients by position", "title"), Spacer(1, 4),
+    for index, row in enumerate(facts["rows"], 1):
+        for column, group in enumerate(GROUPS, 1):
+            cell = row["groups"][group]
+            if cell["pHolm"] is not None and cell["pHolm"] <= evidence["policy"]["alpha"]:
+                table.setStyle(TableStyle([("BACKGROUND", (column, index), (column, index), colors.HexColor("#E8F3EC"))]))
+    subtitle = escape(evidence["season"]) + " NBA salary sample | Three separate regressions; inputs selected independently within each position"
+    story = [paragraph("How player stats relate to NBA salary", "title"), Spacer(1, 4),
         paragraph(subtitle), Spacer(1, 7),
-        paragraph("<b>Weight:</b> ridge prediction coefficient per 1 standard deviation (SD), used in the NCAA peer signal. <b>OLS beta:</b> separate log-salary coefficient for the stated increase. <b>Intervals and p-values apply only to OLS beta.</b> Neither number is a percentage of player value.", "small"),
+        paragraph("<b>How to read:</b> for the increase at left, each cell estimates the salary difference among NBA players in that position, after accounting for the other factors included in its model. These are associations, not guaranteed raises. <b>+5 percentage points</b> means, for example, 35% shooting becomes 40%.", "small"),
         Spacer(1, 9), table, Spacer(1, 9),
-        paragraph(f"<b>{facts['supportedCount']} of {facts['testedCount']} retained OLS associations meet Holm p &lt;= 0.05</b> using the original {facts['familySize']}-candidate correction family. Excluded means not retained, never a zero effect. Age and percentage-availability controls are outside this basketball-input table.", "foot"),
-        Spacer(1, 4), paragraph("<b>Read within each position:</b> different retained inputs mean the columns have different adjustment sets; coefficient differences alone do not establish position priorities. Separate common-input tests are in Full statistical details. These exploratory NBA results do not validate NCAA or WBB pay.", "foot"),
-        Spacer(1, 4), paragraph("<b>Sources:</b> supplied 2022-23 NBA salary workbook; ESPN heights retrieved September 2026, not verified 2022-23 measurements. Full selection policy, excluded inputs, and model checks are in the dashboard's Full statistical details.", "foot")]
+        paragraph(f"<b>Supported:</b> adjusted p &lt;= 0.05 after Holm correction for the original {facts['familySize']} candidate tests ({facts['supportedCount']} of {facts['testedCount']} fitted associations). <b>Uncertain:</b> evidence does not meet that threshold, even if the estimate is large. It does not prove there is no association. Shaded cells are supported.", "foot"),
+        Spacer(1, 4), paragraph("<b>95% range:</b> a pointwise confidence interval for the estimated association; minus means lower salary and plus means higher. Percentages convert salary-regression (OLS) coefficients using 100 x (exp(beta) - 1); they are not ridge prediction weights or shares of player value. Raw coefficients remain in the dashboard.", "foot"),
+        Spacer(1, 4), paragraph("<b>Scope:</b> each position has different adjustment factors; comparing columns alone does not prove different priorities. These exploratory NBA results do not validate NCAA or WBB pay. Sources: supplied 2022-23 salary workbook; ESPN heights retrieved September 2026, not verified 2022-23 measurements. Methods and direct position tests: dashboard Full statistical details.", "foot")]
 
     def footer(canvas, doc):
         canvas.saveState()
@@ -143,13 +161,13 @@ def build():
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(MUTED)
         date = datetime.fromisoformat(evidence["generatedAt"]).strftime("%d %b %Y")
-        canvas.drawString(30, 16, f"Analysis: {date} | NCAA Scouting Dashboard | Coefficients rounded for presentation; CSV contains full precision")
+        canvas.drawString(30, 16, f"Analysis: {date} | NCAA Scouting Dashboard | Percentages calculated from unrounded OLS coefficients")
         canvas.drawRightString(width - 30, 16, str(doc.page))
         canvas.linkURL("https://bryanhkwan.github.io/basketball-dashboard/", (30, 11, width - 60, 25), relative=0)
         canvas.restoreState()
 
     document = SimpleDocTemplate(str(OUTPUT), pagesize=(width, height), leftMargin=30, rightMargin=30,
-        topMargin=27, bottomMargin=35, title="NBA coefficients by position", author="NCAA Scouting Dashboard")
+        topMargin=27, bottomMargin=35, title="How player stats relate to NBA salary", author="NCAA Scouting Dashboard")
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     pdf = PdfReader(OUTPUT)
     if len(pdf.pages) != 1:
@@ -164,7 +182,7 @@ def build():
         "ridgeModelId": model["id"], "ridgeGeneratedAt": model["generatedAt"],
         "sourceSha256": sha256(EVIDENCE_PATH), "ridgeSourceSha256": sha256(MODEL_PATH),
         "sourceHashBasis": "utf8-lf", "pdfSha256": hashlib.sha256(OUTPUT.read_bytes()).hexdigest(),
-        "pages": len(pdf.pages), "pageSize": "US Letter landscape", "facts": facts,
+        "pages": len(pdf.pages), "pageSize": "US Letter landscape", "presentation": "plain-language-ols-percentages-v1", "facts": facts,
     }
     METADATA.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"pdf": str(OUTPUT), "pages": len(pdf.pages), "rows": len(facts["rows"]), "preview": str(PREVIEW)}, indent=2))

@@ -61,7 +61,7 @@ function csvRecords(text) {
     const luminance = color => color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
     const fg = luminance(ctaColors.foreground), bg = luminance(ctaColors.background); coach.pdfContrast = (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05); assert.ok(coach.pdfContrast >= 4.5, 'PDF CTA text contrast');
     assert.match(coach.text, /Coefficients by position/); assert.match(coach.text, /OLS/); assert.match(coach.text, /ridge/i); assert.match(coach.text, /p-values/); assert.equal(coach.download, true);
-    assert.match(coach.pdf, /position-models-20260914/);
+    assert.match(coach.pdf, /salary-explained-20260915/);
     positionNotes = await evaluate(`Array.from(document.querySelectorAll('.nbaCoachSummary [data-nba-selection-group]')).map(el=>({group:el.getAttribute('data-nba-selection-group'),models:Object.fromEntries(Array.from(el.querySelectorAll('[data-nba-selection-model]')).map(note=>[note.getAttribute('data-nba-selection-model'),note.textContent]))}))`);
     assert.deepEqual(positionNotes.map(note=>note.group),groups);
     for(const note of positionNotes) for(const kind of ['ridge','ols']) {
